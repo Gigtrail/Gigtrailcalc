@@ -31,6 +31,8 @@ const router: IRouter = Router();
 function serializeProfile(p: typeof profilesTable.$inferSelect) {
   return {
     ...p,
+    fuelConsumption: Number(p.fuelConsumption),
+    expectedGigFee: Number(p.expectedGigFee),
     avgAccomPerNight: Number(p.avgAccomPerNight),
     avgFoodPerDay: Number(p.avgFoodPerDay),
     minTakeHomePerPerson: Number(p.minTakeHomePerPerson),
@@ -100,6 +102,8 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const updateData: Record<string, unknown> = { ...parsed.data };
+  if (parsed.data.fuelConsumption != null) updateData.fuelConsumption = String(parsed.data.fuelConsumption);
+  if (parsed.data.expectedGigFee != null) updateData.expectedGigFee = String(parsed.data.expectedGigFee);
   if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
   if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
   if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);

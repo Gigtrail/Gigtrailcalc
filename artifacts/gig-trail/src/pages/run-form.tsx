@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useGetVehicles, useTrackCalculation } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Car, Truck } from "lucide-react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
@@ -39,7 +39,6 @@ import {
 
 const runSchema = z.object({
   profileId: z.coerce.number().optional().nullable(),
-  vehicleId: z.coerce.number().optional().nullable(),
   originLat: z.number().optional().nullable(),
   originLng: z.number().optional().nullable(),
   destinationLat: z.number().optional().nullable(),
@@ -79,11 +78,6 @@ const ACCOM_RATES: Record<string, number> = {
 
 const ACCOM_TYPES = ["Single", "Queen", "Twin", "Double Room", "Multiple Rooms"] as const;
 
-const VEHICLE_PRESETS = [
-  { label: "Car", value: "car", consumption: 7, Icon: Car },
-  { label: "Van", value: "van", consumption: 10, Icon: Truck },
-  { label: "Bus", value: "bus", consumption: 16, Icon: Truck },
-] as const;
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -136,7 +130,6 @@ export default function RunForm() {
   });
   
   const { data: profiles, isLoading: isLoadingProfiles } = useGetProfiles();
-  const { data: vehicles, isLoading: isLoadingVehicles } = useGetVehicles();
   
   const createRun = useCreateRun();
   const updateRun = useUpdateRun();
@@ -145,7 +138,6 @@ export default function RunForm() {
     resolver: zodResolver(runSchema),
     defaultValues: {
       profileId: null,
-      vehicleId: null,
       originLat: null,
       originLng: null,
       destinationLat: null,
@@ -187,10 +179,8 @@ export default function RunForm() {
     takeHomePerPerson: number; minTakeHomePerPerson: number;
   } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [showVehicleUpgradeModal, setShowVehicleUpgradeModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [freeVehiclePreset, setFreeVehiclePreset] = useState<"car" | "van" | "bus">("van");
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
 
   const trackCalculation = useTrackCalculation();
@@ -200,11 +190,10 @@ export default function RunForm() {
     overrides?: { distanceKm?: number; vehicleConsumption?: number; driveTimeMinutes?: number | null }
   ) => {
     const profile = profiles?.find(p => p.id === vals.profileId);
-    const vehicle = vehicles?.find(v => v.id === vals.vehicleId);
 
     const distanceKm = overrides?.distanceKm ?? (Number(vals.distanceKm) || 0);
     const vehicleConsumption = overrides?.vehicleConsumption
-      ?? (vehicle ? Number(vehicle.avgConsumption) : 0);
+      ?? (profile ? Number(profile.fuelConsumption) : 0);
     const driveTimeMinutes = overrides?.driveTimeMinutes !== undefined ? overrides.driveTimeMinutes : null;
 
     const fuelPrice = Number(vals.fuelPrice) || 0;
@@ -300,7 +289,7 @@ export default function RunForm() {
       accommodationCost, distanceKm, driveTimeMinutes, fuelUsedLitres,
       takeHomePerPerson, minTakeHomePerPerson,
     };
-  }, [profiles, vehicles]);
+  }, [profiles]);
 
   const handleCalculate = useCallback(async () => {
     const vals = form.getValues();
@@ -322,17 +311,14 @@ export default function RunForm() {
       }
     }
 
-    const freePreset = !isPro ? VEHICLE_PRESETS.find(p => p.value === freeVehiclePreset) : undefined;
-    const vehicleConsumptionOverride = freePreset ? freePreset.consumption : undefined;
-
     try {
       if (profileId) {
         const result = await trackCalculation.mutateAsync({ id: profileId });
         setCalcUsage({ count: result.count, limit: result.limit ?? null });
-        const computed = computeGigResults(vals, { ...routeOverride, vehicleConsumption: vehicleConsumptionOverride });
+        const computed = computeGigResults(vals, routeOverride);
         setCalculationResult(computed);
       } else {
-        const computed = computeGigResults(vals, { ...routeOverride, vehicleConsumption: vehicleConsumptionOverride });
+        const computed = computeGigResults(vals, routeOverride);
         setCalculationResult(computed);
       }
     } catch (err: unknown) {
@@ -345,34 +331,31 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, toast, isPro, freeVehiclePreset]);
+  }, [form, trackCalculation, computeGigResults, toast]);
 
   // Prefill from URL search params after onboarding redirect
   useEffect(() => {
-    if (!isEditing && profiles && vehicles) {
+    if (!isEditing && profiles) {
       const params = new URLSearchParams(window.location.search);
       const profileId = params.get("profileId");
-      const vehicleId = params.get("vehicleId");
       const origin = params.get("origin");
       const fuelPrice = params.get("fuelPrice");
-      if (profileId || vehicleId || origin || fuelPrice) {
+      if (profileId || origin || fuelPrice) {
         form.reset({
           ...form.getValues(),
           profileId: profileId ? Number(profileId) : null,
-          vehicleId: vehicleId ? Number(vehicleId) : null,
           origin: origin || "",
           fuelPrice: fuelPrice ? Number(fuelPrice) : 1.5,
         });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profiles, vehicles, isEditing]);
+  }, [profiles, isEditing]);
 
   useEffect(() => {
-    if (run && profiles && vehicles) {
+    if (run && profiles) {
       form.reset({
         profileId: run.profileId,
-        vehicleId: run.vehicleId,
         originLat: run.originLat ?? null,
         originLng: run.originLng ?? null,
         destinationLat: run.destinationLat ?? null,
@@ -400,22 +383,30 @@ export default function RunForm() {
         notes: run.notes,
       });
     }
-  }, [run, profiles, vehicles, form]);
+  }, [run, profiles, form]);
 
   const handleProfileChange = (val: string) => {
     const pId = val === "none" ? null : parseInt(val);
     form.setValue("profileId", pId);
-    
+
     if (pId) {
       const profile = profiles?.find(p => p.id === pId);
       if (profile) {
-        if (isPro && profile.defaultVehicleId) {
-          form.setValue("vehicleId", profile.defaultVehicleId);
+        // Auto-fill accommodation from profile defaults
+        form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
+        if (profile.accommodationType) {
+          form.setValue("accommodationType", profile.accommodationType);
         }
-        const count = profile.peopleCount ?? 1;
-        const defaultType = count <= 1 ? "Single" : count === 2 ? "Queen" : "Multiple Rooms";
-        form.setValue("accommodationType", defaultType);
+        // Auto-fill food cost from profile
         form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
+        // Auto-fill expected fee from profile (only if fee is currently 0)
+        if (profile.expectedGigFee && profile.expectedGigFee > 0) {
+          const currentFee = form.getValues("fee");
+          if (!currentFee || currentFee === 0) {
+            form.setValue("fee", profile.expectedGigFee);
+          }
+        }
+        // For free users, lock origin to home base
         if (!isPro && profile.homeBase) {
           form.setValue("origin", profile.homeBase);
           form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
@@ -521,63 +512,36 @@ export default function RunForm() {
                         </FormItem>
                       )}
                     />
-                    {!isPro ? (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none">Vehicle</label>
-                        <div className="flex gap-2">
-                          {VEHICLE_PRESETS.map(preset => (
-                            <button
-                              key={preset.value}
-                              type="button"
-                              onClick={() => setFreeVehiclePreset(preset.value)}
-                              className={`flex-1 flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border text-xs font-medium transition-all ${
-                                freeVehiclePreset === preset.value
-                                  ? "border-primary bg-primary/10 text-primary shadow-sm"
-                                  : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                              }`}
-                            >
-                              <preset.Icon className="w-4 h-4" />
-                              <span>{preset.label}</span>
-                              <span className="text-[10px] opacity-70">{preset.consumption} L/100</span>
-                            </button>
-                          ))}
+                    {/* Vehicle — read from selected profile */}
+                    {(() => {
+                      const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
+                      return (
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium leading-none">Vehicle</label>
+                          {selectedProfile ? (
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                              <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="text-foreground">
+                                {selectedProfile.vehicleName
+                                  ? `${selectedProfile.vehicleName} (${selectedProfile.vehicleType})`
+                                  : selectedProfile.vehicleType}
+                              </span>
+                              <span className="text-muted-foreground ml-auto text-xs">
+                                {selectedProfile.fuelConsumption} L/100km
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px] text-muted-foreground">
+                              Select a profile to set vehicle
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Vehicle is set in your profile.{" "}
+                            <a href="/profiles" className="text-primary underline underline-offset-2">Edit profile</a>
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Simple presets — <a href="/billing" className="text-primary underline underline-offset-2">customise in Pro</a>
-                        </p>
-                      </div>
-                    ) : (
-                      <FormField
-                        control={form.control}
-                        name="vehicleId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Vehicle</FormLabel>
-                            <Select 
-                              onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
-                              value={field.value ? field.value.toString() : "none"}
-                              disabled={isLoadingVehicles}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select vehicle" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                {vehicles?.map(v => (
-                                  <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                              <a href="/vehicles" className="text-primary underline underline-offset-2">Manage vehicles</a>
-                            </p>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+                      );
+                    })()}
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1204,29 +1168,6 @@ export default function RunForm() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showVehicleUpgradeModal} onOpenChange={setShowVehicleUpgradeModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Truck className="w-5 h-5 text-primary" />
-              </div>
-              <DialogTitle className="text-xl">Custom vehicles are a Pro feature</DialogTitle>
-            </div>
-            <DialogDescription className="text-base">
-              Upgrade to Pro to match your real setup and get more accurate results.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowVehicleUpgradeModal(false)} className="w-full sm:w-auto">
-              Keep using presets
-            </Button>
-            <Button onClick={() => { setShowVehicleUpgradeModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
-              Upgrade to Pro
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

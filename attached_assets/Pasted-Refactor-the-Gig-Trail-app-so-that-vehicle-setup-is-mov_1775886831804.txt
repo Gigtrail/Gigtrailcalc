@@ -1,0 +1,209 @@
+Refactor the Gig Trail app so that vehicle setup is moved into each act profile, and Duo/Band profiles include more touring setup information.
+
+## Goal
+Make profiles the central place where a user sets up how that act actually tours.
+
+Remove the need for a separate standalone Vehicles tab and make the app simpler and more intuitive.
+
+---
+
+## Main change
+
+Move vehicle setup into the Profile system.
+
+A profile should now contain:
+- act name
+- act type
+- home base
+- people count
+- minimum take-home per person
+- expected gig fee
+- accommodation requirements
+- vehicle setup
+
+The profile should act as the default touring setup for that act.
+
+---
+
+## 1. Remove standalone Vehicles tab
+
+- Remove the separate Vehicles tab from navigation
+- Remove the separate vehicle management page for now
+- Vehicle should now be configured inside each profile
+
+---
+
+## 2. Update profile structure
+
+Each profile should store:
+
+### Basic
+- name
+- act_type
+- home_base
+
+### People
+- people_count
+- band_members (for Duo/Band only)
+
+### Money
+- minimum_take_home_per_person
+- expected_gig_fee
+
+### Accommodation
+- accommodation_required
+- accommodation_type
+
+### Vehicle
+- vehicle_type
+- fuel_consumption_l_per_100km
+
+---
+
+## 3. Show extra fields only for Duo and Band
+
+If act type is:
+### Solo
+Show:
+- name
+- home base
+- minimum take-home
+- expected gig fee
+- accommodation defaults
+- vehicle
+
+### Duo or Band
+Also show:
+- Members of the Band
+- Expected Gig Fee
+- Accommodation Requirements
+- Vehicle Options
+
+---
+
+## 4. Members of the Band section
+
+For Duo and Band profiles, add:
+
+### Section title
+"Band Members"
+
+Allow user to enter:
+- member name
+- optional role
+
+For Duo:
+- default two member rows
+
+For Band:
+- repeatable/add member rows
+
+Keep this lightweight and easy to use.
+
+---
+
+## 5. Expected Gig Fee
+
+Add profile field:
+
+- expected_gig_fee
+
+Label:
+"Expected Gig Fee"
+
+Helper text:
+"Your usual minimum or typical fee for this act"
+
+Use this later in calculator logic and comparisons.
+
+---
+
+## 6. Accommodation defaults
+
+Add profile fields:
+
+- accommodation_required (yes/no)
+- accommodation_type
+
+Options:
+- Single
+- Queen
+- Twin
+- Double
+- Multiple Rooms
+
+These should act as defaults when creating a run, but still allow per-run override later.
+
+---
+
+## 7. Vehicle inside profile
+
+Replace the old vehicle tab with a profile vehicle section.
+
+### Free users
+- can only choose preset vehicles:
+  - Car = 7 L/100km
+  - Van = 10 L/100km
+  - Bus = 16 L/100km
+- cannot customise fuel consumption
+- helper text:
+  "Simple presets — customise in Pro"
+
+### Pro users
+- can customise vehicle type/name
+- can customise fuel consumption
+- can save that vehicle setup inside the profile
+
+Vehicle fields:
+- vehicle_type
+- vehicle_name (optional for Pro)
+- fuel_consumption_l_per_100km
+
+---
+
+## 8. Auto-fill calculator from profile
+
+When user selects a profile in Single Show or Tour Builder, auto-fill:
+- home base
+- people count
+- minimum take-home
+- expected gig fee
+- accommodation defaults
+- vehicle defaults
+
+This profile should become the main source of truth for run defaults.
+
+---
+
+## 9. Navigation cleanup
+
+Update navigation to remove Vehicles tab.
+
+Keep navigation simpler:
+- Dashboard
+- Single Shows
+- Tour Builder
+- Profiles
+- Billing
+
+---
+
+## 10. UX goal
+
+Profiles should feel like:
+"How this act tours"
+
+not just:
+"basic account info"
+
+The profile page should be the place where a user sets up:
+- who is in the act
+- what fee they expect
+- what vehicle they travel in
+- what accommodation they usually need
+
+---
+
+## Final goal
+
+Make the app feel simpler and more practical by making each profile a complete touring setup for that act.

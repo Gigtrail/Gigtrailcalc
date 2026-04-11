@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Truck, Map, Navigation, Guitar, CreditCard, LogOut, Crown, Zap } from "lucide-react";
+import { Home, User, Map, Navigation, Guitar, CreditCard, LogOut, Crown, Zap } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -25,7 +25,6 @@ const navItems = [
   { title: "Single Shows", url: "/runs", icon: Map },
   { title: "Tour Builder", url: "/tours", icon: Navigation },
   { title: "Profiles", url: "/profiles", icon: Guitar },
-  { title: "Vehicles", url: "/vehicles", icon: Truck },
 ];
 
 const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Unlimited" };

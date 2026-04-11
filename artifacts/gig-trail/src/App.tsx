@@ -12,8 +12,7 @@ import Dashboard from "@/pages/dashboard";
 import Billing from "@/pages/billing";
 import Profiles from "@/pages/profiles";
 import ProfileForm from "@/pages/profile-form";
-import Vehicles from "@/pages/vehicles";
-import VehicleForm from "@/pages/vehicle-form";
+
 import Runs from "@/pages/runs";
 import RunForm from "@/pages/run-form";
 import RunDetail from "@/pages/run-detail";
@@ -155,15 +154,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/profiles/:id/edit">
               {() => <ProtectedRoute component={ProfileForm} />}
             </Route>
-            <Route path="/vehicles">
-              {() => <ProtectedRoute component={Vehicles} />}
-            </Route>
-            <Route path="/vehicles/new">
-              {() => <ProtectedRoute component={VehicleForm} />}
-            </Route>
-            <Route path="/vehicles/:id/edit">
-              {() => <ProtectedRoute component={VehicleForm} />}
-            </Route>
+
             <Route path="/runs">
               {() => <ProtectedRoute component={Runs} />}
             </Route>
