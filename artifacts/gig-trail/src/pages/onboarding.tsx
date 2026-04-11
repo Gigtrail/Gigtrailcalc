@@ -3,15 +3,24 @@ import { useLocation } from "wouter";
 import { useCreateProfile, useCreateVehicle } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { usePlan } from "@/hooks/use-plan";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Car, Truck, Bus, User, Users, Music2, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Car, Truck, Bus, User, Users, Music2, Loader2, Lock, Zap } from "lucide-react";
+import { Link } from "wouter";
 
 const ACT_TYPES = [
-  { type: "Solo", icon: User, people: 1, desc: "Just you" },
-  { type: "Duo", icon: Users, people: 2, desc: "Two of you" },
-  { type: "Band", icon: Music2, people: 3, desc: "Full crew" },
+  { type: "Solo", icon: User, people: 1, desc: "Just you", locked: false },
+  { type: "Duo", icon: Users, people: 2, desc: "Two of you", locked: false },
+  { type: "Band", icon: Music2, people: 4, desc: "Full crew", locked: true },
 ];
 
 const VEHICLE_OPTIONS = [
@@ -24,15 +33,17 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { plan } = usePlan();
+  const isPro = plan === "pro" || plan === "unlimited";
 
   const [actName, setActName] = useState("");
   const [actType, setActType] = useState("Solo");
-  const [peopleCount, setPeopleCount] = useState(1);
   const [homeBase, setHomeBase] = useState("");
   const [vehicleType, setVehicleType] = useState("Car");
   const [fuelPrice, setFuelPrice] = useState("2.00");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const actNameRef = useRef<HTMLInputElement>(null);
 
@@ -43,16 +54,23 @@ export default function Onboarding() {
   const createProfile = useCreateProfile();
   const createVehicle = useCreateVehicle();
 
-  const handleActTypeSelect = (type: string, people: number) => {
+  const handleActTypeClick = (type: string, locked: boolean) => {
+    if (locked && !isPro) {
+      setShowUpgradeModal(true);
+      return;
+    }
     setActType(type);
-    setPeopleCount(people);
+  };
+
+  const getPeopleCount = () => {
+    const found = ACT_TYPES.find(a => a.type === actType);
+    return found ? found.people : 1;
   };
 
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!actName.trim()) errs.actName = "Please give your act a name";
     if (!homeBase.trim()) errs.homeBase = "Add your home base so we know where the run starts";
-    if (!peopleCount || peopleCount < 1) errs.peopleCount = "You need at least 1 person";
     return errs;
   };
 
@@ -67,6 +85,7 @@ export default function Onboarding() {
     try {
       const vehicleOption = VEHICLE_OPTIONS.find(v => v.type === vehicleType)!;
       const parsedFuelPrice = parseFloat(fuelPrice) || 2.00;
+      const peopleCount = getPeopleCount();
 
       const vehicle = await createVehicle.mutateAsync({
         name: vehicleOption.name,
@@ -116,22 +135,19 @@ export default function Onboarding() {
           <img
             src="/gig-trail-logo.png"
             alt="The Gig Trail"
-            className="h-20 w-auto mx-auto"
+            className="h-16 w-auto mx-auto"
           />
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20">
-            <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-            <span className="text-xs font-medium text-primary">30 seconds and you're in</span>
-          </div>
           <h1 className="text-3xl font-bold text-foreground">Let's set up your act</h1>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            We'll use this to calculate your runs properly.{" "}
-            <span className="text-muted-foreground/60">You can change all of this later.</span>
+          <p className="text-muted-foreground text-sm">
+            Takes 30 seconds — we'll use this to run your numbers.{" "}
+            <span className="text-muted-foreground/60">Change it anytime.</span>
           </p>
         </div>
 
         <div className="bg-card border border-border/60 rounded-xl shadow-sm divide-y divide-border/40">
 
-          <div className="p-6 space-y-2">
+          {/* Act Name */}
+          <div className="p-5 space-y-2">
             <Label htmlFor="act-name" className="text-sm font-semibold text-foreground">
               Act Name
             </Label>
@@ -150,52 +166,46 @@ export default function Onboarding() {
             }
           </div>
 
-          <div className="p-6 space-y-3">
+          {/* Act Type */}
+          <div className="p-5 space-y-3">
             <div>
               <Label className="text-sm font-semibold text-foreground">What kind of act are you?</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">This affects how we split profit later</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Affects how profit is split later</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              {ACT_TYPES.map(({ type, icon: Icon, people, desc }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleActTypeSelect(type, people)}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                    actType === type
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5"
-                  }`}
-                >
-                  <Icon className="w-6 h-6" />
-                  <span className="text-sm font-semibold">{type}</span>
-                  <span className="text-xs opacity-70">{desc}</span>
-                </button>
-              ))}
+              {ACT_TYPES.map(({ type, icon: Icon, desc, locked }) => {
+                const isLocked = locked && !isPro;
+                const isSelected = actType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleActTypeClick(type, locked)}
+                    className={`relative flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary"
+                        : isLocked
+                        ? "border-border/40 bg-background/50 text-muted-foreground/50 cursor-pointer"
+                        : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5"
+                    }`}
+                  >
+                    {isLocked && (
+                      <span className="absolute top-2 right-2 flex items-center gap-0.5 bg-accent/20 text-accent-foreground/70 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-accent/30">
+                        <Lock className="w-2.5 h-2.5" />
+                        Pro
+                      </span>
+                    )}
+                    <Icon className="w-5 h-5" />
+                    <span className="text-sm font-semibold">{type}</span>
+                    <span className="text-xs opacity-60">{desc}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="p-6 space-y-2">
-            <Label htmlFor="people-count" className="text-sm font-semibold text-foreground">
-              Number of People
-            </Label>
-            <Input
-              id="people-count"
-              type="number"
-              min={1}
-              max={99}
-              value={peopleCount}
-              onChange={e => { setPeopleCount(Number(e.target.value)); setErrors(p => ({ ...p, peopleCount: "" })); }}
-              onKeyDown={handleKeyDown}
-              className={`w-28 ${errors.peopleCount ? "border-destructive" : ""}`}
-            />
-            {errors.peopleCount
-              ? <p className="text-xs text-destructive">{errors.peopleCount}</p>
-              : <p className="text-xs text-muted-foreground">Who's sharing the money</p>
-            }
-          </div>
-
-          <div className="p-6 space-y-2">
+          {/* Home Base */}
+          <div className="p-5 space-y-2">
             <Label htmlFor="home-base" className="text-sm font-semibold text-foreground">
               Home Base
             </Label>
@@ -213,10 +223,11 @@ export default function Onboarding() {
             }
           </div>
 
-          <div className="p-6 space-y-3">
+          {/* Vehicle */}
+          <div className="p-5 space-y-3">
             <div>
               <Label className="text-sm font-semibold text-foreground">What do you travel in?</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">We use this to estimate fuel costs</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Simple setup — customise in Pro</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {VEHICLE_OPTIONS.map(({ type, icon: Icon, desc }) => (
@@ -224,21 +235,22 @@ export default function Onboarding() {
                   key={type}
                   type="button"
                   onClick={() => setVehicleType(type)}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                  className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all cursor-pointer ${
                     vehicleType === type
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5"
                   }`}
                 >
-                  <Icon className="w-6 h-6" />
+                  <Icon className="w-5 h-5" />
                   <span className="text-sm font-semibold">{type}</span>
-                  <span className="text-xs opacity-70">{desc}</span>
+                  <span className="text-xs opacity-60">{desc}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="p-6 space-y-2">
+          {/* Fuel Price */}
+          <div className="p-5 space-y-2">
             <Label htmlFor="fuel-price" className="text-sm font-semibold text-foreground">
               Fuel Price ($/L)
             </Label>
@@ -280,6 +292,35 @@ export default function Onboarding() {
           </p>
         </div>
       </div>
+
+      {/* Upgrade Modal */}
+      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+        <DialogContent className="max-w-sm bg-card border-border/60">
+          <DialogHeader>
+            <div className="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center mb-2">
+              <Zap className="w-5 h-5 text-accent" />
+            </div>
+            <DialogTitle className="text-lg font-bold">Band setups are on Pro</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
+              Upgrade to Pro to unlock Band act type, unlimited saved runs, the full tour builder, and more.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-1">
+            <Link href="/billing">
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                Upgrade to Pro — AU$5/mo
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => setShowUpgradeModal(false)}
+            >
+              Continue as Solo or Duo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
