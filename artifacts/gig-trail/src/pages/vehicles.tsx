@@ -1,0 +1,142 @@
+import { useGetVehicles, useDeleteVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
+import { Link } from "wouter";
+import { Plus, Truck, Fuel, Users, Edit, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+export default function Vehicles() {
+  const { data: vehicles, isLoading } = useGetVehicles();
+  const deleteVehicle = useDeleteVehicle();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleDelete = (id: number) => {
+    deleteVehicle.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+          toast({ title: "Vehicle deleted" });
+        },
+        onError: () => {
+          toast({ title: "Failed to delete vehicle", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Vehicles</h1>
+          <p className="text-muted-foreground mt-1">Manage your fleet and fuel consumption.</p>
+        </div>
+        <Button asChild>
+          <Link href="/vehicles/new">
+            <Plus className="w-4 h-4 mr-2" />
+            New Vehicle
+          </Link>
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-20 mt-1" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : vehicles?.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
+          <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
+          <h3 className="text-lg font-medium">No vehicles yet</h3>
+          <p className="text-muted-foreground mb-4">Add a vehicle to calculate travel costs.</p>
+          <Button asChild>
+            <Link href="/vehicles/new">Add Vehicle</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {vehicles?.map((vehicle) => (
+            <Card key={vehicle.id} className="group hover-elevate transition-all border-border/50 bg-card/50">
+              <CardHeader className="pb-2 flex flex-row items-start justify-between">
+                <div>
+                  <CardTitle className="text-xl">{vehicle.name}</CardTitle>
+                  <div className="text-sm text-primary font-medium mt-1">{vehicle.fuelType}</div>
+                </div>
+                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                    <Link href={`/vehicles/${vehicle.id}/edit`}>
+                      <Edit className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure? This will permanently delete "{vehicle.name}".
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(vehicle.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Fuel className="w-4 h-4 mr-2 opacity-70" />
+                  {vehicle.avgConsumption} L/100km
+                </div>
+                {vehicle.maxPassengers && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Users className="w-4 h-4 mr-2 opacity-70" />
+                    Max {vehicle.maxPassengers} passengers
+                  </div>
+                )}
+                {vehicle.notes && (
+                  <div className="pt-3 mt-3 border-t border-border/40 text-sm text-muted-foreground italic">
+                    "{vehicle.notes}"
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

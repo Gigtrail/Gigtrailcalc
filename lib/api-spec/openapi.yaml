@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Gig Trail Tour Calculator API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: profiles
+    description: Artist/band profile management
+  - name: vehicles
+    description: Vehicle management
+  - name: runs
+    description: Single show calculations
+  - name: tours
+    description: Multi-stop tour management
+  - name: dashboard
+    description: Dashboard summary data
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,497 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /profiles:
+    get:
+      operationId: getProfiles
+      tags: [profiles]
+      summary: List all profiles
+      responses:
+        "200":
+          description: List of profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Profile"
+    post:
+      operationId: createProfile
+      tags: [profiles]
+      summary: Create a profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileBody"
+      responses:
+        "201":
+          description: Created profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+
+  /profiles/{id}:
+    get:
+      operationId: getProfile
+      tags: [profiles]
+      summary: Get a profile by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateProfile
+      tags: [profiles]
+      summary: Update a profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    delete:
+      operationId: deleteProfile
+      tags: [profiles]
+      summary: Delete a profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /vehicles:
+    get:
+      operationId: getVehicles
+      tags: [vehicles]
+      summary: List all vehicles
+      responses:
+        "200":
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Create a vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleBody"
+      responses:
+        "201":
+          description: Created vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get a vehicle by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      summary: Update a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleBody"
+      responses:
+        "200":
+          description: Updated vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    delete:
+      operationId: deleteVehicle
+      tags: [vehicles]
+      summary: Delete a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /runs:
+    get:
+      operationId: getRuns
+      tags: [runs]
+      summary: List all single show calculations
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Run"
+    post:
+      operationId: createRun
+      tags: [runs]
+      summary: Create a single show calculation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunBody"
+      responses:
+        "201":
+          description: Created run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+
+  /runs/{id}:
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Get a run by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateRun
+      tags: [runs]
+      summary: Update a run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunBody"
+      responses:
+        "200":
+          description: Updated run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+    delete:
+      operationId: deleteRun
+      tags: [runs]
+      summary: Delete a run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tours:
+    get:
+      operationId: getTours
+      tags: [tours]
+      summary: List all tours
+      responses:
+        "200":
+          description: List of tours
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tour"
+    post:
+      operationId: createTour
+      tags: [tours]
+      summary: Create a tour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTourBody"
+      responses:
+        "201":
+          description: Created tour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tour"
+
+  /tours/{id}:
+    get:
+      operationId: getTour
+      tags: [tours]
+      summary: Get a tour with all its stops
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tour with stops
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourWithStops"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateTour
+      tags: [tours]
+      summary: Update a tour
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTourBody"
+      responses:
+        "200":
+          description: Updated tour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tour"
+    delete:
+      operationId: deleteTour
+      tags: [tours]
+      summary: Delete a tour
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tours/{tourId}/stops:
+    get:
+      operationId: getTourStops
+      tags: [tours]
+      summary: List stops for a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourStop"
+    post:
+      operationId: createTourStop
+      tags: [tours]
+      summary: Add a stop to a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTourStopBody"
+      responses:
+        "201":
+          description: Created stop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourStop"
+
+  /tours/{tourId}/stops/{stopId}:
+    patch:
+      operationId: updateTourStop
+      tags: [tours]
+      summary: Update a tour stop
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTourStopBody"
+      responses:
+        "200":
+          description: Updated stop
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourStop"
+    delete:
+      operationId: deleteTourStop
+      tags: [tours]
+      summary: Delete a tour stop
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent:
+    get:
+      operationId: getDashboardRecent
+      tags: [dashboard]
+      summary: Get recent runs and tours for dashboard
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardRecent"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +535,555 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Profile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        actType:
+          type: string
+        homeBase:
+          type: ["string", "null"]
+        peopleCount:
+          type: integer
+        defaultVehicleId:
+          type: ["integer", "null"]
+        avgAccomPerNight:
+          type: number
+        avgFoodPerDay:
+          type: number
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - actType
+        - homeBase
+        - peopleCount
+        - defaultVehicleId
+        - avgAccomPerNight
+        - avgFoodPerDay
+        - notes
+        - createdAt
+
+    CreateProfileBody:
+      type: object
+      properties:
+        name:
+          type: string
+        actType:
+          type: string
+        homeBase:
+          type: ["string", "null"]
+        peopleCount:
+          type: integer
+        defaultVehicleId:
+          type: ["integer", "null"]
+        avgAccomPerNight:
+          type: number
+        avgFoodPerDay:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+        - actType
+        - peopleCount
+        - avgAccomPerNight
+        - avgFoodPerDay
+
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        fuelType:
+          type: string
+        avgConsumption:
+          type: number
+        maxPassengers:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - fuelType
+        - avgConsumption
+        - maxPassengers
+        - notes
+        - createdAt
+
+    CreateVehicleBody:
+      type: object
+      properties:
+        name:
+          type: string
+        fuelType:
+          type: string
+        avgConsumption:
+          type: number
+        maxPassengers:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+        - fuelType
+        - avgConsumption
+
+    Run:
+      type: object
+      properties:
+        id:
+          type: integer
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        origin:
+          type: ["string", "null"]
+        destination:
+          type: ["string", "null"]
+        distanceKm:
+          type: number
+        returnTrip:
+          type: boolean
+        fuelPrice:
+          type: number
+        showType:
+          type: string
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        expectedAttendancePct:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        marketingCost:
+          type: ["number", "null"]
+        accommodationCost:
+          type: ["number", "null"]
+        foodCost:
+          type: ["number", "null"]
+        extraCosts:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - profileId
+        - vehicleId
+        - origin
+        - destination
+        - distanceKm
+        - returnTrip
+        - fuelPrice
+        - showType
+        - fee
+        - capacity
+        - ticketPrice
+        - expectedAttendancePct
+        - dealType
+        - splitPct
+        - guarantee
+        - merchEstimate
+        - marketingCost
+        - accommodationCost
+        - foodCost
+        - extraCosts
+        - totalCost
+        - totalIncome
+        - totalProfit
+        - notes
+        - createdAt
+
+    CreateRunBody:
+      type: object
+      properties:
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        origin:
+          type: ["string", "null"]
+        destination:
+          type: ["string", "null"]
+        distanceKm:
+          type: number
+        returnTrip:
+          type: boolean
+        fuelPrice:
+          type: number
+        showType:
+          type: string
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        expectedAttendancePct:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        marketingCost:
+          type: ["number", "null"]
+        accommodationCost:
+          type: ["number", "null"]
+        foodCost:
+          type: ["number", "null"]
+        extraCosts:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - distanceKm
+        - returnTrip
+        - fuelPrice
+        - showType
+
+    Tour:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        startLocation:
+          type: ["string", "null"]
+        endLocation:
+          type: ["string", "null"]
+        returnHome:
+          type: boolean
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        defaultFoodCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        totalDistance:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - profileId
+        - vehicleId
+        - startLocation
+        - endLocation
+        - returnHome
+        - startDate
+        - endDate
+        - defaultFoodCost
+        - notes
+        - totalDistance
+        - totalCost
+        - totalIncome
+        - totalProfit
+        - createdAt
+
+    CreateTourBody:
+      type: object
+      properties:
+        name:
+          type: string
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        startLocation:
+          type: ["string", "null"]
+        endLocation:
+          type: ["string", "null"]
+        returnHome:
+          type: boolean
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        defaultFoodCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+
+    TourStop:
+      type: object
+      properties:
+        id:
+          type: integer
+        tourId:
+          type: integer
+        stopOrder:
+          type: integer
+        date:
+          type: ["string", "null"]
+        city:
+          type: string
+        venueName:
+          type: ["string", "null"]
+        showType:
+          type: string
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        expectedAttendancePct:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        marketingCost:
+          type: ["number", "null"]
+        accommodationCost:
+          type: ["number", "null"]
+        extraCosts:
+          type: ["number", "null"]
+        distanceOverride:
+          type: ["number", "null"]
+        fuelPriceOverride:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - id
+        - tourId
+        - stopOrder
+        - date
+        - city
+        - venueName
+        - showType
+        - fee
+        - capacity
+        - ticketPrice
+        - expectedAttendancePct
+        - dealType
+        - splitPct
+        - guarantee
+        - merchEstimate
+        - marketingCost
+        - accommodationCost
+        - extraCosts
+        - distanceOverride
+        - fuelPriceOverride
+        - notes
+
+    CreateTourStopBody:
+      type: object
+      properties:
+        stopOrder:
+          type: integer
+        date:
+          type: ["string", "null"]
+        city:
+          type: string
+        venueName:
+          type: ["string", "null"]
+        showType:
+          type: string
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        expectedAttendancePct:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        marketingCost:
+          type: ["number", "null"]
+        accommodationCost:
+          type: ["number", "null"]
+        extraCosts:
+          type: ["number", "null"]
+        distanceOverride:
+          type: ["number", "null"]
+        fuelPriceOverride:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - city
+        - showType
+
+    TourWithStops:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        startLocation:
+          type: ["string", "null"]
+        endLocation:
+          type: ["string", "null"]
+        returnHome:
+          type: boolean
+        startDate:
+          type: ["string", "null"]
+        endDate:
+          type: ["string", "null"]
+        defaultFoodCost:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        totalDistance:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourStop"
+      required:
+        - id
+        - name
+        - profileId
+        - vehicleId
+        - startLocation
+        - endLocation
+        - returnHome
+        - startDate
+        - endDate
+        - defaultFoodCost
+        - notes
+        - totalDistance
+        - totalCost
+        - totalIncome
+        - totalProfit
+        - createdAt
+        - stops
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalRuns:
+          type: integer
+        totalTours:
+          type: integer
+        totalProfiles:
+          type: integer
+        totalVehicles:
+          type: integer
+        totalKmDriven:
+          type: number
+        totalIncome:
+          type: number
+        totalProfit:
+          type: number
+        worthTheDrive:
+          type: integer
+        tightMargins:
+          type: integer
+        notWorthIt:
+          type: integer
+      required:
+        - totalRuns
+        - totalTours
+        - totalProfiles
+        - totalVehicles
+        - totalKmDriven
+        - totalIncome
+        - totalProfit
+        - worthTheDrive
+        - tightMargins
+        - notWorthIt
+
+    DashboardRecent:
+      type: object
+      properties:
+        recentRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
+        recentTours:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tour"
+      required:
+        - recentRuns
+        - recentTours

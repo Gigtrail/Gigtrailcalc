@@ -1,0 +1,506 @@
+Build me a simple but polished web app in Replit called **Gig Trail Tour Calculator**.
+
+This app should follow **The Gig Trail** branding and feel:
+- warm
+- road-worn
+- practical
+- musician-first
+- clean, modern, slightly rugged
+- not corporate SaaS
+- not overly flashy
+
+Use a visual style with:
+- deep charcoal / off-black backgrounds
+- warm white cards or soft dark cards
+- burnt orange and dusty gold accent colors
+- rounded cards
+- clean readable typography
+- strong mobile-friendly layout
+- clear dashboard feel
+- simple, fast user experience
+
+Suggested palette:
+- background: #121212
+- card dark: #1F1F1F
+- warm white: #F5F3EF
+- muted grey: #7A7A7A
+- burnt orange: #D2691E
+- dusty gold: #C2A14D
+
+Use language in the interface that fits a touring musician audience:
+- “Run the Numbers”
+- “Build Your Run”
+- “Add Stop”
+- “Save This Tour”
+- “What’s It Worth?”
+- “Worth the Drive”
+- “Tight Margins”
+- “Probably Not Worth It”
+- “Trail Notes”
+
+## Core idea
+
+This app is for musicians to work out whether a single show or a whole tour run is financially worth doing.
+
+It should have **two main modes**:
+
+1. **Single Show Calculator**
+2. **Tour Calculator**
+
+The app should feel simple and easy to use, but powerful underneath.
+
+## Main features
+
+### 1. Artist / Band Profiles
+Users can create and save profiles such as:
+- Solo
+- Duo
+- Band
+
+Each profile should store:
+- profile name
+- act type
+- home base
+- number of people
+- default vehicle
+- average accommodation cost per night
+- average food/per diem per day
+- optional notes
+
+Examples:
+- Julian James Solo
+- Julian James & Beci Kate Duo
+- Full Band
+
+### 2. Vehicles
+Users can create and save vehicles.
+
+Each vehicle should store:
+- vehicle name
+- fuel type
+- average fuel consumption
+- units as L/100km
+- optional notes
+- optional max passengers
+
+Examples:
+- Coaster Bus – diesel – 16 L/100km
+- Van – diesel – 9.5 L/100km
+- Car – petrol – 7.2 L/100km
+
+### 3. Single Show Calculator
+This mode is for quickly checking whether one show is worth doing.
+
+Inputs:
+- selected profile
+- selected vehicle
+- origin
+- destination
+- return trip yes/no
+- distance in km
+- fuel price per litre
+- show type
+- fee or ticket setup
+- accommodation cost
+- food cost
+- other costs
+- merch estimate
+- trail notes
+
+Outputs:
+- estimated fuel used
+- fuel cost
+- total trip cost
+- total income
+- net profit/loss
+- break-even fee needed
+- profit per band member
+- status indicator:
+  - Worth the Drive
+  - Tight Margins
+  - Probably Not Worth It
+
+### 4. Tour Calculator
+This is a multi-show tour planner.
+
+A tour should include:
+- tour name
+- selected profile
+- selected vehicle
+- start location
+- optional end location
+- return home yes/no
+- start date
+- end date
+- default food/per diem
+- trail notes
+
+Inside the tour, the user can add multiple **stops/shows**.
+
+Each stop/show should store:
+- date
+- town/city
+- venue/show name
+- show type
+- fee or ticketed setup
+- merch estimate
+- accommodation cost
+- extra costs
+- fuel price override (optional)
+- manual distance override (optional)
+- notes
+
+The app should calculate:
+- leg distance between each stop
+- total distance
+- total fuel used
+- total fuel cost
+- total accommodation
+- total food/per diem
+- total extra costs
+- total show income
+- total merch
+- total marketing spend
+- gross income
+- total expenses
+- net profit
+- profit per show
+- profit per day
+- profit per band member
+
+Also show a running total as stops are added.
+
+## Show types
+
+Each show can be one of these:
+
+1. **Flat Fee**
+2. **Ticketed Show**
+3. **Hybrid** (guarantee + % of door)
+
+### Flat Fee
+Inputs:
+- fee
+- merch estimate
+
+### Ticketed Show
+Inputs:
+- capacity
+- ticket price
+- expected attendance percentage
+- deal type:
+  - 100% door
+  - percentage split
+  - guarantee vs door
+- your percentage if relevant
+- marketing spend
+- suggested marketing spend
+- merch estimate
+
+Calculations:
+- expected tickets sold
+- gross ticket revenue
+- your cut
+- merch income
+- total show income
+- break-even tickets
+- break-even capacity percentage
+
+### Hybrid
+Inputs:
+- guarantee
+- ticket setup
+- split setup
+- merch estimate
+
+Calculation:
+- user receives the better of guarantee or door deal if that is how the deal is structured
+
+## Marketing feature
+
+This is important.
+
+For ticketed shows, include a **suggested marketing budget**.
+
+Use a simple default recommendation such as:
+- suggested marketing spend = 10% to 20% of expected gross ticket revenue
+- default recommendation should show around 15%
+
+Example:
+suggested marketing spend = expected ticket revenue × 0.15
+
+Allow user to override it manually.
+
+Also show useful outputs such as:
+- “You need 28 tickets to break even”
+- “You need 40% capacity to break even”
+- “At this attendance, you’ll clear $X”
+
+## Fuel and distance
+
+Keep this simple and practical.
+
+For the first version:
+- allow manual entry for distance
+- allow manual entry for fuel price
+- optionally add support for location-based estimates later
+
+If possible, structure the app so distance and fuel data can be upgraded later.
+
+For now:
+- user can type in start and destination
+- user can manually enter or override distance
+- user can manually enter fuel price
+- for tour mode, distance between stops can be entered manually if needed
+
+## App structure / pages
+
+Create a clean dashboard app with these main sections:
+
+### Dashboard
+Show:
+- quick actions
+- recent runs
+- recent tours
+- summary cards
+
+Quick actions:
+- New Single Show
+- New Tour
+- Profiles
+- Vehicles
+
+### Profiles Page
+- list all saved profiles as cards
+- add / edit / delete profiles
+
+### Vehicles Page
+- list all saved vehicles as cards
+- add / edit / delete vehicles
+
+### Single Show Page
+- build a single show calculation
+- clear step-by-step form
+- result summary card
+
+### Tour Builder Page
+- create a tour
+- add stops/shows
+- see running totals
+- see final result summary
+
+### Saved Runs / Tours Page
+- list saved single shows and saved tours
+- allow viewing details later
+
+## UI / UX guidance
+
+Keep the interface very clear and musician-friendly.
+
+Use:
+- cards
+- sections
+- large clear totals
+- mobile-responsive layout
+- clean form inputs
+- simple charts or visual progress bars only if easy
+
+Important:
+- do not make it cluttered
+- do not make it look like accounting software
+- do not make it too corporate
+- do not make it too busy
+
+Use section titles like:
+- Build Your Run
+- On the Road
+- Show Breakdown
+- What’s It Worth?
+- Trail Notes
+
+Buttons:
+- Run the Numbers
+- Add Stop
+- Save This Tour
+- Save This Show
+- Back to Dashboard
+
+Result labels can use friendly wording like:
+- You’ll clear
+- Total on the table
+- Cost to get there
+- Break-even point
+
+## Status logic
+
+Use a simple profitability indicator:
+
+- Green: **Worth the Drive**
+- Amber: **Tight Margins**
+- Red: **Probably Not Worth It**
+
+You can base this on profit margin such as:
+- strong profit = green
+- low profit or near break-even = amber
+- loss = red
+
+## Data model
+
+Use a simple database such as SQLite.
+
+Suggested entities:
+
+### profiles
+- id
+- name
+- act_type
+- home_base
+- people_count
+- default_vehicle_id
+- avg_accom_per_night
+- avg_food_per_day
+- notes
+
+### vehicles
+- id
+- name
+- fuel_type
+- avg_consumption
+- notes
+- max_passengers
+
+### single_runs
+- id
+- profile_id
+- vehicle_id
+- origin
+- destination
+- distance_km
+- return_trip
+- fuel_price
+- show_type
+- fee
+- capacity
+- ticket_price
+- expected_attendance_pct
+- deal_type
+- split_pct
+- guarantee
+- merch_estimate
+- marketing_cost
+- accommodation_cost
+- food_cost
+- extra_costs
+- total_cost
+- total_income
+- total_profit
+- notes
+- created_at
+
+### tours
+- id
+- name
+- profile_id
+- vehicle_id
+- start_location
+- end_location
+- return_home
+- start_date
+- end_date
+- default_food_cost
+- notes
+- total_distance
+- total_cost
+- total_income
+- total_profit
+- created_at
+
+### tour_stops
+- id
+- tour_id
+- stop_order
+- date
+- city
+- venue_name
+- show_type
+- fee
+- capacity
+- ticket_price
+- expected_attendance_pct
+- deal_type
+- split_pct
+- guarantee
+- merch_estimate
+- marketing_cost
+- accommodation_cost
+- extra_costs
+- distance_override
+- fuel_price_override
+- notes
+
+## Tech stack
+
+Choose the simplest reliable Replit-friendly stack.
+
+Preferred:
+- Python
+- Flask
+- SQLite
+- HTML templates
+- CSS
+- minimal JavaScript for dynamic forms
+
+Alternative:
+- a lightweight modern frontend is okay if it stays simple and easy to run in Replit
+
+Important:
+- keep setup easy
+- keep code readable
+- keep the app easy to expand later
+
+## Dynamic behavior
+
+Please include:
+- conditional form sections based on show type
+- live calculations when practical
+- auto-updating totals in tour mode
+- easy editing of saved records
+
+## Seed data
+
+Include some example starter data so the app is usable immediately:
+- 1 duo profile
+- 1 band profile
+- 2 vehicles
+- 1 example single show
+- 1 example multi-stop tour
+
+## Deliverables
+
+Please generate:
+1. the full working app
+2. clean project structure
+3. setup instructions for running in Replit
+4. sample seed data
+5. comments in the code where future upgrades could be added
+
+## Future-ready notes
+
+Structure the code so later I can add:
+- automatic fuel price by location
+- map distance APIs
+- accommodation estimate tools
+- export to PDF or CSV
+- tour comparison
+- sharing runs with band members
+
+## Final instruction
+
+Prioritize:
+- simplicity
+- usefulness
+- clear financial outputs
+- great musician-focused UX
+- strong Gig Trail branding
+
+This should feel like a practical touring tool built by someone who actually lives on the road.

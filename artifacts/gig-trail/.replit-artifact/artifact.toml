@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Gig Trail Tour Calculator"
+version = "1.0.0"
+id = "artifacts/gig-trail"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22623
+
+[services.development]
+run = "pnpm --filter @workspace/gig-trail run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/gig-trail", "run", "build" ]
+publicDir = "artifacts/gig-trail/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22623"
+BASE_PATH = "/"
