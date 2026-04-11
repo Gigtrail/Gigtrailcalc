@@ -170,14 +170,6 @@ export default function RunForm() {
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
 
-  const [calculationResult, setCalculationResult] = useState<{
-    fuelCost: number; totalCost: number; totalIncome: number; netProfit: number;
-    status: string; statusColor: string; StatusIcon: typeof XCircle;
-    profitPerMember: number; expectedTicketsSold: number; grossRevenue: number;
-    breakEvenTickets: number; breakEvenCapacity: number; accommodationCost: number;
-    distanceKm: number; driveTimeMinutes: number | null; fuelUsedLitres: number;
-    takeHomePerPerson: number; minTakeHomePerPerson: number;
-  } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -291,6 +283,8 @@ export default function RunForm() {
     };
   }, [profiles]);
 
+  const [calculationResult, setCalculationResult] = useState<ReturnType<typeof computeGigResults> | null>(null);
+
   const handleCalculate = useCallback(async () => {
     const vals = form.getValues();
     const profileId = vals.profileId;
@@ -312,15 +306,59 @@ export default function RunForm() {
     }
 
     try {
+      let calcCount: number | undefined;
+      let calcLimit: number | null | undefined;
+
       if (profileId) {
         const result = await trackCalculation.mutateAsync({ id: profileId });
+        calcCount = result.count;
+        calcLimit = result.limit ?? null;
         setCalcUsage({ count: result.count, limit: result.limit ?? null });
-        const computed = computeGigResults(vals, routeOverride);
-        setCalculationResult(computed);
-      } else {
-        const computed = computeGigResults(vals, routeOverride);
-        setCalculationResult(computed);
       }
+
+      const computed = computeGigResults(vals, routeOverride);
+
+      const profile = profiles?.find(p => p.id === profileId);
+      const maxDriveHoursPerDay = (isPro && profile?.maxDriveHoursPerDay) ? profile.maxDriveHoursPerDay : 8;
+      const totalDriveHours = computed.driveTimeMinutes !== null
+        ? (vals.returnTrip ? computed.driveTimeMinutes * 2 : computed.driveTimeMinutes) / 60
+        : 0;
+      const drivingDaysNeeded = totalDriveHours > 0 ? Math.ceil(totalDriveHours / maxDriveHoursPerDay) : 0;
+      const recommendedNights = Math.max(0, drivingDaysNeeded - 1);
+      const accomTypeForRecommendation = profile?.accommodationType ?? null;
+      const accomRate = ACCOM_RATES[accomTypeForRecommendation ?? ""] ?? 80;
+      const estimatedAccomCostFromDrive = recommendedNights * accomRate;
+
+      // StatusIcon is a React component — not JSON-serializable; exclude it
+      const { StatusIcon: _icon, statusColor: _color, ...serializableComputed } = computed;
+
+      const resultData = {
+        ...serializableComputed,
+        recommendedNights,
+        maxDriveHoursPerDay,
+        accomTypeForRecommendation,
+        estimatedAccomCostFromDrive,
+        formData: {
+          ...vals,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+        },
+        profileName: profile?.name ?? null,
+        profilePeopleCount: profile?.peopleCount ?? 1,
+        vehicleType: profile?.vehicleType ?? null,
+        vehicleName: profile?.vehicleName ?? null,
+        isEditing,
+        runId: isEditing ? runId : undefined,
+        calcCount,
+        calcLimit,
+        isPro,
+      };
+
+      setCalculationResult(computed);
+      sessionStorage.setItem("gigtrail_result", JSON.stringify(resultData));
+      setLocation("/runs/results");
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
       if (status === 403) {
@@ -331,7 +369,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, toast]);
+  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast]);
 
   // Prefill from URL search params after onboarding redirect
   useEffect(() => {
@@ -463,19 +501,18 @@ export default function RunForm() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl mx-auto">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/runs")} className="h-8 w-8">
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Show" : "Single Show Calculator"}</h1>
-          <p className="text-muted-foreground mt-1">Run the numbers before you accept the gig.</p>
+          <p className="text-muted-foreground mt-1">Fill in the details then hit Calculate Gig.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               
@@ -974,7 +1011,7 @@ export default function RunForm() {
                 </CardContent>
               </Card>
               
-              <div className="space-y-3">
+              <div className="space-y-3 pb-2">
                 <Button
                   type="button"
                   size="lg"
@@ -995,153 +1032,15 @@ export default function RunForm() {
                 {!calcUsage && !isPro && (
                   <p className="text-xs text-center text-muted-foreground">10 free calculations per week</p>
                 )}
-                {isPro && (
-                  <p className="text-xs text-center text-muted-foreground">Unlimited calculations</p>
+                {isEditing && (
+                  <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
+                    <Save className="w-4 h-4 mr-2" />
+                    {isPending ? "Saving..." : "Save Changes"}
+                  </Button>
                 )}
-              </div>
-
-              <div className="hidden lg:block">
-                <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isPending ? "Saving..." : "Save This Show"}
-                </Button>
               </div>
             </form>
           </Form>
-        </div>
-
-        <div className="lg:col-span-1 space-y-6">
-          <div className="sticky top-20">
-            {!calculationResult ? (
-              <Card className="border-2 border-border/50 shadow-lg">
-                <CardContent className="pt-10 pb-10 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
-                    <Calculator className="w-7 h-7 text-muted-foreground/50" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground">Ready to run the numbers?</p>
-                    <p className="text-sm text-muted-foreground mt-1">Fill in your gig details then hit<br/><span className="font-medium text-primary">Calculate Gig</span> to see if it's worth the drive.</p>
-                  </div>
-                  {!isPro && (
-                    <p className="text-xs text-muted-foreground/60">Free plan · 10 calculations/week</p>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className={`border-2 ${calculationResult.netProfit > 0 ? 'border-primary/50' : 'border-destructive/50'} shadow-lg animate-in fade-in slide-in-from-top-2 duration-500`}>
-                <CardHeader className={`pb-4 border-b border-border/40 ${calculationResult.statusColor} rounded-t-lg`}>
-                  <div className="flex items-center gap-2">
-                    <calculationResult.StatusIcon className="w-5 h-5" />
-                    <CardTitle className="text-lg">{calculationResult.status}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-6 space-y-6">
-                  <div>
-                    <div className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">You'll clear</div>
-                    <div className={`text-4xl font-bold ${calculationResult.netProfit > 0 ? 'text-primary' : 'text-destructive'}`}>
-                      ${calculationResult.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                    </div>
-                    {formValues.profileId && (
-                      <div className="mt-2 space-y-1">
-                        <div className="text-sm text-muted-foreground">
-                          Each person clears <span className={`font-semibold ${calculationResult.takeHomePerPerson >= 0 ? 'text-foreground' : 'text-destructive'}`}>
-                            ${calculationResult.takeHomePerPerson.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                          </span>
-                        </div>
-                        {calculationResult.minTakeHomePerPerson > 0 && (
-                          <div className="text-sm text-muted-foreground">
-                            Minimum target <span className="font-semibold text-foreground">${calculationResult.minTakeHomePerPerson.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> each
-                          </div>
-                        )}
-                        {calculationResult.minTakeHomePerPerson > 0 && calculationResult.takeHomePerPerson < calculationResult.minTakeHomePerPerson && calculationResult.netProfit > 0 && (
-                          <div className="flex items-center gap-1.5 text-xs text-amber-600 font-medium mt-1">
-                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                            This run falls below your minimum take-home target
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-3 pt-4 border-t border-border/40">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground text-sm">Total on the table</span>
-                      <span className="font-semibold text-foreground">${calculationResult.totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground text-sm">Cost to get there</span>
-                      <span className="font-semibold text-destructive">${calculationResult.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    </div>
-                  </div>
-
-                  {calculationResult.distanceKm > 0 && (
-                    <div className="space-y-2 pt-4 border-t border-border/40">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Route</div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <MapPin className="w-3.5 h-3.5" />
-                          Distance
-                        </span>
-                        <span className="font-medium text-foreground">
-                          {calculationResult.distanceKm} km{formValues.returnTrip ? ` × 2 = ${(calculationResult.distanceKm * 2).toFixed(1)} km` : ""}
-                        </span>
-                      </div>
-                      {calculationResult.driveTimeMinutes !== null && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Clock className="w-3.5 h-3.5" />
-                            Drive time
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {formValues.returnTrip
-                              ? formatDuration(calculationResult.driveTimeMinutes * 2)
-                              : formatDuration(calculationResult.driveTimeMinutes)}
-                          </span>
-                        </div>
-                      )}
-                      {calculationResult.fuelUsedLitres > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <Fuel className="w-3.5 h-3.5" />
-                            Fuel used
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {calculationResult.fuelUsedLitres.toFixed(1)} L
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Fuel cost</span>
-                      <span>${calculationResult.fuelCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    </div>
-                    {calculationResult.accommodationCost > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Est. accommodation</span>
-                        <span>${calculationResult.accommodationCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                      </div>
-                    )}
-                    {isTicketed && calculationResult.breakEvenTickets > 0 && (
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Break-even point</span>
-                        <span>{calculationResult.breakEvenTickets} tix ({calculationResult.breakEvenCapacity.toFixed(0)}%)</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-6 lg:hidden">
-                    <Button type="button" onClick={form.handleSubmit(onSubmit)} className="w-full" disabled={isPending}>
-                      {isPending ? "Saving..." : "Save This Show"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
       </div>
 
       <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>

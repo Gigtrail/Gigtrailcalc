@@ -35,6 +35,7 @@ export const GetProfilesResponseItem = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   minTakeHomePerPerson: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -62,6 +63,7 @@ export const CreateProfileBody = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   minTakeHomePerPerson: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -90,6 +92,7 @@ export const GetProfileResponse = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   minTakeHomePerPerson: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -120,6 +123,7 @@ export const UpdateProfileBody = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   minTakeHomePerPerson: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -141,6 +145,7 @@ export const UpdateProfileResponse = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   minTakeHomePerPerson: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),

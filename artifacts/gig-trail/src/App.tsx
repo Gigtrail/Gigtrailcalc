@@ -16,6 +16,7 @@ import ProfileForm from "@/pages/profile-form";
 import Runs from "@/pages/runs";
 import RunForm from "@/pages/run-form";
 import RunDetail from "@/pages/run-detail";
+import RunResults from "@/pages/run-results";
 import Tours from "@/pages/tours";
 import TourForm from "@/pages/tour-form";
 import TourDetail from "@/pages/tour-detail";
@@ -160,6 +161,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/runs/new">
               {() => <ProtectedRoute component={RunForm} />}
+            </Route>
+            <Route path="/runs/results">
+              {() => <ProtectedRoute component={RunResults} />}
             </Route>
             <Route path="/runs/:id/edit">
               {() => <ProtectedRoute component={RunForm} />}

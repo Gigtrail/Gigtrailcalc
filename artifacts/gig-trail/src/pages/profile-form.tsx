@@ -54,6 +54,7 @@ const profileSchema = z.object({
   vehicleType: z.string(),
   vehicleName: z.string().optional().nullable(),
   fuelConsumption: z.coerce.number().min(0),
+  maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -95,6 +96,7 @@ export default function ProfileForm() {
       vehicleType: "Van",
       vehicleName: "",
       fuelConsumption: 10,
+      maxDriveHoursPerDay: 8,
       notes: "",
     },
   });
@@ -132,6 +134,7 @@ export default function ProfileForm() {
         vehicleType: profile.vehicleType || "Van",
         vehicleName: profile.vehicleName || "",
         fuelConsumption: profile.fuelConsumption ?? 10,
+        maxDriveHoursPerDay: profile.maxDriveHoursPerDay ?? 8,
         notes: profile.notes || "",
       });
     }
@@ -574,6 +577,25 @@ export default function ProfileForm() {
                       </FormItem>
                     )}
                   />
+
+                  {isPro && (
+                    <FormField
+                      control={form.control}
+                      name="maxDriveHoursPerDay"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Preferred max driving hours per day</FormLabel>
+                          <FormControl>
+                            <Input type="number" min="1" max="24" step="1" {...field} value={field.value ?? 8} />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Used to recommend stopovers and accommodation nights on the results screen.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
               )}
             </CardContent>

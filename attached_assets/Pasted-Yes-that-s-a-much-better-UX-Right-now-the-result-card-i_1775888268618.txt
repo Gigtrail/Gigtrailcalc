@@ -1,0 +1,364 @@
+Yes — that’s a much better UX.
+
+Right now the result card is trying to do too much while the user is still entering data.
+
+The cleaner flow is:
+
+1. Fill in run
+2. Hit **Calculate Gig**
+3. Go to a dedicated **Results / Gig Verdict** screen
+
+That makes the app feel:
+- more focused
+- more valuable
+- less cluttered
+- easier to understand
+
+And yes — accommodation based on driving time is a very good idea.
+
+## Best logic
+
+For Free users:
+- use a simple built-in rule:
+  - up to 8 hours total driving in a day = no accom required
+  - over 8 hours = recommend 1 night
+  - over 16 hours = recommend 2 nights
+  - over 24 hours = recommend 3 nights
+- or if you want slightly more forgiving:
+  - use 10 hours instead of 8
+
+For Pro users:
+- let them set a profile preference:
+  - **Preferred max driving hours per day**
+- then use that to calculate recommended nights
+
+Example:
+- total drive time = 17 hours
+- preferred max driving hours/day = 8
+- driving days needed = ceil(17 / 8) = 3
+- recommended nights of accom = driving days - 1 = 2
+
+That is smart and actually useful.
+
+## Recommended product split
+
+### Free
+- dedicated results screen
+- built-in accom recommendation rule
+- default max drive hours/day = 8 or 10
+- no custom travel-day preference
+
+### Pro
+- all of the above
+- profile setting:
+  - preferred max driving hours per day
+- smarter accom recommendation based on personal touring style
+
+That is a very clean upsell.
+
+## Important UX note
+
+I would show:
+- **Recommended accommodation nights**
+not
+- forced accom nights
+
+Because some users will still push through or sleep in vehicle etc.
+
+So wording should be:
+
+- Recommended nights: 1
+- Based on 17h total driving and your 8h/day travel preference
+
+That feels advisory, not bossy.
+
+## Best result screen structure
+
+### Top
+- Verdict
+- You’ll clear / You’ll lose
+
+### Then
+- Take-home per person
+- Minimum target comparison
+
+### Then
+- Route summary
+  - distance
+  - drive time
+  - return trip
+  - fuel used
+  - fuel cost
+
+### Then
+- Accommodation recommendation
+  - recommended nights
+  - estimated accom cost
+  - based on drive time
+
+### Then
+- Smart insights
+  - “Long drive — consider adding a stopover”
+  - “Fuel is a large share of costs”
+  - “This run only works if merch is strong”
+
+### Then
+- CTA buttons
+  - Back to edit run
+  - Save run
+  - Upgrade to Pro
+
+## Replit prompt
+
+Please refactor the Gig Trail Single Show Calculator so the gig result appears on a separate dedicated results screen after the user clicks “Calculate Gig”.
+
+## Goal
+Make the app feel cleaner and more decision-focused by separating:
+- input screen
+- result / verdict screen
+
+Also add accommodation recommendations based on driving time.
+
+---
+
+## 1. Separate results screen
+
+Change the current Single Show Calculator flow to:
+
+### Step 1: Input screen
+User enters:
+- profile
+- home base / origin
+- destination
+- fuel price
+- deal structure
+- fee / merch / costs
+- return trip toggle
+
+### Step 2: Click button
+Primary CTA:
+- “Calculate Gig”
+or
+- “Run the Numbers”
+
+### Step 3: Results screen
+After calculation, navigate to a dedicated results page/screen
+
+Examples:
+- /single-show/results
+- or similar route
+
+Do NOT keep the full result card crowded next to the form.
+
+---
+
+## 2. Results screen layout
+
+The new results screen should clearly show:
+
+### A. Verdict
+- Worth the Drive
+- Tight Margins
+- Probably Not Worth It
+
+### B. Main result
+- You’ll clear $X
+or
+- You’ll lose $X
+
+### C. Per-person result
+- Each person clears $X
+- Minimum target is $Y each
+
+### D. Route summary
+- One-way distance
+- Total distance
+- Estimated drive time
+- Fuel used
+- Fuel cost
+
+### E. Accommodation recommendation
+- Recommended accommodation nights
+- Estimated accommodation cost
+- Why it was recommended
+
+### F. Cost summary
+- Total on the table
+- Cost to get there
+- Fuel cost
+- Estimated accommodation
+- Other costs
+
+### G. Smart insights
+Examples:
+- “Long drive — consider a stopover”
+- “Fuel is a high percentage of this run”
+- “This run is above your minimum take-home target”
+
+### H. Actions
+Buttons:
+- Edit Run
+- Save Run
+- Calculate Another
+- Upgrade to Pro (if relevant)
+
+---
+
+## 3. Accommodation recommendation based on driving time
+
+Add logic to recommend accommodation nights based on total driving time.
+
+### For Free users
+Use a built-in default maximum driving time per day.
+
+Recommended default:
+- 8 hours/day
+OR
+- 10 hours/day
+
+Use one default consistently.
+
+### Recommended logic
+Let:
+- total_drive_hours = route travel time including return if selected
+- max_drive_hours_per_day = default for Free, profile setting for Pro
+
+Then:
+- driving_days_needed = ceil(total_drive_hours / max_drive_hours_per_day)
+- recommended_accommodation_nights = max(0, driving_days_needed - 1)
+
+Examples:
+- 6h total drive → 0 nights
+- 9h total drive with 8h/day max → 1 night
+- 17h total drive with 8h/day max → 2 nights
+
+This recommendation should feel practical and realistic.
+
+---
+
+## 4. Estimated accommodation cost
+
+Use the recommended accommodation nights to estimate cost.
+
+If profile has accommodation defaults:
+- use profile accommodation required setting
+- use profile accommodation type
+- use estimated nightly cost based on accommodation type
+
+Example estimated nightly rates:
+- Single = 80
+- Queen = 120
+- Twin = 130
+- Double = 120
+- Multiple Rooms = 250
+
+Formula:
+estimated_accommodation_cost = recommended_accommodation_nights × nightly_rate
+
+Show:
+- Recommended nights
+- Accommodation type
+- Estimated accom cost
+
+---
+
+## 5. Pro feature: preferred max driving hours per day
+
+Add a new optional profile field for Pro users only:
+
+### Field
+- preferred_max_driving_hours_per_day
+
+Label:
+- “Preferred max driving hours per day”
+
+Helper:
+- “We use this to recommend stopovers and accommodation”
+
+Type:
+- number input
+- examples: 6, 8, 10
+
+### Free users
+- do NOT allow customisation
+- use fixed default
+
+### Pro users
+- use their profile value in accommodation recommendation logic
+
+---
+
+## 6. Profile logic
+
+When a profile is selected, use profile data to prefill:
+- people count
+- minimum take-home per person
+- accommodation type
+- vehicle
+- expected gig fee if relevant
+- preferred max driving hours per day (Pro only)
+
+---
+
+## 7. UI/UX requirements
+
+### Input screen
+- simpler
+- focused only on entering run details
+- no full results panel on the side
+
+### Results screen
+- clear hierarchy
+- big verdict
+- simple stats
+- readable route and accommodation summary
+- mobile-friendly
+
+The flow should feel like:
+- fill in run
+- hit calculate
+- land on verdict screen
+
+---
+
+## 8. Plan gating
+
+### Free
+- separate result screen
+- default accommodation recommendation based on fixed max drive hours/day
+- no editable travel-hours preference
+
+### Pro
+- profile setting for preferred max driving hours per day
+- smarter accommodation recommendations based on personal touring style
+
+---
+
+## 9. Important wording
+
+Use:
+- “Recommended accommodation nights”
+not
+- “Accommodation required”
+
+This should feel like practical advice, not a forced rule.
+
+Also explain why:
+Example:
+- “Based on 17h total driving and an 8h/day travel limit”
+
+---
+
+## 10. Final goal
+
+The Single Show flow should feel like:
+1. enter the details
+2. calculate the gig
+3. get a clean verdict screen that explains:
+   - whether it’s worth it
+   - how much each person clears
+   - how far the run is
+   - how long it takes
+   - whether a stopover/accommodation is recommended
+
+This should feel simple, helpful, and built for real touring decisions.

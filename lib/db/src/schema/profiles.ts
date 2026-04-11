@@ -22,6 +22,7 @@ export const profilesTable = pgTable("profiles", {
   avgAccomPerNight: numeric("avg_accom_per_night", { precision: 10, scale: 2 }).notNull().default("0"),
   avgFoodPerDay: numeric("avg_food_per_day", { precision: 10, scale: 2 }).notNull().default("0"),
   minTakeHomePerPerson: numeric("min_take_home_per_person", { precision: 10, scale: 2 }).notNull().default("0"),
+  maxDriveHoursPerDay: integer("max_drive_hours_per_day").default(8),
   notes: text("notes"),
   calculationsThisWeek: integer("calculations_this_week").notNull().default(0),
   lastCalculationReset: date("last_calculation_reset"),
