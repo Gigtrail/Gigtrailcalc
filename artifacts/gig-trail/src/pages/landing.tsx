@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Guitar, Map, Navigation, TrendingUp, Shield, Zap } from "lucide-react";
+import { Map, Navigation, TrendingUp, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -7,7 +7,11 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground dark">
       <header className="px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
-        <h1 className="text-2xl font-bold text-primary tracking-tight">Gig Trail</h1>
+        <img
+          src="/gig-trail-logo.png"
+          alt="The Gig Trail"
+          className="h-12 w-auto"
+        />
         <div className="flex gap-3">
           <Link href="/sign-in">
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground">Sign In</Button>
@@ -18,20 +22,25 @@ export default function Landing() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-16 space-y-24">
-        <section className="text-center space-y-6">
-          <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1.5 text-sm text-primary font-medium">
-            <Guitar className="w-4 h-4" />
-            Built for touring musicians
+      <main className="max-w-6xl mx-auto px-6 space-y-24">
+        <section className="text-center space-y-8 pt-10 pb-4">
+          <div className="flex justify-center">
+            <img
+              src="/gig-trail-logo.png"
+              alt="The Gig Trail"
+              className="w-56 h-56 object-contain drop-shadow-[0_0_40px_rgba(210,105,30,0.3)]"
+            />
           </div>
-          <h2 className="text-5xl font-bold tracking-tight leading-tight">
-            Is this gig worth<br />
-            <span className="text-primary">the drive?</span>
-          </h2>
-          <p className="text-muted-foreground text-xl max-w-2xl mx-auto leading-relaxed">
-            Calculate the real cost of any show or tour. Factor in fuel, accommodation, food, 
-            marketing, and more — then see exactly what lands in your pocket.
-          </p>
+          <div className="space-y-4">
+            <h2 className="text-5xl font-bold tracking-tight leading-tight">
+              Is this gig worth<br />
+              <span className="text-primary">the drive?</span>
+            </h2>
+            <p className="text-muted-foreground text-xl max-w-2xl mx-auto leading-relaxed">
+              Calculate the real cost of any show or tour. Factor in fuel, accommodation, food,
+              marketing, and more — then see exactly what lands in your pocket.
+            </p>
+          </div>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link href="/sign-up">
               <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground px-8">

@@ -43,8 +43,14 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4">
-        <h1 className="text-xl font-bold text-primary tracking-tight">Gig Trail</h1>
+      <SidebarHeader className="p-4 flex items-center justify-center">
+        <Link href="/dashboard">
+          <img
+            src="/gig-trail-logo.png"
+            alt="The Gig Trail"
+            className="h-20 w-auto object-contain"
+          />
+        </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
