@@ -28,7 +28,7 @@ export default function Landing() {
             <img
               src="/gig-trail-logo.png"
               alt="The Gig Trail"
-              className="w-56 h-56 object-contain drop-shadow-[0_0_50px_rgba(184,97,27,0.45)]"
+              className="w-56 h-56 object-contain drop-shadow-[0_6px_24px_rgba(58,47,38,0.30)]"
             />
           </div>
           <div className="space-y-4">
