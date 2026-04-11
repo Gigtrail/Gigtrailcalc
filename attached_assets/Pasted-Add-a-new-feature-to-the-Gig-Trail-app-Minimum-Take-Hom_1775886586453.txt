@@ -1,0 +1,114 @@
+Add a new feature to the Gig Trail app: Minimum Take-Home Per Person.
+
+## Goal
+Help users decide if a gig is truly worth doing based on what each person actually takes home.
+
+---
+
+## 1. Add field to act profiles
+
+Add a new profile field:
+
+- minimum_take_home_per_person
+
+Label:
+"Minimum Take-Home Per Person"
+
+Helper text:
+"The least each person needs to make for the gig to feel worth it."
+
+Type:
+- currency / number input
+
+Example values:
+- 100
+- 150
+- 200
+
+This should be saved on the act profile.
+
+---
+
+## 2. Use it in calculations
+
+After calculating net profit:
+
+take_home_per_person = net_profit / people_count
+
+Compare:
+- take_home_per_person
+vs
+- minimum_take_home_per_person
+
+---
+
+## 3. Show result in calculator output
+
+Display:
+
+- Take-home per person
+- Minimum target per person
+
+Examples:
+"Each person clears $110"
+"Your minimum target is $150 each"
+
+If below target, show warning:
+"This run falls below your minimum take-home target"
+
+---
+
+## 4. Update verdict logic
+
+Current verdict should also consider minimum take-home per person.
+
+Rules:
+
+- If take_home_per_person >= minimum_take_home_per_person and profit is healthy:
+  verdict = "Worth the Drive"
+
+- If profit is positive but take_home_per_person is below minimum:
+  verdict = "Tight Margins"
+
+- If net profit is negative:
+  verdict = "Probably Not Worth It"
+
+This means a gig should not automatically be green just because profit is above zero.
+
+---
+
+## 5. UI placement
+
+### In profile setup
+Add field:
+- Minimum Take-Home Per Person
+
+### In results card
+Add:
+- Each person clears: $X
+- Your minimum target: $Y
+
+---
+
+## 6. Defaults
+
+If no minimum_take_home_per_person is set:
+- default to 0
+- app should still calculate normally
+
+---
+
+## 7. Future-ready
+
+Structure this so later we can allow:
+- per-run override
+- different minimums for different acts
+
+---
+
+## Final goal
+
+Make the calculator answer:
+"Is this worth it for each person involved?"
+not just
+"Is this technically profitable?"

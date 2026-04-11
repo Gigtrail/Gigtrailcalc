@@ -37,6 +37,7 @@ const profileSchema = z.object({
   defaultVehicleId: z.coerce.number().optional().nullable(),
   avgAccomPerNight: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
+  minTakeHomePerPerson: z.coerce.number().min(0),
   notes: z.string().optional().nullable(),
 });
 
@@ -71,6 +72,7 @@ export default function ProfileForm() {
       defaultVehicleId: null,
       avgAccomPerNight: 0,
       avgFoodPerDay: 0,
+      minTakeHomePerPerson: 0,
       notes: "",
     },
   });
@@ -87,6 +89,7 @@ export default function ProfileForm() {
         defaultVehicleId: profile.defaultVehicleId || null,
         avgAccomPerNight: profile.avgAccomPerNight,
         avgFoodPerDay: profile.avgFoodPerDay,
+        minTakeHomePerPerson: profile.minTakeHomePerPerson ?? 0,
         notes: profile.notes || "",
       });
     }
@@ -249,6 +252,23 @@ export default function ProfileForm() {
                       <FormControl>
                         <Input type="number" min="0" step="0.01" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="minTakeHomePerPerson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Minimum Take-Home Per Person ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="1" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        The least each person needs to make for the gig to feel worth it.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}

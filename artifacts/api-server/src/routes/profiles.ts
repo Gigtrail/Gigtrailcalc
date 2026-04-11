@@ -33,6 +33,7 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
     ...p,
     avgAccomPerNight: Number(p.avgAccomPerNight),
     avgFoodPerDay: Number(p.avgFoodPerDay),
+    minTakeHomePerPerson: Number(p.minTakeHomePerPerson),
     homeBaseLat: p.homeBaseLat != null ? Number(p.homeBaseLat) : null,
     homeBaseLng: p.homeBaseLng != null ? Number(p.homeBaseLng) : null,
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
@@ -101,6 +102,7 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
   if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
+  if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
   const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });

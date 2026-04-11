@@ -184,6 +184,7 @@ export default function RunForm() {
     profitPerMember: number; expectedTicketsSold: number; grossRevenue: number;
     breakEvenTickets: number; breakEvenCapacity: number; accommodationCost: number;
     distanceKm: number; driveTimeMinutes: number | null; fuelUsedLitres: number;
+    takeHomePerPerson: number; minTakeHomePerPerson: number;
   } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showVehicleUpgradeModal, setShowVehicleUpgradeModal] = useState(false);
@@ -257,24 +258,29 @@ export default function RunForm() {
     const totalCost = fuelCost + accommodationCost + foodCost + extraCosts + marketingCost;
     const netProfit = totalIncome - totalCost;
 
+    const peopleCount = profile && profile.peopleCount > 0 ? profile.peopleCount : 1;
+    const takeHomePerPerson = netProfit / peopleCount;
+    const minTakeHomePerPerson = profile ? (profile.minTakeHomePerPerson ?? 0) : 0;
+
     let status = "Probably Not Worth It";
     let statusColor = "text-red-500 bg-red-500/10";
     let StatusIcon: typeof XCircle = XCircle;
 
-    if (totalIncome > 0) {
-      const margin = netProfit / totalIncome;
-      if (margin > 0.2) {
+    if (netProfit > 0) {
+      const margin = netProfit / (totalIncome || 1);
+      const meetsMinimum = minTakeHomePerPerson <= 0 || takeHomePerPerson >= minTakeHomePerPerson;
+      if (margin > 0.2 && meetsMinimum) {
         status = "Worth the Drive";
         statusColor = "text-green-500 bg-green-500/10";
         StatusIcon = TrendingUp;
-      } else if (netProfit > 0) {
+      } else {
         status = "Tight Margins";
         statusColor = "text-amber-500 bg-amber-500/10";
         StatusIcon = AlertTriangle;
       }
     }
 
-    const profitPerMember = profile && profile.peopleCount > 0 ? netProfit / profile.peopleCount : netProfit;
+    const profitPerMember = takeHomePerPerson;
 
     let breakEvenTickets = 0;
     let breakEvenCapacity = 0;
@@ -292,6 +298,7 @@ export default function RunForm() {
       fuelCost, totalCost, totalIncome, netProfit, status, statusColor, StatusIcon,
       profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity,
       accommodationCost, distanceKm, driveTimeMinutes, fuelUsedLitres,
+      takeHomePerPerson, minTakeHomePerPerson,
     };
   }, [profiles, vehicles]);
 
@@ -1071,8 +1078,23 @@ export default function RunForm() {
                       ${calculationResult.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </div>
                     {formValues.profileId && (
-                      <div className="text-sm text-muted-foreground mt-1">
-                        ${calculationResult.profitPerMember.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} per member
+                      <div className="mt-2 space-y-1">
+                        <div className="text-sm text-muted-foreground">
+                          Each person clears <span className={`font-semibold ${calculationResult.takeHomePerPerson >= 0 ? 'text-foreground' : 'text-destructive'}`}>
+                            ${calculationResult.takeHomePerPerson.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </div>
+                        {calculationResult.minTakeHomePerPerson > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            Minimum target <span className="font-semibold text-foreground">${calculationResult.minTakeHomePerPerson.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> each
+                          </div>
+                        )}
+                        {calculationResult.minTakeHomePerPerson > 0 && calculationResult.takeHomePerPerson < calculationResult.minTakeHomePerPerson && calculationResult.netProfit > 0 && (
+                          <div className="flex items-center gap-1.5 text-xs text-amber-600 font-medium mt-1">
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                            This run falls below your minimum take-home target
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
