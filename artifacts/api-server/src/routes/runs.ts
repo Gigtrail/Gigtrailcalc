@@ -27,6 +27,7 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
     guarantee: r.guarantee != null ? Number(r.guarantee) : null,
     merchEstimate: r.merchEstimate != null ? Number(r.merchEstimate) : null,
     marketingCost: r.marketingCost != null ? Number(r.marketingCost) : null,
+    accommodationNights: r.accommodationNights != null ? Number(r.accommodationNights) : null,
     accommodationCost: r.accommodationCost != null ? Number(r.accommodationCost) : null,
     foodCost: r.foodCost != null ? Number(r.foodCost) : null,
     extraCosts: r.extraCosts != null ? Number(r.extraCosts) : null,
@@ -42,7 +43,8 @@ function toDbRun(data: Record<string, unknown>) {
   for (const [k, v] of Object.entries(data)) {
     if (typeof v === 'number' && [
       'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
-      'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost',
+      'splitPct', 'guarantee', 'merchEstimate', 'marketingCost',
+      'accommodationNights', 'accommodationCost',
       'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit'
     ].includes(k)) {
       result[k] = String(v);

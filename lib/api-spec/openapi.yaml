@@ -748,6 +748,12 @@ components:
           type: ["number", "null"]
         marketingCost:
           type: ["number", "null"]
+        accommodationRequired:
+          type: boolean
+        accommodationType:
+          type: ["string", "null"]
+        accommodationNights:
+          type: ["number", "null"]
         accommodationCost:
           type: ["number", "null"]
         foodCost:
@@ -836,6 +842,12 @@ components:
         merchEstimate:
           type: ["number", "null"]
         marketingCost:
+          type: ["number", "null"]
+        accommodationRequired:
+          type: boolean
+        accommodationType:
+          type: ["string", "null"]
+        accommodationNights:
           type: ["number", "null"]
         accommodationCost:
           type: ["number", "null"]

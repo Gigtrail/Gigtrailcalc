@@ -59,13 +59,25 @@ const runSchema = z.object({
   guarantee: z.coerce.number().optional().nullable(),
   merchEstimate: z.coerce.number().optional().nullable(),
   marketingCost: z.coerce.number().optional().nullable(),
-  accommodationCost: z.coerce.number().optional().nullable(),
+  accommodationRequired: z.boolean(),
+  accommodationType: z.string().optional().nullable(),
+  accommodationNights: z.coerce.number().optional().nullable(),
   foodCost: z.coerce.number().optional().nullable(),
   extraCosts: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
 type RunFormValues = z.infer<typeof runSchema>;
+
+const ACCOM_RATES: Record<string, number> = {
+  "Single": 80,
+  "Queen": 120,
+  "Twin": 130,
+  "Double Room": 120,
+  "Multiple Rooms": 250,
+};
+
+const ACCOM_TYPES = ["Single", "Queen", "Twin", "Double Room", "Multiple Rooms"] as const;
 
 export default function RunForm() {
   const [, setLocation] = useLocation();
@@ -109,7 +121,9 @@ export default function RunForm() {
       guarantee: 0,
       merchEstimate: 0,
       marketingCost: 0,
-      accommodationCost: 0,
+      accommodationRequired: false,
+      accommodationType: null,
+      accommodationNights: 1,
       foodCost: 0,
       extraCosts: 0,
       notes: "",
@@ -124,7 +138,7 @@ export default function RunForm() {
     fuelCost: number; totalCost: number; totalIncome: number; netProfit: number;
     status: string; statusColor: string; StatusIcon: typeof XCircle;
     profitPerMember: number; expectedTicketsSold: number; grossRevenue: number;
-    breakEvenTickets: number; breakEvenCapacity: number;
+    breakEvenTickets: number; breakEvenCapacity: number; accommodationCost: number;
   } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
@@ -145,7 +159,11 @@ export default function RunForm() {
     const splitPct = Number(vals.splitPct) || 0;
     const guarantee = Number(vals.guarantee) || 0;
     const merchEstimate = Number(vals.merchEstimate) || 0;
-    const accommodationCost = Number(vals.accommodationCost) || 0;
+    const accommodationNights = Number(vals.accommodationNights) || 0;
+    const accomRate = vals.accommodationRequired && vals.accommodationType
+      ? (ACCOM_RATES[vals.accommodationType] ?? 0)
+      : 0;
+    const accommodationCost = accommodationNights * accomRate;
     const foodCost = Number(vals.foodCost) || 0;
     const extraCosts = Number(vals.extraCosts) || 0;
     const marketingCost = Number(vals.marketingCost) || 0;
@@ -218,7 +236,8 @@ export default function RunForm() {
 
     return {
       fuelCost, totalCost, totalIncome, netProfit, status, statusColor, StatusIcon,
-      profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity
+      profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity,
+      accommodationCost
     };
   }, [profiles, vehicles]);
 
@@ -293,7 +312,9 @@ export default function RunForm() {
         guarantee: run.guarantee,
         merchEstimate: run.merchEstimate,
         marketingCost: run.marketingCost,
-        accommodationCost: run.accommodationCost,
+        accommodationRequired: run.accommodationRequired ?? false,
+        accommodationType: run.accommodationType ?? null,
+        accommodationNights: run.accommodationNights ? Number(run.accommodationNights) : 1,
         foodCost: run.foodCost,
         extraCosts: run.extraCosts,
         notes: run.notes,
@@ -311,7 +332,9 @@ export default function RunForm() {
         if (profile.defaultVehicleId) {
           form.setValue("vehicleId", profile.defaultVehicleId);
         }
-        form.setValue("accommodationCost", profile.avgAccomPerNight);
+        const count = profile.peopleCount ?? 1;
+        const defaultType = count <= 1 ? "Single" : count === 2 ? "Queen" : "Multiple Rooms";
+        form.setValue("accommodationType", defaultType);
         form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
       }
     }
@@ -321,6 +344,7 @@ export default function RunForm() {
     const computed = calculationResult ?? computeGigResults(data);
     const payload = {
       ...data,
+      accommodationCost: computed.accommodationCost,
       totalCost: computed.totalCost,
       totalIncome: computed.totalIncome,
       totalProfit: computed.netProfit
@@ -717,20 +741,81 @@ export default function RunForm() {
                   <CardTitle>Other Costs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="accommodationRequired"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Accommodation Required</FormLabel>
+                        <div className="flex gap-2 mt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={field.value ? "default" : "outline"}
+                            onClick={() => field.onChange(true)}
+                          >
+                            Yes
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={!field.value ? "default" : "outline"}
+                            onClick={() => {
+                              field.onChange(false);
+                              form.setValue("accommodationType", null);
+                            }}
+                          >
+                            No
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {formValues.accommodationRequired && (
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="accommodationType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Room Type</FormLabel>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {ACCOM_TYPES.map(type => (
+                                <Button
+                                  key={type}
+                                  type="button"
+                                  size="sm"
+                                  variant={field.value === type ? "default" : "outline"}
+                                  onClick={() => field.onChange(type)}
+                                >
+                                  {type}
+                                  <span className="ml-1 text-xs opacity-70">${ACCOM_RATES[type]}/nt</span>
+                                </Button>
+                              ))}
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="accommodationNights"
+                        render={({ field }) => (
+                          <FormItem className="w-40">
+                            <FormLabel>Nights</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="1" step="1" {...field} value={field.value ?? 1} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="accommodationCost"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Accommodation ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                     <FormField
                       control={form.control}
                       name="foodCost"
@@ -865,6 +950,12 @@ export default function RunForm() {
                       <span>Fuel</span>
                       <span>${calculationResult.fuelCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
+                    {calculationResult.accommodationCost > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Est. accommodation</span>
+                        <span>${calculationResult.accommodationCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      </div>
+                    )}
                     {isTicketed && calculationResult.breakEvenTickets > 0 && (
                       <div className="flex justify-between text-muted-foreground">
                         <span>Break-even point</span>
