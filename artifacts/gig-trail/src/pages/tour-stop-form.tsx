@@ -110,6 +110,9 @@ export default function TourStopForm() {
     const splitPct = Number(formValues.splitPct) || 0;
     const guarantee = Number(formValues.guarantee) || 0;
     const merchEstimate = Number(formValues.merchEstimate) || 0;
+    const accommodationCost = Number(formValues.accommodationCost) || 0;
+    const extraCosts = Number(formValues.extraCosts) || 0;
+    const marketingCost = Number(formValues.marketingCost) || 0;
 
     let showIncome = 0;
     let expectedTicketsSold = 0;
@@ -135,11 +138,17 @@ export default function TourStopForm() {
       }
     }
 
+    const totalIncome = showIncome + merchEstimate;
+    const totalCost = accommodationCost + extraCosts + marketingCost;
+    const netProfit = totalIncome - totalCost;
+
     return {
       expectedTicketsSold,
       grossRevenue,
       showIncome,
-      totalIncome: showIncome + merchEstimate,
+      totalIncome,
+      totalCost,
+      netProfit,
     };
   }, [formValues]);
 
@@ -541,22 +550,37 @@ export default function TourStopForm() {
 
         <div className="lg:col-span-1 space-y-6">
           <div className="sticky top-20">
-            <Card className="border-secondary/30 bg-card shadow-lg">
+            <Card className={`border-2 ${calculatedValues.netProfit >= 0 ? 'border-secondary/40' : 'border-destructive/50'} bg-card shadow-lg`}>
               <CardHeader className="pb-4 border-b border-border/40">
-                <CardTitle className="text-lg">Stop Income Preview</CardTitle>
+                <CardTitle className="text-lg">Stop Preview</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6 space-y-6">
+              <CardContent className="pt-6 space-y-4">
                 <div>
-                   <div className="text-4xl font-bold text-secondary">
-                    ${calculatedValues.totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                  <div className={`text-4xl font-bold ${calculatedValues.netProfit >= 0 ? 'text-secondary' : 'text-destructive'}`}>
+                    ${calculatedValues.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Total on the table for this stop
-                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">Net for this stop</div>
                 </div>
 
-                <div className="pt-6 lg:hidden">
-                   <Button type="button" variant="secondary" onClick={form.handleSubmit(onSubmit)} className="w-full" disabled={isPending}>
+                <div className="space-y-2 pt-2 border-t border-border/40 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Income</span>
+                    <span className="text-foreground font-medium">
+                      ${calculatedValues.totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </span>
+                  </div>
+                  {calculatedValues.totalCost > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Costs</span>
+                      <span className="text-destructive font-medium">
+                        −${calculatedValues.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 lg:hidden">
+                  <Button type="button" variant="secondary" onClick={form.handleSubmit(onSubmit)} className="w-full" disabled={isPending}>
                     {isPending ? "Saving..." : isEditing ? "Save Stop" : "Add Stop"}
                   </Button>
                 </div>
