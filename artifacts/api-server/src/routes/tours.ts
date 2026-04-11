@@ -78,7 +78,7 @@ router.post("/tours", async (req, res): Promise<void> => {
     return;
   }
   const [tour] = await db.insert(toursTable).values(toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as typeof toursTable.$inferInsert).returning();
-  res.status(201).json(GetTourResponse.parse(serializeTour(tour)));
+  res.status(201).json(GetTourResponse.parse({ ...serializeTour(tour), stops: [] }));
 });
 
 router.get("/tours/:id", async (req, res): Promise<void> => {

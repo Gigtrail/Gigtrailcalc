@@ -187,7 +187,7 @@ export default function TourStopForm() {
 
     if (isEditing) {
       updateStop.mutate(
-        { id: parsedStopId, data: payload },
+        { tourId, stopId: parsedStopId, data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
@@ -202,7 +202,7 @@ export default function TourStopForm() {
       );
     } else {
       createStop.mutate(
-        { data: payload },
+        { tourId, data: payload },
         {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
