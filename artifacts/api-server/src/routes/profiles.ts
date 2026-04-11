@@ -33,6 +33,8 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
     ...p,
     avgAccomPerNight: Number(p.avgAccomPerNight),
     avgFoodPerDay: Number(p.avgFoodPerDay),
+    homeBaseLat: p.homeBaseLat != null ? Number(p.homeBaseLat) : null,
+    homeBaseLng: p.homeBaseLng != null ? Number(p.homeBaseLng) : null,
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
   };
 }
