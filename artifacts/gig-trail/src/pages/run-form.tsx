@@ -200,6 +200,27 @@ export default function RunForm() {
     };
   }, [formValues, profiles, vehicles]);
 
+  // Prefill from URL search params after onboarding redirect
+  useEffect(() => {
+    if (!isEditing && profiles && vehicles) {
+      const params = new URLSearchParams(window.location.search);
+      const profileId = params.get("profileId");
+      const vehicleId = params.get("vehicleId");
+      const origin = params.get("origin");
+      const fuelPrice = params.get("fuelPrice");
+      if (profileId || vehicleId || origin || fuelPrice) {
+        form.reset({
+          ...form.getValues(),
+          profileId: profileId ? Number(profileId) : null,
+          vehicleId: vehicleId ? Number(vehicleId) : null,
+          origin: origin || "",
+          fuelPrice: fuelPrice ? Number(fuelPrice) : 1.5,
+        });
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles, vehicles, isEditing]);
+
   useEffect(() => {
     if (run && profiles && vehicles) {
       form.reset({

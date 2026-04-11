@@ -1,0 +1,335 @@
+Please add a super simple, idiot-proof onboarding flow to the Gig Trail app immediately after signup.
+
+## Main goal
+
+Make it incredibly easy for a new user to get started.
+
+The onboarding should:
+- feel friendly
+- feel fast
+- take about 30 seconds
+- avoid overwhelm
+- help the user understand why they are entering the information
+- create their first act profile automatically
+- create a basic vehicle automatically
+- send them straight into the calculator
+
+This should not feel like a boring “create profile” form.
+It should feel like:
+- “Let’s get your setup sorted”
+- “Tell us about your act”
+- “We’ll use this to run your numbers”
+
+## Core UX direction
+
+Do NOT use the phrase:
+- “Create Profile”
+
+Instead use:
+- “Let’s set up your act”
+
+Use simple plain-English language throughout.
+Assume the user is not technical.
+Assume the user may be tired, busy, or using mobile.
+Everything should be obvious.
+
+## Flow
+
+### After signup
+After a user signs up, do not send them to the dashboard first.
+
+Instead redirect them to a new onboarding page.
+
+Route example:
+- /onboarding
+or similar
+
+## Onboarding screen content
+
+### Main heading
+Let’s set up your act
+
+### Subheading
+This takes 30 seconds — we’ll use this to calculate your runs properly.
+
+### Small reassurance text
+You can change all of this later.
+
+## Keep the form minimal
+
+Only ask for the fields needed to make the calculator useful right away.
+
+### Field 1: Act Name
+Type:
+- text input
+
+Label:
+- Act Name
+
+Placeholder examples:
+- Julian & Beci Duo
+- My Solo Act
+- The Midnight Ramblers
+
+Helper text:
+- Just something to label your setup
+
+### Field 2: Act Type
+Type:
+- large button group or card buttons
+- do NOT use a dropdown
+
+Options:
+- Solo
+- Duo
+- Band
+
+Helper text:
+- This affects how we split profit later
+
+UX:
+- buttons should be large and easy to tap
+- one option selected at a time
+
+### Field 3: Number of People
+Type:
+- number input
+
+Label:
+- Number of People
+
+Behavior:
+- auto-fill based on Act Type:
+  - Solo = 1
+  - Duo = 2
+  - Band = 3
+- user can edit this if needed
+
+Helper text:
+- Who’s sharing the money
+
+### Field 4: Home Base
+Type:
+- text input
+
+Label:
+- Home Base
+
+Placeholder:
+- Melbourne, VIC
+
+Helper text:
+- Where most trips start from
+
+### Field 5: Vehicle
+Type:
+- simple card/button selection
+- do NOT make this a full vehicle builder yet
+
+Options:
+- Car — 7 L/100km
+- Van — 10 L/100km
+- Bus — 16 L/100km
+
+Helper text:
+- We use this to estimate fuel costs
+
+Behavior:
+- selecting one should automatically set a default vehicle name and fuel consumption
+- this should create a basic saved vehicle record later
+
+### Field 6: Fuel Price
+Type:
+- number input
+
+Label:
+- Fuel Price ($/L)
+
+Default:
+- 2.00
+
+Helper text:
+- You can change this anytime
+
+## CTA
+
+Main button text:
+- Build My First Run
+
+Do NOT use:
+- Submit
+- Create Profile
+- Save
+
+## Submission behavior
+
+When the user clicks “Build My First Run”:
+
+1. create their first act profile
+2. create a default vehicle based on the selected vehicle type
+3. attach both to the signed-in user
+4. save:
+   - act name
+   - act type
+   - people count
+   - home base
+   - vehicle type
+   - fuel consumption
+   - fuel price
+5. redirect the user straight into the Single Show Calculator
+6. pre-fill the calculator with:
+   - their act/profile
+   - their vehicle
+   - their home base
+   - their fuel price if applicable
+
+## Important UX requirements
+
+Please make this onboarding as easy as possible.
+
+### Required UX improvements
+- mobile friendly
+- large tap targets
+- clear spacing
+- friendly helper text
+- not too many words
+- not too many fields
+- user should understand why each field matters
+
+### Add a progress indicator
+Show something simple like:
+- Step 1 of 2
+or
+- Almost there
+
+### Add a reassurance note near the button
+- You can edit this later
+
+### Keep it fast
+Do not add:
+- advanced vehicle setup
+- accommodation defaults
+- food/day defaults
+- ticketing setup
+- multiple profiles
+- marketing options
+- tax info
+- complicated forms
+
+## Visual style
+
+Match the Gig Trail vintage brand theme:
+- warm parchment background
+- soft cream cards
+- burnt orange accents
+- charcoal text
+- rustic but clean
+- friendly and road-worn
+- still highly readable
+
+The onboarding page should feel:
+- welcoming
+- practical
+- musician-first
+- not corporate SaaS
+
+## Data behavior
+
+Please create or update the necessary models so this onboarding creates the actual user data needed by the app.
+
+### It should create:
+#### profile
+- user_id
+- name
+- act_type
+- people_count
+- home_base
+- default_vehicle_id
+
+#### vehicle
+- user_id
+- name
+- fuel_type (can default based on selection if needed)
+- avg_consumption_l_per_100km
+- notes optional
+
+### Suggested default vehicle names
+- Car Setup
+- Van Setup
+- Bus Setup
+
+Or similar clean naming.
+
+## Smart defaults
+
+### Act Type -> Number of People
+- Solo = 1
+- Duo = 2
+- Band = 3
+
+### Vehicle defaults
+- Car = 7
+- Van = 10
+- Bus = 16
+
+### Fuel price
+- default to 2.00
+
+## Validation
+
+Make validation very forgiving and user-friendly.
+
+### Requirements
+- Act Name required
+- Act Type required
+- Number of People required and must be at least 1
+- Home Base required
+- Vehicle required
+- Fuel Price optional but if blank use default 2.00
+
+### Validation messages should be plain English
+Examples:
+- Please give your act a name
+- Pick the setup that fits you best
+- Add your home base so we know where the run starts
+
+Avoid technical or harsh error messages.
+
+## Success behavior
+
+After successful onboarding:
+- show no confusing success page
+- send user directly into the calculator
+- make the first calculator screen feel ready to go
+
+Optional success line on redirect:
+- Your setup’s ready — let’s run the numbers
+
+## Optional polish
+
+If easy, add:
+- subtle icon for each vehicle
+- little explanation blurbs
+- auto-focus first input
+- Enter key submission
+- loading state on button:
+  - “Setting things up...”
+
+## Technical requirement
+
+Please implement this cleanly:
+- proper onboarding route/page
+- backend save logic
+- database persistence
+- redirect into calculator with prefilled defaults
+- clean reusable styling consistent with Gig Trail branding
+
+## Final goal
+
+A brand new user should be able to:
+1. sign up
+2. complete onboarding in under 30 seconds
+3. understand exactly what they are doing
+4. land in the calculator with useful defaults already filled in
+
+This needs to feel simple, helpful, and idiot-proof.

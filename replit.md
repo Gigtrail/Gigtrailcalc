@@ -35,9 +35,17 @@ A full-stack web app for touring musicians to calculate whether a single show or
 ### Authentication (Clerk)
 - Sign Up / Sign In via Clerk (email + Google OAuth)
 - Session cookies (NOT bearer tokens) — no `setAuthTokenGetter` needed
-- Landing page (`/`) for unauthenticated users; redirects to `/dashboard` when signed in
+- Landing page (`/`) for unauthenticated users; signed-in users with no profiles go to `/onboarding`, others to `/dashboard`
 - `requireAuth` middleware on all API routes
 - All data filtered by `userId` — users only see their own data
+
+### Onboarding Flow
+- Route: `/onboarding` — full-screen (no sidebar), protected, shown automatically to new users with 0 profiles
+- Fields: Act Name, Act Type (Solo/Duo/Band card buttons), Number of People (auto-filled from type), Home Base, Vehicle (Car/Van/Bus card buttons), Fuel Price
+- On submit: creates vehicle via `POST /vehicles`, then profile via `POST /profiles` (with `defaultVehicleId`)
+- Redirects to `/runs/new?profileId=X&vehicleId=Y&origin=...&fuelPrice=...` for prefilled calculator
+- Run form reads URL params and prefills form fields after profiles/vehicles load
+- `HomeRedirect` uses `SignedInRedirect` component that calls `useGetProfiles` to detect new users
 
 ### Subscription Plans (Stripe)
 - **Free** (AU$0): 1 profile, 1 vehicle, 5 saved runs, no tours

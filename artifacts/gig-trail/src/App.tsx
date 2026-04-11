@@ -21,7 +21,9 @@ import Tours from "@/pages/tours";
 import TourForm from "@/pages/tour-form";
 import TourDetail from "@/pages/tour-detail";
 import TourStopForm from "@/pages/tour-stop-form";
+import Onboarding from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
+import { useGetProfiles } from "@workspace/api-client-react";
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -63,11 +65,25 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function SignedInRedirect() {
+  const { data: profiles, isLoading } = useGetProfiles();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  if (!profiles || profiles.length === 0) {
+    return <Redirect to="/onboarding" />;
+  }
+
+  return <Redirect to="/dashboard" />;
+}
+
 function HomeRedirect() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/dashboard" />
+        <SignedInRedirect />
       </Show>
       <Show when="signed-out">
         <Landing />
@@ -83,6 +99,19 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
         <Layout>
           <Component />
         </Layout>
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
+}
+
+function ProtectedFullPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <>
+      <Show when="signed-in">
+        <Component />
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
@@ -108,6 +137,9 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/onboarding">
+              {() => <ProtectedFullPage component={Onboarding} />}
+            </Route>
             <Route path="/dashboard">
               {() => <ProtectedRoute component={Dashboard} />}
             </Route>
