@@ -15,7 +15,15 @@ export interface Run {
   /** @nullable */
   origin: string | null;
   /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
   destination: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
   distanceKm: number;
   returnTrip: boolean;
   fuelPrice: number;

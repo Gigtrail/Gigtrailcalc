@@ -8,6 +8,8 @@ export const profilesTable = pgTable("profiles", {
   name: text("name").notNull(),
   actType: text("act_type").notNull().default("Solo"),
   homeBase: text("home_base"),
+  homeBaseLat: numeric("home_base_lat", { precision: 10, scale: 6 }),
+  homeBaseLng: numeric("home_base_lng", { precision: 10, scale: 6 }),
   peopleCount: integer("people_count").notNull().default(1),
   defaultVehicleId: integer("default_vehicle_id"),
   avgAccomPerNight: numeric("avg_accom_per_night", { precision: 10, scale: 2 }).notNull().default("0"),

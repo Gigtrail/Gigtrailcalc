@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, Save } from "lucide-react";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useEffect, useMemo } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +32,8 @@ import { useQueryClient } from "@tanstack/react-query";
 const stopSchema = z.object({
   date: z.string().optional().nullable(),
   city: z.string().min(1, "City is required"),
+  cityLat: z.number().optional().nullable(),
+  cityLng: z.number().optional().nullable(),
   venueName: z.string().optional().nullable(),
   showType: z.string().min(1, "Show type is required"),
   fee: z.coerce.number().optional().nullable(),
@@ -80,6 +83,8 @@ export default function TourStopForm() {
     defaultValues: {
       date: "",
       city: "",
+      cityLat: null,
+      cityLng: null,
       venueName: "",
       showType: "Flat Fee",
       fee: 0,
@@ -157,6 +162,8 @@ export default function TourStopForm() {
       form.reset({
         date: stop.date ? stop.date.split('T')[0] : "",
         city: stop.city,
+        cityLat: stop.cityLat ?? null,
+        cityLng: stop.cityLng ?? null,
         venueName: stop.venueName || "",
         showType: stop.showType,
         fee: stop.fee,
@@ -255,7 +262,15 @@ export default function TourStopForm() {
                         <FormItem>
                           <FormLabel>City</FormLabel>
                           <FormControl>
-                            <Input placeholder="Austin, TX" {...field} />
+                            <PlacesAutocomplete
+                              value={field.value || ""}
+                              onChange={(text, place) => {
+                                field.onChange(text);
+                                form.setValue("cityLat", place?.lat ?? null);
+                                form.setValue("cityLng", place?.lng ?? null);
+                              }}
+                              placeholder="Austin, TX"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

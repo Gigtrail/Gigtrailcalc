@@ -26,10 +26,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 
 const runSchema = z.object({
   profileId: z.coerce.number().optional().nullable(),
   vehicleId: z.coerce.number().optional().nullable(),
+  originLat: z.number().optional().nullable(),
+  originLng: z.number().optional().nullable(),
+  destinationLat: z.number().optional().nullable(),
+  destinationLng: z.number().optional().nullable(),
   origin: z.string().min(1, "Origin is required"),
   destination: z.string().min(1, "Destination is required"),
   distanceKm: z.coerce.number().min(0),
@@ -76,6 +81,10 @@ export default function RunForm() {
     defaultValues: {
       profileId: null,
       vehicleId: null,
+      originLat: null,
+      originLng: null,
+      destinationLat: null,
+      destinationLng: null,
       origin: "",
       destination: "",
       distanceKm: 0,
@@ -226,6 +235,10 @@ export default function RunForm() {
       form.reset({
         profileId: run.profileId,
         vehicleId: run.vehicleId,
+        originLat: run.originLat ?? null,
+        originLng: run.originLng ?? null,
+        destinationLat: run.destinationLat ?? null,
+        destinationLng: run.destinationLng ?? null,
         origin: run.origin || "",
         destination: run.destination || "",
         distanceKm: run.distanceKm,
@@ -396,7 +409,15 @@ export default function RunForm() {
                         <FormItem>
                           <FormLabel>Origin</FormLabel>
                           <FormControl>
-                            <Input placeholder="Home City" {...field} />
+                            <PlacesAutocomplete
+                              value={field.value || ""}
+                              onChange={(text, place) => {
+                                field.onChange(text);
+                                form.setValue("originLat", place?.lat ?? null);
+                                form.setValue("originLng", place?.lng ?? null);
+                              }}
+                              placeholder="Home City"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -409,7 +430,15 @@ export default function RunForm() {
                         <FormItem>
                           <FormLabel>Destination</FormLabel>
                           <FormControl>
-                            <Input placeholder="Gig City" {...field} />
+                            <PlacesAutocomplete
+                              value={field.value || ""}
+                              onChange={(text, place) => {
+                                field.onChange(text);
+                                form.setValue("destinationLat", place?.lat ?? null);
+                                form.setValue("destinationLng", place?.lng ?? null);
+                              }}
+                              placeholder="Gig City"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

@@ -34,3 +34,8 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+VITE_GOOGLE_MAPS_API_KEY = "AIzaSyAg-fikECIa47zW4olWiHTEDHtaw_PfkyM"

@@ -25,6 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, Save, Navigation } from "lucide-react";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useEffect } from "react";
 
 const tourSchema = z.object({
@@ -32,7 +33,11 @@ const tourSchema = z.object({
   profileId: z.coerce.number().optional().nullable(),
   vehicleId: z.coerce.number().optional().nullable(),
   startLocation: z.string().optional().nullable(),
+  startLocationLat: z.number().optional().nullable(),
+  startLocationLng: z.number().optional().nullable(),
   endLocation: z.string().optional().nullable(),
+  endLocationLat: z.number().optional().nullable(),
+  endLocationLng: z.number().optional().nullable(),
   returnHome: z.boolean(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
@@ -67,7 +72,11 @@ export default function TourForm() {
       profileId: null,
       vehicleId: null,
       startLocation: "",
+      startLocationLat: null,
+      startLocationLng: null,
       endLocation: "",
+      endLocationLat: null,
+      endLocationLng: null,
       returnHome: true,
       startDate: "",
       endDate: "",
@@ -276,7 +285,15 @@ export default function TourForm() {
                     <FormItem>
                       <FormLabel>Start Location</FormLabel>
                       <FormControl>
-                        <Input placeholder="Home City" {...field} value={field.value || ""} />
+                        <PlacesAutocomplete
+                          value={field.value || ""}
+                          onChange={(text, place) => {
+                            field.onChange(text);
+                            form.setValue("startLocationLat", place?.lat ?? null);
+                            form.setValue("startLocationLng", place?.lng ?? null);
+                          }}
+                          placeholder="Home City"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -289,7 +306,15 @@ export default function TourForm() {
                     <FormItem>
                       <FormLabel>End Location</FormLabel>
                       <FormControl>
-                        <Input placeholder="Where the tour ends" {...field} value={field.value || ""} />
+                        <PlacesAutocomplete
+                          value={field.value || ""}
+                          onChange={(text, place) => {
+                            field.onChange(text);
+                            form.setValue("endLocationLat", place?.lat ?? null);
+                            form.setValue("endLocationLng", place?.lng ?? null);
+                          }}
+                          placeholder="Where the tour ends"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

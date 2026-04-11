@@ -12,6 +12,10 @@ export interface Profile {
   actType: string;
   /** @nullable */
   homeBase: string | null;
+  /** @nullable */
+  homeBaseLat?: number | null;
+  /** @nullable */
+  homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
   defaultVehicleId: number | null;

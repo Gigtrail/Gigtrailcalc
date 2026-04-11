@@ -19,6 +19,10 @@ export interface Profile {
   actType: string;
   /** @nullable */
   homeBase: string | null;
+  /** @nullable */
+  homeBaseLat?: number | null;
+  /** @nullable */
+  homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
   defaultVehicleId: number | null;
@@ -34,6 +38,10 @@ export interface CreateProfileBody {
   actType: string;
   /** @nullable */
   homeBase?: string | null;
+  /** @nullable */
+  homeBaseLat?: number | null;
+  /** @nullable */
+  homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
   defaultVehicleId?: number | null;
@@ -74,7 +82,15 @@ export interface Run {
   /** @nullable */
   origin: string | null;
   /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
   destination: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
   distanceKm: number;
   returnTrip: boolean;
   fuelPrice: number;
@@ -122,7 +138,15 @@ export interface CreateRunBody {
   /** @nullable */
   origin?: string | null;
   /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
   destination?: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
   distanceKm: number;
   returnTrip: boolean;
   fuelPrice: number;
@@ -221,6 +245,10 @@ export interface TourStop {
   date: string | null;
   city: string;
   /** @nullable */
+  cityLat?: number | null;
+  /** @nullable */
+  cityLng?: number | null;
+  /** @nullable */
   venueName: string | null;
   showType: string;
   /** @nullable */
@@ -258,6 +286,10 @@ export interface CreateTourStopBody {
   /** @nullable */
   date?: string | null;
   city: string;
+  /** @nullable */
+  cityLat?: number | null;
+  /** @nullable */
+  cityLng?: number | null;
   /** @nullable */
   venueName?: string | null;
   showType: string;

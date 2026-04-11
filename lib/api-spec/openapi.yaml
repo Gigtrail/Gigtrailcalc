@@ -554,6 +554,10 @@ components:
           type: string
         homeBase:
           type: ["string", "null"]
+        homeBaseLat:
+          type: ["number", "null"]
+        homeBaseLng:
+          type: ["number", "null"]
         peopleCount:
           type: integer
         defaultVehicleId:
@@ -587,6 +591,10 @@ components:
           type: string
         homeBase:
           type: ["string", "null"]
+        homeBaseLat:
+          type: ["number", "null"]
+        homeBaseLng:
+          type: ["number", "null"]
         peopleCount:
           type: integer
         defaultVehicleId:
@@ -659,8 +667,16 @@ components:
           type: ["integer", "null"]
         origin:
           type: ["string", "null"]
+        originLat:
+          type: ["number", "null"]
+        originLng:
+          type: ["number", "null"]
         destination:
           type: ["string", "null"]
+        destinationLat:
+          type: ["number", "null"]
+        destinationLng:
+          type: ["number", "null"]
         distanceKm:
           type: number
         returnTrip:
@@ -740,8 +756,16 @@ components:
           type: ["integer", "null"]
         origin:
           type: ["string", "null"]
+        originLat:
+          type: ["number", "null"]
+        originLng:
+          type: ["number", "null"]
         destination:
           type: ["string", "null"]
+        destinationLat:
+          type: ["number", "null"]
+        destinationLng:
+          type: ["number", "null"]
         distanceKm:
           type: number
         returnTrip:
@@ -880,6 +904,10 @@ components:
           type: ["string", "null"]
         city:
           type: string
+        cityLat:
+          type: ["number", "null"]
+        cityLng:
+          type: ["number", "null"]
         venueName:
           type: ["string", "null"]
         showType:
@@ -944,6 +972,10 @@ components:
           type: ["string", "null"]
         city:
           type: string
+        cityLat:
+          type: ["number", "null"]
+        cityLng:
+          type: ["number", "null"]
         venueName:
           type: ["string", "null"]
         showType:

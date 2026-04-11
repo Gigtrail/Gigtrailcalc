@@ -8,6 +8,8 @@ export const tourStopsTable = pgTable("tour_stops", {
   stopOrder: integer("stop_order").notNull().default(0),
   date: text("date"),
   city: text("city").notNull(),
+  cityLat: numeric("city_lat", { precision: 10, scale: 6 }),
+  cityLng: numeric("city_lng", { precision: 10, scale: 6 }),
   venueName: text("venue_name"),
   showType: text("show_type").notNull().default("flat_fee"),
   fee: numeric("fee", { precision: 10, scale: 2 }),

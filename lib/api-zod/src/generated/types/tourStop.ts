@@ -14,6 +14,10 @@ export interface TourStop {
   date: string | null;
   city: string;
   /** @nullable */
+  cityLat?: number | null;
+  /** @nullable */
+  cityLng?: number | null;
+  /** @nullable */
   venueName: string | null;
   showType: string;
   /** @nullable */

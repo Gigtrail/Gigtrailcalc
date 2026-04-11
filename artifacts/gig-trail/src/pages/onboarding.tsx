@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan } from "@/hooks/use-plan";
 import { Input } from "@/components/ui/input";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -39,6 +40,8 @@ export default function Onboarding() {
   const [actName, setActName] = useState("");
   const [actType, setActType] = useState("Solo");
   const [homeBase, setHomeBase] = useState("");
+  const [homeBaseLat, setHomeBaseLat] = useState<number | undefined>(undefined);
+  const [homeBaseLng, setHomeBaseLng] = useState<number | undefined>(undefined);
   const [vehicleType, setVehicleType] = useState("Car");
   const [fuelPrice, setFuelPrice] = useState("2.00");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,6 +101,8 @@ export default function Onboarding() {
         actType,
         peopleCount,
         homeBase: homeBase.trim(),
+        homeBaseLat: homeBaseLat ?? null,
+        homeBaseLng: homeBaseLng ?? null,
         defaultVehicleId: vehicle.id,
         avgAccomPerNight: 0,
         avgFoodPerDay: 0,
@@ -209,10 +214,15 @@ export default function Onboarding() {
             <Label htmlFor="home-base" className="text-sm font-semibold text-foreground">
               Home Base
             </Label>
-            <Input
+            <PlacesAutocomplete
               id="home-base"
               value={homeBase}
-              onChange={e => { setHomeBase(e.target.value); setErrors(p => ({ ...p, homeBase: "" })); }}
+              onChange={(text, place) => {
+                setHomeBase(text);
+                setHomeBaseLat(place?.lat);
+                setHomeBaseLng(place?.lng);
+                setErrors(p => ({ ...p, homeBase: "" }));
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Melbourne, VIC"
               className={errors.homeBase ? "border-destructive" : ""}
