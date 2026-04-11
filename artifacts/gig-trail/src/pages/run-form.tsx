@@ -104,11 +104,25 @@ export default function RunForm() {
     const profile = profiles?.find(p => p.id === formValues.profileId);
     const vehicle = vehicles?.find(v => v.id === formValues.vehicleId);
 
+    const distanceKm = Number(formValues.distanceKm) || 0;
+    const fuelPrice = Number(formValues.fuelPrice) || 0;
+    const fee = Number(formValues.fee) || 0;
+    const capacity = Number(formValues.capacity) || 0;
+    const ticketPrice = Number(formValues.ticketPrice) || 0;
+    const expectedAttendancePct = Number(formValues.expectedAttendancePct) || 0;
+    const splitPct = Number(formValues.splitPct) || 0;
+    const guarantee = Number(formValues.guarantee) || 0;
+    const merchEstimate = Number(formValues.merchEstimate) || 0;
+    const accommodationCost = Number(formValues.accommodationCost) || 0;
+    const foodCost = Number(formValues.foodCost) || 0;
+    const extraCosts = Number(formValues.extraCosts) || 0;
+    const marketingCost = Number(formValues.marketingCost) || 0;
+
     const distanceMultiplier = formValues.returnTrip ? 2 : 1;
-    const totalDistance = (formValues.distanceKm || 0) * distanceMultiplier;
-    
-    const fuelCost = vehicle && vehicle.avgConsumption && formValues.fuelPrice
-      ? (totalDistance * vehicle.avgConsumption / 100) * formValues.fuelPrice
+    const totalDistance = distanceKm * distanceMultiplier;
+
+    const fuelCost = vehicle && vehicle.avgConsumption && fuelPrice
+      ? (totalDistance * Number(vehicle.avgConsumption) / 100) * fuelPrice
       : 0;
 
     let showIncome = 0;
@@ -116,27 +130,27 @@ export default function RunForm() {
     let grossRevenue = 0;
 
     if (formValues.showType === "Flat Fee") {
-      showIncome = formValues.fee || 0;
+      showIncome = fee;
     } else if (formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") {
-      expectedTicketsSold = Math.floor(((formValues.capacity || 0) * (formValues.expectedAttendancePct || 0)) / 100);
-      grossRevenue = expectedTicketsSold * (formValues.ticketPrice || 0);
+      expectedTicketsSold = Math.floor((capacity * expectedAttendancePct) / 100);
+      grossRevenue = expectedTicketsSold * ticketPrice;
 
       if (formValues.dealType === "100% door") {
         showIncome = grossRevenue;
       } else if (formValues.dealType === "percentage split") {
-        showIncome = grossRevenue * ((formValues.splitPct || 0) / 100);
+        showIncome = grossRevenue * (splitPct / 100);
       } else if (formValues.dealType === "guarantee vs door") {
-        const splitIncome = grossRevenue * ((formValues.splitPct || 0) / 100);
-        showIncome = Math.max(formValues.guarantee || 0, splitIncome);
+        const splitIncome = grossRevenue * (splitPct / 100);
+        showIncome = Math.max(guarantee, splitIncome);
       }
 
       if (formValues.showType === "Hybrid") {
-        showIncome += (formValues.guarantee || 0);
+        showIncome += guarantee;
       }
     }
 
-    const totalIncome = showIncome + (formValues.merchEstimate || 0);
-    const totalCost = fuelCost + (formValues.accommodationCost || 0) + (formValues.foodCost || 0) + (formValues.extraCosts || 0) + (formValues.marketingCost || 0);
+    const totalIncome = showIncome + merchEstimate;
+    const totalCost = fuelCost + accommodationCost + foodCost + extraCosts + marketingCost;
     const netProfit = totalIncome - totalCost;
 
     let status = "Probably Not Worth It";
@@ -160,14 +174,14 @@ export default function RunForm() {
 
     let breakEvenTickets = 0;
     let breakEvenCapacity = 0;
-    if ((formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") && formValues.ticketPrice && formValues.ticketPrice > 0) {
-      const remainingCosts = Math.max(0, totalCost - (formValues.merchEstimate || 0) - (formValues.showType === "Hybrid" ? (formValues.guarantee || 0) : 0));
+    if ((formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") && ticketPrice > 0) {
+      const remainingCosts = Math.max(0, totalCost - merchEstimate - (formValues.showType === "Hybrid" ? guarantee : 0));
       if (formValues.dealType === "100% door") {
-        breakEvenTickets = Math.ceil(remainingCosts / formValues.ticketPrice);
+        breakEvenTickets = Math.ceil(remainingCosts / ticketPrice);
       } else {
-         breakEvenTickets = Math.ceil((remainingCosts / ((formValues.splitPct || 100) / 100)) / formValues.ticketPrice);
+        breakEvenTickets = Math.ceil((remainingCosts / ((splitPct || 100) / 100)) / ticketPrice);
       }
-      breakEvenCapacity = formValues.capacity ? (breakEvenTickets / formValues.capacity) * 100 : 0;
+      breakEvenCapacity = capacity > 0 ? (breakEvenTickets / capacity) * 100 : 0;
     }
 
     return {

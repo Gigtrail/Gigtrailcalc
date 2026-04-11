@@ -103,27 +103,35 @@ export default function TourStopForm() {
   const formValues = useWatch({ control: form.control });
 
   const calculatedValues = useMemo(() => {
+    const fee = Number(formValues.fee) || 0;
+    const capacity = Number(formValues.capacity) || 0;
+    const expectedAttendancePct = Number(formValues.expectedAttendancePct) || 0;
+    const ticketPrice = Number(formValues.ticketPrice) || 0;
+    const splitPct = Number(formValues.splitPct) || 0;
+    const guarantee = Number(formValues.guarantee) || 0;
+    const merchEstimate = Number(formValues.merchEstimate) || 0;
+
     let showIncome = 0;
     let expectedTicketsSold = 0;
     let grossRevenue = 0;
 
     if (formValues.showType === "Flat Fee") {
-      showIncome = formValues.fee || 0;
+      showIncome = fee;
     } else if (formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") {
-      expectedTicketsSold = Math.floor(((formValues.capacity || 0) * (formValues.expectedAttendancePct || 0)) / 100);
-      grossRevenue = expectedTicketsSold * (formValues.ticketPrice || 0);
+      expectedTicketsSold = Math.floor((capacity * expectedAttendancePct) / 100);
+      grossRevenue = expectedTicketsSold * ticketPrice;
 
       if (formValues.dealType === "100% door") {
         showIncome = grossRevenue;
       } else if (formValues.dealType === "percentage split") {
-        showIncome = grossRevenue * ((formValues.splitPct || 0) / 100);
+        showIncome = grossRevenue * (splitPct / 100);
       } else if (formValues.dealType === "guarantee vs door") {
-        const splitIncome = grossRevenue * ((formValues.splitPct || 0) / 100);
-        showIncome = Math.max(formValues.guarantee || 0, splitIncome);
+        const splitIncome = grossRevenue * (splitPct / 100);
+        showIncome = Math.max(guarantee, splitIncome);
       }
 
       if (formValues.showType === "Hybrid") {
-        showIncome += (formValues.guarantee || 0);
+        showIncome += guarantee;
       }
     }
 
@@ -131,7 +139,7 @@ export default function TourStopForm() {
       expectedTicketsSold,
       grossRevenue,
       showIncome,
-      totalIncome: showIncome + (formValues.merchEstimate || 0)
+      totalIncome: showIncome + merchEstimate,
     };
   }, [formValues]);
 
