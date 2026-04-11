@@ -1,0 +1,250 @@
+Please update the Gig Trail app to improve Free plan logic and enable automatic route distance, travel time, and fuel cost calculations using the Google Maps APIs already connected to the app.
+
+## Main goals
+
+1. Free users should have their Origin/Home Base fixed from their saved profile
+2. Destination should still be selectable
+3. Distance should be calculated automatically from Origin to Destination
+4. Estimated driving time should be calculated automatically
+5. Fuel cost should be calculated automatically from:
+   - route distance
+   - selected vehicle fuel consumption
+   - fuel price
+6. Keep this simple and musician-friendly
+
+---
+
+## 1. Free plan location behavior
+
+### Free users
+- Origin/Home Base should be locked to the location saved in their act profile
+- Do NOT let Free users manually edit Origin on the Single Show Calculator
+- Show the profile home base as a read-only field
+- Add helper text:
+  "Your home base comes from your profile"
+- If the user wants to change it, show:
+  "Change this in your profile"
+
+### Pro users
+- Can edit origin manually if needed
+- Can still default to profile location
+
+---
+
+## 2. Use Google autocomplete in destination fields
+
+For destination fields:
+- keep Google Places Autocomplete enabled
+- when a place is selected, store:
+  - place name
+  - latitude
+  - longitude
+
+For Origin/Home Base:
+- use saved profile location and stored lat/lng if available
+- if lat/lng is missing for an older profile, geocode it once and save it
+
+---
+
+## 3. Automatic route calculation
+
+When user clicks “Calculate Gig”:
+
+### Required inputs
+- Origin location
+- Destination location
+- Vehicle fuel consumption
+- Fuel price
+- Return trip toggle
+
+### Route calculation
+Use Google routing to calculate:
+- one-way distance in km
+- one-way driving duration
+- if return trip is enabled:
+  - total distance = one-way distance × 2
+  - total duration = one-way duration × 2
+
+### Output fields
+Display:
+- Distance (km)
+- Estimated drive time
+- Fuel used (L)
+- Fuel cost ($)
+
+If no route can be found:
+- show friendly error:
+  "We couldn't calculate the route for this run. Please check the locations."
+
+---
+
+## 4. Fuel calculation logic
+
+Use:
+fuel_used_litres = (total_distance_km * vehicle_l_per_100km) / 100
+fuel_cost = fuel_used_litres * fuel_price
+
+### Example
+If:
+- total distance = 400 km
+- vehicle = 10 L/100km
+- fuel price = 2.00
+
+Then:
+- fuel used = 40 L
+- fuel cost = 80.00
+
+Please ensure:
+- all values are numeric
+- currency formatting is correct
+- no string concatenation bugs
+
+---
+
+## 5. Time calculation
+
+Display driving time in a readable format, for example:
+- 2h 35m
+- 8h 10m
+
+If return trip is enabled, show:
+- total travel time including return
+
+Label:
+- Estimated drive time
+
+---
+
+## 6. UI changes in Single Show Calculator
+
+### Origin field
+For Free:
+- read-only
+- prefilled from profile
+- visually styled as locked/read-only
+
+For Pro:
+- editable if needed
+
+### Destination field
+- keep autocomplete
+- selectable by user
+
+### Distance field
+- remove manual editing if auto route is available
+- show calculated value after route lookup
+- if you want fallback mode, allow manual override only when auto route fails
+
+### Add travel summary section
+Show a compact section with:
+- Distance
+- Drive time
+- Fuel used
+- Fuel cost
+
+---
+
+## 7. Plan gating
+
+### Free
+- fixed origin from profile
+- destination autocomplete
+- automatic distance and drive time for single shows
+- automatic fuel cost for single shows
+
+### Pro
+- editable origin
+- tour-wide route automation
+- routing between stops
+- deeper automation and insights
+
+Important:
+Do NOT gate basic single-show distance/time calculation behind Pro.
+Keep advanced routing flexibility as the Pro upsell.
+
+---
+
+## 8. Data model updates
+
+Make sure profiles store:
+- home_base_name
+- home_base_lat
+- home_base_lng
+
+Make sure locations selected in calculator store:
+- display_name
+- latitude
+- longitude
+
+If older profiles only have a text home base, backfill coordinates when possible.
+
+---
+
+## 9. Technical implementation
+
+Use the Google Maps APIs already set up in the app.
+
+Recommended architecture:
+- frontend autocomplete for location selection
+- backend route calculation service
+- backend fuel calculation service
+
+Please create or update:
+- routing service
+- calculation helpers
+- location persistence logic
+
+The routing service should return:
+- distance_km
+- duration_minutes
+- source/provider
+- success/failure
+
+---
+
+## 10. Important bug fixes
+
+Please also fix the current issue where:
+- distance is not being calculated
+- fuel cost is not being calculated correctly
+
+Make sure the result card reflects the real calculated values.
+
+From the current screenshot it appears:
+- origin and destination are selected
+- but distance remains 0
+- fuel remains 0
+This should be fixed.
+
+---
+
+## 11. Result card updates
+
+Update the result card so it shows:
+- Verdict
+- You’ll clear / You’ll lose
+- Total on the table
+- Cost to get there
+- Fuel
+- Estimated accommodation
+- Distance
+- Drive time
+
+Keep the design simple and readable.
+
+---
+
+## 12. UX goals
+
+The final experience should feel like this:
+
+Free user:
+- picks destination
+- clicks Calculate Gig
+- instantly sees:
+  - how far it is
+  - how long it takes
+  - what fuel will cost
+  - whether the gig is worth it
+
+This should feel obvious, useful, and low-friction.
