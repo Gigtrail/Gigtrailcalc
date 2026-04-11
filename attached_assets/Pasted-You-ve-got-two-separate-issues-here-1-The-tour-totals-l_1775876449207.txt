@@ -1,0 +1,332 @@
+You’ve got two separate issues here:
+
+1. **The tour totals logic is broken**
+2. **You want auto-routing + location-based average fuel pricing**
+
+The best move is to give Replit a very clear upgrade/fix prompt.
+
+````text
+Please fix and upgrade the Gig Trail Tour Calculator.
+
+## Current problems
+
+### Problem 1: Tour totals are not calculating correctly
+On the tour summary page, the app is not correctly working out:
+- show income
+- merch income
+- fuel cost
+- accommodation
+- extra costs
+- total expenses
+- net result
+- per member amount
+- average per show
+
+From the current screen, it looks like the tour has show income entered, but the final “What’s It Worth?” card is still showing $0 or incorrect values.
+
+Please fix the full calculation flow so the tour summary correctly totals all stop income and all expenses.
+
+---
+
+## Required tour calculation logic
+
+A tour should total all stops and all travel legs.
+
+### Tour income should include:
+- flat fees
+- ticketed show income
+- hybrid show income
+- merch estimates
+
+### Tour expenses should include:
+- fuel cost for each travel leg
+- accommodation costs
+- extra costs
+- marketing costs for ticketed shows
+- optional food/per diem if already stored on profile or tour
+
+### Tour totals should calculate:
+- total show income
+- total merch estimate
+- gross income
+- total fuel cost
+- total accommodation
+- total extra costs
+- total marketing
+- total food/per diem
+- total expenses
+- net profit/loss
+- profit per member
+- average profit per show
+
+### Formula
+gross_income = total_show_income + total_merch
+total_expenses = fuel + accommodation + extras + marketing + food
+net_profit = gross_income - total_expenses
+profit_per_member = net_profit / people_count
+average_per_show = net_profit / number_of_shows
+
+Please ensure these values appear correctly in the summary cards.
+
+---
+
+## Required fix for fuel cost logic
+
+The fuel section currently looks wrong.
+It appears to be showing something like:
+- “Est. Fuel (km) $-530.00”
+
+That suggests fuel distance and fuel cost may be mixed up, signed incorrectly, or labelled incorrectly.
+
+Please fix this so the UI clearly separates:
+
+- Total Distance (km)
+- Fuel Used (L)
+- Avg Fuel Price ($/L)
+- Fuel Cost ($)
+
+### Correct fuel formula
+fuel_used_litres = (total_distance_km * vehicle_l_per_100km) / 100
+fuel_cost = fuel_used_litres * avg_fuel_price
+
+Fuel cost should always display as a positive expense number.
+If it is shown in an expenses card, that is enough — do not also apply a negative sign to the label.
+
+---
+
+## New feature: automatic routing between tour stops
+
+I want the app to automatically work out routing between:
+- home base / start location
+- each stop in order
+- optional return to end location or return home
+
+### Requirements
+- Use stop order to calculate each leg
+- Route should be:
+  start -> stop 1 -> stop 2 -> stop 3 -> end/return home
+- Calculate distance per leg
+- Sum all leg distances into total distance
+- Allow manual distance override for any stop if needed
+- If manual override exists, use it instead of the auto route distance for that leg
+
+### UI improvements
+On the tour page, show:
+- each travel leg
+- distance for each leg
+- fuel estimate for each leg
+- running total distance
+
+Example:
+Melbourne -> Osborne Flat = 120 km
+Osborne Flat -> Chewton = 95 km
+Chewton -> Melbourne = 140 km
+
+Total distance = 355 km
+
+---
+
+## New feature: automatic average fuel price by location
+
+I want the app to automatically estimate average fuel prices based on location.
+
+### Requirements
+- Each stop can use a location-based fuel estimate
+- The tour should calculate an average fuel price across the route
+- If a stop has a fuel price override, that override should be used for that stop/leg
+- If no override is entered, use the automatic location-based estimate
+
+### Important
+Structure this cleanly so it works now with a basic implementation and can be improved later.
+
+### Implementation approach
+Please create a service layer for fuel pricing, for example:
+- fuel_service.py
+or similar
+
+For now, support either:
+1. a basic built-in regional lookup table by city/state/country
+2. or API-ready structure if an external fuel API is available later
+
+### Fallback logic
+If automatic fuel data is unavailable:
+- fall back to a default fuel price from app settings
+- or use the profile/tour default fuel price
+
+### UI
+Show:
+- Avg fuel price used: $X.XX/L
+- if estimated automatically, label it as:
+  “Auto fuel estimate”
+- if overridden manually, label it as:
+  “Manual fuel price”
+
+---
+
+## New feature: route/distance service layer
+
+Please refactor the app so route distance is handled by a dedicated service layer, for example:
+- routing_service.py
+
+The routing service should:
+- calculate distance between two place names
+- be easy to replace later with a real mapping API
+- support fallback manual distance
+- return structured data for each leg
+
+Example output:
+{
+  "from": "Melbourne, VIC",
+  "to": "Chewton, VIC",
+  "distance_km": 140,
+  "source": "auto"
+}
+
+If manual override exists:
+{
+  "from": "Melbourne, VIC",
+  "to": "Chewton, VIC",
+  "distance_km": 150,
+  "source": "manual"
+}
+
+---
+
+## Summary card fixes
+
+Please fix the “What’s It Worth?” card so it always shows:
+- net total
+- profit per member
+- average per show
+- status:
+  - Worth the Drive
+  - Tight Margins
+  - Probably Not Worth It
+
+### Suggested status logic
+- net profit > good margin threshold = Worth the Drive
+- near break-even = Tight Margins
+- negative profit = Probably Not Worth It
+
+---
+
+## Expense and income card fixes
+
+Please make sure these cards display correctly:
+
+### Income card
+- show income total
+- merch estimate total
+- ticket income total if relevant
+- gross total
+
+### Expenses card
+- fuel cost
+- accommodation
+- extra costs
+- marketing
+- food/per diem
+- total expenses
+
+Do not mix distance units and dollar units in the same line.
+
+---
+
+## Debugging and reliability improvements
+
+Please add:
+- console logging or backend logs for calculation steps during development
+- helper functions for all numeric conversions
+- shared currency formatting helper
+- safe defaults so blank numeric fields become 0
+- no string concatenation in totals
+
+Suggested helper functions:
+```js
+function toNumber(value) {
+  const n = parseFloat(value);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+function formatCurrency(value) {
+  return `$${toNumber(value).toFixed(2)}`;
+}
+````
+
+---
+
+## Seed data / testing
+
+Please test the app with a sample tour:
+
+* Start: Melbourne, VIC
+* Stop 1: Osborne Flat
+
+  * flat fee 600
+  * merch 100
+  * accommodation 80
+  * extra costs 100
+* Stop 2: Chewton
+
+  * flat fee 550
+  * merch 100
+  * accommodation 200
+  * extra costs 50
+* Return home: Melbourne, VIC
+
+Vehicle:
+
+* Coaster Bus
+* 16 L/100km
+
+Profile:
+
+* Julian & Beci Duo
+* 2 members
+
+The app should calculate:
+
+* route distances
+* fuel used
+* fuel cost
+* gross income
+* total expenses
+* net result
+* per member result
+* average per show
+
+---
+
+## Final requirement
+
+Please clean up the code so the app is structured like this:
+
+* calculation service
+* routing service
+* fuel pricing service
+* clean frontend display
+* accurate tour totals
+
+The app should feel reliable and practical for musicians planning real tour runs.
+
+```
+
+A couple of honest notes:
+
+- **Auto-routing** is very doable.
+- **Auto fuel pricing by location** is also doable, but it depends on what data source/API Replit uses. So the safest build is:
+  - make the app structure ready for it now
+  - use fallback defaults/manual override
+  - plug in a proper source after
+
+The key thing is: **do not ask Replit to “just magically know fuel prices” without a service layer and fallback logic**, or it’ll get flaky again.
+
+The cleanest next version of this app should work like this:
+
+- route is auto-calculated
+- fuel price is estimated automatically where possible
+- every stop still allows manual override
+- totals always come from one shared calculator engine
+
+If you want, I can also write you a **second, better prompt just for the routing/fuel API part** so you can do it in stages instead of one big hit.
+```
