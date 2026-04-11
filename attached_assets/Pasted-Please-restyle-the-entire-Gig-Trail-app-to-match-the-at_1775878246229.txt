@@ -1,0 +1,242 @@
+Please restyle the entire Gig Trail app to match the attached vintage logo and make the UI feel like it belongs to the same brand world.
+
+## Overall design direction
+
+The app should match this visual style:
+
+- vintage
+- warm
+- road-worn
+- practical
+- rustic but still polished
+- like an old touring notebook mixed with a clean modern tool
+- inspired by aged paper, vintage signage, old-road motels, classic touring vehicles, tyre marks, worn print textures
+- still easy to read and functional
+- do NOT make it look like a modern corporate SaaS dashboard
+- do NOT make it look glossy, neon, or futuristic
+
+The look should feel like:
+- dusty highways
+- old pub posters
+- road maps
+- petrol-station nostalgia
+- touring musicians living on the road
+
+## Use the attached logo as the main brand reference
+
+The visual cues to pull from the logo are:
+
+- aged cream / parchment background
+- burnt orange lettering
+- charcoal / near-black typography
+- tyre track motif
+- distressed print texture
+- vintage classic station wagon vibe
+- bold slab/serif headline feel
+- warm earthy tones
+
+## New color palette
+
+Use this as the new core theme:
+
+### Backgrounds
+- parchment / aged cream: #EDE2C8
+- slightly darker paper tone: #DCC9A3
+- warm panel tone: #F4EAD2
+
+### Text
+- charcoal black: #1E1A17
+- faded dark brown: #3A2F26
+- muted brown-grey: #6F6255
+
+### Accents
+- burnt orange: #B8611B
+- deeper rust: #8F4A16
+- dusty gold: #C49446
+
+### Borders / details
+- faded tyre grey: #5F5A54
+- soft paper shadow: rgba(58, 47, 38, 0.12)
+
+## Theme update requirements
+
+Please replace the current dark theme with this new warm vintage theme across the whole app.
+
+### Update these areas:
+- app background
+- cards
+- forms
+- sidebars
+- headers
+- navigation
+- buttons
+- badges
+- alerts
+- summary cards
+- pricing page
+- tables/lists
+- empty states
+- lock/upgrade prompts
+
+## Styling rules
+
+### Background
+- use a parchment or aged-paper style background
+- subtle texture is okay if lightweight
+- avoid flat stark white
+- avoid black/dark mode as default
+
+### Cards
+- warm paper cards or soft cream panels
+- rounded corners
+- light borders
+- subtle depth
+- slightly inset vintage look okay
+- no glassmorphism
+
+### Typography
+- headings should feel bold and vintage-inspired
+- body text should remain highly readable
+- preserve usability over style
+- if using Google Fonts, choose something that fits the brand:
+  - headings: a slab serif or bold serif vibe
+  - body: clean readable sans-serif or humanist serif
+- examples of acceptable directions:
+  - heading style similar to Roboto Slab, Bitter, Arvo, or similar
+  - body style similar to Inter, Source Sans, Lato, or similar
+
+### Buttons
+Primary buttons:
+- burnt orange or dusty gold
+- dark text or cream text depending on contrast
+- sturdy, tactile feel
+- hover state slightly darker
+
+Secondary buttons:
+- cream or paper tone with charcoal border
+- subtle vintage feel
+
+Danger buttons:
+- muted rust red, not bright modern red
+
+### Inputs and forms
+- cream/paper input backgrounds
+- warm dark text
+- borders in muted brown/grey
+- focus state in burnt orange
+- placeholders in muted brown-grey
+- forms should feel tactile and analogue-inspired but still modern
+
+### Cards and UI language
+Use the current Gig Trail tone:
+- Build Your Run
+- What’s It Worth?
+- Trail Notes
+- Worth the Drive
+- Tight Margins
+- Probably Not Worth It
+
+But restyle them visually to suit the new theme.
+
+## Profitability status styles
+
+Please redesign the status cards using the new palette:
+
+### Worth the Drive
+- warm olive/gold tint or dusty green-brown accent
+- should feel positive without looking bright tech-green
+
+### Tight Margins
+- muted amber / dusty gold
+
+### Probably Not Worth It
+- muted rust / old warning-sign red
+- softer and more vintage than modern red
+
+## Specific component changes
+
+### Header / navigation
+- make it feel like a vintage touring app
+- warm paper or parchment background
+- logo placement should feel natural
+- darker text
+- subtle bottom border
+
+### Dashboard cards
+- use warm paper cards
+- improve visual hierarchy
+- use accent color for totals and key values
+- cards should feel like well-designed printed labels or route cards
+
+### Tour page
+- restyle route/stops list to feel like a roadbook or itinerary
+- use badges that fit the palette
+- pricing/income figures should use burnt orange or charcoal
+- stop numbers can use circular badge styling inspired by route markers
+
+### Pricing page
+- update all pricing cards to match the vintage brand
+- remove generic SaaS look
+- cards should feel warm and premium
+- CTA buttons should fit the new color palette
+
+### Auth pages
+- login/signup pages should feel on-brand
+- use warm paper background and logo styling
+- checkboxes and labels should match the vintage palette
+
+## Add subtle brand motifs sparingly
+
+You may include very subtle decorative touches such as:
+- tyre-track divider pattern
+- faint paper texture
+- thin vintage-style separators
+- route marker circles
+- old travel tag / ticket inspired badges
+
+But keep them minimal so the app stays clean and usable.
+
+## Important usability constraints
+
+Do not sacrifice readability.
+
+Please ensure:
+- strong text contrast
+- buttons remain obvious
+- forms remain easy to use
+- summary cards remain clear
+- mobile responsiveness stays good
+- layout does not become cluttered
+
+## Technical instructions
+
+Please implement this as a proper theme/style refactor, not random one-off inline styles.
+
+If the app uses:
+- CSS files: create/update a theme stylesheet
+- Tailwind: update the palette and component classes consistently
+- component library: override theme tokens cleanly
+
+Please centralize reusable theme variables for:
+- colors
+- border radius
+- shadows
+- button styles
+- card styles
+- typography
+
+## Deliverables
+
+Please update:
+1. the global app theme
+2. all major pages/components
+3. buttons, cards, forms, badges, and status colors
+4. pricing page styling
+5. auth page styling
+
+And make sure the app now feels visually aligned with the attached Gig Trail Fuel Calculator logo.
+
+## Final design goal
+
+The app should feel like:
+“A touring calculator built for real musicians on the road, with the soul of an old road atlas and the practicality of a modern tool.”

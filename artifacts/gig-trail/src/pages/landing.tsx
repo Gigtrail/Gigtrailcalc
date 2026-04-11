@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background text-foreground dark">
+    <div className="min-h-screen bg-background text-foreground">
       <header className="px-6 py-4 flex items-center justify-between max-w-6xl mx-auto">
         <img
           src="/gig-trail-logo.png"
@@ -28,7 +28,7 @@ export default function Landing() {
             <img
               src="/gig-trail-logo.png"
               alt="The Gig Trail"
-              className="w-56 h-56 object-contain drop-shadow-[0_0_40px_rgba(210,105,30,0.3)]"
+              className="w-56 h-56 object-contain drop-shadow-[0_8px_30px_rgba(58,47,38,0.25)]"
             />
           </div>
           <div className="space-y-4">

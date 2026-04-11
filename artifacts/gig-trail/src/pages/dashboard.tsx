@@ -86,7 +86,7 @@ export default function Dashboard() {
           <Card className="hover-elevate border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Worth the Drive</CardTitle>
-              <span className="flex h-3 w-3 rounded-full bg-green-500"></span>
+              <span className="flex h-3 w-3 rounded-full status-bar-worth"></span>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">{summary.worthTheDrive}</div>

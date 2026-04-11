@@ -42,11 +42,11 @@ export default function Runs() {
   };
 
   const getStatusColor = (profit: number, income: number) => {
-    if (income === 0) return profit > 0 ? "bg-green-500" : "bg-red-500";
+    if (income === 0) return profit > 0 ? "status-bar-worth" : "status-bar-loss";
     const margin = profit / income;
-    if (margin > 0.2) return "bg-green-500";
-    if (profit > 0) return "bg-amber-500";
-    return "bg-red-500";
+    if (margin > 0.2) return "status-bar-worth";
+    if (profit > 0) return "status-bar-tight";
+    return "status-bar-loss";
   };
 
   const getStatusText = (profit: number, income: number) => {

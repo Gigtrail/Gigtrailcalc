@@ -92,10 +92,10 @@ export default function TourDetail() {
     if (grossIncome === 0 && netProfit === 0)
       return { text: "No Data Yet", color: "text-muted-foreground bg-muted/30 border-border/50", Icon: XCircle };
     if (netProfit < 0)
-      return { text: "Probably Not Worth It", color: "text-red-500 bg-red-500/10 border-red-500/20", Icon: XCircle };
+      return { text: "Probably Not Worth It", color: "status-not-worth", Icon: XCircle };
     if (margin > 0.2)
-      return { text: "Worth the Drive", color: "text-green-500 bg-green-500/10 border-green-500/20", Icon: TrendingUp };
-    return { text: "Tight Margins", color: "text-amber-500 bg-amber-500/10 border-amber-500/20", Icon: AlertTriangle };
+      return { text: "Worth the Drive", color: "status-worth", Icon: TrendingUp };
+    return { text: "Tight Margins", color: "status-tight", Icon: AlertTriangle };
   };
   const status = getStatus();
 

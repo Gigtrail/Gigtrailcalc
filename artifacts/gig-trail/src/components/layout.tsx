@@ -141,10 +141,10 @@ export function AppSidebar() {
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-[100dvh] w-full bg-background dark text-foreground selection:bg-primary selection:text-primary-foreground">
+      <div className="flex min-h-[100dvh] w-full bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
         <AppSidebar />
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 border-b border-border/40 flex items-center px-4 shrink-0 bg-card/50 backdrop-blur-md sticky top-0 z-10">
+          <header className="h-14 border-b border-border/60 flex items-center px-4 shrink-0 bg-background/90 backdrop-blur-sm sticky top-0 z-10">
             <SidebarTrigger />
           </header>
           <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">

@@ -36,14 +36,14 @@ export default function RunDetail() {
     
     if (income === 0) {
       return profit > 0 
-        ? { text: "Worth the Drive", color: "text-green-500 bg-green-500/10 border-green-500/20", icon: TrendingUp }
-        : { text: "Probably Not Worth It", color: "text-red-500 bg-red-500/10 border-red-500/20", icon: XCircle };
+        ? { text: "Worth the Drive", color: "status-worth", icon: TrendingUp }
+        : { text: "Probably Not Worth It", color: "status-not-worth", icon: XCircle };
     }
     
     const margin = profit / income;
-    if (margin > 0.2) return { text: "Worth the Drive", color: "text-green-500 bg-green-500/10 border-green-500/20", icon: TrendingUp };
-    if (profit > 0) return { text: "Tight Margins", color: "text-amber-500 bg-amber-500/10 border-amber-500/20", icon: AlertTriangle };
-    return { text: "Probably Not Worth It", color: "text-red-500 bg-red-500/10 border-red-500/20", icon: XCircle };
+    if (margin > 0.2) return { text: "Worth the Drive", color: "status-worth", icon: TrendingUp };
+    if (profit > 0) return { text: "Tight Margins", color: "status-tight", icon: AlertTriangle };
+    return { text: "Probably Not Worth It", color: "status-not-worth", icon: XCircle };
   };
 
   const status = getStatusInfo();

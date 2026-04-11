@@ -6,7 +6,7 @@ export default function SignInPage() {
   // To update login providers, app branding, or OAuth settings use the Auth
   // pane in the workspace toolbar.
   return (
-    <div className="min-h-screen bg-background dark flex flex-col items-center justify-center gap-6 p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6 p-4">
       <img
         src="/gig-trail-logo.png"
         alt="The Gig Trail"
