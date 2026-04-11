@@ -129,8 +129,12 @@ export default function Profiles() {
                 )}
                 <div className="pt-3 mt-3 border-t border-border/40 grid grid-cols-2 gap-2 text-sm">
                   <div>
-                    <div className="text-muted-foreground text-xs">Avg Accom.</div>
-                    <div className="font-medium">${profile.avgAccomPerNight}/night</div>
+                    <div className="text-muted-foreground text-xs">Accommodation</div>
+                    <div className="font-medium">
+                      {profile.accommodationRequired
+                        ? (profile.accommodationType ?? "Required")
+                        : "Not required"}
+                    </div>
                   </div>
                   <div>
                     <div className="text-muted-foreground text-xs">Avg Food</div>

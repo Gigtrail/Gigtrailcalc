@@ -233,7 +233,11 @@ export default function ProfileForm() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Act Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        key={`actType-${isEditing ? (profile?.actType ?? "loading") : "new"}`}
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select act type" />
