@@ -25,11 +25,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChevronLeft, Save } from "lucide-react";
 import { useEffect } from "react";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 
 const profileSchema = z.object({
   name: z.string().min(1, "Name is required"),
   actType: z.string().min(1, "Act type is required"),
   homeBase: z.string().optional().nullable(),
+  homeBaseLat: z.number().optional().nullable(),
+  homeBaseLng: z.number().optional().nullable(),
   peopleCount: z.coerce.number().min(1, "Must have at least 1 person"),
   defaultVehicleId: z.coerce.number().optional().nullable(),
   avgAccomPerNight: z.coerce.number().min(0),
@@ -62,6 +65,8 @@ export default function ProfileForm() {
       name: "",
       actType: "Band",
       homeBase: "",
+      homeBaseLat: null,
+      homeBaseLng: null,
       peopleCount: 1,
       defaultVehicleId: null,
       avgAccomPerNight: 0,
@@ -76,6 +81,8 @@ export default function ProfileForm() {
         name: profile.name,
         actType: profile.actType,
         homeBase: profile.homeBase || "",
+        homeBaseLat: typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null,
+        homeBaseLng: typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null,
         peopleCount: profile.peopleCount,
         defaultVehicleId: profile.defaultVehicleId || null,
         avgAccomPerNight: profile.avgAccomPerNight,
@@ -187,8 +194,19 @@ export default function ProfileForm() {
                     <FormItem>
                       <FormLabel>Home Base</FormLabel>
                       <FormControl>
-                        <Input placeholder="Nashville, TN" {...field} value={field.value || ""} />
+                        <PlacesAutocomplete
+                          value={field.value || ""}
+                          onChange={(text, place) => {
+                            field.onChange(text);
+                            form.setValue("homeBaseLat", place?.lat ?? null);
+                            form.setValue("homeBaseLng", place?.lng ?? null);
+                          }}
+                          placeholder="Start typing a city or suburb..."
+                        />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        This is used as your origin when calculating shows on the free plan.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
