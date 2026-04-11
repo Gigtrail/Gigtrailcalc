@@ -49,8 +49,8 @@ export function getPlanLimits(plan: string): PlanLimits {
   switch (plan) {
     case "unlimited":
       return {
-        maxProfiles: Infinity,
-        maxVehicles: Infinity,
+        maxProfiles: 10,
+        maxVehicles: 10,
         maxRuns: Infinity,
         toursEnabled: true,
         ticketedShowEnabled: true,

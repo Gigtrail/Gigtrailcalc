@@ -9,7 +9,7 @@ import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal } from "@
 import { useQueryClient } from "@tanstack/react-query";
 
 const PLAN_ORDER = ["free", "pro", "unlimited"] as const;
-const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Unlimited Bands" };
+const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Pro Plus" };
 const PLAN_COLORS: Record<string, string> = {
   free: "bg-muted text-muted-foreground",
   pro: "bg-primary/10 text-primary border border-primary/30",
@@ -20,34 +20,42 @@ const STATIC_PLANS = [
   {
     key: "free",
     name: "Free",
+    tagline: "Try it out",
     price: "AU$0",
     period: "forever",
-    features: ["1 act profile", "1 vehicle", "Single show calculator", "5 saved calculations"],
+    features: [
+      "1 act profile · 1 vehicle",
+      "Basic show calculator",
+      "10 calculations per week",
+      "5 saved runs",
+    ],
   },
   {
     key: "pro",
     name: "Pro",
+    tagline: "For working musicians",
+    badge: "Most popular",
     price: "AU$5",
     period: "per month",
     features: [
       "1 act profile",
-      "Unlimited saved runs",
+      "Unlimited runs & calculations",
       "Full tour builder",
       "Ticketed show tools",
-      "Marketing cost tracking",
       "Routing & fuel estimates",
+      "Accommodation insights",
     ],
   },
   {
     key: "unlimited",
-    name: "Unlimited Bands",
+    name: "Pro Plus",
+    tagline: "For multiple projects",
     price: "AU$7.99",
     period: "per month",
     features: [
-      "Unlimited act profiles",
-      "Unlimited vehicles",
-      "Unlimited saved runs & tours",
-      "All Pro features",
+      "Up to 10 act profiles",
+      "Up to 10 vehicles",
+      "Everything in Pro",
     ],
   },
 ];
@@ -161,9 +169,16 @@ export default function Billing() {
           return (
             <Card
               key={staticPlan.key}
-              className={`border ${isCurrentPlan ? "border-primary bg-primary/5" : "border-border/40 bg-card"} transition-all`}
+              className={`border relative ${isCurrentPlan ? "border-primary bg-primary/5" : staticPlan.key === "pro" ? "border-primary/40 bg-card shadow-md" : "border-border/40 bg-card"} transition-all`}
             >
-              <CardContent className="p-5 space-y-4">
+              {"badge" in staticPlan && staticPlan.badge && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-primary text-primary-foreground text-xs shadow-sm px-3 py-0.5">
+                    {staticPlan.badge}
+                  </Badge>
+                </div>
+              )}
+              <CardContent className="p-5 space-y-4 pt-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="font-semibold text-foreground flex items-center gap-2">
@@ -172,7 +187,10 @@ export default function Billing() {
                         <Badge className="bg-primary/10 text-primary text-xs border border-primary/30">Current</Badge>
                       )}
                     </div>
-                    <div className="text-2xl font-bold text-foreground mt-1">{staticPlan.price}</div>
+                    {"tagline" in staticPlan && (
+                      <div className="text-xs text-muted-foreground mt-0.5">{staticPlan.tagline}</div>
+                    )}
+                    <div className="text-2xl font-bold text-foreground mt-2">{staticPlan.price}</div>
                     <div className="text-xs text-muted-foreground">{staticPlan.period}</div>
                   </div>
                 </div>

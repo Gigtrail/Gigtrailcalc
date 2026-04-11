@@ -54,36 +54,50 @@ export default function Landing() {
             {[
               {
                 name: "Free",
+                tagline: "Try it out",
                 price: "AU$0",
-                features: ["Single show calculator", "5 saved runs", "1 act · 1 vehicle"],
+                features: ["Basic show calculator", "5 saved runs", "1 act · 1 vehicle", "10 calcs/week"],
                 cta: "Get started",
                 highlight: false,
+                badge: null,
               },
               {
                 name: "Pro",
+                tagline: "For working musicians",
                 price: "AU$5 /mo",
-                features: ["Unlimited saved runs", "Full tour builder", "Ticketed show tools"],
+                features: ["1 act profile", "Unlimited runs", "Full tour builder", "Accommodation insights"],
                 cta: "Go Pro",
                 highlight: true,
+                badge: "Most popular",
               },
               {
-                name: "Unlimited",
+                name: "Pro Plus",
+                tagline: "For multiple projects",
                 price: "AU$7.99 /mo",
-                features: ["Everything in Pro", "Unlimited acts & vehicles", "Multiple acts"],
-                cta: "Go Unlimited",
+                features: ["Up to 10 act profiles", "Multiple vehicles", "Everything in Pro"],
+                cta: "Go Pro Plus",
                 highlight: false,
+                badge: null,
               },
-            ].map(({ name, price, features, cta, highlight }) => (
+            ].map(({ name, tagline, price, features, cta, highlight, badge }) => (
               <div
                 key={name}
-                className={`flex flex-col gap-4 p-6 ${
+                className={`flex flex-col gap-4 p-6 relative ${
                   highlight ? "bg-primary/8" : "bg-card"
                 }`}
               >
+                {badge && (
+                  <div className="absolute top-0 right-0">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary text-primary-foreground px-2 py-0.5 rounded-bl-lg">
+                      {badge}
+                    </span>
+                  </div>
+                )}
                 <div>
-                  <div className={`text-xs font-semibold uppercase tracking-wider mb-1 ${highlight ? "text-primary" : "text-muted-foreground"}`}>
+                  <div className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${highlight ? "text-primary" : "text-muted-foreground"}`}>
                     {name}
                   </div>
+                  <div className="text-xs text-muted-foreground/60 mb-2">{tagline}</div>
                   <div className="text-xl font-bold text-foreground">{price}</div>
                 </div>
                 <ul className="space-y-1.5 flex-1">
