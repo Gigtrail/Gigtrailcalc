@@ -31,6 +31,7 @@ import type {
   Tour,
   TourStop,
   TourWithStops,
+  TrackCalculationResponse,
   Vehicle,
 } from "./api.schemas";
 
@@ -535,6 +536,90 @@ export const useDeleteProfile = <
   TContext
 > => {
   return useMutation(getDeleteProfileMutationOptions(options));
+};
+
+/**
+ * @summary Track a calculation attempt (enforces weekly limits)
+ */
+export const getTrackCalculationUrl = (id: number) => {
+  return `/api/profiles/${id}/track-calculation`;
+};
+
+export const trackCalculation = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TrackCalculationResponse> => {
+  return customFetch<TrackCalculationResponse>(getTrackCalculationUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getTrackCalculationMutationOptions = <
+  TError = ErrorType<TrackCalculationResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof trackCalculation>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof trackCalculation>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["trackCalculation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof trackCalculation>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return trackCalculation(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TrackCalculationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof trackCalculation>>
+>;
+
+export type TrackCalculationMutationError = ErrorType<TrackCalculationResponse>;
+
+/**
+ * @summary Track a calculation attempt (enforces weekly limits)
+ */
+export const useTrackCalculation = <
+  TError = ErrorType<TrackCalculationResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof trackCalculation>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof trackCalculation>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getTrackCalculationMutationOptions(options));
 };
 
 /**

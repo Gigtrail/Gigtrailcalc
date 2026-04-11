@@ -1,0 +1,132 @@
+Update the Gig Trail calculator to use a manual calculation trigger and implement a weekly usage limit for Free users.
+
+## Goal
+- stop instant calculation
+- introduce “Calculate Gig” button
+- limit Free users to 10 calculations per week
+- create a clean upgrade path
+
+---
+
+## 1. Remove instant calculation
+
+- disable auto-calculation on input change
+- results should NOT update live
+
+---
+
+## 2. Add calculation button
+
+Add a primary button:
+
+Label options:
+- "Run the Numbers"
+- "Calculate Gig"
+
+Behavior:
+- only calculate when button is clicked
+
+---
+
+## 3. Calculation logic
+
+On button click:
+- validate inputs
+- run calculation
+- display results
+
+---
+
+## 4. Free plan limit
+
+### Rules:
+- Free users get 10 calculations per week
+- Pro users = unlimited
+
+---
+
+## 5. Backend tracking
+
+Add fields to user:
+
+- calculations_this_week (integer)
+- last_calculation_reset (date)
+
+---
+
+## 6. Reset logic
+
+If current date > last_calculation_reset + 7 days:
+- reset calculations_this_week to 0
+- update last_calculation_reset
+
+---
+
+## 7. Limit enforcement
+
+Before calculation:
+
+IF user.plan == "free" AND calculations_this_week >= 10:
+- block calculation
+- show upgrade modal
+
+---
+
+## 8. Increment usage
+
+After successful calculation:
+- increment calculations_this_week by 1
+
+---
+
+## 9. UI feedback
+
+Under the button show:
+
+- “X of 10 free runs used this week”
+
+Example:
+- “3 of 10 free runs used this week”
+
+---
+
+## 10. Limit reached modal
+
+Title:
+"You’ve used your 10 free runs this week"
+
+Body:
+"Upgrade to Pro for unlimited runs and advanced features like routing and fuel automation."
+
+CTA:
+"Upgrade to Pro"
+
+Secondary:
+"Come back next week"
+
+---
+
+## 11. Pro users
+
+- no limits
+- no counter needed (or show “Unlimited runs”)
+
+---
+
+## 12. UX requirements
+
+- button should be prominent
+- result should feel like a moment (not instant)
+- smooth transition when showing results
+- mobile-friendly
+
+---
+
+## Final goal
+
+Make the calculator feel:
+- intentional
+- valuable
+- worth paying for
+
+Users should associate value with each calculation.

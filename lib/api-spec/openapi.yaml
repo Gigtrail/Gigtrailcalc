@@ -128,6 +128,31 @@ paths:
         "204":
           description: Deleted
 
+  /profiles/{id}/track-calculation:
+    post:
+      operationId: trackCalculation
+      tags: [profiles]
+      summary: Track a calculation attempt (enforces weekly limits)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Calculation allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackCalculationResponse"
+        "403":
+          description: Weekly limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackCalculationResponse"
+
   /vehicles:
     get:
       operationId: getVehicles
@@ -568,6 +593,10 @@ components:
           type: number
         notes:
           type: ["string", "null"]
+        calculationsThisWeek:
+          type: integer
+        lastCalculationReset:
+          type: ["string", "null"]
         createdAt:
           type: string
       required:
@@ -580,7 +609,23 @@ components:
         - avgAccomPerNight
         - avgFoodPerDay
         - notes
+        - calculationsThisWeek
+        - lastCalculationReset
         - createdAt
+
+    TrackCalculationResponse:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        count:
+          type: integer
+        limit:
+          type: ["integer", "null"]
+      required:
+        - allowed
+        - count
+        - limit
 
     CreateProfileBody:
       type: object

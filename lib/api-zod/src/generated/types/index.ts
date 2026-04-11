@@ -20,4 +20,5 @@ export * from "./run";
 export * from "./tour";
 export * from "./tourStop";
 export * from "./tourWithStops";
+export * from "./trackCalculationResponse";
 export * from "./vehicle";

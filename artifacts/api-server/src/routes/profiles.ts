@@ -10,8 +10,21 @@ import {
   UpdateProfileResponse,
   DeleteProfileParams,
   GetProfilesResponse,
+  TrackCalculationResponse,
 } from "@workspace/api-zod";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
+
+const FREE_CALC_LIMIT = 10;
+
+function todayString() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function daysDiff(dateStr: string) {
+  const past = new Date(dateStr).getTime();
+  const now = Date.now();
+  return (now - past) / (1000 * 60 * 60 * 24);
+}
 
 const router: IRouter = Router();
 
@@ -107,6 +120,47 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   res.sendStatus(204);
+});
+
+router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid profile id" });
+    return;
+  }
+
+  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, id), eq(profilesTable.userId, userId)));
+  if (!profile) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+
+  const isPro = userPlan === "pro" || userPlan === "unlimited";
+
+  if (isPro) {
+    res.json(TrackCalculationResponse.parse({ allowed: true, count: 0, limit: null }));
+    return;
+  }
+
+  const today = todayString();
+  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
+  let count = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
+
+  if (!needsReset && count >= FREE_CALC_LIMIT) {
+    res.status(403).json(TrackCalculationResponse.parse({ allowed: false, count, limit: FREE_CALC_LIMIT }));
+    return;
+  }
+
+  count += 1;
+  await db.update(profilesTable)
+    .set({
+      calculationsThisWeek: count,
+      lastCalculationReset: needsReset ? today : profile.lastCalculationReset!,
+    })
+    .where(eq(profilesTable.id, id));
+
+  res.json(TrackCalculationResponse.parse({ allowed: true, count, limit: FREE_CALC_LIMIT }));
 });
 
 export default router;

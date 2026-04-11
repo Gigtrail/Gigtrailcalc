@@ -29,6 +29,8 @@ export const GetProfilesResponseItem = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   notes: zod.string().nullable(),
+  calculationsThisWeek: zod.number(),
+  lastCalculationReset: zod.string().nullable(),
   createdAt: zod.string(),
 });
 export const GetProfilesResponse = zod.array(GetProfilesResponseItem);
@@ -68,6 +70,8 @@ export const GetProfileResponse = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   notes: zod.string().nullable(),
+  calculationsThisWeek: zod.number(),
+  lastCalculationReset: zod.string().nullable(),
   createdAt: zod.string(),
 });
 
@@ -103,6 +107,8 @@ export const UpdateProfileResponse = zod.object({
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
   notes: zod.string().nullable(),
+  calculationsThisWeek: zod.number(),
+  lastCalculationReset: zod.string().nullable(),
   createdAt: zod.string(),
 });
 
@@ -111,6 +117,19 @@ export const UpdateProfileResponse = zod.object({
  */
 export const DeleteProfileParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * @summary Track a calculation attempt (enforces weekly limits)
+ */
+export const TrackCalculationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TrackCalculationResponse = zod.object({
+  allowed: zod.boolean(),
+  count: zod.number(),
+  limit: zod.number().nullable(),
 });
 
 /**

@@ -30,7 +30,17 @@ export interface Profile {
   avgFoodPerDay: number;
   /** @nullable */
   notes: string | null;
+  calculationsThisWeek: number;
+  /** @nullable */
+  lastCalculationReset: string | null;
   createdAt: string;
+}
+
+export interface TrackCalculationResponse {
+  allowed: boolean;
+  count: number;
+  /** @nullable */
+  limit: number | null;
 }
 
 export interface CreateProfileBody {

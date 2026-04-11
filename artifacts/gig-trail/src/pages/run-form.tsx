@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useGetVehicles } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useGetVehicles, useTrackCalculation } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,9 +24,18 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { usePlan } from "@/hooks/use-plan";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const runSchema = z.object({
   profileId: z.coerce.number().optional().nullable(),
@@ -108,26 +117,40 @@ export default function RunForm() {
   });
 
   const formValues = useWatch({ control: form.control });
+  const { plan } = usePlan();
+  const isPro = plan === "pro" || plan === "unlimited";
 
-  const calculatedValues = useMemo(() => {
-    const profile = profiles?.find(p => p.id === formValues.profileId);
-    const vehicle = vehicles?.find(v => v.id === formValues.vehicleId);
+  const [calculationResult, setCalculationResult] = useState<{
+    fuelCost: number; totalCost: number; totalIncome: number; netProfit: number;
+    status: string; statusColor: string; StatusIcon: typeof XCircle;
+    profitPerMember: number; expectedTicketsSold: number; grossRevenue: number;
+    breakEvenTickets: number; breakEvenCapacity: number;
+  } | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
 
-    const distanceKm = Number(formValues.distanceKm) || 0;
-    const fuelPrice = Number(formValues.fuelPrice) || 0;
-    const fee = Number(formValues.fee) || 0;
-    const capacity = Number(formValues.capacity) || 0;
-    const ticketPrice = Number(formValues.ticketPrice) || 0;
-    const expectedAttendancePct = Number(formValues.expectedAttendancePct) || 0;
-    const splitPct = Number(formValues.splitPct) || 0;
-    const guarantee = Number(formValues.guarantee) || 0;
-    const merchEstimate = Number(formValues.merchEstimate) || 0;
-    const accommodationCost = Number(formValues.accommodationCost) || 0;
-    const foodCost = Number(formValues.foodCost) || 0;
-    const extraCosts = Number(formValues.extraCosts) || 0;
-    const marketingCost = Number(formValues.marketingCost) || 0;
+  const trackCalculation = useTrackCalculation();
 
-    const distanceMultiplier = formValues.returnTrip ? 2 : 1;
+  const computeGigResults = useCallback((vals: typeof formValues) => {
+    const profile = profiles?.find(p => p.id === vals.profileId);
+    const vehicle = vehicles?.find(v => v.id === vals.vehicleId);
+
+    const distanceKm = Number(vals.distanceKm) || 0;
+    const fuelPrice = Number(vals.fuelPrice) || 0;
+    const fee = Number(vals.fee) || 0;
+    const capacity = Number(vals.capacity) || 0;
+    const ticketPrice = Number(vals.ticketPrice) || 0;
+    const expectedAttendancePct = Number(vals.expectedAttendancePct) || 0;
+    const splitPct = Number(vals.splitPct) || 0;
+    const guarantee = Number(vals.guarantee) || 0;
+    const merchEstimate = Number(vals.merchEstimate) || 0;
+    const accommodationCost = Number(vals.accommodationCost) || 0;
+    const foodCost = Number(vals.foodCost) || 0;
+    const extraCosts = Number(vals.extraCosts) || 0;
+    const marketingCost = Number(vals.marketingCost) || 0;
+
+    const distanceMultiplier = vals.returnTrip ? 2 : 1;
     const totalDistance = distanceKm * distanceMultiplier;
 
     const fuelCost = vehicle && vehicle.avgConsumption && fuelPrice
@@ -138,22 +161,22 @@ export default function RunForm() {
     let expectedTicketsSold = 0;
     let grossRevenue = 0;
 
-    if (formValues.showType === "Flat Fee") {
+    if (vals.showType === "Flat Fee") {
       showIncome = fee;
-    } else if (formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") {
+    } else if (vals.showType === "Ticketed Show" || vals.showType === "Hybrid") {
       expectedTicketsSold = Math.floor((capacity * expectedAttendancePct) / 100);
       grossRevenue = expectedTicketsSold * ticketPrice;
 
-      if (formValues.dealType === "100% door") {
+      if (vals.dealType === "100% door") {
         showIncome = grossRevenue;
-      } else if (formValues.dealType === "percentage split") {
+      } else if (vals.dealType === "percentage split") {
         showIncome = grossRevenue * (splitPct / 100);
-      } else if (formValues.dealType === "guarantee vs door") {
+      } else if (vals.dealType === "guarantee vs door") {
         const splitIncome = grossRevenue * (splitPct / 100);
         showIncome = Math.max(guarantee, splitIncome);
       }
 
-      if (formValues.showType === "Hybrid") {
+      if (vals.showType === "Hybrid") {
         showIncome += guarantee;
       }
     }
@@ -164,8 +187,8 @@ export default function RunForm() {
 
     let status = "Probably Not Worth It";
     let statusColor = "text-red-500 bg-red-500/10";
-    let StatusIcon = XCircle;
-    
+    let StatusIcon: typeof XCircle = XCircle;
+
     if (totalIncome > 0) {
       const margin = netProfit / totalIncome;
       if (margin > 0.2) {
@@ -183,9 +206,9 @@ export default function RunForm() {
 
     let breakEvenTickets = 0;
     let breakEvenCapacity = 0;
-    if ((formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") && ticketPrice > 0) {
-      const remainingCosts = Math.max(0, totalCost - merchEstimate - (formValues.showType === "Hybrid" ? guarantee : 0));
-      if (formValues.dealType === "100% door") {
+    if ((vals.showType === "Ticketed Show" || vals.showType === "Hybrid") && ticketPrice > 0) {
+      const remainingCosts = Math.max(0, totalCost - merchEstimate - (vals.showType === "Hybrid" ? guarantee : 0));
+      if (vals.dealType === "100% door") {
         breakEvenTickets = Math.ceil(remainingCosts / ticketPrice);
       } else {
         breakEvenTickets = Math.ceil((remainingCosts / ((splitPct || 100) / 100)) / ticketPrice);
@@ -194,20 +217,36 @@ export default function RunForm() {
     }
 
     return {
-      fuelCost,
-      totalCost,
-      totalIncome,
-      netProfit,
-      status,
-      statusColor,
-      StatusIcon,
-      profitPerMember,
-      expectedTicketsSold,
-      grossRevenue,
-      breakEvenTickets,
-      breakEvenCapacity
+      fuelCost, totalCost, totalIncome, netProfit, status, statusColor, StatusIcon,
+      profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity
     };
-  }, [formValues, profiles, vehicles]);
+  }, [profiles, vehicles]);
+
+  const handleCalculate = useCallback(async () => {
+    const vals = form.getValues();
+    const profileId = vals.profileId;
+    setIsCalculating(true);
+    try {
+      if (profileId) {
+        const result = await trackCalculation.mutateAsync({ id: profileId });
+        setCalcUsage({ count: result.count, limit: result.limit ?? null });
+        const computed = computeGigResults(vals);
+        setCalculationResult(computed);
+      } else {
+        const computed = computeGigResults(vals);
+        setCalculationResult(computed);
+      }
+    } catch (err: unknown) {
+      const status = (err as { status?: number })?.status;
+      if (status === 403) {
+        setShowLimitModal(true);
+      } else {
+        toast({ title: "Calculation failed", variant: "destructive" });
+      }
+    } finally {
+      setIsCalculating(false);
+    }
+  }, [form, trackCalculation, computeGigResults, toast]);
 
   // Prefill from URL search params after onboarding redirect
   useEffect(() => {
@@ -279,11 +318,12 @@ export default function RunForm() {
   };
 
   const onSubmit = (data: RunFormValues) => {
+    const computed = calculationResult ?? computeGigResults(data);
     const payload = {
       ...data,
-      totalCost: calculatedValues.totalCost,
-      totalIncome: calculatedValues.totalIncome,
-      totalProfit: calculatedValues.netProfit
+      totalCost: computed.totalCost,
+      totalIncome: computed.totalIncome,
+      totalProfit: computed.netProfit
     };
 
     if (isEditing) {
@@ -584,7 +624,9 @@ export default function RunForm() {
                             <FormControl>
                               <Input type="number" min="0" max="100" {...field} value={field.value || 0} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">Calculated: {calculatedValues.expectedTicketsSold} tickets / ${calculatedValues.grossRevenue} gross</p>
+                            {calculationResult && (
+                              <p className="text-xs text-muted-foreground">Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross</p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -658,7 +700,9 @@ export default function RunForm() {
                             <FormControl>
                               <Input type="number" min="0" {...field} value={field.value || 0} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculatedValues.grossRevenue * 0.15)} (15% of gross)</p>
+                            {calculationResult && (
+                              <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)</p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -731,8 +775,35 @@ export default function RunForm() {
                 </CardContent>
               </Card>
               
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  size="lg"
+                  className="w-full text-base font-bold"
+                  onClick={handleCalculate}
+                  disabled={isCalculating}
+                >
+                  <Calculator className="w-4 h-4 mr-2" />
+                  {isCalculating ? "Calculating..." : "Calculate Gig"}
+                </Button>
+                {calcUsage && !isPro && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    {calcUsage.limit !== null
+                      ? `${calcUsage.count} of ${calcUsage.limit} free calculations used this week`
+                      : "Unlimited calculations"}
+                  </p>
+                )}
+                {!calcUsage && !isPro && (
+                  <p className="text-xs text-center text-muted-foreground">10 free calculations per week</p>
+                )}
+                {isPro && (
+                  <p className="text-xs text-center text-muted-foreground">Unlimited calculations</p>
+                )}
+              </div>
+
               <div className="hidden lg:block">
-                <Button type="submit" className="w-full" disabled={isPending}>
+                <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
+                  <Save className="w-4 h-4 mr-2" />
                   {isPending ? "Saving..." : "Save This Show"}
                 </Button>
               </div>
@@ -742,60 +813,101 @@ export default function RunForm() {
 
         <div className="lg:col-span-1 space-y-6">
           <div className="sticky top-20">
-            <Card className={`border-2 ${calculatedValues.netProfit > 0 ? 'border-primary/50' : 'border-destructive/50'} shadow-lg`}>
-              <CardHeader className={`pb-4 border-b border-border/40 ${calculatedValues.statusColor} rounded-t-lg`}>
-                <div className="flex items-center gap-2">
-                  <calculatedValues.StatusIcon className="w-5 h-5" />
-                  <CardTitle className="text-lg">{calculatedValues.status}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-6">
-                <div>
-                  <div className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">You'll clear</div>
-                  <div className={`text-4xl font-bold ${calculatedValues.netProfit > 0 ? 'text-primary' : 'text-destructive'}`}>
-                    ${calculatedValues.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            {!calculationResult ? (
+              <Card className="border-2 border-border/50 shadow-lg">
+                <CardContent className="pt-10 pb-10 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+                    <Calculator className="w-7 h-7 text-muted-foreground/50" />
                   </div>
-                  {formValues.profileId && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      ${calculatedValues.profitPerMember.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} per member
-                    </div>
+                  <div>
+                    <p className="font-semibold text-foreground">Ready to run the numbers?</p>
+                    <p className="text-sm text-muted-foreground mt-1">Fill in your gig details then hit<br/><span className="font-medium text-primary">Calculate Gig</span> to see if it's worth the drive.</p>
+                  </div>
+                  {!isPro && (
+                    <p className="text-xs text-muted-foreground/60">Free plan · 10 calculations/week</p>
                   )}
-                </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className={`border-2 ${calculationResult.netProfit > 0 ? 'border-primary/50' : 'border-destructive/50'} shadow-lg animate-in fade-in slide-in-from-top-2 duration-500`}>
+                <CardHeader className={`pb-4 border-b border-border/40 ${calculationResult.statusColor} rounded-t-lg`}>
+                  <div className="flex items-center gap-2">
+                    <calculationResult.StatusIcon className="w-5 h-5" />
+                    <CardTitle className="text-lg">{calculationResult.status}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-6">
+                  <div>
+                    <div className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">You'll clear</div>
+                    <div className={`text-4xl font-bold ${calculationResult.netProfit > 0 ? 'text-primary' : 'text-destructive'}`}>
+                      ${calculationResult.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </div>
+                    {formValues.profileId && (
+                      <div className="text-sm text-muted-foreground mt-1">
+                        ${calculationResult.profitPerMember.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} per member
+                      </div>
+                    )}
+                  </div>
 
-                <div className="space-y-3 pt-4 border-t border-border/40">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground text-sm">Total on the table</span>
-                    <span className="font-semibold text-foreground">${calculatedValues.totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  <div className="space-y-3 pt-4 border-t border-border/40">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground text-sm">Total on the table</span>
+                      <span className="font-semibold text-foreground">${calculationResult.totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground text-sm">Cost to get there</span>
+                      <span className="font-semibold text-destructive">${calculationResult.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground text-sm">Cost to get there</span>
-                    <span className="font-semibold text-destructive">${calculatedValues.totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                  </div>
-                </div>
 
-                <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Fuel</span>
-                    <span>${calculatedValues.fuelCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                  </div>
-                  {isTicketed && calculatedValues.breakEvenTickets > 0 && (
+                  <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Break-even point</span>
-                      <span>{calculatedValues.breakEvenTickets} tix ({calculatedValues.breakEvenCapacity.toFixed(0)}%)</span>
+                      <span>Fuel</span>
+                      <span>${calculationResult.fuelCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
-                  )}
-                </div>
+                    {isTicketed && calculationResult.breakEvenTickets > 0 && (
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Break-even point</span>
+                        <span>{calculationResult.breakEvenTickets} tix ({calculationResult.breakEvenCapacity.toFixed(0)}%)</span>
+                      </div>
+                    )}
+                  </div>
 
-                <div className="pt-6 lg:hidden">
-                   <Button type="button" onClick={form.handleSubmit(onSubmit)} className="w-full" disabled={isPending}>
-                    {isPending ? "Saving..." : "Save This Show"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="pt-6 lg:hidden">
+                    <Button type="button" onClick={form.handleSubmit(onSubmit)} className="w-full" disabled={isPending}>
+                      {isPending ? "Saving..." : "Save This Show"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>
+
+      <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-600" />
+              </div>
+              <DialogTitle className="text-xl">You've used your 10 free calculations this week</DialogTitle>
+            </div>
+            <DialogDescription className="text-base">
+              Upgrade to Pro for unlimited calculations and advanced features like routing and fuel automation.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowLimitModal(false)} className="w-full sm:w-auto">
+              Come back next week
+            </Button>
+            <Button onClick={() => { setShowLimitModal(false); window.location.href = "/#plans"; }} className="w-full sm:w-auto">
+              Upgrade to Pro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

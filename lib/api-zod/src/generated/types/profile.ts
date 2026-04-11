@@ -23,5 +23,8 @@ export interface Profile {
   avgFoodPerDay: number;
   /** @nullable */
   notes: string | null;
+  calculationsThisWeek: number;
+  /** @nullable */
+  lastCalculationReset: string | null;
   createdAt: string;
 }
