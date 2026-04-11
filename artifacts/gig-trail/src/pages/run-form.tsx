@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock } from "lucide-react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Car, Truck } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
@@ -78,6 +78,50 @@ const ACCOM_RATES: Record<string, number> = {
 };
 
 const ACCOM_TYPES = ["Single", "Queen", "Twin", "Double Room", "Multiple Rooms"] as const;
+
+const VEHICLE_PRESETS = [
+  { label: "Car", value: "car", consumption: 7, Icon: Car },
+  { label: "Van", value: "van", consumption: 10, Icon: Truck },
+  { label: "Bus", value: "bus", consumption: 16, Icon: Truck },
+] as const;
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+async function calculateGoogleRoute(
+  originLat: number, originLng: number,
+  destLat: number, destLng: number
+): Promise<{ distanceKm: number; durationMinutes: number } | null> {
+  return new Promise((resolve) => {
+    const g = (window as unknown as { google?: { maps?: { DistanceMatrixService?: unknown } } }).google;
+    if (!g?.maps?.DistanceMatrixService) { resolve(null); return; }
+    const gm = g.maps as unknown as typeof google.maps;
+    const service = new gm.DistanceMatrixService();
+    service.getDistanceMatrix({
+      origins: [{ lat: originLat, lng: originLng }],
+      destinations: [{ lat: destLat, lng: destLng }],
+      travelMode: gm.TravelMode.DRIVING,
+      unitSystem: gm.UnitSystem.METRIC,
+    }, (result, status) => {
+      if (status === "OK" && result) {
+        const el = result.rows[0]?.elements[0];
+        if (el?.status === "OK") {
+          resolve({
+            distanceKm: Math.round(el.distance.value / 100) / 10,
+            durationMinutes: Math.round(el.duration.value / 60),
+          });
+          return;
+        }
+      }
+      resolve(null);
+    });
+  });
+}
 
 export default function RunForm() {
   const [, setLocation] = useLocation();
@@ -139,18 +183,29 @@ export default function RunForm() {
     status: string; statusColor: string; StatusIcon: typeof XCircle;
     profitPerMember: number; expectedTicketsSold: number; grossRevenue: number;
     breakEvenTickets: number; breakEvenCapacity: number; accommodationCost: number;
+    distanceKm: number; driveTimeMinutes: number | null; fuelUsedLitres: number;
   } | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showVehicleUpgradeModal, setShowVehicleUpgradeModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [freeVehiclePreset, setFreeVehiclePreset] = useState<"car" | "van" | "bus">("van");
+  const [routeCalcFailed, setRouteCalcFailed] = useState(false);
 
   const trackCalculation = useTrackCalculation();
 
-  const computeGigResults = useCallback((vals: typeof formValues) => {
+  const computeGigResults = useCallback((
+    vals: typeof formValues,
+    overrides?: { distanceKm?: number; vehicleConsumption?: number; driveTimeMinutes?: number | null }
+  ) => {
     const profile = profiles?.find(p => p.id === vals.profileId);
     const vehicle = vehicles?.find(v => v.id === vals.vehicleId);
 
-    const distanceKm = Number(vals.distanceKm) || 0;
+    const distanceKm = overrides?.distanceKm ?? (Number(vals.distanceKm) || 0);
+    const vehicleConsumption = overrides?.vehicleConsumption
+      ?? (vehicle ? Number(vehicle.avgConsumption) : 0);
+    const driveTimeMinutes = overrides?.driveTimeMinutes !== undefined ? overrides.driveTimeMinutes : null;
+
     const fuelPrice = Number(vals.fuelPrice) || 0;
     const fee = Number(vals.fee) || 0;
     const capacity = Number(vals.capacity) || 0;
@@ -171,9 +226,8 @@ export default function RunForm() {
     const distanceMultiplier = vals.returnTrip ? 2 : 1;
     const totalDistance = distanceKm * distanceMultiplier;
 
-    const fuelCost = vehicle && vehicle.avgConsumption && fuelPrice
-      ? (totalDistance * Number(vehicle.avgConsumption) / 100) * fuelPrice
-      : 0;
+    const fuelUsedLitres = vehicleConsumption > 0 ? (totalDistance * vehicleConsumption) / 100 : 0;
+    const fuelCost = fuelUsedLitres * fuelPrice;
 
     let showIncome = 0;
     let expectedTicketsSold = 0;
@@ -237,7 +291,7 @@ export default function RunForm() {
     return {
       fuelCost, totalCost, totalIncome, netProfit, status, statusColor, StatusIcon,
       profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity,
-      accommodationCost
+      accommodationCost, distanceKm, driveTimeMinutes, fuelUsedLitres,
     };
   }, [profiles, vehicles]);
 
@@ -245,14 +299,33 @@ export default function RunForm() {
     const vals = form.getValues();
     const profileId = vals.profileId;
     setIsCalculating(true);
+    setRouteCalcFailed(false);
+
+    let routeOverride: { distanceKm?: number; driveTimeMinutes?: number | null } = {};
+
+    const oLat = vals.originLat, oLng = vals.originLng;
+    const dLat = vals.destinationLat, dLng = vals.destinationLng;
+    if (oLat && oLng && dLat && dLng) {
+      const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
+      if (route) {
+        form.setValue("distanceKm", route.distanceKm);
+        routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
+      } else {
+        setRouteCalcFailed(true);
+      }
+    }
+
+    const freePreset = !isPro ? VEHICLE_PRESETS.find(p => p.value === freeVehiclePreset) : undefined;
+    const vehicleConsumptionOverride = freePreset ? freePreset.consumption : undefined;
+
     try {
       if (profileId) {
         const result = await trackCalculation.mutateAsync({ id: profileId });
         setCalcUsage({ count: result.count, limit: result.limit ?? null });
-        const computed = computeGigResults(vals);
+        const computed = computeGigResults(vals, { ...routeOverride, vehicleConsumption: vehicleConsumptionOverride });
         setCalculationResult(computed);
       } else {
-        const computed = computeGigResults(vals);
+        const computed = computeGigResults(vals, { ...routeOverride, vehicleConsumption: vehicleConsumptionOverride });
         setCalculationResult(computed);
       }
     } catch (err: unknown) {
@@ -265,7 +338,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, toast]);
+  }, [form, trackCalculation, computeGigResults, toast, isPro, freeVehiclePreset]);
 
   // Prefill from URL search params after onboarding redirect
   useEffect(() => {
@@ -329,13 +402,18 @@ export default function RunForm() {
     if (pId) {
       const profile = profiles?.find(p => p.id === pId);
       if (profile) {
-        if (profile.defaultVehicleId) {
+        if (isPro && profile.defaultVehicleId) {
           form.setValue("vehicleId", profile.defaultVehicleId);
         }
         const count = profile.peopleCount ?? 1;
         const defaultType = count <= 1 ? "Single" : count === 2 ? "Queen" : "Multiple Rooms";
         form.setValue("accommodationType", defaultType);
         form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
+        if (!isPro && profile.homeBase) {
+          form.setValue("origin", profile.homeBase);
+          form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
+          form.setValue("originLng", typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null);
+        }
       }
     }
   };
@@ -436,57 +514,115 @@ export default function RunForm() {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="vehicleId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Vehicle</FormLabel>
-                          <Select 
-                            onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
-                            value={field.value ? field.value.toString() : "none"}
-                            disabled={isLoadingVehicles}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select vehicle" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {vehicles?.map(v => (
-                                <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {!isPro ? (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none">Vehicle</label>
+                        <div className="flex gap-2">
+                          {VEHICLE_PRESETS.map(preset => (
+                            <button
+                              key={preset.value}
+                              type="button"
+                              onClick={() => setFreeVehiclePreset(preset.value)}
+                              className={`flex-1 flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border text-xs font-medium transition-all ${
+                                freeVehiclePreset === preset.value
+                                  ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                  : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                              }`}
+                            >
+                              <preset.Icon className="w-4 h-4" />
+                              <span>{preset.label}</span>
+                              <span className="text-[10px] opacity-70">{preset.consumption} L/100</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Simple presets — <a href="/billing" className="text-primary underline underline-offset-2">customise in Pro</a>
+                        </p>
+                      </div>
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="vehicleId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Vehicle</FormLabel>
+                            <Select 
+                              onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
+                              value={field.value ? field.value.toString() : "none"}
+                              disabled={isLoadingVehicles}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select vehicle" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {vehicles?.map(v => (
+                                  <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              <a href="/vehicles" className="text-primary underline underline-offset-2">Manage vehicles</a>
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="origin"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Origin</FormLabel>
-                          <FormControl>
-                            <PlacesAutocomplete
-                              value={field.value || ""}
-                              onChange={(text, place) => {
-                                field.onChange(text);
-                                form.setValue("originLat", place?.lat ?? null);
-                                form.setValue("originLng", place?.lng ?? null);
-                              }}
-                              placeholder="Home City"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {!isPro ? (
+                      <FormField
+                        control={form.control}
+                        name="origin"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                              Home Base
+                            </FormLabel>
+                            <div className="relative">
+                              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                                <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className={field.value ? "text-foreground" : "text-muted-foreground"}>
+                                  {field.value || "Select a profile to set your home base"}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Your home base comes from your profile.{" "}
+                              <a href="/profiles" className="text-primary underline underline-offset-2">Edit in profile</a>
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name="origin"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Origin</FormLabel>
+                            <FormControl>
+                              <PlacesAutocomplete
+                                value={field.value || ""}
+                                onChange={(text, place) => {
+                                  field.onChange(text);
+                                  form.setValue("originLat", place?.lat ?? null);
+                                  form.setValue("originLng", place?.lng ?? null);
+                                }}
+                                placeholder="Home City"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <FormField
                       control={form.control}
                       name="destination"
@@ -516,10 +652,17 @@ export default function RunForm() {
                       name="distanceKm"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Distance (km, one way)</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            Distance (km, one way)
+                          </FormLabel>
                           <FormControl>
-                            <Input type="number" min="0" {...field} />
+                            <Input type="number" min="0" {...field} placeholder="Auto-calculated on Calculate" />
                           </FormControl>
+                          {routeCalcFailed && (
+                            <p className="text-xs text-amber-600">
+                              Couldn't calculate route — enter distance manually
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -945,9 +1088,48 @@ export default function RunForm() {
                     </div>
                   </div>
 
+                  {calculationResult.distanceKm > 0 && (
+                    <div className="space-y-2 pt-4 border-t border-border/40">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Route</div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <MapPin className="w-3.5 h-3.5" />
+                          Distance
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {calculationResult.distanceKm} km{formValues.returnTrip ? ` × 2 = ${(calculationResult.distanceKm * 2).toFixed(1)} km` : ""}
+                        </span>
+                      </div>
+                      {calculationResult.driveTimeMinutes !== null && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5" />
+                            Drive time
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {formValues.returnTrip
+                              ? formatDuration(calculationResult.driveTimeMinutes * 2)
+                              : formatDuration(calculationResult.driveTimeMinutes)}
+                          </span>
+                        </div>
+                      )}
+                      {calculationResult.fuelUsedLitres > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Fuel className="w-3.5 h-3.5" />
+                            Fuel used
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {calculationResult.fuelUsedLitres.toFixed(1)} L
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Fuel</span>
+                      <span>Fuel cost</span>
                       <span>${calculationResult.fuelCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     {calculationResult.accommodationCost > 0 && (
@@ -994,6 +1176,30 @@ export default function RunForm() {
               Come back next week
             </Button>
             <Button onClick={() => { setShowLimitModal(false); window.location.href = "/#plans"; }} className="w-full sm:w-auto">
+              Upgrade to Pro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showVehicleUpgradeModal} onOpenChange={setShowVehicleUpgradeModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Truck className="w-5 h-5 text-primary" />
+              </div>
+              <DialogTitle className="text-xl">Custom vehicles are a Pro feature</DialogTitle>
+            </div>
+            <DialogDescription className="text-base">
+              Upgrade to Pro to match your real setup and get more accurate results.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowVehicleUpgradeModal(false)} className="w-full sm:w-auto">
+              Keep using presets
+            </Button>
+            <Button onClick={() => { setShowVehicleUpgradeModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
               Upgrade to Pro
             </Button>
           </DialogFooter>

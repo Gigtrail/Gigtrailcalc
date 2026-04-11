@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
 import { useCreateVehicle, useUpdateVehicle, useGetVehicle } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { usePlan } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -23,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save } from "lucide-react";
+import { ChevronLeft, Save, Truck } from "lucide-react";
 import { useEffect } from "react";
 
 const vehicleSchema = z.object({
@@ -40,6 +41,8 @@ export default function VehicleForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
+  const { plan } = usePlan();
+  const isPro = plan === "pro" || plan === "unlimited";
   
   const isEditing = !!id;
   const vehicleId = isEditing ? parseInt(id) : 0;
@@ -108,6 +111,34 @@ export default function VehicleForm() {
 
   if (isEditing && isLoadingVehicle) {
     return <div className="p-8 text-center text-muted-foreground">Loading vehicle...</div>;
+  }
+
+  if (!isPro) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/vehicles")} className="h-8 w-8">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <h1 className="text-3xl font-bold tracking-tight">Custom Vehicles</h1>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-card/50 p-8 text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Truck className="w-7 h-7 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold">Custom vehicles are a Pro feature</h2>
+            <p className="text-muted-foreground mt-1">
+              Upgrade to Pro to match your real setup and get more accurate results.
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button variant="outline" onClick={() => setLocation("/vehicles")}>Back to vehicles</Button>
+            <Button onClick={() => setLocation("/billing")}>Upgrade to Pro</Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
