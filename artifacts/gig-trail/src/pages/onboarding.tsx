@@ -91,21 +91,25 @@ export default function Onboarding() {
       const peopleCount = getPeopleCount();
 
       const vehicle = await createVehicle.mutateAsync({
-        name: vehicleOption.name,
-        fuelType: "petrol",
-        avgConsumption: vehicleOption.consumption,
+        data: {
+          name: vehicleOption.name,
+          fuelType: "petrol",
+          avgConsumption: vehicleOption.consumption,
+        },
       });
 
       const profile = await createProfile.mutateAsync({
-        name: actName.trim(),
-        actType,
-        peopleCount,
-        homeBase: homeBase.trim(),
-        homeBaseLat: homeBaseLat ?? null,
-        homeBaseLng: homeBaseLng ?? null,
-        defaultVehicleId: vehicle.id,
-        avgAccomPerNight: 0,
-        avgFoodPerDay: 0,
+        data: {
+          name: actName.trim(),
+          actType,
+          peopleCount,
+          homeBase: homeBase.trim(),
+          homeBaseLat: homeBaseLat ?? null,
+          homeBaseLng: homeBaseLng ?? null,
+          defaultVehicleId: vehicle.id,
+          avgAccomPerNight: 0,
+          avgFoodPerDay: 0,
+        },
       });
 
       await queryClient.invalidateQueries();
