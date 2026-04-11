@@ -18,10 +18,13 @@ if (Number.isNaN(port) || port <= 0) {
 async function initStripe() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) return;
-  if (!process.env.STRIPE_SECRET_KEY) {
-    logger.info("Stripe not configured yet — skipping Stripe init");
+
+  // Skip if Replit Connectors not available (local dev without connector)
+  if (!process.env.REPLIT_CONNECTORS_HOSTNAME) {
+    logger.info("Stripe connector not available — skipping Stripe init");
     return;
   }
+
   try {
     const { runMigrations } = await import("stripe-replit-sync");
     await runMigrations({ databaseUrl });
