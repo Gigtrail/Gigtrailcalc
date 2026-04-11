@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, toursTable, tourStopsTable } from "@workspace/db";
+import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateTourBody,
   GetTourParams,
@@ -66,28 +67,46 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
 const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
-router.get("/tours", async (_req, res): Promise<void> => {
-  const tours = await db.select().from(toursTable).orderBy(desc(toursTable.createdAt));
+router.get("/tours", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userPlan);
+  if (!limits.toursEnabled) {
+    res.json(GetToursResponse.parse([]));
+    return;
+  }
+  const tours = await db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt));
   res.json(GetToursResponse.parse(tours.map(serializeTour)));
 });
 
-router.post("/tours", async (req, res): Promise<void> => {
+router.post("/tours", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userPlan);
+  if (!limits.toursEnabled) {
+    res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
+    return;
+  }
   const parsed = CreateTourBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [tour] = await db.insert(toursTable).values(toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as typeof toursTable.$inferInsert).returning();
+  const [tour] = await db.insert(toursTable).values({ ...toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as typeof toursTable.$inferInsert, userId }).returning();
   res.status(201).json(GetTourResponse.parse({ ...serializeTour(tour), stops: [] }));
 });
 
-router.get("/tours/:id", async (req, res): Promise<void> => {
+router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userPlan);
+  if (!limits.toursEnabled) {
+    res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
+    return;
+  }
   const params = GetTourParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [tour] = await db.select().from(toursTable).where(eq(toursTable.id, params.data.id));
+  const [tour] = await db.select().from(toursTable).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId)));
   if (!tour) {
     res.status(404).json({ error: "Tour not found" });
     return;
@@ -96,7 +115,8 @@ router.get("/tours/:id", async (req, res): Promise<void> => {
   res.json(GetTourResponse.parse({ ...serializeTour(tour), stops: stops.map(serializeStop) }));
 });
 
-router.patch("/tours/:id", async (req, res): Promise<void> => {
+router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = UpdateTourParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -107,7 +127,7 @@ router.patch("/tours/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [tour] = await db.update(toursTable).set(toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as Partial<typeof toursTable.$inferInsert>).where(eq(toursTable.id, params.data.id)).returning();
+  const [tour] = await db.update(toursTable).set(toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as Partial<typeof toursTable.$inferInsert>).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId))).returning();
   if (!tour) {
     res.status(404).json({ error: "Tour not found" });
     return;
@@ -115,14 +135,15 @@ router.patch("/tours/:id", async (req, res): Promise<void> => {
   res.json(UpdateTourResponse.parse(serializeTour(tour)));
 });
 
-router.delete("/tours/:id", async (req, res): Promise<void> => {
+router.delete("/tours/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = DeleteTourParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
   await db.delete(tourStopsTable).where(eq(tourStopsTable.tourId, params.data.id));
-  const [tour] = await db.delete(toursTable).where(eq(toursTable.id, params.data.id)).returning();
+  const [tour] = await db.delete(toursTable).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId))).returning();
   if (!tour) {
     res.status(404).json({ error: "Tour not found" });
     return;
@@ -130,7 +151,7 @@ router.delete("/tours/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-router.get("/tours/:tourId/stops", async (req, res): Promise<void> => {
+router.get("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void> => {
   const params = GetTourStopsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -140,7 +161,7 @@ router.get("/tours/:tourId/stops", async (req, res): Promise<void> => {
   res.json(GetTourStopsResponse.parse(stops.map(serializeStop)));
 });
 
-router.post("/tours/:tourId/stops", async (req, res): Promise<void> => {
+router.post("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void> => {
   const params = CreateTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -156,7 +177,7 @@ router.post("/tours/:tourId/stops", async (req, res): Promise<void> => {
   res.status(201).json(serializeStop(stop));
 });
 
-router.patch("/tours/:tourId/stops/:stopId", async (req, res): Promise<void> => {
+router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -175,7 +196,7 @@ router.patch("/tours/:tourId/stops/:stopId", async (req, res): Promise<void> => 
   res.json(UpdateTourStopResponse.parse(serializeStop(stop)));
 });
 
-router.delete("/tours/:tourId/stops/:stopId", async (req, res): Promise<void> => {
+router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {
   const params = DeleteTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

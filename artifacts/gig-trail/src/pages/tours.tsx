@@ -1,12 +1,14 @@
 import { useGetTours, useDeleteTour, getGetToursQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Navigation, Trash2, ChevronRight, Calendar } from "lucide-react";
+import { Plus, Navigation, Trash2, Crown, Lock, Zap } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { usePlan } from "@/hooks/use-plan";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +27,35 @@ export default function Tours() {
   const deleteTour = useDeleteTour();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { plan, limits } = usePlan();
+
+  if (!limits.toursEnabled) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Tours</h1>
+          <p className="text-muted-foreground mt-1">Multi-stop runs and full tours.</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-card rounded-lg border border-border/40">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Lock className="w-8 h-8 text-primary" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Tour Builder is a Pro feature</h2>
+          <p className="text-muted-foreground mb-6 max-w-md">
+            Plan multi-stop tours, track routing and fuel, and see the full financial picture 
+            across every show. Upgrade to Pro for AU$5/month.
+          </p>
+          <Link href="/billing">
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Crown className="w-4 h-4 mr-2" />
+              Upgrade to Pro — AU$5/mo
+            </Button>
+          </Link>
+          <p className="text-xs text-muted-foreground mt-3">Cancel anytime · Your data is always preserved</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleDelete = (id: number) => {
     deleteTour.mutate(

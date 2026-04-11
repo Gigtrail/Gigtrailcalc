@@ -1,0 +1,102 @@
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useUser } from "@clerk/react";
+
+export interface PlanLimits {
+  maxProfiles: number;
+  maxVehicles: number;
+  maxRuns: number;
+  toursEnabled: boolean;
+  ticketedShowEnabled: boolean;
+  marketingCostEnabled: boolean;
+  routingEnabled: boolean;
+}
+
+export interface MeResponse {
+  userId: string;
+  email: string | null;
+  plan: "free" | "pro" | "unlimited";
+  limits: PlanLimits;
+  hasStripeCustomer: boolean;
+}
+
+export function usePlan() {
+  const { isSignedIn } = useUser();
+  const { data, isLoading, refetch } = useQuery<MeResponse>({
+    queryKey: ["/api/me"],
+    queryFn: async () => {
+      const res = await fetch("/api/me", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch plan");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 30_000,
+  });
+
+  const plan = data?.plan ?? "free";
+  const limits = data?.limits ?? {
+    maxProfiles: 1,
+    maxVehicles: 1,
+    maxRuns: 5,
+    toursEnabled: false,
+    ticketedShowEnabled: false,
+    marketingCostEnabled: false,
+    routingEnabled: false,
+  };
+
+  return { plan, limits, me: data, isLoading, refetch };
+}
+
+export interface StripePlan {
+  id: string;
+  name: string;
+  description: string;
+  metadata: Record<string, string>;
+  prices: Array<{
+    id: string;
+    unitAmount: number;
+    currency: string;
+    recurring: { interval: string } | null;
+  }>;
+}
+
+export function useStripePlans() {
+  return useQuery<{ data: StripePlan[] }>({
+    queryKey: ["/api/stripe/plans"],
+    queryFn: async () => {
+      const res = await fetch("/api/stripe/plans", { credentials: "include" });
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateCheckout() {
+  return useMutation({
+    mutationFn: async (priceId: string) => {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Checkout failed");
+      return data as { url: string };
+    },
+  });
+}
+
+export function useCustomerPortal() {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Portal failed");
+      return data as { url: string };
+    },
+  });
+}

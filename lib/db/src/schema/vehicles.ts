@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const vehiclesTable = pgTable("vehicles", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   name: text("name").notNull(),
   fuelType: text("fuel_type").notNull().default("petrol"),
   avgConsumption: numeric("avg_consumption", { precision: 6, scale: 2 }).notNull().default("0"),

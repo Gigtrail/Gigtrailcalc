@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, vehiclesTable } from "@workspace/db";
+import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateVehicleBody,
   GetVehicleParams,
@@ -22,12 +23,20 @@ function serializeVehicle(v: typeof vehiclesTable.$inferSelect) {
   };
 }
 
-router.get("/vehicles", async (_req, res): Promise<void> => {
-  const vehicles = await db.select().from(vehiclesTable).orderBy(vehiclesTable.createdAt);
+router.get("/vehicles", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const vehicles = await db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)).orderBy(vehiclesTable.createdAt);
   res.json(GetVehiclesResponse.parse(vehicles.map(serializeVehicle)));
 });
 
-router.post("/vehicles", async (req, res): Promise<void> => {
+router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userPlan);
+  const count = await countUserRecords(vehiclesTable, userId);
+  if (count >= limits.maxVehicles) {
+    res.status(403).json({ error: "Plan limit reached", code: "LIMIT_VEHICLES", limit: limits.maxVehicles, plan: userPlan });
+    return;
+  }
   const parsed = CreateVehicleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -35,18 +44,20 @@ router.post("/vehicles", async (req, res): Promise<void> => {
   }
   const [vehicle] = await db.insert(vehiclesTable).values({
     ...parsed.data,
+    userId,
     avgConsumption: String(parsed.data.avgConsumption),
   }).returning();
   res.status(201).json(GetVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
-router.get("/vehicles/:id", async (req, res): Promise<void> => {
+router.get("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = GetVehicleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, params.data.id));
+  const [vehicle] = await db.select().from(vehiclesTable).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)));
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
@@ -54,7 +65,8 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
   res.json(GetVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
-router.patch("/vehicles/:id", async (req, res): Promise<void> => {
+router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = UpdateVehicleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -66,10 +78,8 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
   const updateData: Record<string, unknown> = { ...parsed.data };
-  if (parsed.data.avgConsumption != null) {
-    updateData.avgConsumption = String(parsed.data.avgConsumption);
-  }
-  const [vehicle] = await db.update(vehiclesTable).set(updateData).where(eq(vehiclesTable.id, params.data.id)).returning();
+  if (parsed.data.avgConsumption != null) updateData.avgConsumption = String(parsed.data.avgConsumption);
+  const [vehicle] = await db.update(vehiclesTable).set(updateData).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
@@ -77,13 +87,14 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   res.json(UpdateVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
-router.delete("/vehicles/:id", async (req, res): Promise<void> => {
+router.delete("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = DeleteVehicleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [vehicle] = await db.delete(vehiclesTable).where(eq(vehiclesTable.id, params.data.id)).returning();
+  const [vehicle] = await db.delete(vehiclesTable).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;

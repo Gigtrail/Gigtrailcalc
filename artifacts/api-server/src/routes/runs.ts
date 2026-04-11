@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, runsTable } from "@workspace/db";
+import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateRunBody,
   GetRunParams,
@@ -52,28 +53,39 @@ function toDbRun(data: Record<string, unknown>) {
   return result;
 }
 
-router.get("/runs", async (_req, res): Promise<void> => {
-  const runs = await db.select().from(runsTable).orderBy(desc(runsTable.createdAt));
+router.get("/runs", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const runs = await db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt));
   res.json(GetRunsResponse.parse(runs.map(serializeRun)));
 });
 
-router.post("/runs", async (req, res): Promise<void> => {
+router.post("/runs", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userPlan);
+  if (limits.maxRuns !== Infinity) {
+    const count = await countUserRecords(runsTable, userId);
+    if (count >= limits.maxRuns) {
+      res.status(403).json({ error: "Plan limit reached", code: "LIMIT_RUNS", limit: limits.maxRuns, plan: userPlan });
+      return;
+    }
+  }
   const parsed = CreateRunBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [run] = await db.insert(runsTable).values(toDbRun(parsed.data as Record<string, unknown>) as typeof runsTable.$inferInsert).returning();
+  const [run] = await db.insert(runsTable).values({ ...toDbRun(parsed.data as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
   res.status(201).json(GetRunResponse.parse(serializeRun(run)));
 });
 
-router.get("/runs/:id", async (req, res): Promise<void> => {
+router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = GetRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [run] = await db.select().from(runsTable).where(eq(runsTable.id, params.data.id));
+  const [run] = await db.select().from(runsTable).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)));
   if (!run) {
     res.status(404).json({ error: "Run not found" });
     return;
@@ -81,7 +93,8 @@ router.get("/runs/:id", async (req, res): Promise<void> => {
   res.json(GetRunResponse.parse(serializeRun(run)));
 });
 
-router.patch("/runs/:id", async (req, res): Promise<void> => {
+router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = UpdateRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -92,7 +105,7 @@ router.patch("/runs/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [run] = await db.update(runsTable).set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>).where(eq(runsTable.id, params.data.id)).returning();
+  const [run] = await db.update(runsTable).set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
   if (!run) {
     res.status(404).json({ error: "Run not found" });
     return;
@@ -100,13 +113,14 @@ router.patch("/runs/:id", async (req, res): Promise<void> => {
   res.json(UpdateRunResponse.parse(serializeRun(run)));
 });
 
-router.delete("/runs/:id", async (req, res): Promise<void> => {
+router.delete("/runs/:id", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = DeleteRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [run] = await db.delete(runsTable).where(eq(runsTable.id, params.data.id)).returning();
+  const [run] = await db.delete(runsTable).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
   if (!run) {
     res.status(404).json({ error: "Run not found" });
     return;

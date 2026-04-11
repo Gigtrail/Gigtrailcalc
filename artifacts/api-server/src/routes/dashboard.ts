@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { db, runsTable, toursTable, profilesTable, vehiclesTable } from "@workspace/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
 } from "@workspace/api-zod";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -42,12 +43,13 @@ function serializeTour(t: typeof toursTable.$inferSelect) {
   };
 }
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const [runs, tours, profiles, vehicles] = await Promise.all([
-    db.select().from(runsTable),
-    db.select().from(toursTable),
-    db.select().from(profilesTable),
-    db.select().from(vehiclesTable),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
+    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)),
   ]);
 
   let totalKmDriven = 0;
@@ -95,10 +97,11 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   }));
 });
 
-router.get("/dashboard/recent", async (_req, res): Promise<void> => {
+router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const [recentRuns, recentTours] = await Promise.all([
-    db.select().from(runsTable).orderBy(desc(runsTable.createdAt)).limit(5),
-    db.select().from(toursTable).orderBy(desc(toursTable.createdAt)).limit(5),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(5),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(5),
   ]);
 
   res.json(GetDashboardRecentResponse.parse({

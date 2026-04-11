@@ -5,10 +5,14 @@ import vehiclesRouter from "./vehicles";
 import runsRouter from "./runs";
 import toursRouter from "./tours";
 import dashboardRouter from "./dashboard";
+import stripeRouter from "./stripe";
+import meRouter from "./me";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(meRouter);
+router.use(stripeRouter);
 router.use(profilesRouter);
 router.use(vehiclesRouter);
 router.use(runsRouter);
