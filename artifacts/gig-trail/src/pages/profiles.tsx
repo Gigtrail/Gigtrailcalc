@@ -1,6 +1,6 @@
 import { useGetProfiles, useDeleteProfile, getGetProfilesQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Users, MapPin, Edit, Trash2 } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,12 +17,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { usePlan } from "@/hooks/use-plan";
 
 export default function Profiles() {
   const { data: profiles, isLoading } = useGetProfiles();
   const deleteProfile = useDeleteProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { limits } = usePlan();
+
+  const atProfileLimit = (profiles?.length ?? 0) >= limits.maxProfiles;
 
   const handleDelete = (id: number) => {
     deleteProfile.mutate(
@@ -46,12 +50,26 @@ export default function Profiles() {
           <h1 className="text-3xl font-bold tracking-tight">Profiles</h1>
           <p className="text-muted-foreground mt-1">Manage your acts and bands.</p>
         </div>
-        <Button asChild>
-          <Link href="/profiles/new">
-            <Plus className="w-4 h-4 mr-2" />
-            New Profile
-          </Link>
-        </Button>
+        {atProfileLimit ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground hidden sm:block">
+              Multiple profiles require Pro
+            </span>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/billing">
+                <Lock className="w-3.5 h-3.5 mr-1.5" />
+                Upgrade to Pro
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <Button asChild>
+            <Link href="/profiles/new">
+              <Plus className="w-4 h-4 mr-2" />
+              New Profile
+            </Link>
+          </Button>
+        )}
       </div>
 
       {isLoading ? (

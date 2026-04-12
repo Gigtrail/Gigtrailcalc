@@ -1,0 +1,196 @@
+Create a clear Free vs Pro feature gating system for Gig Trail.
+
+GOAL
+Set up monetisation so free users get real value immediately, while Pro unlocks the advanced touring features that solve bigger real-world problems.
+
+CORE PRODUCT STRATEGY
+
+Free should feel useful for rough gig planning.
+Pro should feel essential for accurate touring decisions.
+
+Do NOT over-gate the app.
+Do NOT lock the basic calculator behind Pro.
+Do NOT make free users unable to understand the value of the app.
+
+FREE TIER
+
+Implement the following in the Free tier:
+
+1. Calculator
+- Single Show Calculator available
+- Basic profit estimate
+- Fuel cost calculation
+- Travel cost calculation
+- Basic accommodation calculation
+
+2. Profiles
+- 1 profile only
+- Allow act types:
+  - Solo
+  - Duo
+  - Band
+
+3. Band in Free tier
+- Band is allowed in Free
+- Limit Band to a maximum of 3 members
+- Allow basic member setup
+- Do NOT allow advanced shared accommodation logic
+- Do NOT allow advanced per-member finance tools beyond the basic essentials already in use
+
+4. Show History
+- Auto-save calculated shows into profile history
+- Allow viewing saved shows in a simple list
+- No advanced insights or analytics in Free
+
+5. General principle
+- Free users should be able to plan gigs and get hooked on the app
+- Free should feel like “rough planning”
+- Free should not feel broken or useless
+
+PRO TIER
+
+Implement the following as Pro-only features:
+
+1. Advanced Band tools
+- More than 3 band members
+- Unlimited members
+- Full Band Member Finance tools
+- Better per-member finance support
+- Future support for flexible touring lineups
+
+2. Shared Accommodation
+- Shared Accommodation / Couples / Shared Rooms feature
+- Ability to assign members to shared room groups
+- Use shared room logic in accommodation calculations
+- Automatically reduce room count based on shared accommodation setup
+
+3. Advanced touring logic
+- Preferred max driving hours per day
+- Auto overnight stop suggestions
+- Smarter accommodation calculations based on realistic travel limits
+- Better route realism
+
+4. Profiles
+- More than 1 saved profile
+- Multiple touring setups allowed
+- Example:
+  - solo profile
+  - duo profile
+  - band profile
+
+5. Future Pro-ready features
+Set up the code structure so Pro can later include:
+- venue insights
+- average profit by venue
+- would do again filtering
+- performance analytics
+- smarter recommendations
+
+UPGRADE TRIGGERS
+
+Build clean upgrade prompts at the natural friction points.
+
+1. Band member limit trigger
+If a free user tries to add more than 3 members:
+- block the action
+- show message:
+  “Free plans support up to 3 band members. Upgrade to Pro for larger band setups.”
+
+2. Shared accommodation trigger
+If a free user tries to use shared room logic:
+- show message:
+  “Shared Accommodation is a Pro feature.”
+
+3. Driving realism trigger
+If a free user reaches advanced travel planning logic:
+- show message:
+  “Upgrade to Pro for max driving limits and overnight stop planning.”
+
+4. Extra profiles trigger
+If a free user tries to create another profile:
+- show message:
+  “Multiple profiles are available on Pro.”
+
+UX REQUIREMENTS
+
+- Do not hide Pro features completely
+- Show them in the UI where appropriate, but locked or limited
+- Use clean upgrade messaging
+- Avoid aggressive popups
+- Keep upsells contextual and tied to real value
+
+IMPORTANT PRODUCT RULES
+
+- Free users must still be able to use the calculator properly
+- Band should NOT be fully locked behind Pro
+- Free users should be able to create a 3-member band
+- Pro should unlock depth, realism, and scalability
+- The upgrade should feel like:
+  “Now I need the serious touring tools”
+
+TECHNICAL REQUIREMENTS
+
+Create a feature gating system that is modular and reusable.
+
+Recommended structure:
+- /services/featureGateService.ts
+- /types/subscription.ts
+- /constants/planLimits.ts
+
+Suggested plan logic:
+- free
+- pro
+
+Suggested plan limits:
+Free:
+- maxProfiles = 1
+- maxBandMembers = 3
+- sharedAccommodation = false
+- advancedDrivingLogic = false
+
+Pro:
+- maxProfiles = unlimited or high number
+- maxBandMembers = unlimited
+- sharedAccommodation = true
+- advancedDrivingLogic = true
+
+IMPLEMENTATION REQUIREMENTS
+
+1. Centralised feature gate logic
+Do not scatter plan checks randomly through components.
+Use helper/service functions such as:
+- canUseBandMemberCount(userPlan, count)
+- canUseSharedAccommodation(userPlan)
+- canCreateAnotherProfile(userPlan, currentProfileCount)
+- canUseAdvancedDriving(userPlan)
+
+2. UI states
+- Locked features should have clear labels such as:
+  - Pro
+  - Upgrade to Pro
+  - Locked
+
+3. Safe enforcement
+- Enforce limits both in UI and in save/update logic
+- Do not rely only on frontend hiding
+
+4. Backward compatibility
+- If old data exceeds free limits, do not crash
+- Load safely
+- Show upgrade prompt where needed
+- Do not silently delete user data
+
+DELIVERABLES
+
+Please implement:
+- Free vs Pro plan definitions
+- central feature gate service
+- band limit of 3 members on Free
+- unlimited members on Pro
+- shared accommodation as Pro-only
+- advanced driving logic as Pro-only
+- multiple profiles as Pro-only
+- contextual upgrade prompts
+- safe enforcement in both UI and data handling
+
+Keep the code simple, readable, and scalable for future monetisation expansion.

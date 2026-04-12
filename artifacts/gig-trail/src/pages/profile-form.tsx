@@ -29,6 +29,8 @@ import { useEffect, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
+import { canAddBandMember, canUseAdvancedDriving, maxBandMembersForPlan } from "@/lib/plan-limits";
+import type { Plan } from "@/lib/plan-limits";
 
 const VEHICLE_PRESETS = [
   { label: "Car", value: "Car", consumption: 7, Icon: Car },
@@ -440,18 +442,34 @@ export default function ProfileForm() {
                 return msg ? <p className="text-sm font-medium text-destructive">{msg}</p> : null;
               })()}
 
-              {canAddRemoveMembers && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-1"
-                  onClick={() => appendMember(EMPTY_MEMBER())}
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Add Band Member
-                </Button>
-              )}
+              {canAddRemoveMembers && (() => {
+                const atLimit = !canAddBandMember(plan as Plan, memberFields.length);
+                const memberLimit = maxBandMembersForPlan(plan as Plan);
+                if (atLimit) {
+                  return (
+                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5 text-sm">
+                      <p className="font-medium text-amber-800 dark:text-amber-400">
+                        Free plans support up to {memberLimit} band members.
+                      </p>
+                      <p className="text-amber-700 dark:text-amber-500 mt-0.5">
+                        <a href="/billing" className="underline underline-offset-2 font-medium">Upgrade to Pro</a> for larger band setups.
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-1"
+                    onClick={() => appendMember(EMPTY_MEMBER())}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Add Band Member
+                  </Button>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -701,7 +719,7 @@ export default function ProfileForm() {
                     )}
                   />
 
-                  {isPro && (
+                  {canUseAdvancedDriving(plan as Plan) && (
                     <FormField
                       control={form.control}
                       name="maxDriveHoursPerDay"

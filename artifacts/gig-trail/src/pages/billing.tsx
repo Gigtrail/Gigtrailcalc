@@ -24,10 +24,11 @@ const STATIC_PLANS = [
     price: "AU$0",
     period: "forever",
     features: [
-      "1 act profile · 1 vehicle",
+      "1 act profile",
+      "Solo, Duo & Band (up to 3 members)",
       "Basic show calculator",
-      "10 calculations per week",
       "5 saved runs",
+      "10 calculations per week",
     ],
   },
   {
@@ -39,11 +40,11 @@ const STATIC_PLANS = [
     period: "per month",
     features: [
       "1 act profile",
+      "Unlimited band members",
       "Unlimited runs & calculations",
+      "Max driving hours & overnight planning",
       "Full tour builder",
-      "Ticketed show tools",
       "Routing & fuel estimates",
-      "Accommodation insights",
     ],
   },
   {
@@ -54,6 +55,7 @@ const STATIC_PLANS = [
     period: "per month",
     features: [
       "Up to 10 act profiles",
+      "Multiple touring setups",
       "Up to 10 vehicles",
       "Everything in Pro",
     ],
