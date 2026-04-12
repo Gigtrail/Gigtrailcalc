@@ -448,23 +448,6 @@ export default function ProfileForm() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="expectedGigFee"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expected Gig Fee ($)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="1" {...field} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Your usual minimum or typical fee for this act.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="minTakeHomePerPerson"
                   render={({ field }) => (
                     <FormItem>
