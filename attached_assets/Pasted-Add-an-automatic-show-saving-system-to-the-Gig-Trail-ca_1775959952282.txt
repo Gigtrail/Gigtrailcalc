@@ -1,0 +1,245 @@
+Add an automatic show-saving system to the Gig Trail calculator so every calculation is quietly saved into the user’s profile as a draft show record.
+
+GOAL
+Turn the calculator into a lightweight touring memory system without adding friction.
+The user should not need to manually press “Save Show” in V1.
+Every valid calculation should automatically create or update a draft show history record.
+
+CORE BEHAVIOUR
+
+1. Auto-save on calculate
+- When the user presses Calculate, automatically save the show into their profile.
+- No manual save button required for V1.
+- Save the record as status = "draft".
+
+2. Only save valid calculations
+- Do not create junk records from incomplete forms.
+- Only auto-save if minimum required data exists:
+  - venue name
+  - fee or projected income
+- If these are missing, do not save.
+
+3. Show saved confirmation
+- After calculation results are displayed, show a subtle confirmation message:
+  - “Show saved to history”
+- Add small actions:
+  - Edit
+  - View Shows
+
+4. Draft record concept
+- Auto-saved records are not final performance data.
+- They are planning records / estimated records.
+- Later, the user can edit the show and update real results.
+
+DATA TO AUTO-SAVE
+
+Save these fields automatically from the calculator result:
+
+- id
+- profile_id
+- status = "draft"
+- venue_name
+- city
+- state
+- country
+- show_date
+- fee
+- ticket_deal
+- projected_ticket_income
+- projected_total_income
+- travel_distance
+- fuel_cost
+- accommodation_required
+- accommodation_type
+- accommodation_estimated_cost
+- other_expenses
+- projected_profit
+- artist_profile_used
+- created_at
+- updated_at
+
+Use existing profile defaults where relevant, especially:
+- accommodation_required
+- accommodation_type
+- preferred_max_driving_hours_per_day
+
+IMPORTANT
+Accommodation setup should come from the selected profile, not manual input on the Single Show form.
+
+EDIT LATER FLOW
+
+The saved show should be editable later from the user profile / show history screen.
+
+Editable later fields should include:
+- actual_attendance
+- merch_sold
+- actual_ticket_income
+- actual_other_income
+- actual_expenses
+- actual_profit
+- would_do_again
+- notes
+- status can later become "confirmed"
+
+For V1, it is enough to support the record structure even if full confirmed editing UI is basic.
+
+SHOW HISTORY SCREEN
+
+Add a simple “Shows” or “Show History” area inside the user profile.
+
+Display each saved show in a clean list with:
+- venue name
+- date
+- city
+- projected profit
+- status badge (Draft / Confirmed)
+
+Each row should allow:
+- open / edit
+- delete if needed
+
+VENUE MEMORY BEHAVIOUR
+
+When a show is saved:
+- check whether a venue with the same normalized name already exists for that user
+- if yes, link the show to that venue
+- if not, create a lightweight venue record automatically
+
+Venue record can start simple:
+- id
+- profile_id
+- venue_name
+- city
+- state
+- country
+- created_at
+- updated_at
+
+This should happen silently in the background.
+Do not build a full venue CRM yet.
+
+CALCULATOR REUSE BEHAVIOUR
+
+When the user starts entering a venue name in a future calculation:
+- suggest matching previously used venues from their saved history
+- if a previous venue is selected, show a small helper line like:
+  - “Last time: $420 projected profit • Draft”
+  - or if confirmed:
+  - “Last time: $380 actual profit • Yes”
+
+Keep this subtle and lightweight.
+Do not overcomplicate the input flow.
+
+TECHNICAL REQUIREMENTS
+
+- Build this cleanly and modularly
+- Do not tightly couple autosave logic directly into UI components
+- Use a service/helper layer for:
+  - validating whether autosave should happen
+  - creating/updating the show record
+  - normalizing venue names
+  - linking or creating venue records
+
+Suggested structure:
+- /services/showAutosave.ts
+- /services/venueService.ts
+- /types/show.ts
+- /types/venue.ts
+
+RECOMMENDED TYPES
+
+Show:
+- id: string
+- profileId: string
+- venueId?: string
+- status: "draft" | "confirmed"
+- venueName: string
+- city?: string
+- state?: string
+- country?: string
+- showDate?: string
+- fee?: number
+- ticketDeal?: string
+- projectedTicketIncome?: number
+- projectedTotalIncome?: number
+- travelDistance?: number
+- fuelCost?: number
+- accommodationRequired?: boolean
+- accommodationType?: string
+- accommodationEstimatedCost?: number
+- otherExpenses?: number
+- projectedProfit?: number
+- actualAttendance?: number
+- merchSold?: number
+- actualTicketIncome?: number
+- actualOtherIncome?: number
+- actualExpenses?: number
+- actualProfit?: number
+- wouldDoAgain?: "yes" | "maybe" | "no"
+- notes?: string
+- artistProfileUsed?: string
+- createdAt: string
+- updatedAt: string
+
+Venue:
+- id: string
+- profileId: string
+- venueName: string
+- normalizedVenueName: string
+- city?: string
+- state?: string
+- country?: string
+- createdAt: string
+- updatedAt: string
+
+SAVE STRATEGY
+
+Implement autosave like this:
+- when the user presses Calculate
+- generate the calculation result first
+- then call autosave service
+- if a draft already exists for the same user, venue, and show date in recent context, update it instead of creating duplicates
+- otherwise create a new draft show
+
+Use sensible duplicate protection.
+Do not create multiple identical draft records from repeated recalculations unless key values changed meaningfully.
+
+UX NOTES
+
+- Keep the calculator fast
+- Do not interrupt the user with popups
+- Use inline confirmation only
+- The user should feel like the app is “quietly getting smarter”
+
+OUT OF SCOPE FOR THIS TASK
+
+Do NOT build yet:
+- advanced analytics dashboard
+- charts
+- team sharing
+- public venue database
+- CRM contact management
+- complex filtering
+- AI recommendations
+
+This task is only about:
+1. auto-saving calculations into show history
+2. lightweight venue memory
+3. simple profile history UI
+
+DELIVERABLES
+
+Please implement:
+- show and venue types
+- autosave service
+- venue linking / creation logic
+- show history UI
+- subtle saved confirmation on results screen
+- venue suggestion memory in calculator input
+
+Also refactor cleanly so this can scale later into:
+- confirmed show results
+- venue insights
+- performance analytics
+
+Keep the code simple, readable, and production-friendly.
