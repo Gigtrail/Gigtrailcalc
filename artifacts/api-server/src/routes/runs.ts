@@ -18,6 +18,10 @@ const router: IRouter = Router();
 function serializeRun(r: typeof runsTable.$inferSelect) {
   return {
     ...r,
+    originLat: r.originLat != null ? Number(r.originLat) : null,
+    originLng: r.originLng != null ? Number(r.originLng) : null,
+    destinationLat: r.destinationLat != null ? Number(r.destinationLat) : null,
+    destinationLng: r.destinationLng != null ? Number(r.destinationLng) : null,
     distanceKm: Number(r.distanceKm),
     fuelPrice: Number(r.fuelPrice),
     fee: r.fee != null ? Number(r.fee) : null,
