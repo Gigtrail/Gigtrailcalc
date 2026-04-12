@@ -372,13 +372,12 @@ export default function RunForm() {
       const perNightRate = accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE;
       const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * perNightRate : 0;
 
-      // Pass accommodation as override so computeGigResults uses recommended nights
+      // Pass room overrides only — accommodationNights comes from the form value the user set
       const computed = computeGigResults(vals, {
         ...routeOverride,
         accommodationRequired: accomRequired,
         singleRooms: accomSingleRooms,
         doubleRooms: accomDoubleRooms,
-        accommodationNights: accomRequired ? recommendedNights : 0,
       });
 
       // StatusIcon is a React component — not JSON-serializable; exclude it
