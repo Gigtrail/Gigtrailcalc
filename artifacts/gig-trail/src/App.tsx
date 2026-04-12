@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/layout";
@@ -23,7 +23,16 @@ import TourDetail from "@/pages/tour-detail";
 import TourStopForm from "@/pages/tour-stop-form";
 import Onboarding from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
-import { useGetProfiles } from "@workspace/api-client-react";
+import { useGetProfiles, setAuthTokenGetter } from "@workspace/api-client-react";
+
+function ClerkTokenProvider() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setAuthTokenGetter(() => getToken());
+    return () => setAuthTokenGetter(null);
+  }, [getToken]);
+  return null;
+}
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -131,6 +140,7 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
+        <ClerkTokenProvider />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Switch>
