@@ -1,11 +1,10 @@
 import {
   useGetProfiles,
   useDeleteProfile,
-  useUpdateProfile,
   getGetProfilesQueryKey,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Users, MapPin, Edit, Trash2, Lock, Settings2, BookUser } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,37 +22,20 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { usePlan } from "@/hooks/use-plan";
-import type { Plan } from "@/lib/plan-limits";
-import { useState } from "react";
-import { ActSetupDialog, type ActSetupData } from "@/components/act-setup-dialog";
-import { MemberLibraryDialog } from "@/components/member-library-dialog";
-import type { Member } from "@/types/member";
 import {
   migrateOldMembers,
   resolveActiveMembers,
   derivePeopleCount,
-  parseActiveMemberIds,
 } from "@/lib/member-utils";
 
 export default function Profiles() {
   const { data: profiles, isLoading } = useGetProfiles();
   const deleteProfile = useDeleteProfile();
-  const updateProfile = useUpdateProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { limits, plan } = usePlan();
+  const { limits } = usePlan();
 
   const atProfileLimit = (profiles?.length ?? 0) >= limits.maxProfiles;
-
-  const [actSetupProfileId, setActSetupProfileId] = useState<number | null>(null);
-  const [memberLibProfileId, setMemberLibProfileId] = useState<number | null>(null);
-
-  const actSetupProfile = profiles?.find((p) => p.id === actSetupProfileId);
-  const memberLibProfile = profiles?.find((p) => p.id === memberLibProfileId);
-
-  function getProfileMemberData(profile: NonNullable<typeof profiles>[0]) {
-    return migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null);
-  }
 
   const handleDelete = (id: number) => {
     deleteProfile.mutate(
@@ -70,69 +52,12 @@ export default function Profiles() {
     );
   };
 
-  function handleActSetupSave(data: ActSetupData) {
-    if (!actSetupProfileId) return;
-    const peopleCount = derivePeopleCount(data.actType, data.activeMemberIds);
-    updateProfile.mutate(
-      {
-        id: actSetupProfileId,
-        data: {
-          actType: data.actType,
-          bandMembers:
-            data.memberLibrary.length > 0 ? JSON.stringify(data.memberLibrary) : null,
-          activeMemberIds:
-            data.activeMemberIds.length > 0 ? JSON.stringify(data.activeMemberIds) : null,
-          peopleCount,
-        } as Parameters<typeof updateProfile.mutate>[0]["data"],
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
-          setActSetupProfileId(null);
-          toast({ title: "Act setup updated" });
-        },
-        onError: () => {
-          toast({ title: "Failed to update act setup", variant: "destructive" });
-        },
-      }
-    );
-  }
-
-  function handleLibrarySave(updatedLibrary: Member[]) {
-    if (!memberLibProfileId) return;
-    const profile = profiles?.find((p) => p.id === memberLibProfileId);
-    if (!profile) return;
-    const currentActive = parseActiveMemberIds(profile.activeMemberIds ?? null);
-    const validIds = new Set(updatedLibrary.map((m) => m.id));
-    const cleanedActive = currentActive.filter((id) => validIds.has(id));
-    updateProfile.mutate(
-      {
-        id: memberLibProfileId,
-        data: {
-          bandMembers: updatedLibrary.length > 0 ? JSON.stringify(updatedLibrary) : null,
-          activeMemberIds:
-            cleanedActive.length > 0 ? JSON.stringify(cleanedActive) : null,
-        } as Parameters<typeof updateProfile.mutate>[0]["data"],
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
-          setMemberLibProfileId(null);
-          toast({ title: "Member library saved" });
-        },
-        onError: () => {
-          toast({ title: "Failed to save member library", variant: "destructive" });
-        },
-      }
-    );
-  }
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profiles</h1>
-          <p className="text-muted-foreground mt-1">Manage your acts and bands.</p>
+          <p className="text-muted-foreground mt-1">Your acts and bands.</p>
         </div>
         {atProfileLimit ? (
           <div className="flex items-center gap-2">
@@ -183,9 +108,20 @@ export default function Profiles() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {profiles?.map((profile) => {
-            const { library, activeMemberIds } = getProfileMemberData(profile);
+            const { library, activeMemberIds } = migrateOldMembers(
+              profile.bandMembers,
+              profile.activeMemberIds ?? null
+            );
             const activeMembers = resolveActiveMembers(library, activeMemberIds);
             const peopleCount = derivePeopleCount(profile.actType, activeMemberIds);
+
+            // Act Cost / Show: sum of active members' expected gig fees
+            // Falls back to profile-level expectedGigFee if no member fee data
+            const actCostPerShow = activeMembers.length > 0
+              ? activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0)
+              : (profile.expectedGigFee ?? 0);
+
+            const foodPerDay = profile.avgFoodPerDay ?? 0;
 
             return (
               <Card
@@ -193,13 +129,13 @@ export default function Profiles() {
                 className="group hover-elevate transition-all border-border/50 bg-card/50 flex flex-col"
               >
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                  <div>
-                    <CardTitle className="text-xl">{profile.name}</CardTitle>
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-xl truncate">{profile.name}</CardTitle>
                     <div className="text-sm text-primary font-medium mt-0.5">
                       {profile.actType}
                     </div>
                   </div>
-                  <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -224,8 +160,7 @@ export default function Profiles() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete Profile</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure? This will permanently delete the profile "
-                            {profile.name}".
+                            Are you sure? This will permanently delete "{profile.name}".
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -243,24 +178,21 @@ export default function Profiles() {
                 </CardHeader>
 
                 <CardContent className="space-y-3 flex-1 flex flex-col">
+                  {/* Location */}
                   {profile.homeBase && (
                     <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4 mr-2 opacity-70 shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 mr-1.5 opacity-70 shrink-0" />
                       {profile.homeBase}
                     </div>
                   )}
 
+                  {/* Active members */}
                   {activeMembers.length > 0 ? (
                     <div className="space-y-1">
                       {activeMembers.map((m) => (
-                        <div
-                          key={m.id}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span className="text-foreground">
-                            {m.name || (
-                              <span className="text-muted-foreground italic">Unnamed</span>
-                            )}
+                        <div key={m.id} className="flex items-center justify-between text-sm">
+                          <span className="text-foreground truncate">
+                            {m.name || <span className="text-muted-foreground italic">Unnamed</span>}
                             {m.role && (
                               <span className="text-muted-foreground ml-1 text-xs">
                                 ({m.role})
@@ -268,7 +200,7 @@ export default function Profiles() {
                             )}
                           </span>
                           {m.expectedGigFee != null && m.expectedGigFee > 0 && (
-                            <span className="text-primary font-medium tabular-nums text-xs">
+                            <span className="text-primary font-medium tabular-nums text-xs ml-2 shrink-0">
                               ${m.expectedGigFee}
                             </span>
                           )}
@@ -277,109 +209,58 @@ export default function Profiles() {
                     </div>
                   ) : (
                     <div className="flex items-center text-sm text-muted-foreground">
-                      <Users className="w-4 h-4 mr-2 opacity-70" />
+                      <Users className="w-3.5 h-3.5 mr-1.5 opacity-70" />
                       {peopleCount} {peopleCount === 1 ? "Person" : "People"}
                     </div>
                   )}
 
-                  <div className="pt-3 mt-auto border-t border-border/40 grid grid-cols-2 gap-2 text-sm">
+                  {/* Cost summary */}
+                  <div className="mt-auto pt-3 border-t border-border/40 grid grid-cols-2 gap-x-4 gap-y-2.5">
                     <div>
-                      <div className="text-muted-foreground text-xs">Accommodation</div>
-                      <div className="font-medium">
+                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+                        <DollarSign className="w-3 h-3" />
+                        Act Cost / Show
+                      </div>
+                      <div className="font-semibold text-foreground text-sm">
+                        {actCostPerShow > 0 ? `$${actCostPerShow.toLocaleString()}` : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+                        <UtensilsCrossed className="w-3 h-3" />
+                        Food / Day
+                      </div>
+                      <div className="font-semibold text-foreground text-sm">
+                        {foodPerDay > 0 ? `$${foodPerDay}` : "—"}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+                        <BedDouble className="w-3 h-3" />
+                        Accommodation
+                      </div>
+                      <div className="font-semibold text-foreground text-sm">
                         {profile.accommodationRequired
                           ? (profile.accommodationType ?? "Required")
                           : "Not required"}
                       </div>
                     </div>
-                    <div>
-                      <div className="text-muted-foreground text-xs">Avg Food</div>
-                      <div className="font-medium">${profile.avgFoodPerDay}/day</div>
-                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() => setActSetupProfileId(profile.id)}
-                    >
-                      <Settings2 className="w-3 h-3 mr-1" />
-                      Update Act Setup
+                  {/* Footer edit link */}
+                  <div className="pt-2">
+                    <Button variant="ghost" size="sm" asChild className="w-full text-xs text-muted-foreground h-7 hover:text-foreground">
+                      <Link href={`/profiles/${profile.id}/edit`}>
+                        <Edit className="w-3 h-3 mr-1.5" />
+                        Edit Profile
+                      </Link>
                     </Button>
-                    {library.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-7"
-                        onClick={() => setMemberLibProfileId(profile.id)}
-                      >
-                        <BookUser className="w-3 h-3 mr-1" />
-                        Member Library
-                      </Button>
-                    )}
                   </div>
                 </CardContent>
               </Card>
             );
           })}
         </div>
-      )}
-
-      {actSetupProfile && (
-        <ActSetupDialog
-          key={`act-setup-${actSetupProfile.id}`}
-          open={!!actSetupProfileId}
-          onOpenChange={(open) => {
-            if (!open) setActSetupProfileId(null);
-          }}
-          initialActType={actSetupProfile.actType}
-          initialLibrary={(() => {
-            const { library } = migrateOldMembers(
-              actSetupProfile.bandMembers,
-              actSetupProfile.activeMemberIds ?? null
-            );
-            return library;
-          })()}
-          initialActiveMemberIds={(() => {
-            const { activeMemberIds } = migrateOldMembers(
-              actSetupProfile.bandMembers,
-              actSetupProfile.activeMemberIds ?? null
-            );
-            return activeMemberIds;
-          })()}
-          plan={plan as Plan}
-          onSave={handleActSetupSave}
-          isSaving={updateProfile.isPending}
-        />
-      )}
-
-      {memberLibProfile && (
-        <MemberLibraryDialog
-          key={`member-lib-${memberLibProfile.id}`}
-          open={!!memberLibProfileId}
-          onOpenChange={(open) => {
-            if (!open) setMemberLibProfileId(null);
-          }}
-          library={(() => {
-            const { library } = migrateOldMembers(
-              memberLibProfile.bandMembers,
-              memberLibProfile.activeMemberIds ?? null
-            );
-            return library;
-          })()}
-          activeMemberIds={(() => {
-            const { activeMemberIds } = migrateOldMembers(
-              memberLibProfile.bandMembers,
-              memberLibProfile.activeMemberIds ?? null
-            );
-            return activeMemberIds;
-          })()}
-          onSave={handleLibrarySave}
-          isSaving={updateProfile.isPending}
-        />
       )}
     </div>
   );

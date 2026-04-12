@@ -1,0 +1,77 @@
+Refactor the Gig Trail profile cards so they focus on useful act cost summary information instead of management actions.
+
+GOAL
+Make each profile card a quick, high-value summary for planning and calculator use.
+Remove management-style buttons from the card and replace them with act cost summary figures.
+
+CHANGES REQUIRED
+
+1. Remove these buttons from the main profile card:
+- Update Act Setup
+- Member Library
+
+These actions should no longer appear as primary buttons on the profile card.
+
+2. Move profile management into the Edit Profile screen
+- Act setup changes should happen inside the Edit Profile screen
+- Member library management should also happen inside the Edit Profile screen or a nested section there
+
+3. Add act cost summary to the card
+Display these summary values prominently on the profile card:
+- Act Cost / Show
+- Act Cost / Day
+
+4. Calculation rules
+Act Cost / Show:
+- sum all active member expected gig fees
+
+Example:
+- Bec = $50
+- Julian = $75
+- Act Cost / Show = $125
+
+Act Cost / Day:
+- sum all active member daily costs if supported
+- if the current system uses a shared daily allowance/food value instead, label it clearly and do not mislabel it
+
+If daily act cost is not yet fully supported, structure the card so this can be added cleanly.
+
+5. Card content priorities
+The profile card should focus on:
+- profile name
+- act type
+- location
+- active members
+- member expected gig fees
+- act cost / show
+- act cost / day
+- accommodation summary
+
+6. Suggested labels
+Use clear labels:
+- Act Cost / Show
+- Act Cost / Day
+
+7. UI cleanup
+- reduce admin clutter on the card
+- make the card feel like a useful planning summary, not a settings panel
+- allow a smaller Edit action if needed, but do not keep the large management buttons
+
+8. Edit access
+If needed, replace the removed buttons with a lighter action such as:
+- Edit
+or
+- a three-dot menu with Edit / Duplicate / Delete
+
+9. Data rules
+Use only active act members when calculating profile card totals.
+Do not include inactive/saved library members in the summary totals.
+
+10. Deliverables
+Implement:
+- remove Update Act Setup and Member Library buttons from the card
+- move those functions to Edit Profile
+- add Act Cost / Show
+- add Act Cost / Day
+- calculate totals from active members only
+- keep the card clean and readable
