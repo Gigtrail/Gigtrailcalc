@@ -499,6 +499,11 @@ export default function RunResults() {
         </p>
       )}
 
+      {/* Disclaimer */}
+      <p className="text-xs text-center text-muted-foreground/70 px-4">
+        These figures are estimates based on your inputs — real-world results may vary.
+      </p>
+
       {/* Action Buttons */}
       <div className="space-y-3 pt-1">
         {effectiveRunId ? (
