@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
@@ -354,9 +355,12 @@ export default function RunForm() {
       const drivingDaysNeeded = totalDriveHours > 0 ? Math.ceil(totalDriveHours / maxDriveHoursPerDay) : 0;
       const recommendedNights = Math.max(0, drivingDaysNeeded - 1);
 
-      const accomRequired = profile?.accommodationRequired ?? false;
-      const accomTypeForRecommendation = profile?.accommodationType ?? null;
-      const accomRate = ACCOM_RATES[accomTypeForRecommendation ?? ""] ?? 0;
+      // Use form values for accommodation — user can override profile defaults per-show
+      const accomRequired = vals.accommodationRequired ?? false;
+      const accomTypeForRecommendation = vals.accommodationType ?? null;
+      const accomRate = (accomTypeForRecommendation && accomTypeForRecommendation !== "Not specified")
+        ? (ACCOM_RATES[accomTypeForRecommendation] ?? 0)
+        : 0;
       const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * accomRate : 0;
 
       // Pass accommodation as override so computeGigResults uses recommended nights
@@ -1089,40 +1093,58 @@ export default function RunForm() {
                   <CardTitle>Other Costs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Accommodation — read from profile, nights estimated at calculation time */}
-                  {(() => {
-                    const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
-                    const accomRequired = selectedProfile?.accommodationRequired;
-                    const accomType = selectedProfile?.accommodationType;
-                    const accomRate = accomType ? ACCOM_RATES[accomType] : null;
-                    return (
-                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium leading-none flex items-center gap-1.5">
-                          <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
-                          Accommodation
-                        </label>
-                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
-                          {!selectedProfile ? (
-                            <span className="text-muted-foreground">Select a profile to set accommodation</span>
-                          ) : accomRequired && accomType ? (
-                            <>
-                              <span className="text-foreground">{accomType}</span>
-                              {accomRate && (
-                                <span className="text-muted-foreground ml-1">(${accomRate}/night)</span>
-                              )}
-                              <span className="ml-auto text-xs text-muted-foreground">Nights estimated at calculation</span>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">Not required</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Accommodation setup comes from your profile.{" "}
-                          <a href="/profiles" className="text-primary underline underline-offset-2">Edit in profile</a>
-                        </p>
-                      </div>
-                    );
-                  })()}
+                  {/* Accommodation — editable per-show, defaults from profile */}
+                  <div className="space-y-3">
+                    <FormField
+                      control={form.control}
+                      name="accommodationRequired"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                          <div>
+                            <FormLabel className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                              <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
+                              Accommodation Required for this show
+                            </FormLabel>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Defaults from your profile — override per show if needed
+                            </p>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    {formValues.accommodationRequired && (
+                      <FormField
+                        control={form.control}
+                        name="accommodationType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Room Type</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select room type" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {ACCOM_TYPES.map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {t === "Not specified" ? t : `${t} ($${ACCOM_RATES[t]}/night)`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              Nights are estimated from drive time at calculation.
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField

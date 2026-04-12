@@ -507,7 +507,7 @@ export default function ProfileForm() {
                   <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
                     <div>
                       <FormLabel className="text-sm font-medium cursor-pointer">
-                        Accommodation required
+                        Accommodation Required by Default
                       </FormLabel>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Does this act usually need a place to stay?
@@ -527,7 +527,7 @@ export default function ProfileForm() {
                     name="accommodationType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Accommodation Type</FormLabel>
+                        <FormLabel>Preferred Room Type</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value || ""}>
                           <FormControl>
                             <SelectTrigger>
@@ -537,10 +537,9 @@ export default function ProfileForm() {
                           <SelectContent>
                             {ACCOM_TYPES.map((t) => (
                               <SelectItem key={t} value={t}>
-                                {t}{" "}
-                                <span className="text-muted-foreground text-xs ml-1">
-                                  ${ACCOM_RATES[t]}/night
-                                </span>
+                                {t === "Not specified" ? t : (
+                                  `${t} ($${ACCOM_RATES[t]}/night)`
+                                )}
                               </SelectItem>
                             ))}
                           </SelectContent>
