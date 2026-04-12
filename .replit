@@ -38,4 +38,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-VITE_GOOGLE_MAPS_API_KEY = "AIzaSyAg-fikECIa47zW4olWiHTEDHtaw_PfkyM"
+VITE_GOOGLE_MAPS_API_KEY = "AIzaSyAhU3Qx65SMtpzCJuT91REmxLW8aqTXaVs"
