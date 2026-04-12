@@ -185,6 +185,7 @@ export default function ProfileForm() {
     form.setValue("accommodationRequired", data.accommodationRequired, { shouldValidate: false });
     form.setValue("singleRoomsDefault", data.singleRoomsDefault, { shouldValidate: false });
     form.setValue("doubleRoomsDefault", data.doubleRoomsDefault, { shouldValidate: false });
+    form.setValue("avgFoodPerDay", data.avgFoodPerDay, { shouldValidate: false });
     const count = derivePeopleCount(data.actType, data.activeMemberIds);
     form.setValue("peopleCount", count, { shouldValidate: false });
     setActSetupOpen(false);
@@ -432,50 +433,6 @@ export default function ProfileForm() {
                 <div className="flex items-center h-9 px-3 rounded-md border border-border/60 bg-muted/40 text-sm text-foreground w-24">
                   {derivedPeopleCount}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Money */}
-          <Card className="border-border/50 bg-card/50">
-            <CardHeader>
-              <CardTitle>Money</CardTitle>
-              <CardDescription>
-                What you expect to earn and what each person needs to make it worthwhile.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="minTakeHomePerPerson"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Minimum Take-Home Per Person ($)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="1" {...field} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        The least each person needs to make for the gig to feel worth it.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="avgFoodPerDay"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Avg. Food ($ / day / person)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="0" step="0.01" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
             </CardContent>
           </Card>
@@ -801,6 +758,7 @@ export default function ProfileForm() {
         initialAccommodationRequired={accommodationRequired}
         initialSingleRoomsDefault={singleRoomsDefaultWatch}
         initialDoubleRoomsDefault={doubleRoomsDefaultWatch}
+        initialAvgFoodPerDay={form.getValues("avgFoodPerDay") ?? 0}
         plan={plan as Plan}
         onSave={handleActSetupSave}
       />

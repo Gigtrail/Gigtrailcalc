@@ -33,6 +33,7 @@ export interface ActSetupData {
   accommodationRequired: boolean;
   singleRoomsDefault: number;
   doubleRoomsDefault: number;
+  avgFoodPerDay: number;
 }
 
 interface ActSetupDialogProps {
@@ -44,6 +45,7 @@ interface ActSetupDialogProps {
   initialAccommodationRequired: boolean;
   initialSingleRoomsDefault: number;
   initialDoubleRoomsDefault: number;
+  initialAvgFoodPerDay: number;
   plan: Plan;
   onSave: (data: ActSetupData) => void;
   isSaving?: boolean;
@@ -58,6 +60,7 @@ export function ActSetupDialog({
   initialAccommodationRequired,
   initialSingleRoomsDefault,
   initialDoubleRoomsDefault,
+  initialAvgFoodPerDay,
   plan,
   onSave,
   isSaving,
@@ -68,6 +71,7 @@ export function ActSetupDialog({
   const [accommodationRequired, setAccommodationRequired] = useState(initialAccommodationRequired);
   const [singleRoomsDefault, setSingleRoomsDefault] = useState(initialSingleRoomsDefault);
   const [doubleRoomsDefault, setDoubleRoomsDefault] = useState(initialDoubleRoomsDefault);
+  const [avgFoodPerDay, setAvgFoodPerDay] = useState(initialAvgFoodPerDay);
   const [addingNew, setAddingNew] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", role: "", expectedGigFee: 0 });
   const [recentlyRemoved, setRecentlyRemoved] = useState<string[]>([]);
@@ -80,6 +84,7 @@ export function ActSetupDialog({
       setAccommodationRequired(initialAccommodationRequired);
       setSingleRoomsDefault(initialSingleRoomsDefault);
       setDoubleRoomsDefault(initialDoubleRoomsDefault);
+      setAvgFoodPerDay(initialAvgFoodPerDay);
       setAddingNew(false);
       setNewMember({ name: "", role: "", expectedGigFee: 0 });
       setRecentlyRemoved([]);
@@ -198,6 +203,7 @@ export function ActSetupDialog({
       accommodationRequired,
       singleRoomsDefault: accommodationRequired ? singleRoomsDefault : 0,
       doubleRoomsDefault: accommodationRequired ? doubleRoomsDefault : 0,
+      avgFoodPerDay,
     });
   }
 
@@ -419,6 +425,27 @@ export function ActSetupDialog({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Food */}
+          <div className="space-y-3 pt-1 border-t border-border/40">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Food &amp; Drink</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Average daily spend per person on the road.</p>
+            </div>
+            <div className="relative max-w-[140px]">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                value={avgFoodPerDay}
+                onChange={(e) => setAvgFoodPerDay(Math.max(0, Number(e.target.value) || 0))}
+                className="pl-6"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">per person / day</p>
           </div>
 
           {/* Accommodation */}
