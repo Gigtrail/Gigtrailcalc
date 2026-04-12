@@ -43,7 +43,11 @@ const profileSchema = z.object({
   homeBaseLat: z.number().optional().nullable(),
   homeBaseLng: z.number().optional().nullable(),
   peopleCount: z.coerce.number().min(1, "Must have at least 1 person"),
-  bandMembers: z.array(z.object({ name: z.string(), role: z.string().optional() })).optional(),
+  bandMembers: z.array(z.object({
+    name: z.string(),
+    role: z.string().optional(),
+    expectedGigFee: z.coerce.number().min(0).optional(),
+  })).optional(),
   expectedGigFee: z.coerce.number().min(0),
   minTakeHomePerPerson: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
@@ -110,17 +114,25 @@ export default function ProfileForm() {
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
-  const showBandMembers = actType === "Duo" || actType === "Band";
+  const showMembers = actType === "Solo" || actType === "Duo" || actType === "Band";
 
   useEffect(() => {
     if (profile) {
-      let parsedMembers: { name: string; role?: string }[] = [];
+      let parsedMembers: { name: string; role?: string; expectedGigFee?: number }[] = [];
       try {
-        if (profile.bandMembers) parsedMembers = JSON.parse(profile.bandMembers);
+        if (profile.bandMembers) {
+          const raw = JSON.parse(profile.bandMembers);
+          parsedMembers = (Array.isArray(raw) ? raw : []).map((m: Record<string, unknown>) => ({
+            name: String(m.name ?? ""),
+            role: m.role ? String(m.role) : undefined,
+            expectedGigFee: m.expectedGigFee != null ? Number(m.expectedGigFee) : 0,
+          }));
+        }
       } catch {}
+      const safeActType = ["Solo", "Duo", "Band"].includes(profile.actType) ? profile.actType : "Solo";
       form.reset({
         name: profile.name,
-        actType: profile.actType,
+        actType: safeActType,
         homeBase: profile.homeBase || "",
         homeBaseLat: typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null,
         homeBaseLng: typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null,
@@ -143,11 +155,13 @@ export default function ProfileForm() {
   }, [profile, form]);
 
   useEffect(() => {
-    if (actType === "Duo" && memberFields.length === 0) {
-      appendMember({ name: "", role: "" });
-      appendMember({ name: "", role: "" });
+    if (actType === "Solo" && memberFields.length === 0) {
+      appendMember({ name: "", role: "", expectedGigFee: 0 });
+    } else if (actType === "Duo" && memberFields.length === 0) {
+      appendMember({ name: "", role: "", expectedGigFee: 0 });
+      appendMember({ name: "", role: "", expectedGigFee: 0 });
     } else if (actType === "Band" && memberFields.length === 0) {
-      appendMember({ name: "", role: "" });
+      appendMember({ name: "", role: "", expectedGigFee: 0 });
     }
   }, [actType]);
 
@@ -252,7 +266,6 @@ export default function ProfileForm() {
                           <SelectItem value="Solo">Solo</SelectItem>
                           <SelectItem value="Duo">Duo</SelectItem>
                           <SelectItem value="Band">Band</SelectItem>
-                          <SelectItem value="DJ">DJ</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -302,21 +315,25 @@ export default function ProfileForm() {
             </CardContent>
           </Card>
 
-          {/* Band Members — Duo/Band only */}
-          {showBandMembers && (
+          {/* Act Members — all act types */}
+          {showMembers && (
             <Card className="border-border/50 bg-card/50">
               <CardHeader>
-                <CardTitle>Band Members</CardTitle>
-                <CardDescription>Who's in the act?</CardDescription>
+                <CardTitle>{actType === "Solo" ? "Act Member" : "Band Members"}</CardTitle>
+                <CardDescription>
+                  {actType === "Solo"
+                    ? "Your name and expected fee for this act."
+                    : "Who's in the act? Add a name, role, and expected fee per person."}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {memberFields.map((field, index) => (
-                  <div key={field.id} className="flex gap-3 items-start">
+                  <div key={field.id} className="flex gap-2 items-start">
                     <FormField
                       control={form.control}
                       name={`bandMembers.${index}.name`}
                       render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem className="flex-[2]">
                           {index === 0 && <FormLabel>Name</FormLabel>}
                           <FormControl>
                             <Input placeholder="Member name" {...field} />
@@ -329,10 +346,31 @@ export default function ProfileForm() {
                       control={form.control}
                       name={`bandMembers.${index}.role`}
                       render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem className="flex-[1.5]">
                           {index === 0 && <FormLabel>Role (optional)</FormLabel>}
                           <FormControl>
-                            <Input placeholder="e.g. Guitar, Drums" {...field} />
+                            <Input placeholder="e.g. Guitar" {...field} value={field.value ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`bandMembers.${index}.expectedGigFee`}
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-[90px]">
+                          {index === 0 && <FormLabel>Fee ($)</FormLabel>}
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="0"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -349,16 +387,18 @@ export default function ProfileForm() {
                     </Button>
                   </div>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-1"
-                  onClick={() => appendMember({ name: "", role: "" })}
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />
-                  Add Member
-                </Button>
+                {actType !== "Solo" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-1"
+                    onClick={() => appendMember({ name: "", role: "", expectedGigFee: 0 })}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Add Member
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}

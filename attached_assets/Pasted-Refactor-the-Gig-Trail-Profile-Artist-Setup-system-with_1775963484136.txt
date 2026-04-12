@@ -1,0 +1,139 @@
+Refactor the Gig Trail Profile / Artist Setup system with the following fixes and improvements.
+
+GOAL
+Clean up the act setup options, make sure they save properly in the user profile, and improve the UI so expected gig fee is visible next to each act/person entry.
+
+CHANGES REQUIRED
+
+1. Remove DJ option
+- Remove the "DJ" option completely from the act type selector.
+- Keep only:
+  - Solo
+  - Duo
+  - Band
+
+This should be removed from:
+- profile creation
+- profile edit
+- any validation or enum/type definitions
+- any UI dropdowns or radio selectors
+- any stored default option lists
+
+2. Fix saving to profile
+The selected act type options are currently not saving correctly in the profile.
+
+Make sure the following fields persist correctly when a profile is created or updated:
+- act_type (solo / duo / band)
+- member list
+- expected gig fee per member or act member
+- any related artist setup fields already in use
+
+Check the full save flow:
+- UI form state
+- validation layer
+- profile save handler
+- storage/database write
+- profile reload/edit screen
+
+When the profile is reopened, the previously saved values must display correctly.
+
+3. Add expected gig fee next to each person
+In the members/people section of the profile, show each person with their expected gig fee beside their name.
+
+Example UI:
+- Julian James — $350
+- Beci Kate — $300
+- Bass Player — $250
+
+This should work for:
+- Solo
+- Duo
+- Band
+
+If the structure currently supports member objects, use:
+- name
+- role
+- expectedGigFee
+
+If needed, refactor member entries to consistently support this.
+
+4. Improve profile member structure
+Use a clean data structure for act members.
+
+Recommended shape:
+{
+  id: string,
+  name: string,
+  role?: string,
+  expectedGigFee?: number
+}
+
+Recommended profile fields:
+- actType: "solo" | "duo" | "band"
+- members: Member[]
+
+Examples:
+Solo:
+- 1 member
+
+Duo:
+- 2 members
+
+Band:
+- multiple members
+
+5. UI behaviour
+Profile setup/edit screen should:
+- allow adding/editing/removing members
+- show expected gig fee input for each member
+- display saved fee next to the member name in summary/list view
+- hide/remove any DJ-related wording or logic
+
+6. Validation rules
+- actType must be one of:
+  - solo
+  - duo
+  - band
+- each member should have at least:
+  - name
+- expectedGigFee should be numeric and >= 0
+- if invalid, show clean inline validation
+
+7. Persistence requirements
+Make sure this data saves and reloads correctly from the profile store/database.
+
+Check for broken mapping between:
+- frontend camelCase fields
+- backend/storage field names
+- default values
+- edit form hydration
+
+If old profile data exists with DJ, map it safely:
+- either convert DJ to Solo temporarily
+- or ignore DJ and force valid fallback
+Do not let old DJ data break the app.
+
+8. Summary display
+Where the selected profile summary is shown, include:
+- act type
+- member names
+- expected gig fee beside each member
+
+Example:
+Act Type: Duo
+Members:
+- Julian James — $350
+- Beci Kate — $300
+
+9. Keep this clean
+Do not overcomplicate this into payroll/accounting.
+This is only for planning expected gig costs for the calculator.
+
+DELIVERABLES
+Please implement:
+- remove DJ option everywhere
+- fix profile saving/loading for act type and members
+- show expected gig fee next to each member name
+- refactor member data structure if needed
+- keep code modular and readable
+- ensure backward compatibility with older saved profiles where possible

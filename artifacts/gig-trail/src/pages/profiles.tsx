@@ -117,16 +117,43 @@ export default function Profiles() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Users className="w-4 h-4 mr-2 opacity-70" />
-                  {profile.peopleCount} {profile.peopleCount === 1 ? 'Person' : 'People'}
-                </div>
                 {profile.homeBase && (
                   <div className="flex items-center text-sm text-muted-foreground">
                     <MapPin className="w-4 h-4 mr-2 opacity-70" />
                     {profile.homeBase}
                   </div>
                 )}
+                {(() => {
+                  let members: { name: string; role?: string; expectedGigFee?: number }[] = [];
+                  try {
+                    if (profile.bandMembers) members = JSON.parse(profile.bandMembers);
+                  } catch {}
+                  if (members.length > 0) {
+                    return (
+                      <div className="space-y-1">
+                        {members.map((m, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="text-foreground">
+                              {m.name || <span className="text-muted-foreground italic">Unnamed</span>}
+                              {m.role && (
+                                <span className="text-muted-foreground ml-1 text-xs">({m.role})</span>
+                              )}
+                            </span>
+                            {m.expectedGigFee != null && m.expectedGigFee > 0 && (
+                              <span className="text-primary font-medium tabular-nums">${m.expectedGigFee}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex items-center text-sm text-muted-foreground">
+                      <Users className="w-4 h-4 mr-2 opacity-70" />
+                      {profile.peopleCount} {profile.peopleCount === 1 ? 'Person' : 'People'}
+                    </div>
+                  );
+                })()}
                 <div className="pt-3 mt-3 border-t border-border/40 grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <div className="text-muted-foreground text-xs">Accommodation</div>
