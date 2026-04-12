@@ -445,7 +445,6 @@ export function ActSetupDialog({
                 className="pl-6"
               />
             </div>
-            <p className="text-xs text-muted-foreground">per person / day</p>
           </div>
 
           {/* Accommodation */}
