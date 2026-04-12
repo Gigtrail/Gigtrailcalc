@@ -323,19 +323,31 @@ export default function ProfileForm() {
 
           {/* Act Setup */}
           <Card className="border-border/50 bg-card/50">
-            <CardHeader>
-              <CardTitle>Act Setup</CardTitle>
-              <CardDescription>
-                Act type and lineup. Members are saved in your library even if removed from the active act.
-              </CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle>Act Setup</CardTitle>
+                  <CardDescription className="mt-1">
+                    Edit member names and fees here. Use Act Setup for structural changes.
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 ml-4"
+                  onClick={() => setActSetupOpen(true)}
+                >
+                  <Settings2 className="w-3.5 h-3.5 mr-1.5" />
+                  Edit Act Setup
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {activeMemberIdsWatch.length === 0 && memberLibraryWatch.length === 0 ? (
                 <div className="text-center py-6 rounded-lg border border-dashed border-border/60 bg-muted/20">
                   <Settings2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
-                  <p className="text-sm text-muted-foreground">
-                    No act configured yet.
-                  </p>
+                  <p className="text-sm text-muted-foreground">No act configured yet.</p>
                   <p className="text-xs text-muted-foreground mt-0.5 mb-3">
                     Set your act type and add members to get started.
                   </p>
@@ -350,49 +362,64 @@ export default function ProfileForm() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-4">
+                  {/* Read-only summary */}
+                  <div className="flex gap-6 text-sm">
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
-                        Act Type
-                      </div>
+                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">Act Type</div>
                       <div className="font-semibold text-foreground">{actType}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
-                        People on Tour
-                      </div>
+                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">People on Tour</div>
                       <div className="font-semibold text-foreground">{derivedPeopleCount}</div>
                     </div>
                   </div>
 
+                  {/* Inline-editable members — name + fee only */}
                   {activeMembers.length > 0 && (
-                    <div>
-                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">
-                        Active Members
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-[1fr_90px] gap-2 px-0.5">
+                        <span className="text-xs text-muted-foreground font-medium">Name</span>
+                        <span className="text-xs text-muted-foreground font-medium text-right">Fee</span>
                       </div>
-                      <div className="space-y-1">
-                        {activeMembers.map((m) => (
-                          <div
-                            key={m.id}
-                            className="flex items-center justify-between text-sm py-1 px-2 rounded-md bg-muted/30"
-                          >
-                            <span className="text-foreground font-medium">
-                              {m.name || <span className="text-muted-foreground italic">Unnamed</span>}
-                              {m.role && (
-                                <span className="text-muted-foreground font-normal ml-1.5 text-xs">
-                                  {m.role}
-                                </span>
-                              )}
-                            </span>
-                            {m.expectedGigFee != null && m.expectedGigFee > 0 && (
-                              <span className="text-primary font-medium tabular-nums text-xs">
-                                ${m.expectedGigFee}
-                              </span>
+                      {activeMembers.map((m) => (
+                        <div key={m.id} className="grid grid-cols-[1fr_90px] gap-2 items-center">
+                          <div>
+                            <Input
+                              placeholder="Name"
+                              value={m.name}
+                              onChange={(e) => {
+                                const updated = (memberLibraryWatch as Member[]).map((lib) =>
+                                  lib.id === m.id ? { ...lib, name: e.target.value } : lib
+                                );
+                                form.setValue("memberLibrary", updated, { shouldValidate: false });
+                              }}
+                              className="h-9"
+                            />
+                            {m.role && (
+                              <span className="text-xs text-muted-foreground pl-1">{m.role}</span>
                             )}
                           </div>
-                        ))}
-                      </div>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={m.expectedGigFee ?? ""}
+                              onChange={(e) => {
+                                const updated = (memberLibraryWatch as Member[]).map((lib) =>
+                                  lib.id === m.id
+                                    ? { ...lib, expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value) }
+                                    : lib
+                                );
+                                form.setValue("memberLibrary", updated, { shouldValidate: false });
+                              }}
+                              className="h-9 pl-6 text-right"
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -400,39 +427,20 @@ export default function ProfileForm() {
                     <p className="text-sm font-medium text-destructive">{actSetupError}</p>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  {memberLibraryWatch.length > 0 && (
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      onClick={() => setActSetupOpen(true)}
+                      className="text-muted-foreground"
+                      onClick={() => setMemberLibraryOpen(true)}
                     >
-                      <Settings2 className="w-3.5 h-3.5 mr-1.5" />
-                      Update Act Setup
+                      <BookUser className="w-3.5 h-3.5 mr-1.5" />
+                      Manage Member Library
                     </Button>
-                    {memberLibraryWatch.length > 0 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setMemberLibraryOpen(true)}
-                      >
-                        <BookUser className="w-3.5 h-3.5 mr-1.5" />
-                        Manage Member Library
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
-
-              <div>
-                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
-                  People on Tour (used for food & accommodation costs)
-                </div>
-                <div className="flex items-center h-9 px-3 rounded-md border border-border/60 bg-muted/40 text-sm text-foreground w-24">
-                  {derivedPeopleCount}
-                </div>
-              </div>
             </CardContent>
           </Card>
 
