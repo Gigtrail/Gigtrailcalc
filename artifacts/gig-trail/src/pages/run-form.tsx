@@ -175,6 +175,7 @@ export default function RunForm() {
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
+  const [overridingCosts, setOverridingCosts] = useState(isEditing);
   const [venueQuery, setVenueQuery] = useState("");
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
   const venueSuggestionsRef = useRef<HTMLDivElement>(null);
@@ -518,10 +519,11 @@ export default function RunForm() {
     if (pId) {
       const profile = profiles?.find(p => p.id === pId);
       if (profile) {
-        // Auto-fill accommodation from profile defaults
+        // Auto-fill accommodation from profile defaults and reset override state
         form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
         form.setValue("singleRooms", profile.singleRoomsDefault ?? 0);
         form.setValue("doubleRooms", profile.doubleRoomsDefault ?? 0);
+        setOverridingCosts(false);
         // Auto-fill food cost from profile
         form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
         // Auto-fill expected fee from profile (only if fee is currently 0)
@@ -1094,96 +1096,141 @@ export default function RunForm() {
               </Card>
 
               <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Other Costs</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Accommodation — editable per-show, defaults from profile */}
-                  <div className="space-y-3">
-                    <FormField
-                      control={form.control}
-                      name="accommodationRequired"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                          <div>
-                            <FormLabel className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
-                              <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
-                              Accommodation Required for this show
-                            </FormLabel>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Defaults from your profile — override per show if needed
-                            </p>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    {formValues.accommodationRequired && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <FormField
-                          control={form.control}
-                          name="singleRooms"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Single Rooms</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="doubleRooms"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Double / Queen Rooms</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <p className="col-span-2 text-xs text-muted-foreground -mt-1">
-                          Nights estimated from drive time at calculation. Single: ${SINGLE_ROOM_RATE}/night · Double: ${DOUBLE_ROOM_RATE}/night
-                        </p>
-                      </div>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Other Costs</CardTitle>
+                    {!overridingCosts && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground h-7 px-2"
+                        onClick={() => setOverridingCosts(true)}
+                      >
+                        Edit
+                      </Button>
                     )}
                   </div>
+                  {!overridingCosts && (
+                    <p className="text-xs text-muted-foreground mt-0.5">Pulled from your profile — click Edit to override for this show.</p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {overridingCosts ? (
+                    <>
+                      {/* Accommodation */}
+                      <div className="space-y-3">
+                        <FormField
+                          control={form.control}
+                          name="accommodationRequired"
+                          render={({ field }) => (
+                            <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                              <div>
+                                <FormLabel className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                                  <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
+                                  Accommodation Required for this show
+                                </FormLabel>
+                              </div>
+                              <FormControl>
+                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        {formValues.accommodationRequired && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField
+                              control={form.control}
+                              name="singleRooms"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Single Rooms</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="doubleRooms"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Double / Queen Rooms</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <p className="col-span-2 text-xs text-muted-foreground -mt-1">
+                              Nights estimated from drive time. Single: ${SINGLE_ROOM_RATE}/night · Double: ${DOUBLE_ROOM_RATE}/night
+                            </p>
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="foodCost"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Food & Drink ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="foodCost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Food & Drink ($)</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" {...field} value={field.value || 0} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="extraCosts"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Extra Costs ($)</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" {...field} value={field.value || 0} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    /* Collapsed read-only summary */
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between text-sm py-1">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <BedDouble className="w-3.5 h-3.5" />
+                          Accommodation
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {formValues.accommodationRequired
+                            ? [
+                                (Number(formValues.singleRooms) || 0) > 0 && `${formValues.singleRooms} single`,
+                                (Number(formValues.doubleRooms) || 0) > 0 && `${formValues.doubleRooms} double`,
+                              ].filter(Boolean).join(" + ") || "Required"
+                            : "Not required"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
+                        <span className="text-muted-foreground">Food & Drink</span>
+                        <span className="font-medium text-foreground">${Number(formValues.foodCost) || 0}</span>
+                      </div>
+                      {(Number(formValues.extraCosts) || 0) > 0 && (
+                        <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
+                          <span className="text-muted-foreground">Extra Costs</span>
+                          <span className="font-medium text-foreground">${Number(formValues.extraCosts) || 0}</span>
+                        </div>
                       )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="extraCosts"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Extra Costs ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
+                    </div>
+                  )}
+
                   <FormField
                     control={form.control}
                     name="notes"
