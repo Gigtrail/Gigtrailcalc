@@ -71,6 +71,10 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     userId,
     avgAccomPerNight: String(parsed.data.avgAccomPerNight ?? 0),
     avgFoodPerDay: String(parsed.data.avgFoodPerDay ?? 0),
+    fuelConsumption: String(parsed.data.fuelConsumption ?? 10),
+    expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
+    minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
+    defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
   }).returning();
   res.status(201).json(GetProfileResponse.parse(serializeProfile(profile)));
 });

@@ -25,9 +25,22 @@ export interface Profile {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
+  bandMembers: string | null;
+  /** @nullable */
   defaultVehicleId: number | null;
+  vehicleType: string;
+  /** @nullable */
+  vehicleName: string | null;
+  fuelConsumption: number;
+  expectedGigFee: number;
+  minTakeHomePerPerson: number;
+  accommodationRequired: boolean;
+  /** @nullable */
+  accommodationType: string | null;
   avgAccomPerNight: number;
   avgFoodPerDay: number;
+  /** @nullable */
+  maxDriveHoursPerDay: number | null;
   /** @nullable */
   defaultFuelPrice: number | null;
   /** @nullable */
@@ -56,9 +69,22 @@ export interface CreateProfileBody {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
+  bandMembers?: string | null;
+  /** @nullable */
   defaultVehicleId?: number | null;
+  vehicleType?: string;
+  /** @nullable */
+  vehicleName?: string | null;
+  fuelConsumption?: number;
+  expectedGigFee?: number;
+  minTakeHomePerPerson?: number;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
   avgAccomPerNight: number;
   avgFoodPerDay: number;
+  /** @nullable */
+  maxDriveHoursPerDay?: number | null;
   /** @nullable */
   defaultFuelPrice?: number | null;
   /** @nullable */

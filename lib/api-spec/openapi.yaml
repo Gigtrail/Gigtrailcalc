@@ -655,12 +655,30 @@ components:
           type: ["number", "null"]
         peopleCount:
           type: integer
+        bandMembers:
+          type: ["string", "null"]
         defaultVehicleId:
           type: ["integer", "null"]
+        vehicleType:
+          type: string
+        vehicleName:
+          type: ["string", "null"]
+        fuelConsumption:
+          type: number
+        expectedGigFee:
+          type: number
+        minTakeHomePerPerson:
+          type: number
+        accommodationRequired:
+          type: boolean
+        accommodationType:
+          type: ["string", "null"]
         avgAccomPerNight:
           type: number
         avgFoodPerDay:
           type: number
+        maxDriveHoursPerDay:
+          type: ["integer", "null"]
         defaultFuelPrice:
           type: ["number", "null"]
         notes:
@@ -678,6 +696,11 @@ components:
         - homeBase
         - peopleCount
         - defaultVehicleId
+        - vehicleType
+        - fuelConsumption
+        - expectedGigFee
+        - minTakeHomePerPerson
+        - accommodationRequired
         - avgAccomPerNight
         - avgFoodPerDay
         - defaultFuelPrice
@@ -715,12 +738,30 @@ components:
           type: ["number", "null"]
         peopleCount:
           type: integer
+        bandMembers:
+          type: ["string", "null"]
         defaultVehicleId:
           type: ["integer", "null"]
+        vehicleType:
+          type: string
+        vehicleName:
+          type: ["string", "null"]
+        fuelConsumption:
+          type: number
+        expectedGigFee:
+          type: number
+        minTakeHomePerPerson:
+          type: number
+        accommodationRequired:
+          type: boolean
+        accommodationType:
+          type: ["string", "null"]
         avgAccomPerNight:
           type: number
         avgFoodPerDay:
           type: number
+        maxDriveHoursPerDay:
+          type: ["integer", "null"]
         defaultFuelPrice:
           type: ["number", "null"]
         notes:
