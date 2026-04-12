@@ -29,6 +29,7 @@ import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock
 import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
+import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
@@ -176,6 +177,7 @@ export default function RunForm() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
+  const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
   const [venueQuery, setVenueQuery] = useState("");
   const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
   const venueSuggestionsRef = useRef<HTMLDivElement>(null);
@@ -322,15 +324,17 @@ export default function RunForm() {
 
     let routeOverride: { distanceKm?: number; driveTimeMinutes?: number | null } = {};
 
-    const oLat = vals.originLat, oLng = vals.originLng;
-    const dLat = vals.destinationLat, dLng = vals.destinationLng;
-    if (oLat && oLng && dLat && dLng) {
-      const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
-      if (route) {
-        form.setValue("distanceKm", route.distanceKm);
-        routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
-      } else {
-        setRouteCalcFailed(true);
+    if (distanceMode === "auto") {
+      const oLat = vals.originLat, oLng = vals.originLng;
+      const dLat = vals.destinationLat, dLng = vals.destinationLng;
+      if (oLat && oLng && dLat && dLng) {
+        const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
+        if (route) {
+          form.setValue("distanceKm", route.distanceKm);
+          routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
+        } else {
+          setRouteCalcFailed(true);
+        }
       }
     }
 
@@ -455,22 +459,61 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast, createOrUpdateVenue, createRun, updateRun]);
+  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast, createOrUpdateVenue, createRun, updateRun, distanceMode]);
 
-  // Prefill from URL search params after onboarding redirect
+  const LAST_PROFILE_KEY = "gigtrail_lastUsedProfileId";
+
+  const applyProfileValues = useCallback((profile: NonNullable<typeof profiles>[number]) => {
+    form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
+    form.setValue("singleRooms", profile.singleRoomsDefault ?? 0);
+    form.setValue("doubleRooms", profile.doubleRoomsDefault ?? 0);
+    setOverridingCosts(false);
+    form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
+    if (profile.expectedGigFee && profile.expectedGigFee > 0) {
+      const currentFee = form.getValues("fee");
+      if (!currentFee || currentFee === 0) {
+        form.setValue("fee", profile.expectedGigFee);
+      }
+    }
+    if (!isPro && profile.homeBase) {
+      form.setValue("origin", profile.homeBase);
+      form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
+      form.setValue("originLng", typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPro]);
+
+  // Prefill from URL search params after onboarding redirect, or auto-select last used / first profile
   useEffect(() => {
-    if (!isEditing && profiles) {
+    if (!isEditing && profiles && profiles.length > 0) {
       const params = new URLSearchParams(window.location.search);
-      const profileId = params.get("profileId");
+      const urlProfileId = params.get("profileId");
       const origin = params.get("origin");
       const fuelPrice = params.get("fuelPrice");
-      if (profileId || origin || fuelPrice) {
-        form.reset({
-          ...form.getValues(),
-          profileId: profileId ? Number(profileId) : null,
-          origin: origin || "",
-          fuelPrice: fuelPrice ? Number(fuelPrice) : 1.5,
-        });
+
+      let autoProfileId: number | null = null;
+      if (urlProfileId) {
+        autoProfileId = Number(urlProfileId);
+      } else {
+        const lastUsed = localStorage.getItem(LAST_PROFILE_KEY);
+        const lastUsedNum = lastUsed ? parseInt(lastUsed) : null;
+        if (lastUsedNum && profiles.find(p => p.id === lastUsedNum)) {
+          autoProfileId = lastUsedNum;
+        } else {
+          autoProfileId = profiles[0].id;
+        }
+      }
+
+      form.reset({
+        ...form.getValues(),
+        profileId: autoProfileId,
+        origin: origin || form.getValues("origin") || "",
+        fuelPrice: fuelPrice ? Number(fuelPrice) : form.getValues("fuelPrice"),
+      });
+
+      if (autoProfileId) {
+        const profile = profiles.find(p => p.id === autoProfileId);
+        if (profile) applyProfileValues(profile);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -515,33 +558,32 @@ export default function RunForm() {
   const handleProfileChange = (val: string) => {
     const pId = val === "none" ? null : parseInt(val);
     form.setValue("profileId", pId);
-
     if (pId) {
+      localStorage.setItem(LAST_PROFILE_KEY, pId.toString());
       const profile = profiles?.find(p => p.id === pId);
-      if (profile) {
-        // Auto-fill accommodation from profile defaults and reset override state
-        form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
-        form.setValue("singleRooms", profile.singleRoomsDefault ?? 0);
-        form.setValue("doubleRooms", profile.doubleRoomsDefault ?? 0);
-        setOverridingCosts(false);
-        // Auto-fill food cost from profile
-        form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
-        // Auto-fill expected fee from profile (only if fee is currently 0)
-        if (profile.expectedGigFee && profile.expectedGigFee > 0) {
-          const currentFee = form.getValues("fee");
-          if (!currentFee || currentFee === 0) {
-            form.setValue("fee", profile.expectedGigFee);
-          }
-        }
-        // For free users, lock origin to home base
-        if (!isPro && profile.homeBase) {
-          form.setValue("origin", profile.homeBase);
-          form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
-          form.setValue("originLng", typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null);
-        }
-      }
+      if (profile) applyProfileValues(profile);
+    } else {
+      localStorage.removeItem(LAST_PROFILE_KEY);
     }
   };
+
+  // Auto-calculate distance whenever both origin + destination coordinates are set (auto mode only)
+  useEffect(() => {
+    if (distanceMode !== "auto") return;
+    const oLat = formValues.originLat, oLng = formValues.originLng;
+    const dLat = formValues.destinationLat, dLng = formValues.destinationLng;
+    if (oLat && oLng && dLat && dLng) {
+      calculateGoogleRoute(oLat, oLng, dLat, dLng).then(route => {
+        if (route) {
+          form.setValue("distanceKm", route.distanceKm);
+          setRouteCalcFailed(false);
+        } else {
+          setRouteCalcFailed(true);
+        }
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formValues.originLat, formValues.originLng, formValues.destinationLat, formValues.destinationLng, distanceMode]);
 
   const onSubmit = (data: RunFormValues) => {
     const computed = calculationResult ?? computeGigResults(data);
@@ -858,31 +900,70 @@ export default function RunForm() {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="distanceKm"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-1.5">
-                            Distance (km, one way)
-                          </FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} placeholder="Auto-calculated on Calculate" />
-                          </FormControl>
-                          {routeCalcFailed && (
-                            <p className="text-xs text-amber-600">
-                              Route auto-calc failed — enter distance manually above, or make sure you select a location from the dropdown suggestions
-                            </p>
+                    {/* Distance — Auto/Manual toggle */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium leading-none">Distance (km, one way)</label>
+                        <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
+                          <button
+                            type="button"
+                            onClick={() => { setDistanceMode("auto"); setRouteCalcFailed(false); }}
+                            className={cn(
+                              "px-2.5 py-1 transition-colors",
+                              distanceMode === "auto"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            )}
+                          >
+                            Auto
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDistanceMode("manual")}
+                            className={cn(
+                              "px-2.5 py-1 transition-colors",
+                              distanceMode === "manual"
+                                ? "bg-primary text-primary-foreground"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                            )}
+                          >
+                            Manual
+                          </button>
+                        </div>
+                      </div>
+                      {distanceMode === "auto" ? (
+                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                          {(Number(formValues.distanceKm) || 0) > 0 ? (
+                            <span className="font-medium text-foreground">{formValues.distanceKm} km</span>
+                          ) : (
+                            <span className="text-muted-foreground">Auto-calculated from locations</span>
                           )}
-                          {!routeCalcFailed && (
-                            <p className="text-xs text-muted-foreground">
-                              Auto-filled when you select locations from the dropdown, or enter manually
-                            </p>
+                        </div>
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name="distanceKm"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input type="number" min="0" {...field} placeholder="Enter distance" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
                           )}
-                          <FormMessage />
-                        </FormItem>
+                        />
                       )}
-                    />
+                      {routeCalcFailed && distanceMode === "auto" && (
+                        <p className="text-xs text-amber-600">
+                          Route auto-calc failed — switch to Manual or make sure you select locations from the dropdown suggestions
+                        </p>
+                      )}
+                      {distanceMode === "auto" && !routeCalcFailed && (
+                        <p className="text-xs text-muted-foreground">
+                          Calculated automatically when you select both locations
+                        </p>
+                      )}
+                    </div>
                     <FormField
                       control={form.control}
                       name="fuelPrice"
