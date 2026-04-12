@@ -377,6 +377,7 @@ export default function RunForm() {
         estimatedAccomCostFromDrive,
         formData: {
           ...vals,
+          actType: profile?.actType ?? null,
           accommodationCost: computed.accommodationCost,
           totalCost: computed.totalCost,
           totalIncome: computed.totalIncome,
@@ -399,15 +400,19 @@ export default function RunForm() {
 
       // Auto-save: upsert venue then create/update run
       let savedRunId: number | null = isEditing ? runId : null;
+      let saveFailed = false;
       try {
         const vName = vals.venueName?.trim();
         if (vName) {
           await createOrUpdateVenue.mutateAsync({ data: { venueName: vName, city: vals.destination || "" } });
         }
 
+        const actType = profile?.actType ?? null;
+
         const payload = {
           ...vals,
           venueName: vName || null,
+          actType,
           accommodationCost: computed.accommodationCost,
           totalCost: computed.totalCost,
           totalIncome: computed.totalIncome,
@@ -422,11 +427,12 @@ export default function RunForm() {
           const newRun = await createRun.mutateAsync({ data: payload });
           savedRunId = newRun.id;
         }
-      } catch {
-        // auto-save failure is non-fatal; results still shown
+      } catch (saveErr: unknown) {
+        saveFailed = true;
+        console.error("[GigTrail] Auto-save failed:", saveErr);
       }
 
-      sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...resultData, savedRunId }));
+      sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...resultData, savedRunId, saveFailed }));
       setLocation("/runs/results");
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;

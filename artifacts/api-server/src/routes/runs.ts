@@ -82,6 +82,28 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  // Duplicate detection: if same userId + profileId + venueName + showDate + status=draft, update in place
+  if (parsed.data.venueName && parsed.data.profileId && parsed.data.showDate) {
+    const [existing] = await db.select().from(runsTable).where(
+      and(
+        eq(runsTable.userId, userId),
+        eq(runsTable.profileId, parsed.data.profileId),
+        eq(runsTable.venueName, parsed.data.venueName),
+        eq(runsTable.showDate, parsed.data.showDate),
+        eq(runsTable.status, "draft")
+      )
+    ).limit(1);
+    if (existing) {
+      const [updated] = await db.update(runsTable)
+        .set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
+        .where(eq(runsTable.id, existing.id))
+        .returning();
+      res.json(GetRunResponse.parse(serializeRun(updated)));
+      return;
+    }
+  }
+
   const [run] = await db.insert(runsTable).values({ ...toDbRun(parsed.data as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
   res.status(201).json(GetRunResponse.parse(serializeRun(run)));
 });

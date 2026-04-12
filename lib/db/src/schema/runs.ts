@@ -14,6 +14,7 @@ export const runsTable = pgTable("runs", {
   country: text("country"),
   showDate: date("show_date"),
   status: text("status").notNull().default("draft"),
+  actType: text("act_type"),
   origin: text("origin"),
   originLat: numeric("origin_lat", { precision: 10, scale: 6 }),
   originLng: numeric("origin_lng", { precision: 10, scale: 6 }),

@@ -65,6 +65,7 @@ export interface GigTrailResultData {
   isEditing: boolean;
   runId?: number;
   savedRunId?: number | null;
+  saveFailed?: boolean;
   calcCount?: number;
   calcLimit?: number | null;
   isPro?: boolean;
@@ -104,6 +105,7 @@ export default function RunResults() {
     recommendedNights, maxDriveHoursPerDay, accomTypeForRecommendation, estimatedAccomCostFromDrive,
     status, formData, profileName, profilePeopleCount,
     vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice, isEditing, runId, savedRunId,
+    saveFailed,
     calcCount, calcLimit,
   } = result;
 
@@ -243,12 +245,12 @@ export default function RunResults() {
         </div>
       </div>
 
-      {/* Auto-saved banner */}
-      {effectiveRunId && (
+      {/* Save status banner */}
+      {effectiveRunId ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 flex-shrink-0 text-green-600" />
-            <span>Auto-saved to your show history as a draft</span>
+            <span>Show saved to history as a draft</span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
@@ -266,7 +268,14 @@ export default function RunResults() {
             </button>
           </div>
         </div>
-      )}
+      ) : saveFailed ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+            <span>Couldn't save show history — use the button below to save manually</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* Verdict Banner */}
       <div className={`rounded-xl border-2 overflow-hidden ${verdict.bg}`}>

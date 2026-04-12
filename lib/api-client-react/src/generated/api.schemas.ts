@@ -175,6 +175,8 @@ export interface Run {
   showDate?: string | null;
   status: string;
   /** @nullable */
+  actType?: string | null;
+  /** @nullable */
   origin?: string | null;
   /** @nullable */
   originLat?: number | null;
@@ -261,6 +263,8 @@ export interface CreateRunBody {
   showDate?: string | null;
   /** @nullable */
   status?: string | null;
+  /** @nullable */
+  actType?: string | null;
   /** @nullable */
   origin?: string | null;
   /** @nullable */

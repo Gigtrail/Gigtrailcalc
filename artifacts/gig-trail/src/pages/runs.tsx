@@ -100,24 +100,29 @@ export default function Runs() {
           {runs?.map((run) => (
             <Card key={run.id} className="group hover-elevate transition-all border-border/50 bg-card/50 overflow-hidden">
               <div className="flex h-full">
-                <div className={`w-2 ${getStatusColor(run.totalProfit || 0, run.totalIncome || 0)}`} />
-                <div className="flex-1 flex flex-col">
-                  <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl flex items-center gap-2 flex-wrap">
-                        {run.origin || "Unknown"} <ChevronRight className="w-4 h-4 text-muted-foreground" /> {run.destination || "Unknown"}
+                <div className={`w-2 flex-shrink-0 ${getStatusColor(run.totalProfit || 0, run.totalIncome || 0)}`} />
+                <div className="flex-1 flex flex-col min-w-0">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-lg leading-snug truncate">
+                        {run.venueName || `${run.origin || "?"} → ${run.destination || "?"}`}
                       </CardTitle>
-                      {run.venueName && (
-                        <p className="text-sm font-medium text-foreground/80 mt-0.5">{run.venueName}</p>
+                      {run.venueName && (run.origin || run.destination) && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {run.origin} → {run.destination}
+                        </p>
                       )}
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="text-xs text-muted-foreground">
                           {run.showDate
                             ? format(new Date(run.showDate + "T00:00:00"), 'MMM d, yyyy')
                             : format(new Date(run.createdAt), 'MMM d, yyyy')}
                         </span>
+                        {run.actType && (
+                          <Badge variant="outline" className="text-xs">{run.actType}</Badge>
+                        )}
                         <Badge variant="outline" className="text-xs">{run.showType}</Badge>
-                        {run.status && run.status !== "draft" && (
+                        {run.status && run.status !== "draft" ? (
                           <Badge
                             variant="outline"
                             className={`text-xs ${
@@ -129,8 +134,7 @@ export default function Runs() {
                           >
                             {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
                           </Badge>
-                        )}
-                        {(!run.status || run.status === "draft") && (
+                        ) : (
                           <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
                             Draft
                           </Badge>
@@ -139,7 +143,7 @@ export default function Runs() {
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -159,9 +163,11 @@ export default function Runs() {
                       </AlertDialogContent>
                     </AlertDialog>
                   </CardHeader>
-                  <CardContent className="mt-auto pt-4 flex items-end justify-between">
+                  <CardContent className="mt-auto pt-3 flex items-end justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-foreground">${run.totalProfit?.toLocaleString() || 0}</div>
+                      <div className={`text-2xl font-bold ${(run.totalProfit || 0) >= 0 ? "text-foreground" : "text-red-600"}`}>
+                        {(run.totalProfit || 0) < 0 ? "−" : ""}${Math.abs(run.totalProfit || 0).toLocaleString()}
+                      </div>
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{getStatusText(run.totalProfit || 0, run.totalIncome || 0)}</p>
                     </div>
                     <Button variant="secondary" size="sm" asChild>
