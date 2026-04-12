@@ -1,0 +1,64 @@
+Refactor Gig Trail so “People on Tour” is no longer a user-editable field and instead becomes a static derived value based on act type and member count.
+
+GOAL
+Make People on Tour a read-only representation of the act setup, not a manually changeable input.
+
+RULES
+
+1. Solo
+- hardwire People on Tour = 1
+- automatically ensure exactly 1 member exists
+
+2. Duo
+- hardwire People on Tour = 2
+- automatically ensure exactly 2 members exist
+
+3. Band
+- People on Tour should equal the current number of band members
+- Band starts with a minimum of 3 members
+- user can add more members with “+ Add Band Member”
+- Band must never save with fewer than 3 members
+
+IMPORTANT
+- remove any editable People on Tour input field
+- do not allow users to type or override this number manually
+- People on Tour should be derived from act type and member list only
+
+UI REQUIREMENTS
+
+- display People on Tour as a read-only value in the profile summary/setup
+- examples:
+  - Solo → People on Tour: 1
+  - Duo → People on Tour: 2
+  - Band with 4 members → People on Tour: 4
+
+- do not render this as a normal editable input
+- use a static label/value row or other read-only display
+
+LOGIC REQUIREMENTS
+
+- when act type changes, People on Tour updates automatically
+- when band members are added or removed, People on Tour updates automatically
+- Solo and Duo should always stay locked to 1 and 2
+- Band should always have minimum 3 members
+
+SAVE / LOAD
+
+Ensure profile save and reload correctly preserve:
+- actType
+- members array
+
+People on Tour should be recalculated from saved data, not stored as a separate manually edited field unless needed as a derived cached value.
+
+If stored, it must always stay in sync with member count and act type.
+
+DELIVERABLES
+
+Implement:
+- remove editable People on Tour field
+- derive People on Tour from act type/member count
+- Solo = 1
+- Duo = 2
+- Band = member count, minimum 3
+- read-only display in UI
+- correct persistence and hydration

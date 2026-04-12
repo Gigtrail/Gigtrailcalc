@@ -127,6 +127,16 @@ export default function ProfileForm() {
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
 
+  // Derive peopleCount from actType + member count — never let user edit it manually
+  const derivedPeopleCount =
+    actType === "Solo" ? 1
+    : actType === "Duo" ? 2
+    : memberFields.length;
+
+  useEffect(() => {
+    form.setValue("peopleCount", derivedPeopleCount, { shouldValidate: false });
+  }, [derivedPeopleCount, form]);
+
   const loadedFromProfileRef = useRef(false);
 
   useEffect(() => {
@@ -333,22 +343,15 @@ export default function ProfileForm() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="peopleCount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>People on Tour (Band + Crew)</FormLabel>
-                      <FormControl>
-                        <Input type="number" min="1" {...field} />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Total touring party including crew, for food and accommodation costs.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">People on Tour</label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-border/60 bg-muted/40 text-sm text-foreground">
+                    {derivedPeopleCount}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Derived from act type and member count. Used for food and accommodation costs.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
