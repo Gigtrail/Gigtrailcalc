@@ -178,7 +178,7 @@ export default function RunForm() {
 
   const { data: venueSuggestions } = useSearchVenues(
     { q: venueQuery },
-    { query: { enabled: venueQuery.length >= 2 } }
+    { query: { enabled: (venueQuery?.length ?? 0) >= 2 } }
   );
   const createOrUpdateVenue = useCreateOrUpdateVenue();
 
