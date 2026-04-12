@@ -21,14 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { usePlan } from "@/hooks/use-plan";
-
-const ACCOM_RATES: Record<string, number> = {
-  Single: 80,
-  Queen: 120,
-  Twin: 130,
-  "Double Room": 120,
-  "Multiple Rooms": 250,
-};
+import { ACCOM_RATES } from "@/lib/gig-constants";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -143,7 +136,7 @@ export default function RunResults() {
 
   const profile = profiles?.find(p => p.id === formData.profileId);
   const accommodationType = (formData.accommodationType as string) || accomTypeForRecommendation;
-  const accomRate = ACCOM_RATES[accommodationType ?? ""] ?? 80;
+  const accomRate = ACCOM_RATES[accommodationType ?? ""] ?? 0;
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
 

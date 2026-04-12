@@ -24,10 +24,11 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck } from "lucide-react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
+import { ACCOM_RATES, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import {
   Dialog,
   DialogContent,
@@ -68,15 +69,6 @@ const runSchema = z.object({
 
 type RunFormValues = z.infer<typeof runSchema>;
 
-const ACCOM_RATES: Record<string, number> = {
-  "Single": 80,
-  "Queen": 120,
-  "Twin": 130,
-  "Double Room": 120,
-  "Multiple Rooms": 250,
-};
-
-const ACCOM_TYPES = ["Single", "Queen", "Twin", "Double Room", "Multiple Rooms"] as const;
 
 
 function formatDuration(minutes: number): string {
@@ -179,7 +171,14 @@ export default function RunForm() {
 
   const computeGigResults = useCallback((
     vals: typeof formValues,
-    overrides?: { distanceKm?: number; vehicleConsumption?: number; driveTimeMinutes?: number | null }
+    overrides?: {
+      distanceKm?: number;
+      vehicleConsumption?: number;
+      driveTimeMinutes?: number | null;
+      accommodationNights?: number;
+      accommodationType?: string | null;
+      accommodationRequired?: boolean;
+    }
   ) => {
     const profile = profiles?.find(p => p.id === vals.profileId);
 
@@ -196,9 +195,13 @@ export default function RunForm() {
     const splitPct = Number(vals.splitPct) || 0;
     const guarantee = Number(vals.guarantee) || 0;
     const merchEstimate = Number(vals.merchEstimate) || 0;
-    const accommodationNights = Number(vals.accommodationNights) || 0;
-    const accomRate = vals.accommodationRequired && vals.accommodationType
-      ? (ACCOM_RATES[vals.accommodationType] ?? 0)
+
+    // Accommodation — prefer overrides (computed dynamically), fall back to form values
+    const accommodationRequired = overrides?.accommodationRequired ?? vals.accommodationRequired ?? false;
+    const accommodationType = overrides?.accommodationType ?? vals.accommodationType ?? null;
+    const accommodationNights = overrides?.accommodationNights ?? Number(vals.accommodationNights) ?? 0;
+    const accomRate = accommodationRequired && accommodationType
+      ? (ACCOM_RATES[accommodationType] ?? 0)
       : 0;
     const accommodationCost = accommodationNights * accomRate;
     const foodCost = Number(vals.foodCost) || 0;
@@ -316,18 +319,33 @@ export default function RunForm() {
         setCalcUsage({ count: result.count, limit: result.limit ?? null });
       }
 
-      const computed = computeGigResults(vals, routeOverride);
-
       const profile = profiles?.find(p => p.id === profileId);
-      const maxDriveHoursPerDay = (isPro && profile?.maxDriveHoursPerDay) ? profile.maxDriveHoursPerDay : 8;
-      const totalDriveHours = computed.driveTimeMinutes !== null
-        ? (vals.returnTrip ? computed.driveTimeMinutes * 2 : computed.driveTimeMinutes) / 60
+
+      // --- Dynamic accommodation calculation ---
+      const maxDriveHoursPerDay = (isPro && profile?.maxDriveHoursPerDay)
+        ? Number(profile.maxDriveHoursPerDay)
+        : DEFAULT_MAX_DRIVE_HOURS_PER_DAY;
+
+      // Estimate drive time using route override or fallback to 0
+      const estimatedDriveMinutes = routeOverride.driveTimeMinutes ?? null;
+      const totalDriveHours = estimatedDriveMinutes !== null
+        ? (vals.returnTrip ? estimatedDriveMinutes * 2 : estimatedDriveMinutes) / 60
         : 0;
       const drivingDaysNeeded = totalDriveHours > 0 ? Math.ceil(totalDriveHours / maxDriveHoursPerDay) : 0;
       const recommendedNights = Math.max(0, drivingDaysNeeded - 1);
+
+      const accomRequired = profile?.accommodationRequired ?? false;
       const accomTypeForRecommendation = profile?.accommodationType ?? null;
-      const accomRate = ACCOM_RATES[accomTypeForRecommendation ?? ""] ?? 80;
-      const estimatedAccomCostFromDrive = recommendedNights * accomRate;
+      const accomRate = ACCOM_RATES[accomTypeForRecommendation ?? ""] ?? 0;
+      const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * accomRate : 0;
+
+      // Pass accommodation as override so computeGigResults uses recommended nights
+      const computed = computeGigResults(vals, {
+        ...routeOverride,
+        accommodationRequired: accomRequired,
+        accommodationType: accomTypeForRecommendation,
+        accommodationNights: accomRequired ? recommendedNights : 0,
+      });
 
       // StatusIcon is a React component — not JSON-serializable; exclude it
       const { StatusIcon: _icon, statusColor: _color, ...serializableComputed } = computed;
@@ -892,79 +910,40 @@ export default function RunForm() {
                   <CardTitle>Other Costs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="accommodationRequired"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Accommodation Required</FormLabel>
-                        <div className="flex gap-2 mt-1">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={field.value ? "default" : "outline"}
-                            onClick={() => field.onChange(true)}
-                          >
-                            Yes
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={!field.value ? "default" : "outline"}
-                            onClick={() => {
-                              field.onChange(false);
-                              form.setValue("accommodationType", null);
-                            }}
-                          >
-                            No
-                          </Button>
+                  {/* Accommodation — read from profile, nights estimated at calculation time */}
+                  {(() => {
+                    const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
+                    const accomRequired = selectedProfile?.accommodationRequired;
+                    const accomType = selectedProfile?.accommodationType;
+                    const accomRate = accomType ? ACCOM_RATES[accomType] : null;
+                    return (
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-medium leading-none flex items-center gap-1.5">
+                          <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
+                          Accommodation
+                        </label>
+                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                          {!selectedProfile ? (
+                            <span className="text-muted-foreground">Select a profile to set accommodation</span>
+                          ) : accomRequired && accomType ? (
+                            <>
+                              <span className="text-foreground">{accomType}</span>
+                              {accomRate && (
+                                <span className="text-muted-foreground ml-1">(${accomRate}/night)</span>
+                              )}
+                              <span className="ml-auto text-xs text-muted-foreground">Nights estimated at calculation</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">Not required</span>
+                          )}
                         </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {formValues.accommodationRequired && (
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="accommodationType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Room Type</FormLabel>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {ACCOM_TYPES.map(type => (
-                                <Button
-                                  key={type}
-                                  type="button"
-                                  size="sm"
-                                  variant={field.value === type ? "default" : "outline"}
-                                  onClick={() => field.onChange(type)}
-                                >
-                                  {type}
-                                  <span className="ml-1 text-xs opacity-70">${ACCOM_RATES[type]}/nt</span>
-                                </Button>
-                              ))}
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="accommodationNights"
-                        render={({ field }) => (
-                          <FormItem className="w-40">
-                            <FormLabel>Nights</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="1" step="1" {...field} value={field.value ?? 1} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  )}
+                        <p className="text-xs text-muted-foreground">
+                          Accommodation setup comes from your profile.{" "}
+                          <a href="/profiles" className="text-primary underline underline-offset-2">Edit in profile</a>
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField

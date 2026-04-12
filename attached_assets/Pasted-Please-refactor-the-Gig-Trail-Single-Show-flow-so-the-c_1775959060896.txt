@@ -1,0 +1,440 @@
+Please refactor the Gig Trail Single Show flow so the calculator uses a dedicated results screen after clicking “Calculate Gig”, and accommodation handling comes from the selected profile with recommended nights estimated during the final calculation.
+
+## Goal
+Make the Single Show flow cleaner, smarter, and more useful.
+
+The user should:
+1. enter the run details
+2. click “Calculate Gig”
+3. land on a dedicated results/verdict screen
+
+Accommodation should not be manually configured on the main Single Show form if that setup already exists in the profile.
+
+---
+
+## 1. Separate results screen
+
+Change the current Single Show Calculator flow to:
+
+### Step 1: Input screen
+User enters:
+- profile
+- home base / origin
+- destination
+- fuel price
+- deal structure
+- fee / merch / costs
+- return trip toggle
+
+### Step 2: Click button
+Primary CTA:
+- “Calculate Gig”
+
+### Step 3: Results screen
+After calculation, navigate to a dedicated results page/screen.
+
+Examples:
+- /single-show/results
+- or similar route
+
+Do NOT keep the full result card crowded next to the form.
+
+---
+
+## 2. Results screen layout
+
+The dedicated results screen should clearly show:
+
+### A. Verdict
+- Worth the Drive
+- Tight Margins
+- Probably Not Worth It
+
+### B. Main result
+- You’ll clear $X
+or
+- You’ll lose $X
+
+### C. Per-person result
+- Each person clears $X
+- Minimum target is $Y each
+
+### D. Route summary
+- One-way distance
+- Total distance
+- Estimated drive time
+- Fuel used
+- Fuel cost
+
+### E. Accommodation recommendation
+- Recommended accommodation nights
+- Accommodation type
+- Estimated accommodation cost
+- Why it was recommended
+
+### F. Cost summary
+- Total on the table
+- Cost to get there
+- Fuel cost
+- Estimated accommodation
+- Other costs
+
+### G. Smart insights
+Examples:
+- “Long drive — consider a stopover”
+- “Fuel is a high percentage of this run”
+- “This run is above your minimum take-home target”
+
+### H. Actions
+Buttons:
+- Edit Run
+- Save Run
+- Calculate Another
+- Upgrade to Pro (if relevant)
+
+---
+
+## 3. Profile is the source of truth for accommodation
+
+Each profile should store accommodation defaults:
+
+- accommodation_required (yes/no)
+- accommodation_type
+  - Single
+  - Queen
+  - Twin
+  - Double Room
+  - Multiple Rooms
+
+For Pro users also store:
+- preferred_max_driving_hours_per_day
+
+This profile data should be used as the default touring setup.
+
+---
+
+## 4. Remove accommodation controls from Single Show form
+
+From the Single Show input screen, remove the full manual accommodation controls such as:
+- Accommodation Required toggle
+- Room Type selector
+- Nights input
+
+Do NOT ask the user to manually enter nights during input.
+
+---
+
+## 5. Replace with a simple profile-based accommodation summary
+
+On the Single Show form, show a small read-only accommodation summary:
+
+Examples:
+- Accommodation: Queen
+- Accommodation: Not required
+- Accommodation: Multiple Rooms
+
+Add helper text:
+- "Accommodation setup comes from your profile"
+- "Edit in profile"
+
+Keep this compact and simple.
+
+---
+
+## 6. Estimate accommodation nights only after Calculate Gig
+
+When the user clicks “Calculate Gig”, estimate accommodation nights during the final calculation.
+
+### Logic
+
+If accommodation_required = no:
+- recommended_accommodation_nights = 0
+- estimated_accommodation_cost = 0
+
+If accommodation_required = yes:
+- calculate total drive time for the run
+- include return trip if selected
+- determine max driving hours per day:
+  - Free users: use fixed default max driving hours per day
+  - Pro users: use profile preferred_max_driving_hours_per_day if set, otherwise fallback default
+
+Then calculate:
+- driving_days_needed = ceil(total_drive_hours / max_drive_hours_per_day)
+- recommended_accommodation_nights = max(0, driving_days_needed - 1)
+
+---
+
+## 7. Use updated realistic Australian accommodation rates
+
+Use profile accommodation_type to determine nightly rate.
+
+Set the default nightly rates to:
+
+- Single = 120
+- Queen = 180
+- Twin = 200
+- Double Room = 180
+- Multiple Rooms = 300
+
+Formula:
+- estimated_accommodation_cost = recommended_accommodation_nights × nightly_rate
+
+Store these centrally in config/constants so they are easy to update later.
+
+---
+
+## 8. Pro feature: preferred max driving hours per day
+
+Add a new optional profile field for Pro users only:
+
+### Field
+- preferred_max_driving_hours_per_day
+
+Label:
+- “Preferred max driving hours per day”
+
+Helper:
+- “We use this to recommend stopovers and accommodation”
+
+Type:
+- number input
+- examples: 6, 8, 10
+
+### Free users
+- do NOT allow customisation
+- use a fixed default
+
+### Pro users
+- use their profile value in accommodation recommendation logic
+
+---
+
+## 9. Free vs Pro location and vehicle behavior
+
+### Free users
+- Origin/Home Base is fixed to the saved profile home base
+- Origin is read-only on the Single Show form
+- helper text:
+  - “Your home base comes from your profile”
+  - “Edit in profile”
+- destination remains selectable with Google Places autocomplete
+- automatic single-show distance, drive time, and fuel cost should still work
+
+### Pro users
+- can edit origin manually if needed
+- can still default to profile location
+
+### Free vehicle behavior
+- Free users can ONLY use default vehicle presets:
+  - Car → 7 L/100km
+  - Van → 10 L/100km
+  - Bus → 16 L/100km
+- no custom vehicles
+- no custom fuel consumption
+- show helper text:
+  - “Simple presets — customise in Pro”
+  - “Vehicle is set in your profile”
+
+### Pro vehicle behavior
+- can customise vehicle type/name
+- can customise fuel consumption
+- can save that vehicle setup inside the profile
+
+---
+
+## 10. Automatic route calculation
+
+When user clicks “Calculate Gig”:
+
+### Required inputs
+- Origin location
+- Destination location
+- Vehicle fuel consumption
+- Fuel price
+- Return trip toggle
+
+### Route calculation
+Use the Google Maps APIs already connected in the app to calculate:
+- one-way distance in km
+- one-way driving duration
+- if return trip is enabled:
+  - total distance = one-way distance × 2
+  - total duration = one-way duration × 2
+
+### Output fields
+Display:
+- Distance (km)
+- Estimated drive time
+- Fuel used (L)
+- Fuel cost ($)
+
+If no route can be found:
+- show friendly error:
+  "We couldn't calculate the route for this run. Please check the locations."
+
+---
+
+## 11. Fuel calculation logic
+
+Use:
+fuel_used_litres = (total_distance_km * vehicle_l_per_100km) / 100
+fuel_cost = fuel_used_litres * fuel_price
+
+Please ensure:
+- all values are numeric
+- currency formatting is correct
+- no string concatenation bugs
+
+### Example
+If:
+- total distance = 400 km
+- vehicle = 10 L/100km
+- fuel price = 2.00
+
+Then:
+- fuel used = 40 L
+- fuel cost = 80.00
+
+---
+
+## 12. Time calculation
+
+Display driving time in a readable format, for example:
+- 2h 35m
+- 8h 10m
+
+If return trip is enabled, show:
+- total travel time including return
+
+Label:
+- Estimated drive time
+
+---
+
+## 13. UI changes in Single Show Calculator
+
+### Input screen
+Keep it focused only on entering:
+- profile
+- destination
+- money/cost details
+- fuel price
+- return trip
+- simple profile-based summaries
+
+Do NOT show the full verdict/results card beside the form anymore.
+
+### Origin field
+For Free:
+- read-only
+- prefilled from profile
+- visually styled as locked/read-only
+
+For Pro:
+- editable if needed
+
+### Destination field
+- keep Google Places Autocomplete enabled
+
+### Accommodation section
+- no manual nights input
+- no room type selector
+- no accommodation required toggle
+- just a small read-only summary from profile
+
+### Vehicle field
+For Free:
+- use preset vehicle options from profile only
+- no edit controls
+For Pro:
+- show profile vehicle/custom setup
+
+---
+
+## 14. Plan behavior
+
+### Free
+- fixed origin from profile
+- destination autocomplete
+- automatic distance and drive time for single shows
+- automatic fuel cost for single shows
+- accommodation type comes from profile
+- max driving hours/day is fixed default
+- no editable travel-hours preference
+- no custom vehicle editing
+
+### Pro
+- editable origin
+- profile preferred max driving hours/day
+- accommodation type comes from profile
+- smarter accommodation recommendations based on personal touring style
+- custom vehicle setup
+- deeper automation and insights
+
+Important:
+Do NOT gate basic single-show distance/time/fuel calculation behind Pro.
+Keep advanced flexibility and profile customisation as the Pro upsell.
+
+---
+
+## 15. Results screen accommodation section
+
+On the dedicated gig results screen, show:
+
+### Accommodation section
+- Recommended accommodation nights: X
+- Accommodation type: Y
+- Estimated accommodation cost: $Z
+
+Also show explanation:
+- "Based on 17h total driving and an 8h/day travel limit"
+or similar
+
+Important:
+Use the label:
+- "Recommended accommodation nights"
+not
+- "Accommodation required"
+
+This should feel like practical advice, not a forced rule.
+
+---
+
+## 16. Keep override-ready structure
+
+Please structure the code so we can later add:
+- per-run accommodation override
+- per-run room type override
+- manual nights override
+- per-run vehicle override
+- manual distance override if route lookup fails
+
+But do NOT expose those controls in the main Single Show form yet.
+
+---
+
+## 17. UX goals
+
+The Single Show form should feel simpler:
+- choose profile
+- choose destination
+- enter money/cost details
+- click Calculate Gig
+
+Then the final results screen should intelligently estimate:
+- route time
+- fuel
+- recommended accommodation nights
+- estimated accommodation cost
+
+The overall flow should feel like:
+1. enter the details
+2. calculate the gig
+3. get a clean verdict screen that explains:
+   - whether it’s worth it
+   - how much each person clears
+   - how far the run is
+   - how long it takes
+   - whether a stopover/accommodation is recommended
+
+This should reduce clutter and make the app feel smarter, cleaner, and more built for real touring decisions.

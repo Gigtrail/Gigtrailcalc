@@ -28,14 +28,13 @@ import { ChevronLeft, Save, Plus, Trash2, Car, Truck, Bus } from "lucide-react";
 import { useEffect } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
+import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
 
 const VEHICLE_PRESETS = [
   { label: "Car", value: "Car", consumption: 7, Icon: Car },
   { label: "Van", value: "Van", consumption: 10, Icon: Truck },
   { label: "Bus", value: "Bus", consumption: 16, Icon: Bus },
 ] as const;
-
-const ACCOM_TYPES = ["Single", "Queen", "Twin", "Double Room", "Multiple Rooms"] as const;
 
 const profileSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -466,7 +465,9 @@ export default function ProfileForm() {
                         </FormControl>
                         <SelectContent>
                           {ACCOM_TYPES.map(t => (
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                            <SelectItem key={t} value={t}>
+                              {t} <span className="text-muted-foreground text-xs ml-1">${ACCOM_RATES[t]}/night</span>
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

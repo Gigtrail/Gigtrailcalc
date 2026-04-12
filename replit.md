@@ -66,8 +66,14 @@ A full-stack web app for touring musicians to calculate whether a single show or
 
 ### Single Show Calculator
 - Flat Fee, Ticketed Show (with deal types), and Hybrid show types
-- Live calculation: fuel cost, total trip cost, total income, net profit, break-even fee, profit per member
-- Status indicators: "Worth the Drive", "Tight Margins", "Probably Not Worth It"
+- Two-step flow: input form → dedicated results screen (`/runs/results`)
+- `handleCalculate` computes route (Google Maps), then navigates to `/runs/results` with result stored in `sessionStorage` as `gigtrail_result`
+- `run-results.tsx` shows: verdict banner, per-person take-home, route summary, accommodation recommendation, cost breakdown, smart insights, Save/Edit/New actions
+- **Accommodation comes from profile** — no manual accommodation controls on form; nights estimated from drive time ÷ max daily driving hours
+- **Constants centralized** in `artifacts/gig-trail/src/lib/gig-constants.ts`: `ACCOM_RATES` (Single=$120, Queen=$180, Twin=$200, Double Room=$180, Multiple Rooms=$300), `DEFAULT_MAX_DRIVE_HOURS_PER_DAY=8`
+- Status: "Worth the Drive", "Tight Margins", "Probably Not Worth It"
+- Free users: read-only home base (locked from profile), Pro users: editable origin
+- `maxDriveHoursPerDay` in profiles (Pro-only field) used for accommodation night recommendation
 
 ### Tour Builder (Pro+ only)
 - Multi-stop tour planner with running totals
