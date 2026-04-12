@@ -22,6 +22,8 @@ export interface Profile {
   avgAccomPerNight: number;
   avgFoodPerDay: number;
   /** @nullable */
+  defaultFuelPrice: number | null;
+  /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;
   /** @nullable */

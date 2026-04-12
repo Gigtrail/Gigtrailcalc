@@ -29,6 +29,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { ACCOM_RATES, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import { resolveFuelPrice } from "@/lib/fuel-price";
 import {
   Dialog,
   DialogContent,
@@ -200,7 +201,12 @@ export default function RunForm() {
       ?? (profile ? Number(profile.fuelConsumption) : 0);
     const driveTimeMinutes = overrides?.driveTimeMinutes !== undefined ? overrides.driveTimeMinutes : null;
 
-    const fuelPrice = Number(vals.fuelPrice) || 0;
+    const resolvedFuel = resolveFuelPrice(
+      vals.fuelPrice,
+      profile?.defaultFuelPrice
+    );
+    const fuelPrice = resolvedFuel.price;
+    const fuelPriceSource = resolvedFuel.source;
     const fee = Number(vals.fee) || 0;
     const capacity = Number(vals.capacity) || 0;
     const ticketPrice = Number(vals.ticketPrice) || 0;
@@ -380,6 +386,8 @@ export default function RunForm() {
         profilePeopleCount: profile?.peopleCount ?? 1,
         vehicleType: profile?.vehicleType ?? null,
         vehicleName: profile?.vehicleName ?? null,
+        fuelPriceSource,
+        resolvedFuelPrice: fuelPrice,
         isEditing,
         runId: isEditing ? runId : undefined,
         calcCount,

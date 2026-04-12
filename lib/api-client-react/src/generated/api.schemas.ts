@@ -29,6 +29,8 @@ export interface Profile {
   avgAccomPerNight: number;
   avgFoodPerDay: number;
   /** @nullable */
+  defaultFuelPrice: number | null;
+  /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;
   /** @nullable */
@@ -57,6 +59,8 @@ export interface CreateProfileBody {
   defaultVehicleId?: number | null;
   avgAccomPerNight: number;
   avgFoodPerDay: number;
+  /** @nullable */
+  defaultFuelPrice?: number | null;
   /** @nullable */
   notes?: string | null;
 }

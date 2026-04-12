@@ -21,5 +21,7 @@ export interface CreateProfileBody {
   avgAccomPerNight: number;
   avgFoodPerDay: number;
   /** @nullable */
+  defaultFuelPrice?: number | null;
+  /** @nullable */
   notes?: string | null;
 }

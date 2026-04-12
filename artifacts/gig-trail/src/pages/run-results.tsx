@@ -60,6 +60,8 @@ export interface GigTrailResultData {
   profilePeopleCount: number;
   vehicleType: string | null;
   vehicleName: string | null;
+  fuelPriceSource?: "manual" | "profile" | "system_fallback";
+  resolvedFuelPrice?: number;
   isEditing: boolean;
   runId?: number;
   savedRunId?: number | null;
@@ -101,7 +103,7 @@ export default function RunResults() {
     breakEvenTickets, breakEvenCapacity, expectedTicketsSold,
     recommendedNights, maxDriveHoursPerDay, accomTypeForRecommendation, estimatedAccomCostFromDrive,
     status, formData, profileName, profilePeopleCount,
-    vehicleType, vehicleName, isEditing, runId, savedRunId,
+    vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice, isEditing, runId, savedRunId,
     calcCount, calcLimit,
   } = result;
 
@@ -419,6 +421,16 @@ export default function RunResults() {
               <span className="text-muted-foreground">Fuel cost</span>
               <span className="text-muted-foreground">−${fmt(fuelCost)}</span>
             </div>
+            {fuelPriceSource && fuelPriceSource !== "manual" && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-700/80 bg-amber-50 border border-amber-200/60 rounded px-2.5 py-1.5">
+                <Fuel className="w-3 h-3 shrink-0" />
+                <span>
+                  {fuelPriceSource === "profile"
+                    ? `Fuel price from your profile default (${resolvedFuelPrice?.toFixed(2)}/L). Update the form to use a different price.`
+                    : `No fuel price set — used system fallback of $${resolvedFuelPrice?.toFixed(2)}/L. Set a default in your profile or enter a price in the form.`}
+                </span>
+              </div>
+            )}
             {(formData.accommodationRequired || (formData.accommodationNights && (formData.accommodationNights as number) > 0)) && (() => {
               const nights = Number(formData.accommodationNights) || 0;
               const rate = ACCOM_RATES[(formData.accommodationType as string) ?? ""] ?? 0;

@@ -53,6 +53,7 @@ const profileSchema = z.object({
   vehicleType: z.string(),
   vehicleName: z.string().optional().nullable(),
   fuelConsumption: z.coerce.number().min(0),
+  defaultFuelPrice: z.coerce.number().min(0).optional().nullable(),
   maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -95,6 +96,7 @@ export default function ProfileForm() {
       vehicleType: "Van",
       vehicleName: "",
       fuelConsumption: 10,
+      defaultFuelPrice: null,
       maxDriveHoursPerDay: 8,
       notes: "",
     },
@@ -133,6 +135,7 @@ export default function ProfileForm() {
         vehicleType: profile.vehicleType || "Van",
         vehicleName: profile.vehicleName || "",
         fuelConsumption: profile.fuelConsumption ?? 10,
+        defaultFuelPrice: profile.defaultFuelPrice ?? null,
         maxDriveHoursPerDay: profile.maxDriveHoursPerDay ?? 8,
         notes: profile.notes || "",
       });
@@ -574,6 +577,33 @@ export default function ProfileForm() {
                         <FormControl>
                           <Input type="number" min="0" step="0.1" {...field} />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="defaultFuelPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Default Fuel Price ($/L)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 1.85"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value === "" ? null : e.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Used as a fallback when no fuel price is entered on the calculator form.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}

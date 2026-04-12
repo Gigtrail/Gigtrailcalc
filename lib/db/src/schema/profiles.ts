@@ -16,6 +16,7 @@ export const profilesTable = pgTable("profiles", {
   vehicleType: text("vehicle_type").notNull().default("Van"),
   vehicleName: text("vehicle_name"),
   fuelConsumption: numeric("fuel_consumption", { precision: 6, scale: 2 }).notNull().default("10"),
+  defaultFuelPrice: numeric("default_fuel_price", { precision: 6, scale: 3 }),
   expectedGigFee: numeric("expected_gig_fee", { precision: 10, scale: 2 }).notNull().default("0"),
   accommodationRequired: boolean("accommodation_required").notNull().default(false),
   accommodationType: text("accommodation_type"),

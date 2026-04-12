@@ -28,6 +28,7 @@ export const GetProfilesResponseItem = zod.object({
   defaultVehicleId: zod.number().nullable(),
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
+  defaultFuelPrice: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -48,6 +49,7 @@ export const CreateProfileBody = zod.object({
   defaultVehicleId: zod.number().nullish(),
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
+  defaultFuelPrice: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -69,6 +71,7 @@ export const GetProfileResponse = zod.object({
   defaultVehicleId: zod.number().nullable(),
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
+  defaultFuelPrice: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -92,6 +95,7 @@ export const UpdateProfileBody = zod.object({
   defaultVehicleId: zod.number().nullish(),
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
+  defaultFuelPrice: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -106,6 +110,7 @@ export const UpdateProfileResponse = zod.object({
   defaultVehicleId: zod.number().nullable(),
   avgAccomPerNight: zod.number(),
   avgFoodPerDay: zod.number(),
+  defaultFuelPrice: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
