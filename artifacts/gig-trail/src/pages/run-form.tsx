@@ -311,6 +311,7 @@ export default function RunForm() {
       profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity,
       accommodationCost, distanceKm, driveTimeMinutes, fuelUsedLitres,
       takeHomePerPerson, minTakeHomePerPerson,
+      fuelPriceSource, resolvedFuelPrice: fuelPrice,
     };
   }, [profiles]);
 
@@ -402,8 +403,6 @@ export default function RunForm() {
         profilePeopleCount: profile?.peopleCount ?? 1,
         vehicleType: profile?.vehicleType ?? null,
         vehicleName: profile?.vehicleName ?? null,
-        fuelPriceSource,
-        resolvedFuelPrice: fuelPrice,
         isEditing,
         runId: isEditing ? runId : undefined,
         calcCount,
