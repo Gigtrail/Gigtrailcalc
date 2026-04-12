@@ -22,9 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Car, Truck, Bus, Settings2, BookUser } from "lucide-react";
+import { ChevronLeft, Save, Car, Truck, Bus, Settings2, BookUser, BedDouble } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
@@ -441,60 +440,33 @@ export default function ProfileForm() {
           <Card className="border-border/50 bg-card/50">
             <CardHeader>
               <CardTitle>Accommodation</CardTitle>
-              <CardDescription>Default accommodation settings for this act.</CardDescription>
+              <CardDescription>Managed via Act Setup.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="accommodationRequired"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                    <div>
-                      <FormLabel className="text-sm font-medium cursor-pointer">
-                        Accommodation Required by Default
-                      </FormLabel>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Does this act usually need a place to stay?
-                      </p>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              {accommodationRequired && (
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="singleRoomsDefault"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Single Rooms</FormLabel>
-                        <FormControl>
-                          <Input type="number" min="0" step="1" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="doubleRoomsDefault"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Double / Queen Rooms</FormLabel>
-                        <FormControl>
-                          <Input type="number" min="0" step="1" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+            <CardContent>
+              <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <BedDouble className="w-4 h-4 text-muted-foreground shrink-0" />
+                  {accommodationRequired ? (
+                    <span className="text-foreground font-medium">
+                      {[
+                        singleRoomsDefaultWatch > 0 && `${singleRoomsDefaultWatch} single`,
+                        doubleRoomsDefaultWatch > 0 && `${doubleRoomsDefaultWatch} double`,
+                      ].filter(Boolean).join(" + ") || "Required"}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">Not required</span>
+                  )}
                 </div>
-              )}
-
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground h-7 px-2"
+                  onClick={() => setActSetupOpen(true)}
+                >
+                  Edit in Act Setup
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
