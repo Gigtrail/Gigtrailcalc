@@ -150,6 +150,18 @@ export default function RunResults() {
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
 
+  const venueName = (formData.venueName as string | undefined)?.trim() || "";
+  const pageTitle = venueName || "Gig Verdict";
+  const actTypeStr = (formData.actType as string | undefined) ?? "";
+  const playPrefix = actTypeStr === "Solo"
+    ? "For you to play here, you'll"
+    : actTypeStr === "Duo"
+    ? "For the duo to play here, you'll"
+    : actTypeStr === "Band"
+    ? "For the band to play here, you'll"
+    : "To play here, you'll";
+  const earningsLine = venueName ? playPrefix : "Based on this run, you'll";
+
   // Payout calculations
   const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
     ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
@@ -251,7 +263,7 @@ export default function RunResults() {
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight truncate">Gig Verdict</h1>
+          <h1 className="text-2xl font-bold tracking-tight truncate">{pageTitle}</h1>
           {(formData.origin || formData.destination) && (
             <p className="text-sm text-muted-foreground truncate">
               {formData.origin as string} → {formData.destination as string}
@@ -299,9 +311,9 @@ export default function RunResults() {
           <span className="text-xl font-bold text-white">{status}</span>
         </div>
         <div className="px-6 py-5">
-          <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-sm text-muted-foreground">You'll</span>
-            <span className={`text-4xl font-bold ${netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
+          <div className="flex flex-col gap-0.5 mb-1">
+            <span className="text-sm text-muted-foreground">{earningsLine}</span>
+            <span className={`text-4xl font-bold leading-tight ${netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
               {netProfit >= 0 ? "clear" : "lose"} ${fmt(Math.abs(netProfit))}
             </span>
           </div>

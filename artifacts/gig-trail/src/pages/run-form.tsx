@@ -423,8 +423,13 @@ export default function RunForm() {
         const actType = profile?.actType ?? null;
 
         const toNum = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+        const toNumOrNull = (v: unknown) => { const n = Number(v); return isNaN(n) || v === "" || v === null || v === undefined ? null : n; };
         const payload = {
           ...vals,
+          originLat: toNumOrNull(vals.originLat),
+          originLng: toNumOrNull(vals.originLng),
+          destLat: toNumOrNull(vals.destLat),
+          destLng: toNumOrNull(vals.destLng),
           fee: toNum(vals.fee),
           capacity: toNum(vals.capacity),
           ticketPrice: toNum(vals.ticketPrice),
