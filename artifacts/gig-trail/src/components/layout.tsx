@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Map, Navigation, Guitar, CreditCard, LogOut, Crown, Zap } from "lucide-react";
+import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -22,10 +22,28 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Single Shows", url: "/runs", icon: Map },
+  { title: "Calculator", url: "/runs/new", icon: Calculator },
+  { title: "Past Shows", url: "/runs", icon: Clock },
   { title: "Tour Builder", url: "/tours", icon: Navigation },
   { title: "Profiles", url: "/profiles", icon: Guitar },
 ];
+
+function isNavActive(itemUrl: string, location: string): boolean {
+  if (itemUrl === "/runs/new") {
+    return (
+      location === "/runs/new" ||
+      location === "/runs/results" ||
+      /^\/runs\/\d+\/edit$/.test(location)
+    );
+  }
+  if (itemUrl === "/runs") {
+    return location === "/runs" || /^\/runs\/\d+$/.test(location);
+  }
+  if (itemUrl === "/dashboard") {
+    return location === "/dashboard";
+  }
+  return location === itemUrl || location.startsWith(itemUrl + "/");
+}
 
 const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Unlimited" };
 const PLAN_COLORS: Record<string, string> = {
@@ -60,7 +78,7 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
-                    isActive={location === item.url || (item.url !== "/dashboard" && location.startsWith(item.url))}
+                    isActive={isNavActive(item.url, location)}
                   >
                     <Link href={item.url} className="flex items-center gap-3 w-full">
                       <item.icon className="w-5 h-5" />

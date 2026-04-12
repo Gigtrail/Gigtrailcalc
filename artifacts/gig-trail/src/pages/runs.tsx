@@ -1,6 +1,6 @@
 import { useGetRuns, useDeleteRun, getGetRunsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Map, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,13 +61,13 @@ export default function Runs() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Single Shows</h1>
-          <p className="text-muted-foreground mt-1">Your saved one-off gigs.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Past Shows</h1>
+          <p className="text-muted-foreground mt-1">Your saved calculations.</p>
         </div>
         <Button asChild>
           <Link href="/runs/new">
             <Plus className="w-4 h-4 mr-2" />
-            Run the Numbers
+            New Calculation
           </Link>
         </Button>
       </div>
@@ -87,14 +87,9 @@ export default function Runs() {
           ))}
         </div>
       ) : runs?.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
-          <Map className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-          <h3 className="text-lg font-medium">No shows saved yet</h3>
-          <p className="text-muted-foreground mb-4">Calculate a new single show to see if it's worth it.</p>
-          <Button asChild>
-            <Link href="/runs/new">Run the Numbers</Link>
-          </Button>
-        </div>
+        <p className="text-sm text-muted-foreground py-4">
+          Your past shows will appear here once you run your first calculation.
+        </p>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {runs?.map((run) => (

@@ -85,7 +85,7 @@ function SignedInRedirect() {
     return <Redirect to="/onboarding" />;
   }
 
-  return <Redirect to="/dashboard" />;
+  return <Redirect to="/runs/new" />;
 }
 
 function HomeRedirect() {
