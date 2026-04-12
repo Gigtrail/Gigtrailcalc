@@ -30,7 +30,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
-import { ACCOM_RATES, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
 import {
   Dialog,
@@ -65,7 +65,8 @@ const runSchema = z.object({
   merchEstimate: z.coerce.number().optional().nullable(),
   marketingCost: z.coerce.number().optional().nullable(),
   accommodationRequired: z.boolean(),
-  accommodationType: z.string().optional().nullable(),
+  singleRooms: z.coerce.number().min(0).int().optional().nullable(),
+  doubleRooms: z.coerce.number().min(0).int().optional().nullable(),
   accommodationNights: z.coerce.number().optional().nullable(),
   foodCost: z.coerce.number().optional().nullable(),
   extraCosts: z.coerce.number().optional().nullable(),
@@ -157,7 +158,8 @@ export default function RunForm() {
       merchEstimate: 0,
       marketingCost: 0,
       accommodationRequired: false,
-      accommodationType: null,
+      singleRooms: 0,
+      doubleRooms: 0,
       accommodationNights: 1,
       foodCost: 0,
       extraCosts: 0,
@@ -192,8 +194,9 @@ export default function RunForm() {
       vehicleConsumption?: number;
       driveTimeMinutes?: number | null;
       accommodationNights?: number;
-      accommodationType?: string | null;
       accommodationRequired?: boolean;
+      singleRooms?: number;
+      doubleRooms?: number;
     }
   ) => {
     const profile = profiles?.find(p => p.id === vals.profileId);
@@ -219,12 +222,13 @@ export default function RunForm() {
 
     // Accommodation — prefer overrides (computed dynamically), fall back to form values
     const accommodationRequired = overrides?.accommodationRequired ?? vals.accommodationRequired ?? false;
-    const accommodationType = overrides?.accommodationType ?? vals.accommodationType ?? null;
+    const singleRooms = overrides?.singleRooms ?? Number(vals.singleRooms) ?? 0;
+    const doubleRooms = overrides?.doubleRooms ?? Number(vals.doubleRooms) ?? 0;
     const accommodationNights = overrides?.accommodationNights ?? Number(vals.accommodationNights) ?? 0;
-    const accomRate = accommodationRequired && accommodationType
-      ? (ACCOM_RATES[accommodationType] ?? 0)
+    // Structured so per-room-type rates can be adjusted independently in future
+    const accommodationCost = accommodationRequired
+      ? accommodationNights * (singleRooms * SINGLE_ROOM_RATE + doubleRooms * DOUBLE_ROOM_RATE)
       : 0;
-    const accommodationCost = accommodationNights * accomRate;
     const foodCost = Number(vals.foodCost) || 0;
     const extraCosts = Number(vals.extraCosts) || 0;
     const marketingCost = Number(vals.marketingCost) || 0;
@@ -357,17 +361,17 @@ export default function RunForm() {
 
       // Use form values for accommodation — user can override profile defaults per-show
       const accomRequired = vals.accommodationRequired ?? false;
-      const accomTypeForRecommendation = vals.accommodationType ?? null;
-      const accomRate = (accomTypeForRecommendation && accomTypeForRecommendation !== "Not specified")
-        ? (ACCOM_RATES[accomTypeForRecommendation] ?? 0)
-        : 0;
-      const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * accomRate : 0;
+      const accomSingleRooms = Number(vals.singleRooms) || 0;
+      const accomDoubleRooms = Number(vals.doubleRooms) || 0;
+      const perNightRate = accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE;
+      const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * perNightRate : 0;
 
       // Pass accommodation as override so computeGigResults uses recommended nights
       const computed = computeGigResults(vals, {
         ...routeOverride,
         accommodationRequired: accomRequired,
-        accommodationType: accomTypeForRecommendation,
+        singleRooms: accomSingleRooms,
+        doubleRooms: accomDoubleRooms,
         accommodationNights: accomRequired ? recommendedNights : 0,
       });
 
@@ -378,7 +382,8 @@ export default function RunForm() {
         ...serializableComputed,
         recommendedNights,
         maxDriveHoursPerDay,
-        accomTypeForRecommendation,
+        accomSingleRooms,
+        accomDoubleRooms,
         estimatedAccomCostFromDrive,
         formData: {
           ...vals,
@@ -496,7 +501,8 @@ export default function RunForm() {
         merchEstimate: run.merchEstimate,
         marketingCost: run.marketingCost,
         accommodationRequired: run.accommodationRequired ?? false,
-        accommodationType: run.accommodationType ?? null,
+        singleRooms: run.singleRooms ?? 0,
+        doubleRooms: run.doubleRooms ?? 0,
         accommodationNights: run.accommodationNights ? Number(run.accommodationNights) : 1,
         foodCost: run.foodCost,
         extraCosts: run.extraCosts,
@@ -514,9 +520,8 @@ export default function RunForm() {
       if (profile) {
         // Auto-fill accommodation from profile defaults
         form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
-        if (profile.accommodationType) {
-          form.setValue("accommodationType", profile.accommodationType);
-        }
+        form.setValue("singleRooms", profile.singleRoomsDefault ?? 0);
+        form.setValue("doubleRooms", profile.doubleRoomsDefault ?? 0);
         // Auto-fill food cost from profile
         form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
         // Auto-fill expected fee from profile (only if fee is currently 0)
@@ -1116,33 +1121,37 @@ export default function RunForm() {
                       )}
                     />
                     {formValues.accommodationRequired && (
-                      <FormField
-                        control={form.control}
-                        name="accommodationType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Room Type</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField
+                          control={form.control}
+                          name="singleRooms"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Single Rooms</FormLabel>
                               <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select room type" />
-                                </SelectTrigger>
+                                <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
                               </FormControl>
-                              <SelectContent>
-                                {ACCOM_TYPES.map((t) => (
-                                  <SelectItem key={t} value={t}>
-                                    {t === "Not specified" ? t : `${t} ($${ACCOM_RATES[t]}/night)`}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                              Nights are estimated from drive time at calculation.
-                            </p>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="doubleRooms"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Double / Queen Rooms</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <p className="col-span-2 text-xs text-muted-foreground -mt-1">
+                          Nights estimated from drive time at calculation. Single: ${SINGLE_ROOM_RATE}/night · Double: ${DOUBLE_ROOM_RATE}/night
+                        </p>
+                      </div>
                     )}
                   </div>
 

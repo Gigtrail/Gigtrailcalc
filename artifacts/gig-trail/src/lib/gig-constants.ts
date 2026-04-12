@@ -1,13 +1,5 @@
-export const ACCOM_RATES: Record<string, number> = {
-  Single: 120,
-  Queen: 180,
-  Twin: 200,
-  "Double Room": 180,
-  "Multiple Rooms": 300,
-  "Not specified": 0,
-};
-
-export const ACCOM_TYPES = Object.keys(ACCOM_RATES) as Array<keyof typeof ACCOM_RATES>;
+export const SINGLE_ROOM_RATE = 120;
+export const DOUBLE_ROOM_RATE = 180;
 
 export const DEFAULT_MAX_DRIVE_HOURS_PER_DAY = 8;
 

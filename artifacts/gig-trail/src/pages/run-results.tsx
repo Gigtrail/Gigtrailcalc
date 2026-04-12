@@ -21,7 +21,7 @@ import {
   Users,
 } from "lucide-react";
 import { usePlan } from "@/hooks/use-plan";
-import { ACCOM_RATES } from "@/lib/gig-constants";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -53,7 +53,8 @@ export interface GigTrailResultData {
   fuelUsedLitres: number;
   recommendedNights: number;
   maxDriveHoursPerDay: number;
-  accomTypeForRecommendation: string | null;
+  accomSingleRooms: number;
+  accomDoubleRooms: number;
   estimatedAccomCostFromDrive: number;
   formData: Record<string, unknown>;
   profileName: string | null;
@@ -102,7 +103,7 @@ export default function RunResults() {
     takeHomePerPerson, minTakeHomePerPerson,
     distanceKm, driveTimeMinutes, fuelUsedLitres,
     breakEvenTickets, breakEvenCapacity, expectedTicketsSold,
-    recommendedNights, maxDriveHoursPerDay, accomTypeForRecommendation, estimatedAccomCostFromDrive,
+    recommendedNights, maxDriveHoursPerDay, accomSingleRooms, accomDoubleRooms, estimatedAccomCostFromDrive,
     status, formData, profileName, profilePeopleCount,
     vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice, isEditing, runId, savedRunId,
     saveFailed,
@@ -142,8 +143,6 @@ export default function RunResults() {
     : null;
 
   const profile = profiles?.find(p => p.id === formData.profileId);
-  const accommodationType = (formData.accommodationType as string) || accomTypeForRecommendation;
-  const accomRate = ACCOM_RATES[accommodationType ?? ""] ?? 0;
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
 
@@ -393,10 +392,17 @@ export default function RunResults() {
                   <span className="text-2xl font-bold text-blue-700">{recommendedNights}</span>
                   <span className="text-sm font-medium text-blue-700">night{recommendedNights !== 1 ? "s" : ""} recommended</span>
                 </div>
-                {accomTypeForRecommendation && (
+                {(accomSingleRooms > 0 || accomDoubleRooms > 0) && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{accomTypeForRecommendation} accommodation</span>
-                    <span className="font-semibold">${accomRate}/night</span>
+                    <span className="text-muted-foreground">
+                      {[
+                        accomSingleRooms > 0 && `${accomSingleRooms} single`,
+                        accomDoubleRooms > 0 && `${accomDoubleRooms} double`,
+                      ].filter(Boolean).join(" + ")} room{accomSingleRooms + accomDoubleRooms !== 1 ? "s" : ""}
+                    </span>
+                    <span className="font-semibold">
+                      ${(accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE).toLocaleString()}/night
+                    </span>
                   </div>
                 )}
                 {estimatedAccomCostFromDrive > 0 && (
@@ -440,10 +446,11 @@ export default function RunResults() {
                 </span>
               </div>
             )}
-            {(formData.accommodationRequired || (formData.accommodationNights && (formData.accommodationNights as number) > 0)) && (() => {
+            {formData.accommodationRequired && (() => {
               const nights = Number(formData.accommodationNights) || 0;
-              const rate = ACCOM_RATES[(formData.accommodationType as string) ?? ""] ?? 0;
-              const cost = nights * rate;
+              const singleRooms = Number(formData.singleRooms) || 0;
+              const doubleRooms = Number(formData.doubleRooms) || 0;
+              const cost = nights * (singleRooms * SINGLE_ROOM_RATE + doubleRooms * DOUBLE_ROOM_RATE);
               return cost > 0 ? (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">

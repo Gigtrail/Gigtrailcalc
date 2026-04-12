@@ -6,7 +6,6 @@ import {
   adjustActiveForActType,
 } from "@/lib/member-utils";
 import { canAddBandMember, maxBandMembersForPlan, type Plan } from "@/lib/plan-limits";
-import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +31,8 @@ export interface ActSetupData {
   memberLibrary: Member[];
   activeMemberIds: string[];
   accommodationRequired: boolean;
-  accommodationType: string | null;
+  singleRoomsDefault: number;
+  doubleRoomsDefault: number;
 }
 
 interface ActSetupDialogProps {
@@ -42,7 +42,8 @@ interface ActSetupDialogProps {
   initialLibrary: Member[];
   initialActiveMemberIds: string[];
   initialAccommodationRequired: boolean;
-  initialAccommodationType: string | null;
+  initialSingleRoomsDefault: number;
+  initialDoubleRoomsDefault: number;
   plan: Plan;
   onSave: (data: ActSetupData) => void;
   isSaving?: boolean;
@@ -55,7 +56,8 @@ export function ActSetupDialog({
   initialLibrary,
   initialActiveMemberIds,
   initialAccommodationRequired,
-  initialAccommodationType,
+  initialSingleRoomsDefault,
+  initialDoubleRoomsDefault,
   plan,
   onSave,
   isSaving,
@@ -64,7 +66,8 @@ export function ActSetupDialog({
   const [library, setLibrary] = useState<Member[]>(initialLibrary);
   const [activeMemberIds, setActiveMemberIds] = useState<string[]>(initialActiveMemberIds);
   const [accommodationRequired, setAccommodationRequired] = useState(initialAccommodationRequired);
-  const [accommodationType, setAccommodationType] = useState<string | null>(initialAccommodationType);
+  const [singleRoomsDefault, setSingleRoomsDefault] = useState(initialSingleRoomsDefault);
+  const [doubleRoomsDefault, setDoubleRoomsDefault] = useState(initialDoubleRoomsDefault);
   const [addingNew, setAddingNew] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", role: "", expectedGigFee: 0 });
   const [recentlyRemoved, setRecentlyRemoved] = useState<string[]>([]);
@@ -75,7 +78,8 @@ export function ActSetupDialog({
       setLibrary(initialLibrary);
       setActiveMemberIds(initialActiveMemberIds);
       setAccommodationRequired(initialAccommodationRequired);
-      setAccommodationType(initialAccommodationType);
+      setSingleRoomsDefault(initialSingleRoomsDefault);
+      setDoubleRoomsDefault(initialDoubleRoomsDefault);
       setAddingNew(false);
       setNewMember({ name: "", role: "", expectedGigFee: 0 });
       setRecentlyRemoved([]);
@@ -112,7 +116,6 @@ export function ActSetupDialog({
       }
       setLibrary(updated);
     } else if (newType === "Band") {
-      // Band keeps all current active members and pads to at least 3
       let updated = [...library];
       while (newActive.length < 3) {
         const nextInactive = updated.find((m) => !newActive.includes(m.id));
@@ -180,7 +183,8 @@ export function ActSetupDialog({
   const canSave =
     !bandError &&
     !(actType === "Solo" && activeMemberIds.length !== 1) &&
-    !(actType === "Duo" && activeMemberIds.length !== 2);
+    !(actType === "Duo" && activeMemberIds.length !== 2) &&
+    (!accommodationRequired || (singleRoomsDefault + doubleRoomsDefault) >= 1);
 
   function handleSave() {
     if (!canSave) return;
@@ -189,7 +193,8 @@ export function ActSetupDialog({
       memberLibrary: library,
       activeMemberIds,
       accommodationRequired,
-      accommodationType: accommodationRequired ? (accommodationType ?? null) : null,
+      singleRoomsDefault: accommodationRequired ? singleRoomsDefault : 0,
+      doubleRoomsDefault: accommodationRequired ? doubleRoomsDefault : 0,
     });
   }
 
@@ -427,28 +432,40 @@ export function ActSetupDialog({
                 checked={accommodationRequired}
                 onCheckedChange={(val) => {
                   setAccommodationRequired(val);
-                  if (!val) setAccommodationType(null);
+                  if (!val) {
+                    setSingleRoomsDefault(0);
+                    setDoubleRoomsDefault(0);
+                  }
                 }}
               />
             </div>
             {accommodationRequired && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Preferred Room Type</label>
-                <Select
-                  value={accommodationType ?? ""}
-                  onValueChange={(val) => setAccommodationType(val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select room type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACCOM_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t === "Not specified" ? t : `${t} ($${ACCOM_RATES[t]}/night)`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Single Rooms</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={singleRoomsDefault}
+                    onChange={(e) => setSingleRoomsDefault(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Double / Queen Rooms</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={doubleRoomsDefault}
+                    onChange={(e) => setDoubleRoomsDefault(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  />
+                </div>
+                {accommodationRequired && (singleRoomsDefault + doubleRoomsDefault) < 1 && (
+                  <p className="col-span-2 text-xs text-destructive">
+                    At least one room required when accommodation is enabled.
+                  </p>
+                )}
               </div>
             )}
           </div>

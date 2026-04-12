@@ -40,6 +40,8 @@ export interface Profile {
   /** @nullable */
   accommodationType: string | null;
   avgAccomPerNight: number;
+  singleRoomsDefault: number;
+  doubleRoomsDefault: number;
   avgFoodPerDay: number;
   /** @nullable */
   maxDriveHoursPerDay: number | null;
@@ -85,7 +87,9 @@ export interface CreateProfileBody {
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
-  avgAccomPerNight: number;
+  avgAccomPerNight?: number;
+  singleRoomsDefault?: number;
+  doubleRoomsDefault?: number;
   avgFoodPerDay: number;
   /** @nullable */
   maxDriveHoursPerDay?: number | null;
@@ -214,6 +218,10 @@ export interface Run {
   /** @nullable */
   accommodationType?: string | null;
   /** @nullable */
+  singleRooms?: number | null;
+  /** @nullable */
+  doubleRooms?: number | null;
+  /** @nullable */
   accommodationNights?: number | null;
   /** @nullable */
   accommodationCost?: number | null;
@@ -302,6 +310,10 @@ export interface CreateRunBody {
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
+  /** @nullable */
+  singleRooms?: number | null;
+  /** @nullable */
+  doubleRooms?: number | null;
   /** @nullable */
   accommodationNights?: number | null;
   /** @nullable */

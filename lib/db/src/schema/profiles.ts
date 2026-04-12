@@ -22,6 +22,8 @@ export const profilesTable = pgTable("profiles", {
   accommodationRequired: boolean("accommodation_required").notNull().default(false),
   accommodationType: text("accommodation_type"),
   avgAccomPerNight: numeric("avg_accom_per_night", { precision: 10, scale: 2 }).notNull().default("0"),
+  singleRoomsDefault: integer("single_rooms_default").notNull().default(0),
+  doubleRoomsDefault: integer("double_rooms_default").notNull().default(0),
   avgFoodPerDay: numeric("avg_food_per_day", { precision: 10, scale: 2 }).notNull().default("0"),
   minTakeHomePerPerson: numeric("min_take_home_per_person", { precision: 10, scale: 2 }).notNull().default("0"),
   maxDriveHoursPerDay: integer("max_drive_hours_per_day").default(8),

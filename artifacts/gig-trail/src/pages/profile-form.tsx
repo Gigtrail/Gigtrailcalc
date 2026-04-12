@@ -28,7 +28,6 @@ import { ChevronLeft, Save, Car, Truck, Bus, Settings2, BookUser } from "lucide-
 import { useEffect, useRef, useState } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
-import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
 import { canUseAdvancedDriving } from "@/lib/plan-limits";
 import type { Plan } from "@/lib/plan-limits";
 import { ActSetupDialog, type ActSetupData } from "@/components/act-setup-dialog";
@@ -61,9 +60,9 @@ const profileSchema = z.object({
   expectedGigFee: z.coerce.number().min(0),
   minTakeHomePerPerson: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
-  avgAccomPerNight: z.coerce.number().min(0),
   accommodationRequired: z.boolean(),
-  accommodationType: z.string().optional().nullable(),
+  singleRoomsDefault: z.coerce.number().min(0).int(),
+  doubleRoomsDefault: z.coerce.number().min(0).int(),
   vehicleType: z.string(),
   vehicleName: z.string().optional().nullable(),
   fuelConsumption: z.coerce.number().min(0),
@@ -116,9 +115,9 @@ export default function ProfileForm() {
       expectedGigFee: 0,
       minTakeHomePerPerson: 0,
       avgFoodPerDay: 0,
-      avgAccomPerNight: 0,
       accommodationRequired: false,
-      accommodationType: null,
+      singleRoomsDefault: 0,
+      doubleRoomsDefault: 0,
       vehicleType: "Van",
       vehicleName: "",
       fuelConsumption: 10,
@@ -131,7 +130,8 @@ export default function ProfileForm() {
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
-  const accommodationTypeWatch = form.watch("accommodationType") ?? null;
+  const singleRoomsDefaultWatch = form.watch("singleRoomsDefault") ?? 0;
+  const doubleRoomsDefaultWatch = form.watch("doubleRoomsDefault") ?? 0;
   const memberLibraryWatch = form.watch("memberLibrary") ?? [];
   const activeMemberIdsWatch = form.watch("activeMemberIds") ?? [];
 
@@ -165,9 +165,9 @@ export default function ProfileForm() {
         expectedGigFee: profile.expectedGigFee ?? 0,
         minTakeHomePerPerson: profile.minTakeHomePerPerson ?? 0,
         avgFoodPerDay: profile.avgFoodPerDay,
-        avgAccomPerNight: profile.avgAccomPerNight,
         accommodationRequired: profile.accommodationRequired ?? false,
-        accommodationType: profile.accommodationType ?? null,
+        singleRoomsDefault: profile.singleRoomsDefault ?? 0,
+        doubleRoomsDefault: profile.doubleRoomsDefault ?? 0,
         vehicleType: profile.vehicleType || "Van",
         vehicleName: profile.vehicleName || "",
         fuelConsumption: profile.fuelConsumption ?? 10,
@@ -183,7 +183,8 @@ export default function ProfileForm() {
     form.setValue("memberLibrary", data.memberLibrary, { shouldValidate: false });
     form.setValue("activeMemberIds", data.activeMemberIds, { shouldValidate: true });
     form.setValue("accommodationRequired", data.accommodationRequired, { shouldValidate: false });
-    form.setValue("accommodationType", data.accommodationType ?? null, { shouldValidate: false });
+    form.setValue("singleRoomsDefault", data.singleRoomsDefault, { shouldValidate: false });
+    form.setValue("doubleRoomsDefault", data.doubleRoomsDefault, { shouldValidate: false });
     const count = derivePeopleCount(data.actType, data.activeMemberIds);
     form.setValue("peopleCount", count, { shouldValidate: false });
     setActSetupOpen(false);
@@ -524,48 +525,34 @@ export default function ProfileForm() {
               />
 
               {accommodationRequired && (
-                <>
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="accommodationType"
+                    name="singleRoomsDefault"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Preferred Room Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select room type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {ACCOM_TYPES.map((t) => (
-                              <SelectItem key={t} value={t}>
-                                {t === "Not specified" ? t : (
-                                  `${t} ($${ACCOM_RATES[t]}/night)`
-                                )}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="avgAccomPerNight"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Avg. Accommodation ($ / night)</FormLabel>
+                        <FormLabel>Single Rooms</FormLabel>
                         <FormControl>
-                          <Input type="number" min="0" step="0.01" {...field} />
+                          <Input type="number" min="0" step="1" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </>
+                  <FormField
+                    control={form.control}
+                    name="doubleRoomsDefault"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Double / Queen Rooms</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="1" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               )}
 
             </CardContent>
@@ -829,7 +816,8 @@ export default function ProfileForm() {
         initialLibrary={memberLibraryWatch as Member[]}
         initialActiveMemberIds={activeMemberIdsWatch}
         initialAccommodationRequired={accommodationRequired}
-        initialAccommodationType={accommodationTypeWatch}
+        initialSingleRoomsDefault={singleRoomsDefaultWatch}
+        initialDoubleRoomsDefault={doubleRoomsDefaultWatch}
         plan={plan as Plan}
         onSave={handleActSetupSave}
       />

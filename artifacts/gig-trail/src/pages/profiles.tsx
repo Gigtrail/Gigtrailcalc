@@ -241,7 +241,10 @@ export default function Profiles() {
                       </div>
                       <div className="font-semibold text-foreground text-sm">
                         {profile.accommodationRequired
-                          ? (profile.accommodationType ?? "Required")
+                          ? [
+                              (profile.singleRoomsDefault ?? 0) > 0 && `${profile.singleRoomsDefault} single`,
+                              (profile.doubleRoomsDefault ?? 0) > 0 && `${profile.doubleRoomsDefault} double`,
+                            ].filter(Boolean).join(" + ") || "Required"
                           : "Not required"}
                       </div>
                     </div>
