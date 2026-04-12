@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useSearchVenues, useCreateOrUpdateVenue } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { ACCOM_RATES, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
@@ -40,6 +40,8 @@ import {
 
 const runSchema = z.object({
   profileId: z.coerce.number().optional().nullable(),
+  venueName: z.string().optional().nullable(),
+  showDate: z.string().optional().nullable(),
   originLat: z.number().optional().nullable(),
   originLng: z.number().optional().nullable(),
   destinationLat: z.number().optional().nullable(),
@@ -130,6 +132,8 @@ export default function RunForm() {
     resolver: zodResolver(runSchema),
     defaultValues: {
       profileId: null,
+      venueName: "",
+      showDate: "",
       originLat: null,
       originLng: null,
       destinationLat: null,
@@ -166,6 +170,15 @@ export default function RunForm() {
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
+  const [venueQuery, setVenueQuery] = useState("");
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
+  const venueSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  const { data: venueSuggestions } = useSearchVenues(
+    { q: venueQuery },
+    { query: { enabled: venueQuery.length >= 2 } }
+  );
+  const createOrUpdateVenue = useCreateOrUpdateVenue();
 
   const trackCalculation = useTrackCalculation();
 
@@ -375,7 +388,37 @@ export default function RunForm() {
       };
 
       setCalculationResult(computed);
-      sessionStorage.setItem("gigtrail_result", JSON.stringify(resultData));
+
+      // Auto-save: upsert venue then create/update run
+      let savedRunId: number | null = isEditing ? runId : null;
+      try {
+        const vName = vals.venueName?.trim();
+        if (vName) {
+          await createOrUpdateVenue.mutateAsync({ data: { name: vName, city: vals.destination || "" } });
+        }
+
+        const payload = {
+          ...vals,
+          venueName: vName || null,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+          status: "draft" as const,
+        };
+
+        if (isEditing) {
+          await updateRun.mutateAsync({ id: runId, data: payload });
+          savedRunId = runId;
+        } else {
+          const newRun = await createRun.mutateAsync({ data: payload });
+          savedRunId = newRun.id;
+        }
+      } catch {
+        // auto-save failure is non-fatal; results still shown
+      }
+
+      sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...resultData, savedRunId }));
       setLocation("/runs/results");
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
@@ -387,7 +430,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast]);
+  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast, createOrUpdateVenue, createRun, updateRun]);
 
   // Prefill from URL search params after onboarding redirect
   useEffect(() => {
@@ -412,6 +455,8 @@ export default function RunForm() {
     if (run && profiles) {
       form.reset({
         profileId: run.profileId,
+        venueName: run.venueName ?? "",
+        showDate: run.showDate ?? "",
         originLat: run.originLat ?? null,
         originLng: run.originLng ?? null,
         destinationLat: run.destinationLat ?? null,
@@ -599,6 +644,79 @@ export default function RunForm() {
                     })()}
                   </div>
                   
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="venueName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1.5">
+                            <History className="w-3.5 h-3.5 text-muted-foreground" />
+                            Venue Name
+                          </FormLabel>
+                          <div className="relative" ref={venueSuggestionsRef}>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                placeholder="e.g. The Bottleneck"
+                                autoComplete="off"
+                                onChange={(e) => {
+                                  field.onChange(e.target.value);
+                                  setVenueQuery(e.target.value);
+                                  setShowVenueSuggestions(true);
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => setShowVenueSuggestions(false), 150);
+                                }}
+                                onFocus={() => {
+                                  if ((field.value?.length ?? 0) >= 2) setShowVenueSuggestions(true);
+                                }}
+                              />
+                            </FormControl>
+                            {showVenueSuggestions && venueSuggestions && venueSuggestions.length > 0 && (
+                              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-md overflow-hidden">
+                                {venueSuggestions.slice(0, 5).map((v) => (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                                    onMouseDown={() => {
+                                      field.onChange(v.name);
+                                      setVenueQuery(v.name);
+                                      setShowVenueSuggestions(false);
+                                      if (v.city && !form.getValues("destination")) {
+                                        form.setValue("destination", v.city);
+                                      }
+                                    }}
+                                  >
+                                    <Search className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                    <span className="font-medium">{v.name}</span>
+                                    {v.city && <span className="text-muted-foreground text-xs ml-auto">{v.city}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="showDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Show Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {!isPro ? (
                       <FormField

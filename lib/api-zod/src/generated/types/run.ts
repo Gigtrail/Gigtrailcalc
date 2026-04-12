@@ -9,17 +9,30 @@
 export interface Run {
   id: number;
   /** @nullable */
-  profileId: number | null;
+  profileId?: number | null;
   /** @nullable */
-  vehicleId: number | null;
+  vehicleId?: number | null;
   /** @nullable */
-  origin: string | null;
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  status: string;
+  /** @nullable */
+  origin?: string | null;
   /** @nullable */
   originLat?: number | null;
   /** @nullable */
   originLng?: number | null;
   /** @nullable */
-  destination: string | null;
+  destination?: string | null;
   /** @nullable */
   destinationLat?: number | null;
   /** @nullable */
@@ -29,36 +42,53 @@ export interface Run {
   fuelPrice: number;
   showType: string;
   /** @nullable */
-  fee: number | null;
+  fee?: number | null;
   /** @nullable */
-  capacity: number | null;
+  capacity?: number | null;
   /** @nullable */
-  ticketPrice: number | null;
+  ticketPrice?: number | null;
   /** @nullable */
-  expectedAttendancePct: number | null;
+  expectedAttendancePct?: number | null;
   /** @nullable */
-  dealType: string | null;
+  dealType?: string | null;
   /** @nullable */
-  splitPct: number | null;
+  splitPct?: number | null;
   /** @nullable */
-  guarantee: number | null;
+  guarantee?: number | null;
   /** @nullable */
-  merchEstimate: number | null;
+  merchEstimate?: number | null;
   /** @nullable */
-  marketingCost: number | null;
+  marketingCost?: number | null;
+  accommodationRequired?: boolean;
   /** @nullable */
-  accommodationCost: number | null;
+  accommodationType?: string | null;
   /** @nullable */
-  foodCost: number | null;
+  accommodationNights?: number | null;
   /** @nullable */
-  extraCosts: number | null;
+  accommodationCost?: number | null;
   /** @nullable */
-  totalCost: number | null;
+  foodCost?: number | null;
   /** @nullable */
-  totalIncome: number | null;
+  extraCosts?: number | null;
   /** @nullable */
-  totalProfit: number | null;
+  totalCost?: number | null;
   /** @nullable */
-  notes: string | null;
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
+  /** @nullable */
+  notes?: string | null;
   createdAt: string;
 }

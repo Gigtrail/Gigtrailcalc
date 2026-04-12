@@ -62,6 +62,7 @@ export interface GigTrailResultData {
   vehicleName: string | null;
   isEditing: boolean;
   runId?: number;
+  savedRunId?: number | null;
   calcCount?: number;
   calcLimit?: number | null;
   isPro?: boolean;
@@ -100,9 +101,11 @@ export default function RunResults() {
     breakEvenTickets, breakEvenCapacity, expectedTicketsSold,
     recommendedNights, maxDriveHoursPerDay, accomTypeForRecommendation, estimatedAccomCostFromDrive,
     status, formData, profileName, profilePeopleCount,
-    vehicleType, vehicleName, isEditing, runId,
+    vehicleType, vehicleName, isEditing, runId, savedRunId,
     calcCount, calcLimit,
   } = result;
+
+  const effectiveRunId = savedRunId ?? runId;
 
   const verdictConfig = {
     "Worth the Drive": {
@@ -188,22 +191,18 @@ export default function RunResults() {
   }
 
   const handleSave = async () => {
+    if (effectiveRunId) {
+      sessionStorage.removeItem("gigtrail_result");
+      setLocation(`/runs/${effectiveRunId}`);
+      return;
+    }
     setIsSaving(true);
     const payload = formData as Parameters<typeof createRun.mutate>[0]["data"];
     try {
-      if (isEditing && runId) {
-        await updateRun.mutateAsync(
-          { id: runId, data: payload },
-        );
-        toast({ title: "Show updated" });
-        sessionStorage.removeItem("gigtrail_result");
-        setLocation(`/runs/${runId}`);
-      } else {
-        const newRun = await createRun.mutateAsync({ data: payload });
-        toast({ title: "Show saved" });
-        sessionStorage.removeItem("gigtrail_result");
-        setLocation(`/runs/${newRun.id}`);
-      }
+      const newRun = await createRun.mutateAsync({ data: payload });
+      toast({ title: "Show saved" });
+      sessionStorage.removeItem("gigtrail_result");
+      setLocation(`/runs/${newRun.id}`);
     } catch {
       toast({ title: "Failed to save show", variant: "destructive" });
     } finally {
@@ -212,8 +211,8 @@ export default function RunResults() {
   };
 
   const handleEdit = () => {
-    if (isEditing && runId) {
-      setLocation(`/runs/${runId}/edit`);
+    if (effectiveRunId) {
+      setLocation(`/runs/${effectiveRunId}/edit`);
     } else {
       setLocation("/runs/new");
     }
@@ -241,6 +240,31 @@ export default function RunResults() {
           )}
         </div>
       </div>
+
+      {/* Auto-saved banner */}
+      {effectiveRunId && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
+          <div className="flex items-center gap-2">
+            <Save className="w-4 h-4 flex-shrink-0 text-green-600" />
+            <span>Auto-saved to your show history as a draft</span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              className="font-medium underline underline-offset-2 hover:text-green-900"
+              onClick={handleEdit}
+            >
+              Edit
+            </button>
+            <span>·</span>
+            <button
+              className="font-medium underline underline-offset-2 hover:text-green-900"
+              onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}
+            >
+              View all
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Verdict Banner */}
       <div className={`rounded-xl border-2 overflow-hidden ${verdict.bg}`}>
@@ -465,25 +489,48 @@ export default function RunResults() {
 
       {/* Action Buttons */}
       <div className="space-y-3 pt-1">
-        <Button
-          size="lg"
-          className="w-full text-base font-bold"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {isSaving ? "Saving..." : isEditing ? "Update Show" : "Save This Show"}
-        </Button>
-        <div className="grid grid-cols-2 gap-3">
-          <Button variant="outline" onClick={handleEdit} className="w-full">
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Run
+        {effectiveRunId ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Show
+            </Button>
+            <Button size="lg" variant="outline" className="w-full font-bold"
+              onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              My Shows
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="lg"
+            className="w-full text-base font-bold"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {isSaving ? "Saving..." : "Save This Show"}
           </Button>
+        )}
+        {!effectiveRunId && (
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" onClick={handleEdit} className="w-full">
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Run
+            </Button>
+            <Button variant="outline" onClick={handleAnother} className="w-full">
+              <RotateCcw className="w-4 h-4 mr-2" />
+              New Run
+            </Button>
+          </div>
+        )}
+        {effectiveRunId && (
           <Button variant="outline" onClick={handleAnother} className="w-full">
             <RotateCcw className="w-4 h-4 mr-2" />
-            New Run
+            Calculate Another Run
           </Button>
-        </div>
+        )}
         {!isPro && (
           <Button variant="ghost" className="w-full text-muted-foreground text-xs" asChild>
             <a href="/billing">Upgrade to Pro for unlimited calculations & smarter recommendations</a>

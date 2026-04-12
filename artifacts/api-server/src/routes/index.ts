@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import profilesRouter from "./profiles";
 import vehiclesRouter from "./vehicles";
 import runsRouter from "./runs";
+import venuesRouter from "./venues";
 import toursRouter from "./tours";
 import dashboardRouter from "./dashboard";
 import stripeRouter from "./stripe";
@@ -16,6 +17,7 @@ router.use(stripeRouter);
 router.use(profilesRouter);
 router.use(vehiclesRouter);
 router.use(runsRouter);
+router.use(venuesRouter);
 router.use(toursRouter);
 router.use(dashboardRouter);
 

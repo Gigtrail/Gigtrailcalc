@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -7,6 +7,13 @@ export const runsTable = pgTable("runs", {
   userId: text("user_id"),
   profileId: integer("profile_id"),
   vehicleId: integer("vehicle_id"),
+  venueId: integer("venue_id"),
+  venueName: text("venue_name"),
+  city: text("city"),
+  state: text("state"),
+  country: text("country"),
+  showDate: date("show_date"),
+  status: text("status").notNull().default("draft"),
   origin: text("origin"),
   originLat: numeric("origin_lat", { precision: 10, scale: 6 }),
   originLng: numeric("origin_lng", { precision: 10, scale: 6 }),
@@ -35,6 +42,12 @@ export const runsTable = pgTable("runs", {
   totalCost: numeric("total_cost", { precision: 10, scale: 2 }),
   totalIncome: numeric("total_income", { precision: 10, scale: 2 }),
   totalProfit: numeric("total_profit", { precision: 10, scale: 2 }),
+  actualAttendance: integer("actual_attendance"),
+  actualTicketIncome: numeric("actual_ticket_income", { precision: 10, scale: 2 }),
+  actualOtherIncome: numeric("actual_other_income", { precision: 10, scale: 2 }),
+  actualExpenses: numeric("actual_expenses", { precision: 10, scale: 2 }),
+  actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
+  wouldDoAgain: text("would_do_again"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

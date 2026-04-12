@@ -12,6 +12,20 @@ export interface CreateRunBody {
   /** @nullable */
   vehicleId?: number | null;
   /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
   origin?: string | null;
   /** @nullable */
   originLat?: number | null;
@@ -45,6 +59,11 @@ export interface CreateRunBody {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  /** @nullable */
+  accommodationNights?: number | null;
   /** @nullable */
   accommodationCost?: number | null;
   /** @nullable */
@@ -57,6 +76,18 @@ export interface CreateRunBody {
   totalIncome?: number | null;
   /** @nullable */
   totalProfit?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
 }

@@ -34,19 +34,25 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
     totalCost: r.totalCost != null ? Number(r.totalCost) : null,
     totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
     totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
+    actualTicketIncome: r.actualTicketIncome != null ? Number(r.actualTicketIncome) : null,
+    actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
+    actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,
+    actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
 
 function toDbRun(data: Record<string, unknown>) {
   const result: Record<string, unknown> = {};
+  const numericFields = new Set([
+    'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
+    'splitPct', 'guarantee', 'merchEstimate', 'marketingCost',
+    'accommodationNights', 'accommodationCost',
+    'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit',
+    'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',
+  ]);
   for (const [k, v] of Object.entries(data)) {
-    if (typeof v === 'number' && [
-      'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
-      'splitPct', 'guarantee', 'merchEstimate', 'marketingCost',
-      'accommodationNights', 'accommodationCost',
-      'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit'
-    ].includes(k)) {
+    if (typeof v === 'number' && numericFields.has(k)) {
       result[k] = String(v);
     } else {
       result[k] = v;

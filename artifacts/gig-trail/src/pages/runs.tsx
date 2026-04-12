@@ -104,12 +104,37 @@ export default function Runs() {
                 <div className="flex-1 flex flex-col">
                   <CardHeader className="pb-2 flex flex-row items-start justify-between">
                     <div>
-                      <CardTitle className="text-xl flex items-center gap-2">
+                      <CardTitle className="text-xl flex items-center gap-2 flex-wrap">
                         {run.origin || "Unknown"} <ChevronRight className="w-4 h-4 text-muted-foreground" /> {run.destination || "Unknown"}
                       </CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm text-muted-foreground">{format(new Date(run.createdAt), 'MMM d, yyyy')}</span>
+                      {run.venueName && (
+                        <p className="text-sm font-medium text-foreground/80 mt-0.5">{run.venueName}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-sm text-muted-foreground">
+                          {run.showDate
+                            ? format(new Date(run.showDate + "T00:00:00"), 'MMM d, yyyy')
+                            : format(new Date(run.createdAt), 'MMM d, yyyy')}
+                        </span>
                         <Badge variant="outline" className="text-xs">{run.showType}</Badge>
+                        {run.status && run.status !== "draft" && (
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${
+                              run.status === "confirmed" ? "border-green-300 text-green-700 bg-green-50" :
+                              run.status === "cancelled" ? "border-red-300 text-red-700 bg-red-50" :
+                              run.status === "completed" ? "border-blue-300 text-blue-700 bg-blue-50" :
+                              "border-border"
+                            }`}
+                          >
+                            {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
+                          </Badge>
+                        )}
+                        {(!run.status || run.status === "draft") && (
+                          <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
+                            Draft
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <AlertDialog>

@@ -16,6 +16,8 @@ tags:
     description: Vehicle management
   - name: runs
     description: Single show calculations
+  - name: venues
+    description: Venue memory and suggestions
   - name: tours
     description: Multi-stop tour management
   - name: dashboard
@@ -329,6 +331,74 @@ paths:
       operationId: deleteRun
       tags: [runs]
       summary: Delete a run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /venues:
+    get:
+      operationId: getVenues
+      tags: [venues]
+      summary: List all venues for user
+      responses:
+        "200":
+          description: List of venues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Venue"
+    post:
+      operationId: createOrUpdateVenue
+      tags: [venues]
+      summary: Create or update a venue (upserts by normalised name)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVenueBody"
+      responses:
+        "201":
+          description: Created or updated venue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Venue"
+
+  /venues/search:
+    get:
+      operationId: searchVenues
+      tags: [venues]
+      summary: Search venues by name prefix
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching venues
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Venue"
+
+  /venues/{id}:
+    delete:
+      operationId: deleteVenue
+      tags: [venues]
+      summary: Delete a venue
       parameters:
         - name: id
           in: path
@@ -701,6 +771,60 @@ components:
         - fuelType
         - avgConsumption
 
+    Venue:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["string", "null"]
+        profileId:
+          type: ["integer", "null"]
+        venueName:
+          type: string
+        normalizedVenueName:
+          type: string
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        lastTotalProfit:
+          type: ["number", "null"]
+        lastStatus:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - venueName
+        - normalizedVenueName
+        - createdAt
+        - updatedAt
+
+    CreateVenueBody:
+      type: object
+      properties:
+        venueName:
+          type: string
+        profileId:
+          type: ["integer", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        lastTotalProfit:
+          type: ["number", "null"]
+        lastStatus:
+          type: ["string", "null"]
+      required:
+        - venueName
+
     Run:
       type: object
       properties:
@@ -710,6 +834,20 @@ components:
           type: ["integer", "null"]
         vehicleId:
           type: ["integer", "null"]
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        showDate:
+          type: ["string", "null"]
+        status:
+          type: string
         origin:
           type: ["string", "null"]
         originLat:
@@ -766,36 +904,29 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        actualAttendance:
+          type: ["integer", "null"]
+        actualTicketIncome:
+          type: ["number", "null"]
+        actualOtherIncome:
+          type: ["number", "null"]
+        actualExpenses:
+          type: ["number", "null"]
+        actualProfit:
+          type: ["number", "null"]
+        wouldDoAgain:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         createdAt:
           type: string
       required:
         - id
-        - profileId
-        - vehicleId
-        - origin
-        - destination
+        - status
         - distanceKm
         - returnTrip
         - fuelPrice
         - showType
-        - fee
-        - capacity
-        - ticketPrice
-        - expectedAttendancePct
-        - dealType
-        - splitPct
-        - guarantee
-        - merchEstimate
-        - marketingCost
-        - accommodationCost
-        - foodCost
-        - extraCosts
-        - totalCost
-        - totalIncome
-        - totalProfit
-        - notes
         - createdAt
 
     CreateRunBody:
@@ -805,6 +936,20 @@ components:
           type: ["integer", "null"]
         vehicleId:
           type: ["integer", "null"]
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        showDate:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
         origin:
           type: ["string", "null"]
         originLat:
@@ -861,6 +1006,18 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        actualAttendance:
+          type: ["integer", "null"]
+        actualTicketIncome:
+          type: ["number", "null"]
+        actualOtherIncome:
+          type: ["number", "null"]
+        actualExpenses:
+          type: ["number", "null"]
+        actualProfit:
+          type: ["number", "null"]
+        wouldDoAgain:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
       required:

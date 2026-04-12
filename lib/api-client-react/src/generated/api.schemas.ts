@@ -25,20 +25,9 @@ export interface Profile {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
-  bandMembers: string | null;
-  vehicleType: string;
-  /** @nullable */
-  vehicleName: string | null;
-  fuelConsumption: number;
-  expectedGigFee: number;
-  accommodationRequired: boolean;
-  /** @nullable */
-  accommodationType: string | null;
+  defaultVehicleId: number | null;
   avgAccomPerNight: number;
   avgFoodPerDay: number;
-  minTakeHomePerPerson: number;
-  /** @nullable */
-  maxDriveHoursPerDay: number | null;
   /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;
@@ -65,20 +54,9 @@ export interface CreateProfileBody {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
-  bandMembers?: string | null;
-  vehicleType: string;
-  /** @nullable */
-  vehicleName?: string | null;
-  fuelConsumption: number;
-  expectedGigFee: number;
-  accommodationRequired: boolean;
-  /** @nullable */
-  accommodationType?: string | null;
+  defaultVehicleId?: number | null;
   avgAccomPerNight: number;
   avgFoodPerDay: number;
-  minTakeHomePerPerson: number;
-  /** @nullable */
-  maxDriveHoursPerDay?: number | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -105,68 +83,63 @@ export interface CreateVehicleBody {
   notes?: string | null;
 }
 
-export interface Run {
+export interface Venue {
   id: number;
   /** @nullable */
-  profileId: number | null;
+  userId?: string | null;
   /** @nullable */
-  vehicleId: number | null;
+  profileId?: number | null;
+  venueName: string;
+  normalizedVenueName: string;
   /** @nullable */
-  origin: string | null;
+  city?: string | null;
   /** @nullable */
-  originLat?: number | null;
+  state?: string | null;
   /** @nullable */
-  originLng?: number | null;
+  country?: string | null;
   /** @nullable */
-  destination: string | null;
+  lastTotalProfit?: number | null;
   /** @nullable */
-  destinationLat?: number | null;
-  /** @nullable */
-  destinationLng?: number | null;
-  distanceKm: number;
-  returnTrip: boolean;
-  fuelPrice: number;
-  showType: string;
-  /** @nullable */
-  fee: number | null;
-  /** @nullable */
-  capacity: number | null;
-  /** @nullable */
-  ticketPrice: number | null;
-  /** @nullable */
-  expectedAttendancePct: number | null;
-  /** @nullable */
-  dealType: string | null;
-  /** @nullable */
-  splitPct: number | null;
-  /** @nullable */
-  guarantee: number | null;
-  /** @nullable */
-  merchEstimate: number | null;
-  /** @nullable */
-  marketingCost: number | null;
-  /** @nullable */
-  accommodationCost: number | null;
-  /** @nullable */
-  foodCost: number | null;
-  /** @nullable */
-  extraCosts: number | null;
-  /** @nullable */
-  totalCost: number | null;
-  /** @nullable */
-  totalIncome: number | null;
-  /** @nullable */
-  totalProfit: number | null;
-  /** @nullable */
-  notes: string | null;
+  lastStatus?: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
-export interface CreateRunBody {
+export interface CreateVenueBody {
+  venueName: string;
+  /** @nullable */
+  profileId?: number | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  lastTotalProfit?: number | null;
+  /** @nullable */
+  lastStatus?: string | null;
+}
+
+export interface Run {
+  id: number;
   /** @nullable */
   profileId?: number | null;
   /** @nullable */
   vehicleId?: number | null;
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  status: string;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -201,6 +174,11 @@ export interface CreateRunBody {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  /** @nullable */
+  accommodationNights?: number | null;
   /** @nullable */
   accommodationCost?: number | null;
   /** @nullable */
@@ -213,6 +191,105 @@ export interface CreateRunBody {
   totalIncome?: number | null;
   /** @nullable */
   totalProfit?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface CreateRunBody {
+  /** @nullable */
+  profileId?: number | null;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  /** @nullable */
+  status?: string | null;
+  /** @nullable */
+  origin?: string | null;
+  /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
+  destination?: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
+  distanceKm: number;
+  returnTrip: boolean;
+  fuelPrice: number;
+  showType: string;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  ticketPrice?: number | null;
+  /** @nullable */
+  expectedAttendancePct?: number | null;
+  /** @nullable */
+  dealType?: string | null;
+  /** @nullable */
+  splitPct?: number | null;
+  /** @nullable */
+  guarantee?: number | null;
+  /** @nullable */
+  merchEstimate?: number | null;
+  /** @nullable */
+  marketingCost?: number | null;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  /** @nullable */
+  accommodationNights?: number | null;
+  /** @nullable */
+  accommodationCost?: number | null;
+  /** @nullable */
+  foodCost?: number | null;
+  /** @nullable */
+  extraCosts?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -404,3 +481,7 @@ export interface DashboardRecent {
   recentRuns: Run[];
   recentTours: Tour[];
 }
+
+export type SearchVenuesParams = {
+  q: string;
+};
