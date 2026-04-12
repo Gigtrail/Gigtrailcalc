@@ -46,7 +46,8 @@ export function MemberLibraryDialog({
     if (open) {
       setMembers(library);
     }
-  }, [open, library]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // intentionally only reset on open — props may change due to ID regeneration
 
   function handleUpdate(id: string, updates: Partial<Member>) {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));

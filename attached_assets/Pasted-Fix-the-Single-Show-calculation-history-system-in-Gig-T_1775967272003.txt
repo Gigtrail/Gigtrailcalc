@@ -1,0 +1,189 @@
+Fix the Single Show calculation history system in Gig Trail.
+
+GOAL
+Make sure every valid Single Show calculation is reliably saved to history, correctly attached to the user/profile, and displayed properly in the history UI.
+
+CURRENT ISSUE
+Single Show calculated history is not working reliably.
+The problem may be in saving, updating, loading, or displaying saved calculation records.
+
+REQUIREMENTS
+
+1. Save every valid Single Show calculation
+When the user runs a valid Single Show calculation:
+- automatically save the result into Single Show history
+- attach it to the correct user and profile
+- create a proper record with stable ID and timestamps
+
+A valid calculation should require minimum essential fields such as:
+- venue name
+- fee or projected income
+
+Do not save junk/incomplete records.
+
+2. History record structure
+Use a clear consistent structure for saved Single Show calculations.
+
+Recommended type:
+{
+  id: string,
+  userId: string,
+  profileId: string,
+  venueName: string,
+  city?: string,
+  state?: string,
+  country?: string,
+  showDate?: string,
+  actType: "solo" | "duo" | "band",
+  peopleOnTour: number,
+  fee?: number,
+  ticketDeal?: string,
+  projectedTicketIncome?: number,
+  projectedTotalIncome?: number,
+  fuelCost?: number,
+  travelDistance?: number,
+  accommodationCost?: number,
+  otherExpenses?: number,
+  projectedProfit?: number,
+  calculationType: "single_show",
+  status: "draft" | "confirmed",
+  createdAt: string,
+  updatedAt: string
+}
+
+3. Correct profile attachment
+Make sure the history entry is saved under the correct profile.
+Check for any mismatch between:
+- selected profile in UI
+- profileId passed into calculation save logic
+- profileId used when loading history
+
+If no profile is selected, handle safely and clearly.
+
+4. Fix autosave pipeline
+After calculation is generated:
+- call a dedicated saveHistory service
+- do not rely on UI state alone
+- save should happen after calculation result is valid
+- return the saved record so UI can confirm success
+
+Suggested service:
+- /services/singleShowHistoryService.ts
+
+Suggested functions:
+- saveSingleShowCalculation()
+- updateSingleShowCalculation()
+- getSingleShowHistoryByProfile()
+- deleteSingleShowCalculation()
+
+5. Prevent bad duplicate behaviour
+If the user recalculates the same show repeatedly in a short time:
+- do not create endless duplicates unless key values changed meaningfully
+- either:
+  - update the existing draft record
+  - or create a new one only when the calculation is materially different
+
+Use reasonable duplicate detection such as:
+- same profileId
+- same venueName
+- same showDate
+- same calculationType
+within a recent time window
+
+6. Fix history loading
+Make sure the history screen actually loads the saved Single Show records.
+
+Check:
+- correct source/store/database collection
+- correct profile filter
+- correct field names
+- proper sorting by most recent first
+
+The history list should show:
+- venue name
+- show date
+- act type
+- projected profit
+- created/saved date
+- status
+
+7. Fix history display in UI
+In the profile or history section, display Single Show calculations clearly.
+
+Example row:
+- Star Hotel Yackandandah
+- Aug 1, 2026
+- Duo
+- Projected Profit: $420
+- Saved 2 hours ago
+
+Allow:
+- open/view details
+- edit if needed
+- delete if needed
+
+8. Debug and repair field mismatches
+Audit the full path for naming mismatches such as:
+- profile_id vs profileId
+- venue_name vs venueName
+- created_at vs createdAt
+- act_type vs actType
+
+Standardise the mapping so save and load use the same structure everywhere.
+
+9. Save/load reliability
+Test all of these flows:
+- calculate single show
+- autosave to history
+- reload page
+- reopen app
+- switch profile
+- view correct history
+- recalculate same show
+- ensure sensible update/duplicate handling
+
+10. Error handling
+If save fails:
+- do not silently fail
+- show subtle inline error:
+  “Couldn’t save show history”
+- log the technical error for debugging
+
+If save succeeds:
+- show subtle confirmation:
+  “Show saved to history”
+
+11. Keep history separate from profile summary state
+Do not store Single Show history only in temporary component state.
+Persist it through the actual storage/database layer.
+
+12. Backward compatibility
+If old saved history records exist:
+- load them safely
+- map old fields into the new structure if needed
+- do not crash on incomplete old records
+
+TECHNICAL NOTES
+
+Suggested files:
+- /types/singleShowHistory.ts
+- /services/singleShowHistoryService.ts
+- /utils/historyMapper.ts
+
+Use a dedicated service layer for:
+- validation
+- save/update
+- mapping raw stored data
+- loading filtered history by profile
+
+DELIVERABLES
+
+Please implement:
+- reliable autosave for valid Single Show calculations
+- correct profile-linked history storage
+- proper history loading and display
+- duplicate protection/update behaviour
+- subtle saved/error UI messages
+- standardised field mapping
+- page reload persistence
+- backward-safe handling of existing history data

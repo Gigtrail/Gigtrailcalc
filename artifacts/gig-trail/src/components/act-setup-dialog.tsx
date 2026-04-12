@@ -68,7 +68,8 @@ export function ActSetupDialog({
       setNewMember({ name: "", role: "", expectedGigFee: 0 });
       setRecentlyRemoved([]);
     }
-  }, [open, initialActType, initialLibrary, initialActiveMemberIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // intentionally only reset on open — props may change due to ID regeneration
 
   const activeMembers = resolveActiveMembers(library, activeMemberIds);
   const inactiveMembers = library.filter((m) => !activeMemberIds.includes(m.id));
@@ -87,6 +88,21 @@ export function ActSetupDialog({
     } else if (newType === "Duo") {
       let updated = [...library];
       while (newActive.length < 2) {
+        const nextInactive = updated.find((m) => !newActive.includes(m.id));
+        if (nextInactive) {
+          newActive = [...newActive, nextInactive.id];
+        } else {
+          const newId = generateMemberId();
+          const newM: Member = { id: newId, name: "", expectedGigFee: 0 };
+          updated = [...updated, newM];
+          newActive = [...newActive, newId];
+        }
+      }
+      setLibrary(updated);
+    } else if (newType === "Band") {
+      // Band keeps all current active members and pads to at least 3
+      let updated = [...library];
+      while (newActive.length < 3) {
         const nextInactive = updated.find((m) => !newActive.includes(m.id));
         if (nextInactive) {
           newActive = [...newActive, nextInactive.id];
