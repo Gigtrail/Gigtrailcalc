@@ -131,6 +131,7 @@ export default function ProfileForm() {
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
+  const accommodationTypeWatch = form.watch("accommodationType") ?? null;
   const memberLibraryWatch = form.watch("memberLibrary") ?? [];
   const activeMemberIdsWatch = form.watch("activeMemberIds") ?? [];
 
@@ -181,6 +182,8 @@ export default function ProfileForm() {
     form.setValue("actType", data.actType, { shouldValidate: true });
     form.setValue("memberLibrary", data.memberLibrary, { shouldValidate: false });
     form.setValue("activeMemberIds", data.activeMemberIds, { shouldValidate: true });
+    form.setValue("accommodationRequired", data.accommodationRequired, { shouldValidate: false });
+    form.setValue("accommodationType", data.accommodationType ?? null, { shouldValidate: false });
     const count = derivePeopleCount(data.actType, data.activeMemberIds);
     form.setValue("peopleCount", count, { shouldValidate: false });
     setActSetupOpen(false);
@@ -825,6 +828,8 @@ export default function ProfileForm() {
         initialActType={actType}
         initialLibrary={memberLibraryWatch as Member[]}
         initialActiveMemberIds={activeMemberIdsWatch}
+        initialAccommodationRequired={accommodationRequired}
+        initialAccommodationType={accommodationTypeWatch}
         plan={plan as Plan}
         onSave={handleActSetupSave}
       />

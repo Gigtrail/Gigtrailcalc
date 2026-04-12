@@ -6,6 +6,7 @@ import {
   adjustActiveForActType,
 } from "@/lib/member-utils";
 import { canAddBandMember, maxBandMembersForPlan, type Plan } from "@/lib/plan-limits";
+import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -23,12 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X, Plus, Info } from "lucide-react";
+import { X, Plus, Info, BedDouble } from "lucide-react";
 
 export interface ActSetupData {
   actType: string;
   memberLibrary: Member[];
   activeMemberIds: string[];
+  accommodationRequired: boolean;
+  accommodationType: string | null;
 }
 
 interface ActSetupDialogProps {
@@ -37,6 +41,8 @@ interface ActSetupDialogProps {
   initialActType: string;
   initialLibrary: Member[];
   initialActiveMemberIds: string[];
+  initialAccommodationRequired: boolean;
+  initialAccommodationType: string | null;
   plan: Plan;
   onSave: (data: ActSetupData) => void;
   isSaving?: boolean;
@@ -48,6 +54,8 @@ export function ActSetupDialog({
   initialActType,
   initialLibrary,
   initialActiveMemberIds,
+  initialAccommodationRequired,
+  initialAccommodationType,
   plan,
   onSave,
   isSaving,
@@ -55,6 +63,8 @@ export function ActSetupDialog({
   const [actType, setActType] = useState(initialActType);
   const [library, setLibrary] = useState<Member[]>(initialLibrary);
   const [activeMemberIds, setActiveMemberIds] = useState<string[]>(initialActiveMemberIds);
+  const [accommodationRequired, setAccommodationRequired] = useState(initialAccommodationRequired);
+  const [accommodationType, setAccommodationType] = useState<string | null>(initialAccommodationType);
   const [addingNew, setAddingNew] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", role: "", expectedGigFee: 0 });
   const [recentlyRemoved, setRecentlyRemoved] = useState<string[]>([]);
@@ -64,6 +74,8 @@ export function ActSetupDialog({
       setActType(initialActType);
       setLibrary(initialLibrary);
       setActiveMemberIds(initialActiveMemberIds);
+      setAccommodationRequired(initialAccommodationRequired);
+      setAccommodationType(initialAccommodationType);
       setAddingNew(false);
       setNewMember({ name: "", role: "", expectedGigFee: 0 });
       setRecentlyRemoved([]);
@@ -172,7 +184,13 @@ export function ActSetupDialog({
 
   function handleSave() {
     if (!canSave) return;
-    onSave({ actType, memberLibrary: library, activeMemberIds });
+    onSave({
+      actType,
+      memberLibrary: library,
+      activeMemberIds,
+      accommodationRequired,
+      accommodationType: accommodationRequired ? (accommodationType ?? null) : null,
+    });
   }
 
   return (
@@ -388,6 +406,49 @@ export function ActSetupDialog({
                     Cancel
                   </Button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Accommodation */}
+          <div className="space-y-3 pt-1 border-t border-border/40">
+            <label className="text-sm font-medium">Accommodation</label>
+            <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
+                  Required by Default
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Does this act usually need accommodation?
+                </p>
+              </div>
+              <Switch
+                checked={accommodationRequired}
+                onCheckedChange={(val) => {
+                  setAccommodationRequired(val);
+                  if (!val) setAccommodationType(null);
+                }}
+              />
+            </div>
+            {accommodationRequired && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Preferred Room Type</label>
+                <Select
+                  value={accommodationType ?? ""}
+                  onValueChange={(val) => setAccommodationType(val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select room type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOM_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t === "Not specified" ? t : `${t} ($${ACCOM_RATES[t]}/night)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
