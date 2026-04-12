@@ -28,6 +28,7 @@ import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock
 import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
+import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
 import { ACCOM_RATES, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
 import {
@@ -657,7 +658,48 @@ export default function RunForm() {
                       );
                     })()}
                   </div>
-                  
+
+                  {/* Quick profile summary — visible as soon as a profile is selected */}
+                  {(() => {
+                    const sel = profiles?.find(p => p.id === formValues.profileId);
+                    if (!sel) return null;
+                    const { library, activeMemberIds } = migrateOldMembers(sel.bandMembers, sel.activeMemberIds ?? null);
+                    const activeMembers = resolveActiveMembers(library, activeMemberIds);
+                    const peopleCount = derivePeopleCount(sel.actType, activeMemberIds);
+                    const actCostPerShow = activeMembers.length > 0
+                      ? activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0)
+                      : (sel.expectedGigFee ?? 0);
+                    return (
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                        <div>
+                          <div className="text-xs text-muted-foreground">Act Type</div>
+                          <div className="font-medium text-foreground">{sel.actType ?? "—"}</div>
+                        </div>
+                        <div className="hidden sm:block w-px h-7 bg-border/50" />
+                        <div>
+                          <div className="text-xs text-muted-foreground">People on Tour</div>
+                          <div className="font-medium text-foreground">{peopleCount}</div>
+                        </div>
+                        <div className="hidden sm:block w-px h-7 bg-border/50" />
+                        <div>
+                          <div className="text-xs text-muted-foreground">Act Cost / Show</div>
+                          <div className="font-medium text-foreground">
+                            {actCostPerShow > 0 ? `$${actCostPerShow.toLocaleString()}` : "—"}
+                          </div>
+                        </div>
+                        {sel.homeBase && (
+                          <>
+                            <div className="hidden sm:block w-px h-7 bg-border/50" />
+                            <div>
+                              <div className="text-xs text-muted-foreground">Home Base</div>
+                              <div className="font-medium text-foreground">{sel.homeBase}</div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
