@@ -1,0 +1,113 @@
+Refactor the Gig Trail Profile / Artist Setup so that Band member count is controlled via a dynamic “Add Band Member” button instead of asking for a number.
+
+GOAL
+Make band setup more flexible and intuitive by allowing users to visually add/remove members instead of entering a fixed number.
+
+ACT TYPE RULES
+
+1. Solo
+- Hardwire to 1 member
+- Automatically create 1 member if none exists
+- Do not allow adding/removing members
+
+2. Duo
+- Hardwire to 2 members
+- Automatically create 2 members if needed
+- Do not allow adding/removing members
+
+3. Band (Pro feature)
+- Do NOT ask “how many members”
+- Instead:
+  - display member list
+  - allow dynamic creation of members using a button:
+    “+ Add Band Member”
+
+- Each click adds a new empty member row
+
+- Allow removing members (optional but recommended)
+
+VALIDATION
+
+- Band must have at least 3 members
+- Validate on save:
+  - if < 3 members, show error:
+    “Band must have at least 3 members”
+
+MEMBER STRUCTURE
+
+Each member should include:
+- id
+- name
+- role
+- expectedGigFee
+- accommodationRequired (optional)
+
+UI REQUIREMENTS
+
+Band mode should display:
+- list of members
+- input fields per member:
+  - name
+  - role
+  - expected gig fee
+
+Below list:
+- button: “+ Add Band Member”
+
+Optional:
+- remove button per member
+
+ACT TYPE SWITCHING BEHAVIOUR
+
+When changing act type:
+
+- Band → Duo
+  - keep first 2 members only
+
+- Band → Solo
+  - keep first member only
+
+- Duo → Band
+  - keep existing 2 members
+  - allow adding more
+
+- Solo → Band
+  - keep existing 1 member
+  - allow adding more
+
+SHARED ACCOMMODATION
+
+Ensure shared accommodation logic still works with dynamic members:
+- new members should be eligible for shared room grouping
+- if members are removed, clean up any invalid shared room references
+
+PROFILE SAVE / LOAD
+
+Ensure correct persistence of:
+- actType
+- bandMembers array
+- expectedGigFee per member
+- shared accommodation groupings
+
+DATA INTEGRITY
+
+- do not allow duplicate member IDs
+- ensure member list stays in sync with UI
+- prevent orphaned shared room references
+
+OUT OF SCOPE
+
+Do not build:
+- payroll system
+- advanced analytics
+- financial reporting
+
+DELIVERABLES
+
+Implement:
+- remove band size input
+- add “+ Add Band Member” button
+- dynamic member creation/removal
+- validation for minimum 3 members in Band mode
+- correct behaviour when switching act types
+- full persistence and reload support

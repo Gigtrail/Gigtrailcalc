@@ -25,7 +25,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChevronLeft, Save, Plus, Trash2, Car, Truck, Bus } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
@@ -36,6 +36,12 @@ const VEHICLE_PRESETS = [
   { label: "Bus", value: "Bus", consumption: 16, Icon: Bus },
 ] as const;
 
+const memberSchema = z.object({
+  name: z.string(),
+  role: z.string().optional(),
+  expectedGigFee: z.coerce.number().min(0).optional(),
+});
+
 const profileSchema = z.object({
   name: z.string().min(1, "Name is required"),
   actType: z.string().min(1, "Act type is required"),
@@ -43,11 +49,7 @@ const profileSchema = z.object({
   homeBaseLat: z.number().optional().nullable(),
   homeBaseLng: z.number().optional().nullable(),
   peopleCount: z.coerce.number().min(1, "Must have at least 1 person"),
-  bandMembers: z.array(z.object({
-    name: z.string(),
-    role: z.string().optional(),
-    expectedGigFee: z.coerce.number().min(0).optional(),
-  })).optional(),
+  bandMembers: z.array(memberSchema).optional(),
   expectedGigFee: z.coerce.number().min(0),
   minTakeHomePerPerson: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
@@ -60,9 +62,19 @@ const profileSchema = z.object({
   defaultFuelPrice: z.coerce.number().min(0).optional().nullable(),
   maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.actType === "Band" && (data.bandMembers?.length ?? 0) < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Band must have at least 3 members",
+      path: ["bandMembers"],
+    });
+  }
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+
+const EMPTY_MEMBER = () => ({ name: "", role: "", expectedGigFee: 0 });
 
 export default function ProfileForm() {
   const [, setLocation] = useLocation();
@@ -106,7 +118,7 @@ export default function ProfileForm() {
     },
   });
 
-  const { fields: memberFields, append: appendMember, remove: removeMember } = useFieldArray({
+  const { fields: memberFields, append: appendMember, remove: removeMember, replace: replaceMembers } = useFieldArray({
     control: form.control,
     name: "bandMembers",
   });
@@ -114,10 +126,12 @@ export default function ProfileForm() {
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
-  const showMembers = actType === "Solo" || actType === "Duo" || actType === "Band";
+
+  const loadedFromProfileRef = useRef(false);
 
   useEffect(() => {
     if (profile) {
+      loadedFromProfileRef.current = true;
       let parsedMembers: { name: string; role?: string; expectedGigFee?: number }[] = [];
       try {
         if (profile.bandMembers) {
@@ -154,16 +168,36 @@ export default function ProfileForm() {
     }
   }, [profile, form]);
 
+  const prevActTypeRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (actType === "Solo" && memberFields.length === 0) {
-      appendMember({ name: "", role: "", expectedGigFee: 0 });
-    } else if (actType === "Duo" && memberFields.length === 0) {
-      appendMember({ name: "", role: "", expectedGigFee: 0 });
-      appendMember({ name: "", role: "", expectedGigFee: 0 });
-    } else if (actType === "Band" && memberFields.length === 0) {
-      appendMember({ name: "", role: "", expectedGigFee: 0 });
+    if (prevActTypeRef.current === actType) return;
+    const prev = prevActTypeRef.current;
+    prevActTypeRef.current = actType;
+
+    const current = form.getValues("bandMembers") ?? [];
+
+    if (actType === "Solo") {
+      if (current.length === 0) {
+        replaceMembers([EMPTY_MEMBER()]);
+      } else if (current.length > 1) {
+        replaceMembers(current.slice(0, 1));
+      }
+    } else if (actType === "Duo") {
+      if (current.length < 2) {
+        const needed = 2 - current.length;
+        replaceMembers([...current, ...Array.from({ length: needed }, EMPTY_MEMBER)]);
+      } else if (current.length > 2) {
+        replaceMembers(current.slice(0, 2));
+      }
+    } else if (actType === "Band") {
+      if (current.length === 0) {
+        replaceMembers([EMPTY_MEMBER(), EMPTY_MEMBER(), EMPTY_MEMBER()]);
+      } else if (prev === null && current.length > 0) {
+        // initial mount with existing members — no change
+      }
     }
-  }, [actType]);
+  }, [actType, form, replaceMembers]);
 
   const onSubmit = (data: ProfileFormValues) => {
     const payload = {
@@ -204,6 +238,7 @@ export default function ProfileForm() {
   };
 
   const isPending = createProfile.isPending || updateProfile.isPending;
+  const canAddRemoveMembers = actType === "Band";
 
   if (isEditing && isLoadingProfile) {
     return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>;
@@ -307,6 +342,9 @@ export default function ProfileForm() {
                       <FormControl>
                         <Input type="number" min="1" {...field} />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Total touring party including crew, for food and accommodation costs.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -315,67 +353,69 @@ export default function ProfileForm() {
             </CardContent>
           </Card>
 
-          {/* Act Members — all act types */}
-          {showMembers && (
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle>{actType === "Solo" ? "Act Member" : "Band Members"}</CardTitle>
-                <CardDescription>
-                  {actType === "Solo"
-                    ? "Your name and expected fee for this act."
-                    : "Who's in the act? Add a name, role, and expected fee per person."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {memberFields.map((field, index) => (
-                  <div key={field.id} className="flex gap-2 items-start">
-                    <FormField
-                      control={form.control}
-                      name={`bandMembers.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem className="flex-[2]">
-                          {index === 0 && <FormLabel>Name</FormLabel>}
-                          <FormControl>
-                            <Input placeholder="Member name" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`bandMembers.${index}.role`}
-                      render={({ field }) => (
-                        <FormItem className="flex-[1.5]">
-                          {index === 0 && <FormLabel>Role (optional)</FormLabel>}
-                          <FormControl>
-                            <Input placeholder="e.g. Guitar" {...field} value={field.value ?? ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`bandMembers.${index}.expectedGigFee`}
-                      render={({ field }) => (
-                        <FormItem className="flex-1 min-w-[90px]">
-                          {index === 0 && <FormLabel>Fee ($)</FormLabel>}
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="1"
-                              placeholder="0"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+          {/* Act Members */}
+          <Card className="border-border/50 bg-card/50">
+            <CardHeader>
+              <CardTitle>
+                {actType === "Solo" ? "Act Member" : actType === "Duo" ? "Duo Members" : "Band Members"}
+              </CardTitle>
+              <CardDescription>
+                {actType === "Solo" && "Your name and expected fee for this act."}
+                {actType === "Duo" && "Both members — names, roles, and expected fees."}
+                {actType === "Band" && "Add all band members. Band requires at least 3 members."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {memberFields.map((field, index) => (
+                <div key={field.id} className="flex gap-2 items-start">
+                  <FormField
+                    control={form.control}
+                    name={`bandMembers.${index}.name`}
+                    render={({ field }) => (
+                      <FormItem className="flex-[2]">
+                        {index === 0 && <FormLabel>Name</FormLabel>}
+                        <FormControl>
+                          <Input placeholder="Member name" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`bandMembers.${index}.role`}
+                    render={({ field }) => (
+                      <FormItem className="flex-[1.5]">
+                        {index === 0 && <FormLabel>Role (optional)</FormLabel>}
+                        <FormControl>
+                          <Input placeholder="e.g. Guitar" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`bandMembers.${index}.expectedGigFee`}
+                    render={({ field }) => (
+                      <FormItem className="flex-1 min-w-[90px]">
+                        {index === 0 && <FormLabel>Fee ($)</FormLabel>}
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {canAddRemoveMembers && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -385,23 +425,32 @@ export default function ProfileForm() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
-                  </div>
-                ))}
-                {actType !== "Solo" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-1"
-                    onClick={() => appendMember({ name: "", role: "", expectedGigFee: 0 })}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Add Member
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  )}
+                </div>
+              ))}
+
+              {/* Band minimum error */}
+              {actType === "Band" && (() => {
+                const err = form.formState.errors.bandMembers;
+                const msg = (err as { message?: string; root?: { message?: string } } | undefined)?.message
+                  || (err as { message?: string; root?: { message?: string } } | undefined)?.root?.message;
+                return msg ? <p className="text-sm font-medium text-destructive">{msg}</p> : null;
+              })()}
+
+              {canAddRemoveMembers && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-1"
+                  onClick={() => appendMember(EMPTY_MEMBER())}
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Add Band Member
+                </Button>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Money */}
           <Card className="border-border/50 bg-card/50">
