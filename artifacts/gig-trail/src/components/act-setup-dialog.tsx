@@ -85,7 +85,7 @@ export function ActSetupDialog({
       setRecentlyRemoved([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]); // intentionally only reset on open — props may change due to ID regeneration
+  }, [open]);
 
   const activeMembers = resolveActiveMembers(library, activeMemberIds);
   const inactiveMembers = library.filter((m) => !activeMemberIds.includes(m.id));
@@ -100,6 +100,8 @@ export function ActSetupDialog({
         const newM: Member = { id: newId, name: "", expectedGigFee: 0 };
         setLibrary((prev) => [...prev, newM]);
         newActive = [newId];
+      } else {
+        newActive = [newActive[0]];
       }
     } else if (newType === "Duo") {
       let updated = [...library];
@@ -114,6 +116,7 @@ export function ActSetupDialog({
           newActive = [...newActive, newId];
         }
       }
+      newActive = newActive.slice(0, 2);
       setLibrary(updated);
     } else if (newType === "Band") {
       let updated = [...library];
@@ -172,7 +175,7 @@ export function ActSetupDialog({
 
   const bandError =
     actType === "Band" && activeMembers.length < 3
-      ? `Band requires at least 3 active members — currently ${activeMembers.length}.`
+      ? `Band requires at least 3 members — currently ${activeMembers.length}.`
       : null;
 
   const canAdd =
@@ -208,9 +211,14 @@ export function ActSetupDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
+        <div className="space-y-6 py-2">
+
+          {/* Act Type */}
           <div className="space-y-2">
-            <label className="text-sm font-medium">Act Type</label>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Act Type</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Who's touring with you?</p>
+            </div>
             <div className="flex gap-2">
               {["Solo", "Duo", "Band"].map((type) => (
                 <button
@@ -229,65 +237,70 @@ export function ActSetupDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {actType === "Solo"
-                ? "Act Member"
-                : actType === "Duo"
-                ? "Duo Members"
-                : "Active Band Members"}
-            </label>
+          {/* Members */}
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-foreground">Members</p>
 
             {activeMembers.length === 0 && (
-              <p className="text-sm text-muted-foreground italic py-2">
-                No active members yet — add one below.
+              <p className="text-sm text-muted-foreground italic py-1">
+                No members yet — add one below.
               </p>
+            )}
+
+            {/* Column headers */}
+            {activeMembers.length > 0 && (
+              <div className="grid grid-cols-[1fr_0.8fr_80px_32px] gap-2 px-0.5">
+                <span className="text-xs text-muted-foreground font-medium">Name</span>
+                <span className="text-xs text-muted-foreground font-medium">Role <span className="font-normal opacity-60">(optional)</span></span>
+                <span className="text-xs text-muted-foreground font-medium text-right">Fee</span>
+                <span />
+              </div>
             )}
 
             <div className="space-y-2">
               {activeMembers.map((member) => (
-                <div key={member.id} className="flex gap-2 items-center">
+                <div key={member.id} className="grid grid-cols-[1fr_0.8fr_80px_32px] gap-2 items-center">
                   <Input
                     placeholder="Name"
                     value={member.name}
-                    onChange={(e) =>
-                      handleUpdateMember(member.id, { name: e.target.value })
-                    }
-                    className="flex-[2]"
+                    onChange={(e) => handleUpdateMember(member.id, { name: e.target.value })}
+                    className="h-9"
                   />
                   <Input
-                    placeholder="Role"
+                    placeholder="e.g. Guitar"
                     value={member.role || ""}
-                    onChange={(e) =>
-                      handleUpdateMember(member.id, { role: e.target.value })
-                    }
-                    className="flex-[1.5]"
+                    onChange={(e) => handleUpdateMember(member.id, { role: e.target.value })}
+                    className="h-9 text-muted-foreground text-sm"
                   />
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Fee $"
-                    value={member.expectedGigFee ?? ""}
-                    onChange={(e) =>
-                      handleUpdateMember(member.id, {
-                        expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
-                      })
-                    }
-                    className="flex-1 min-w-[75px]"
-                  />
-                  {actType === "Band" && (
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={member.expectedGigFee ?? ""}
+                      onChange={(e) =>
+                        handleUpdateMember(member.id, {
+                          expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
+                        })
+                      }
+                      className="h-9 pl-6 text-right"
+                    />
+                  </div>
+                  {actType === "Band" ? (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => handleRemoveFromAct(member.id)}
                       title="Remove from act — kept in your member library"
                     >
                       <X className="w-4 h-4" />
                     </Button>
+                  ) : (
+                    <div className="w-9 shrink-0" />
                   )}
-                  {actType !== "Band" && <div className="w-8 shrink-0" />}
                 </div>
               ))}
             </div>
@@ -305,90 +318,83 @@ export function ActSetupDialog({
               <p className="text-sm font-medium text-destructive">{bandError}</p>
             )}
 
-            {actType === "Band" && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {atPlanLimit ? (
-                  <div className="w-full rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5 text-sm">
-                    <p className="font-medium text-amber-800 dark:text-amber-400">
-                      Free plans support up to {maxBandMembersForPlan(plan)} active band members.
-                    </p>
-                    <p className="text-amber-700 dark:text-amber-500 mt-0.5">
-                      <a href="/billing" className="underline underline-offset-2 font-medium">
-                        Upgrade to Pro
-                      </a>{" "}
-                      for larger band setups.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {!addingNew && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAddingNew(true)}
-                      >
-                        <Plus className="w-3.5 h-3.5 mr-1.5" />
-                        Add New Member
-                      </Button>
-                    )}
-                    {inactiveMembers.length > 0 && !addingNew && (
-                      <Select onValueChange={handleAddFromLibrary}>
-                        <SelectTrigger className="h-9 w-auto text-sm">
-                          <SelectValue placeholder="Add from Library" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inactiveMembers.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.name || "Unnamed"}
-                              {m.role ? ` (${m.role})` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </>
+            {/* Plan limit message — directly below member list */}
+            {actType === "Band" && atPlanLimit && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                Free plan supports up to {maxBandMembersForPlan(plan)} members.{" "}
+                <a href="/billing" className="underline underline-offset-2 font-medium">
+                  Upgrade to Pro
+                </a>{" "}
+                for larger bands.
+              </p>
+            )}
+
+            {/* Add member controls */}
+            {actType === "Band" && !atPlanLimit && (
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                {!addingNew && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAddingNew(true)}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />
+                    Add Member
+                  </Button>
+                )}
+                {inactiveMembers.length > 0 && !addingNew && (
+                  <Select onValueChange={handleAddFromLibrary}>
+                    <SelectTrigger className="h-9 w-auto text-sm">
+                      <SelectValue placeholder="Add from Library" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inactiveMembers.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name || "Unnamed"}
+                          {m.role ? ` (${m.role})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
             )}
 
             {addingNew && (
-              <div className="space-y-2 p-3 rounded-md border border-border/50 bg-muted/30 mt-2">
-                <p className="text-xs font-medium text-muted-foreground">New Band Member</p>
-                <div className="flex gap-2">
+              <div className="space-y-2 p-3 rounded-md border border-border/50 bg-muted/30 mt-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">New Member</p>
+                <div className="grid grid-cols-[1fr_0.8fr_80px] gap-2">
                   <Input
                     placeholder="Name *"
                     value={newMember.name}
-                    onChange={(e) =>
-                      setNewMember((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className="flex-[2]"
+                    onChange={(e) => setNewMember((prev) => ({ ...prev, name: e.target.value }))}
+                    className="h-9"
                     autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddNewMember();
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddNewMember(); }}
                   />
                   <Input
                     placeholder="Role (optional)"
                     value={newMember.role}
-                    onChange={(e) =>
-                      setNewMember((prev) => ({ ...prev, role: e.target.value }))
-                    }
-                    className="flex-[1.5]"
+                    onChange={(e) => setNewMember((prev) => ({ ...prev, role: e.target.value }))}
+                    className="h-9 text-muted-foreground text-sm"
                   />
-                  <Input
-                    type="number"
-                    min="0"
-                    placeholder="Fee $"
-                    value={newMember.expectedGigFee || ""}
-                    onChange={(e) =>
-                      setNewMember((prev) => ({
-                        ...prev,
-                        expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
-                      }))
-                    }
-                    className="flex-1 min-w-[75px]"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0"
+                      value={newMember.expectedGigFee || ""}
+                      onChange={(e) =>
+                        setNewMember((prev) => ({
+                          ...prev,
+                          expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
+                        }))
+                      }
+                      className="h-9 pl-6 text-right"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -417,16 +423,12 @@ export function ActSetupDialog({
 
           {/* Accommodation */}
           <div className="space-y-3 pt-1 border-t border-border/40">
-            <label className="text-sm font-medium">Accommodation</label>
-            <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-              <div>
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
-                  Required by Default
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Does this act usually need accommodation?
-                </p>
+            <p className="text-sm font-semibold text-foreground">Accommodation</p>
+
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 px-3 py-3">
+              <div className="flex items-center gap-2">
+                <BedDouble className="w-4 h-4 text-muted-foreground shrink-0" />
+                <p className="text-sm font-medium text-foreground">This act requires accommodation</p>
               </div>
               <Switch
                 checked={accommodationRequired}
@@ -439,10 +441,11 @@ export function ActSetupDialog({
                 }}
               />
             </div>
+
             {accommodationRequired && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 pl-1">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Single Rooms</label>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Single Rooms</label>
                   <Input
                     type="number"
                     min="0"
@@ -452,7 +455,7 @@ export function ActSetupDialog({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Double / Queen Rooms</label>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Double / Queen</label>
                   <Input
                     type="number"
                     min="0"
@@ -461,7 +464,7 @@ export function ActSetupDialog({
                     onChange={(e) => setDoubleRoomsDefault(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                   />
                 </div>
-                {accommodationRequired && (singleRoomsDefault + doubleRoomsDefault) < 1 && (
+                {(singleRoomsDefault + doubleRoomsDefault) < 1 && (
                   <p className="col-span-2 text-xs text-destructive">
                     At least one room required when accommodation is enabled.
                   </p>
