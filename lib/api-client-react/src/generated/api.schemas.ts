@@ -27,6 +27,8 @@ export interface Profile {
   /** @nullable */
   bandMembers: string | null;
   /** @nullable */
+  activeMemberIds?: string | null;
+  /** @nullable */
   defaultVehicleId: number | null;
   vehicleType: string;
   /** @nullable */
@@ -70,6 +72,8 @@ export interface CreateProfileBody {
   peopleCount: number;
   /** @nullable */
   bandMembers?: string | null;
+  /** @nullable */
+  activeMemberIds?: string | null;
   /** @nullable */
   defaultVehicleId?: number | null;
   vehicleType?: string;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
 import { useCreateProfile, useUpdateProfile, useGetProfile } from "@workspace/api-client-react";
@@ -24,13 +24,17 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Plus, Trash2, Car, Truck, Bus } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { ChevronLeft, Save, Car, Truck, Bus, Settings2, BookUser } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { ACCOM_TYPES, ACCOM_RATES } from "@/lib/gig-constants";
-import { canAddBandMember, canUseAdvancedDriving, maxBandMembersForPlan } from "@/lib/plan-limits";
+import { canUseAdvancedDriving } from "@/lib/plan-limits";
 import type { Plan } from "@/lib/plan-limits";
+import { ActSetupDialog, type ActSetupData } from "@/components/act-setup-dialog";
+import { MemberLibraryDialog } from "@/components/member-library-dialog";
+import type { Member } from "@/types/member";
+import { migrateOldMembers, derivePeopleCount, resolveActiveMembers } from "@/lib/member-utils";
 
 const VEHICLE_PRESETS = [
   { label: "Car", value: "Car", consumption: 7, Icon: Car },
@@ -38,7 +42,8 @@ const VEHICLE_PRESETS = [
   { label: "Bus", value: "Bus", consumption: 16, Icon: Bus },
 ] as const;
 
-const memberSchema = z.object({
+const memberWithIdSchema = z.object({
+  id: z.string(),
   name: z.string(),
   role: z.string().optional(),
   expectedGigFee: z.coerce.number().min(0).optional(),
@@ -50,8 +55,9 @@ const profileSchema = z.object({
   homeBase: z.string().optional().nullable(),
   homeBaseLat: z.number().optional().nullable(),
   homeBaseLng: z.number().optional().nullable(),
-  peopleCount: z.coerce.number().min(1, "Must have at least 1 person"),
-  bandMembers: z.array(memberSchema).optional(),
+  peopleCount: z.coerce.number().min(1),
+  memberLibrary: z.array(memberWithIdSchema).optional(),
+  activeMemberIds: z.array(z.string()).optional(),
   expectedGigFee: z.coerce.number().min(0),
   minTakeHomePerPerson: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
@@ -65,18 +71,16 @@ const profileSchema = z.object({
   maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
 }).superRefine((data, ctx) => {
-  if (data.actType === "Band" && (data.bandMembers?.length ?? 0) < 3) {
+  if (data.actType === "Band" && (data.activeMemberIds?.length ?? 0) < 3) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "Band must have at least 3 members",
-      path: ["bandMembers"],
+      message: "Band must have at least 3 active members. Use 'Update Act Setup' to configure.",
+      path: ["activeMemberIds"],
     });
   }
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
-
-const EMPTY_MEMBER = () => ({ name: "", role: "", expectedGigFee: 0 });
 
 export default function ProfileForm() {
   const [, setLocation] = useLocation();
@@ -95,6 +99,9 @@ export default function ProfileForm() {
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
 
+  const [actSetupOpen, setActSetupOpen] = useState(false);
+  const [memberLibraryOpen, setMemberLibraryOpen] = useState(false);
+
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -104,7 +111,8 @@ export default function ProfileForm() {
       homeBaseLat: null,
       homeBaseLng: null,
       peopleCount: 1,
-      bandMembers: [],
+      memberLibrary: [],
+      activeMemberIds: [],
       expectedGigFee: 0,
       minTakeHomePerPerson: 0,
       avgFoodPerDay: 0,
@@ -120,20 +128,13 @@ export default function ProfileForm() {
     },
   });
 
-  const { fields: memberFields, append: appendMember, remove: removeMember, replace: replaceMembers } = useFieldArray({
-    control: form.control,
-    name: "bandMembers",
-  });
-
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
+  const memberLibraryWatch = form.watch("memberLibrary") ?? [];
+  const activeMemberIdsWatch = form.watch("activeMemberIds") ?? [];
 
-  // Derive peopleCount from actType + member count — never let user edit it manually
-  const derivedPeopleCount =
-    actType === "Solo" ? 1
-    : actType === "Duo" ? 2
-    : memberFields.length;
+  const derivedPeopleCount = derivePeopleCount(actType, activeMemberIdsWatch);
 
   useEffect(() => {
     form.setValue("peopleCount", derivedPeopleCount, { shouldValidate: false });
@@ -144,18 +145,13 @@ export default function ProfileForm() {
   useEffect(() => {
     if (profile) {
       loadedFromProfileRef.current = true;
-      let parsedMembers: { name: string; role?: string; expectedGigFee?: number }[] = [];
-      try {
-        if (profile.bandMembers) {
-          const raw = JSON.parse(profile.bandMembers);
-          parsedMembers = (Array.isArray(raw) ? raw : []).map((m: Record<string, unknown>) => ({
-            name: String(m.name ?? ""),
-            role: m.role ? String(m.role) : undefined,
-            expectedGigFee: m.expectedGigFee != null ? Number(m.expectedGigFee) : 0,
-          }));
-        }
-      } catch {}
-      const safeActType = ["Solo", "Duo", "Band"].includes(profile.actType) ? profile.actType : "Solo";
+      const safeActType = ["Solo", "Duo", "Band"].includes(profile.actType)
+        ? profile.actType
+        : "Solo";
+      const { library, activeMemberIds } = migrateOldMembers(
+        profile.bandMembers,
+        profile.activeMemberIds
+      );
       form.reset({
         name: profile.name,
         actType: safeActType,
@@ -163,7 +159,8 @@ export default function ProfileForm() {
         homeBaseLat: typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null,
         homeBaseLng: typeof profile.homeBaseLng === "number" ? profile.homeBaseLng : null,
         peopleCount: profile.peopleCount,
-        bandMembers: parsedMembers,
+        memberLibrary: library,
+        activeMemberIds,
         expectedGigFee: profile.expectedGigFee ?? 0,
         minTakeHomePerPerson: profile.minTakeHomePerPerson ?? 0,
         avgFoodPerDay: profile.avgFoodPerDay,
@@ -180,44 +177,35 @@ export default function ProfileForm() {
     }
   }, [profile, form]);
 
-  const prevActTypeRef = useRef<string | null>(null);
+  function handleActSetupSave(data: ActSetupData) {
+    form.setValue("actType", data.actType, { shouldValidate: true });
+    form.setValue("memberLibrary", data.memberLibrary, { shouldValidate: false });
+    form.setValue("activeMemberIds", data.activeMemberIds, { shouldValidate: true });
+    const count = derivePeopleCount(data.actType, data.activeMemberIds);
+    form.setValue("peopleCount", count, { shouldValidate: false });
+    setActSetupOpen(false);
+  }
 
-  useEffect(() => {
-    if (prevActTypeRef.current === actType) return;
-    const prev = prevActTypeRef.current;
-    prevActTypeRef.current = actType;
-
-    const current = form.getValues("bandMembers") ?? [];
-
-    if (actType === "Solo") {
-      if (current.length === 0) {
-        replaceMembers([EMPTY_MEMBER()]);
-      } else if (current.length > 1) {
-        replaceMembers(current.slice(0, 1));
-      }
-    } else if (actType === "Duo") {
-      if (current.length < 2) {
-        const needed = 2 - current.length;
-        replaceMembers([...current, ...Array.from({ length: needed }, EMPTY_MEMBER)]);
-      } else if (current.length > 2) {
-        replaceMembers(current.slice(0, 2));
-      }
-    } else if (actType === "Band") {
-      if (current.length === 0) {
-        replaceMembers([EMPTY_MEMBER(), EMPTY_MEMBER(), EMPTY_MEMBER()]);
-      } else if (prev === null && current.length > 0) {
-        // initial mount with existing members — no change
-      }
-    }
-  }, [actType, form, replaceMembers]);
+  function handleLibrarySave(updatedLibrary: Member[]) {
+    form.setValue("memberLibrary", updatedLibrary, { shouldValidate: false });
+    const currentActive = form.getValues("activeMemberIds") ?? [];
+    const validIds = new Set(updatedLibrary.map((m) => m.id));
+    const cleanedActive = currentActive.filter((id) => validIds.has(id));
+    form.setValue("activeMemberIds", cleanedActive, { shouldValidate: true });
+    setMemberLibraryOpen(false);
+  }
 
   const onSubmit = (data: ProfileFormValues) => {
+    const { memberLibrary, activeMemberIds: activeIdsArray, ...rest } = data;
+    const activeIds = activeIdsArray ?? [];
+    const peopleCount = derivePeopleCount(rest.actType, activeIds);
+
     const payload = {
-      ...data,
-      bandMembers: data.bandMembers && data.bandMembers.length > 0
-        ? JSON.stringify(data.bandMembers)
-        : null,
-      avgAccomPerNight: data.avgAccomPerNight,
+      ...rest,
+      bandMembers:
+        memberLibrary && memberLibrary.length > 0 ? JSON.stringify(memberLibrary) : null,
+      activeMemberIds: activeIds.length > 0 ? JSON.stringify(activeIds) : null,
+      peopleCount,
     };
 
     if (isEditing) {
@@ -250,7 +238,8 @@ export default function ProfileForm() {
   };
 
   const isPending = createProfile.isPending || updateProfile.isPending;
-  const canAddRemoveMembers = actType === "Band";
+  const activeMembers = resolveActiveMembers(memberLibraryWatch as Member[], activeMemberIdsWatch);
+  const actSetupError = form.formState.errors.activeMemberIds?.message as string | undefined;
 
   if (isEditing && isLoadingProfile) {
     return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>;
@@ -259,11 +248,18 @@ export default function ProfileForm() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl mx-auto">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/profiles")} className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setLocation("/profiles")}
+          className="h-8 w-8"
+        >
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Profile" : "New Profile"}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isEditing ? "Edit Profile" : "New Profile"}
+          </h1>
           <p className="text-muted-foreground mt-1">Set up how this act tours.</p>
         </div>
       </div>
@@ -295,33 +291,6 @@ export default function ProfileForm() {
 
                 <FormField
                   control={form.control}
-                  name="actType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Act Type</FormLabel>
-                      <Select
-                        key={`actType-${isEditing ? (profile?.actType ?? "loading") : "new"}`}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select act type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Solo">Solo</SelectItem>
-                          <SelectItem value="Duo">Duo</SelectItem>
-                          <SelectItem value="Band">Band</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="homeBase"
                   render={({ field }) => (
                     <FormItem>
@@ -344,132 +313,122 @@ export default function ProfileForm() {
                     </FormItem>
                   )}
                 />
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium">People on Tour</label>
-                  <div className="flex items-center h-9 px-3 rounded-md border border-border/60 bg-muted/40 text-sm text-foreground">
-                    {derivedPeopleCount}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Derived from act type and member count. Used for food and accommodation costs.
-                  </p>
-                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Act Members */}
+          {/* Act Setup */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader>
-              <CardTitle>
-                {actType === "Solo" ? "Act Member" : actType === "Duo" ? "Duo Members" : "Band Members"}
-              </CardTitle>
+              <CardTitle>Act Setup</CardTitle>
               <CardDescription>
-                {actType === "Solo" && "Your name and expected fee for this act."}
-                {actType === "Duo" && "Both members — names, roles, and expected fees."}
-                {actType === "Band" && "Add all band members. Band requires at least 3 members."}
+                Act type and lineup. Members are saved in your library even if removed from the active act.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {memberFields.map((field, index) => (
-                <div key={field.id} className="flex gap-2 items-start">
-                  <FormField
-                    control={form.control}
-                    name={`bandMembers.${index}.name`}
-                    render={({ field }) => (
-                      <FormItem className="flex-[2]">
-                        {index === 0 && <FormLabel>Name</FormLabel>}
-                        <FormControl>
-                          <Input placeholder="Member name" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`bandMembers.${index}.role`}
-                    render={({ field }) => (
-                      <FormItem className="flex-[1.5]">
-                        {index === 0 && <FormLabel>Role (optional)</FormLabel>}
-                        <FormControl>
-                          <Input placeholder="e.g. Guitar" {...field} value={field.value ?? ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`bandMembers.${index}.expectedGigFee`}
-                    render={({ field }) => (
-                      <FormItem className="flex-1 min-w-[90px]">
-                        {index === 0 && <FormLabel>Fee ($)</FormLabel>}
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1"
-                            placeholder="0"
-                            {...field}
-                            value={field.value ?? ""}
-                            onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {canAddRemoveMembers && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={`text-muted-foreground hover:text-destructive shrink-0 ${index === 0 ? "mt-6" : ""}`}
-                      onClick={() => removeMember(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-
-              {/* Band minimum error */}
-              {actType === "Band" && (() => {
-                const err = form.formState.errors.bandMembers;
-                const msg = (err as { message?: string; root?: { message?: string } } | undefined)?.message
-                  || (err as { message?: string; root?: { message?: string } } | undefined)?.root?.message;
-                return msg ? <p className="text-sm font-medium text-destructive">{msg}</p> : null;
-              })()}
-
-              {canAddRemoveMembers && (() => {
-                const atLimit = !canAddBandMember(plan as Plan, memberFields.length);
-                const memberLimit = maxBandMembersForPlan(plan as Plan);
-                if (atLimit) {
-                  return (
-                    <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-3 py-2.5 text-sm">
-                      <p className="font-medium text-amber-800 dark:text-amber-400">
-                        Free plans support up to {memberLimit} band members.
-                      </p>
-                      <p className="text-amber-700 dark:text-amber-500 mt-0.5">
-                        <a href="/billing" className="underline underline-offset-2 font-medium">Upgrade to Pro</a> for larger band setups.
-                      </p>
-                    </div>
-                  );
-                }
-                return (
+            <CardContent className="space-y-4">
+              {activeMemberIdsWatch.length === 0 && memberLibraryWatch.length === 0 ? (
+                <div className="text-center py-6 rounded-lg border border-dashed border-border/60 bg-muted/20">
+                  <Settings2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                  <p className="text-sm text-muted-foreground">
+                    No act configured yet.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                    Set your act type and add members to get started.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="mt-1"
-                    onClick={() => appendMember(EMPTY_MEMBER())}
+                    onClick={() => setActSetupOpen(true)}
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    Add Band Member
+                    <Settings2 className="w-3.5 h-3.5 mr-1.5" />
+                    Setup Act
                   </Button>
-                );
-              })()}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                        Act Type
+                      </div>
+                      <div className="font-semibold text-foreground">{actType}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                        People on Tour
+                      </div>
+                      <div className="font-semibold text-foreground">{derivedPeopleCount}</div>
+                    </div>
+                  </div>
+
+                  {activeMembers.length > 0 && (
+                    <div>
+                      <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1.5">
+                        Active Members
+                      </div>
+                      <div className="space-y-1">
+                        {activeMembers.map((m) => (
+                          <div
+                            key={m.id}
+                            className="flex items-center justify-between text-sm py-1 px-2 rounded-md bg-muted/30"
+                          >
+                            <span className="text-foreground font-medium">
+                              {m.name || <span className="text-muted-foreground italic">Unnamed</span>}
+                              {m.role && (
+                                <span className="text-muted-foreground font-normal ml-1.5 text-xs">
+                                  {m.role}
+                                </span>
+                              )}
+                            </span>
+                            {m.expectedGigFee != null && m.expectedGigFee > 0 && (
+                              <span className="text-primary font-medium tabular-nums text-xs">
+                                ${m.expectedGigFee}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {actSetupError && (
+                    <p className="text-sm font-medium text-destructive">{actSetupError}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActSetupOpen(true)}
+                    >
+                      <Settings2 className="w-3.5 h-3.5 mr-1.5" />
+                      Update Act Setup
+                    </Button>
+                    {memberLibraryWatch.length > 0 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMemberLibraryOpen(true)}
+                      >
+                        <BookUser className="w-3.5 h-3.5 mr-1.5" />
+                        Manage Member Library
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-0.5">
+                  People on Tour (used for food & accommodation costs)
+                </div>
+                <div className="flex items-center h-9 px-3 rounded-md border border-border/60 bg-muted/40 text-sm text-foreground w-24">
+                  {derivedPeopleCount}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -477,7 +436,9 @@ export default function ProfileForm() {
           <Card className="border-border/50 bg-card/50">
             <CardHeader>
               <CardTitle>Money</CardTitle>
-              <CardDescription>What you expect to earn and what each person needs to make it worthwhile.</CardDescription>
+              <CardDescription>
+                What you expect to earn and what each person needs to make it worthwhile.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -545,50 +506,66 @@ export default function ProfileForm() {
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
                     <div>
-                      <FormLabel className="text-sm font-medium cursor-pointer">Accommodation required</FormLabel>
+                      <FormLabel className="text-sm font-medium cursor-pointer">
+                        Accommodation required
+                      </FormLabel>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Does this act usually need a place to stay?
                       </p>
                     </div>
                     <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}
               />
 
               {accommodationRequired && (
-                <FormField
-                  control={form.control}
-                  name="accommodationType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Accommodation Type</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value || ""}
-                      >
+                <>
+                  <FormField
+                    control={form.control}
+                    name="accommodationType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Accommodation Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select room type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {ACCOM_TYPES.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}{" "}
+                                <span className="text-muted-foreground text-xs ml-1">
+                                  ${ACCOM_RATES[t]}/night
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="avgAccomPerNight"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Avg. Accommodation ($ / night)</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select room type" />
-                          </SelectTrigger>
+                          <Input type="number" min="0" step="0.01" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          {ACCOM_TYPES.map(t => (
-                            <SelectItem key={t} value={t}>
-                              {t} <span className="text-muted-foreground text-xs ml-1">${ACCOM_RATES[t]}/night</span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
               )}
+
             </CardContent>
           </Card>
 
@@ -607,7 +584,7 @@ export default function ProfileForm() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Vehicle Type</label>
                   <div className="flex gap-2">
-                    {VEHICLE_PRESETS.map(preset => (
+                    {VEHICLE_PRESETS.map((preset) => (
                       <button
                         key={preset.value}
                         type="button"
@@ -628,7 +605,13 @@ export default function ProfileForm() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Simple presets — <a href="/billing" className="text-primary underline underline-offset-2">customise in Pro</a>
+                    Simple presets —{" "}
+                    <a
+                      href="/billing"
+                      className="text-primary underline underline-offset-2"
+                    >
+                      customise in Pro
+                    </a>
                   </p>
                 </div>
               ) : (
@@ -642,7 +625,7 @@ export default function ProfileForm() {
                         <Select
                           onValueChange={(val) => {
                             field.onChange(val);
-                            const preset = VEHICLE_PRESETS.find(p => p.value === val);
+                            const preset = VEHICLE_PRESETS.find((p) => p.value === val);
                             if (preset) form.setValue("fuelConsumption", preset.consumption);
                           }}
                           value={field.value}
@@ -653,8 +636,10 @@ export default function ProfileForm() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {VEHICLE_PRESETS.map(p => (
-                              <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                            {VEHICLE_PRESETS.map((p) => (
+                              <SelectItem key={p.value} value={p.value}>
+                                {p.label}
+                              </SelectItem>
                             ))}
                             <SelectItem value="Custom">Custom</SelectItem>
                           </SelectContent>
@@ -671,7 +656,11 @@ export default function ProfileForm() {
                       <FormItem>
                         <FormLabel>Vehicle Name (optional)</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. The Band Van" {...field} value={field.value || ""} />
+                          <Input
+                            placeholder="e.g. The Band Van"
+                            {...field}
+                            value={field.value || ""}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -727,16 +716,55 @@ export default function ProfileForm() {
                         <FormItem>
                           <FormLabel>Preferred max driving hours per day</FormLabel>
                           <FormControl>
-                            <Input type="number" min="1" max="24" step="1" {...field} value={field.value ?? 8} />
+                            <Input
+                              type="number"
+                              min="1"
+                              max="24"
+                              step="1"
+                              {...field}
+                              value={field.value ?? 8}
+                            />
                           </FormControl>
                           <p className="text-xs text-muted-foreground">
-                            Used to recommend stopovers and accommodation nights on the results screen.
+                            Used to recommend stopovers and accommodation nights on the results
+                            screen.
                           </p>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   )}
+                </div>
+              )}
+
+              {!isPro && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="defaultFuelPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Default Fuel Price ($/L)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 1.85"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(e) =>
+                              field.onChange(e.target.value === "" ? null : e.target.value)
+                            }
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Fallback fuel price for calculations.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               )}
             </CardContent>
@@ -770,11 +798,18 @@ export default function ProfileForm() {
           </Card>
 
           <div className="flex justify-end pt-2">
-            <Button type="button" variant="ghost" onClick={() => setLocation("/profiles")} className="mr-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setLocation("/profiles")}
+              className="mr-2"
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Saving..." : (
+              {isPending ? (
+                "Saving..."
+              ) : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
                   {isEditing ? "Save Changes" : "Create Profile"}
@@ -784,6 +819,24 @@ export default function ProfileForm() {
           </div>
         </form>
       </Form>
+
+      <ActSetupDialog
+        open={actSetupOpen}
+        onOpenChange={setActSetupOpen}
+        initialActType={actType}
+        initialLibrary={memberLibraryWatch as Member[]}
+        initialActiveMemberIds={activeMemberIdsWatch}
+        plan={plan as Plan}
+        onSave={handleActSetupSave}
+      />
+
+      <MemberLibraryDialog
+        open={memberLibraryOpen}
+        onOpenChange={setMemberLibraryOpen}
+        library={memberLibraryWatch as Member[]}
+        activeMemberIds={activeMemberIdsWatch}
+        onSave={handleLibrarySave}
+      />
     </div>
   );
 }

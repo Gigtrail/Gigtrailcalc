@@ -1,0 +1,177 @@
+Refactor the Gig Trail Profile system so Act Type is displayed as static text in the profile summary and edited only through a dedicated update flow. Also make band members persist in the profile even when they are removed from the current act.
+
+GOAL
+Improve reliability of profile saving by removing fragile always-editable Act Type fields, and create a reusable member library so band members are remembered even if they are no longer active in the current act setup.
+
+PART 1: ACT TYPE AS STATIC PROFILE TEXT
+
+1. In the main profile section:
+- display Act Type as read-only/static text
+- display People on Tour as read-only/static text
+- do not render Act Type as a normal always-editable selector in the profile summary
+
+Example:
+- Act Type: Duo
+- People on Tour: 2
+
+2. Add a button:
+- “Update Act Setup”
+
+3. When the user clicks “Update Act Setup”:
+- open the dedicated act setup flow/screen/modal
+- only there can the user change:
+  - act type
+  - active members
+  - band setup
+
+4. Save behaviour:
+- act type changes should save only through this dedicated update flow
+- after save, the static profile summary should refresh correctly
+
+PART 2: REMEMBER BAND MEMBERS EVEN IF REMOVED
+
+Current problem:
+Band members are being forgotten/removed entirely when taken out of the act.
+
+New requirement:
+Band members should remain saved in the profile even if they are no longer part of the active act.
+
+Implement a separation between:
+1. Member Library
+2. Active Act Members
+
+MEMBER LIBRARY
+- Stores all members ever added to this profile
+- Members should persist unless the user explicitly deletes them
+
+ACTIVE ACT MEMBERS
+- Stores which members are currently part of the selected act setup
+- Removing a member from the act should only remove them from the active act
+- It should NOT delete the member from the member library
+
+RECOMMENDED DATA MODEL
+
+Profile:
+- id
+- actType: "solo" | "duo" | "band"
+- memberLibrary: Member[]
+- activeMemberIds: string[]
+
+Member:
+- id: string
+- name: string
+- role?: string
+- expectedGigFee?: number
+
+IMPORTANT
+Do not tightly couple “member exists” with “member is active in current act”.
+
+PART 3: ACT SETUP FLOW
+
+Inside the “Update Act Setup” flow:
+
+1. Solo
+- exactly 1 active member
+
+2. Duo
+- exactly 2 active members
+
+3. Band
+- minimum 3 active members
+- allow:
+  - + Add Band Member
+  - Add Existing Member from Member Library
+  - Create New Member
+
+4. When removing a member from the current act:
+- remove them from activeMemberIds only
+- keep them in memberLibrary
+
+PART 4: MEMBER LIBRARY MANAGEMENT
+
+Add a simple way to reuse previously saved members.
+
+In the act setup flow, allow:
+- selecting an existing member from the library
+- adding that member back into the current act
+
+Optional but recommended:
+- separate button/section:
+  - “Manage Member Library”
+
+This can allow:
+- viewing all saved members
+- editing member details
+- explicitly deleting a member only if the user chooses to
+
+PART 5: PROFILE SUMMARY DISPLAY
+
+In the main profile summary, show:
+- Act Type
+- People on Tour
+- Active Members
+
+Example:
+Act Type: Band
+People on Tour: 4
+Active Members:
+- Julian James — $350
+- Beci Kate — $300
+- Bass Player — $250
+- Drummer — $250
+
+Buttons:
+- Update Act Setup
+- Manage Member Library
+
+PART 6: SAVE / LOAD RELIABILITY
+
+Ensure all of the following persist correctly:
+- actType
+- memberLibrary
+- activeMemberIds
+
+On profile reload:
+- Act Type should display correctly as static text
+- active members should resolve from activeMemberIds
+- previously removed members should still exist in memberLibrary
+
+PART 7: DATA SAFETY
+
+- do not lose members when switching act types
+- when changing Band -> Duo or Solo:
+  - reduce activeMemberIds appropriately
+  - do not delete extra members from memberLibrary
+
+Examples:
+- Band with 5 members changes to Duo
+- keep first 2 active
+- remaining 3 stay saved in memberLibrary
+
+PART 8: TECHNICAL REQUIREMENTS
+
+Keep this modular.
+
+Suggested files:
+- /types/profile.ts
+- /types/member.ts
+- /services/actSetupService.ts
+- /services/memberLibraryService.ts
+
+Use helper functions for:
+- resolving active members from memberLibrary + activeMemberIds
+- updating active members without deleting stored members
+- deriving People on Tour from activeMemberIds count and act type
+
+DELIVERABLES
+
+Please implement:
+- static Act Type display in profile summary
+- Update Act Setup button
+- dedicated act setup editing flow
+- persistent member library
+- activeMemberIds system
+- safe member removal from act without deleting saved member data
+- correct save/load behaviour
+- summary display with active members and expected gig fee
+- ability to reuse previously saved members

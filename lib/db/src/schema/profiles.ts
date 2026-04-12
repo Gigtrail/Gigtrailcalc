@@ -12,6 +12,7 @@ export const profilesTable = pgTable("profiles", {
   homeBaseLng: numeric("home_base_lng", { precision: 10, scale: 6 }),
   peopleCount: integer("people_count").notNull().default(1),
   bandMembers: text("band_members"),
+  activeMemberIds: text("active_member_ids"),
   defaultVehicleId: integer("default_vehicle_id"),
   vehicleType: text("vehicle_type").notNull().default("Van"),
   vehicleName: text("vehicle_name"),
