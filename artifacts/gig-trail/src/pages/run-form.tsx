@@ -423,8 +423,25 @@ export default function RunForm() {
 
         const actType = profile?.actType ?? null;
 
+        const toNum = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
         const payload = {
           ...vals,
+          fee: toNum(vals.fee),
+          capacity: toNum(vals.capacity),
+          ticketPrice: toNum(vals.ticketPrice),
+          expectedAttendancePct: toNum(vals.expectedAttendancePct),
+          splitPct: toNum(vals.splitPct),
+          guarantee: toNum(vals.guarantee),
+          merchEstimate: toNum(vals.merchEstimate),
+          distanceKm: toNum(vals.distanceKm),
+          fuelEfficiency: toNum(vals.fuelEfficiency),
+          fuelPrice: toNum(vals.fuelPrice),
+          accommodationNights: toNum(vals.accommodationNights),
+          singleRooms: toNum(vals.singleRooms),
+          doubleRooms: toNum(vals.doubleRooms),
+          foodCost: toNum(vals.foodCost),
+          marketingCost: toNum(vals.marketingCost),
+          extraCosts: toNum(vals.extraCosts),
           venueName: vName || null,
           actType,
           accommodationCost: computed.accommodationCost,

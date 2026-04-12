@@ -19,9 +19,12 @@ import {
   Save,
   Edit,
   Users,
+  CheckCircle2,
 } from "lucide-react";
 import { usePlan } from "@/hooks/use-plan";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
+import { cn } from "@/lib/utils";
+import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -76,6 +79,7 @@ export default function RunResults() {
   const [, setLocation] = useLocation();
   const [result, setResult] = useState<GigTrailResultData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
@@ -145,6 +149,18 @@ export default function RunResults() {
   const profile = profiles?.find(p => p.id === formData.profileId);
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
+
+  // Payout calculations
+  const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
+    ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
+    : { library: [], activeMemberIds: [] };
+  const activeMembers = resolveActiveMembers(memberLibrary, activeMemberIdList);
+  const membersWithFees = activeMembers.filter(m => (m.expectedGigFee ?? 0) > 0);
+  const showPayoutSection = activeMembers.length > 1;
+  const totalMemberFees = activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0);
+  const profitAfterMemberFees = netProfit - totalMemberFees;
+  const splitPerMember = activeMembers.length > 0 ? netProfit / activeMembers.length : 0;
+  const fullFeesCovered = profitAfterMemberFees >= 0;
 
   const totalDriveHours = totalDriveMinutes ? totalDriveMinutes / 60 : 0;
 
@@ -489,6 +505,134 @@ export default function RunResults() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Member Payout */}
+      {showPayoutSection && (
+        <Card className="border-border/50">
+          <CardContent className="pt-5 pb-5">
+            {/* Header + mode toggle */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-muted-foreground" />
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Member Payout</div>
+              </div>
+              <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPayoutMode("full")}
+                  className={cn(
+                    "px-2.5 py-1 transition-colors",
+                    payoutMode === "full"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  Full Fees
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayoutMode("split")}
+                  className={cn(
+                    "px-2.5 py-1 transition-colors",
+                    payoutMode === "split"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  Split Evenly
+                </button>
+              </div>
+            </div>
+
+            {/* Warning: full fees not covered */}
+            {payoutMode === "full" && !fullFeesCovered && membersWithFees.length > 0 && (
+              <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-medium">This show doesn't cover full fees</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    You're ${fmt(Math.abs(profitAfterMemberFees))} short.{" "}
+                    <button
+                      onClick={() => setPayoutMode("split")}
+                      className="underline underline-offset-2 font-medium hover:text-amber-900"
+                    >
+                      Switch to Split Evenly
+                    </button>{" "}
+                    to see realistic payouts.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Split evenly label */}
+            {payoutMode === "split" && (
+              <p className="text-xs text-muted-foreground mb-3">
+                Even split based on available profit ({activeMembers.length} people)
+              </p>
+            )}
+
+            {/* Member rows */}
+            <div className="space-y-0 divide-y divide-border/30">
+              {activeMembers.map((member) => {
+                const expectedFee = member.expectedGigFee ?? 0;
+                const isCovered = payoutMode === "full"
+                  ? (totalMemberFees <= netProfit || expectedFee === 0)
+                  : true;
+                const actualPayout = payoutMode === "split" ? splitPerMember : expectedFee;
+
+                return (
+                  <div key={member.id} className="flex items-center justify-between py-2.5 gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {payoutMode === "full" && membersWithFees.length > 0 && (
+                        isCovered ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                        )
+                      )}
+                      <span className="text-sm font-medium text-foreground truncate">{member.name}</span>
+                      {member.role && (
+                        <span className="text-xs text-muted-foreground shrink-0">{member.role}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {payoutMode === "split" && expectedFee > 0 && (
+                        <span className="text-xs text-muted-foreground line-through">
+                          ${fmt(expectedFee)}
+                        </span>
+                      )}
+                      <span className={cn(
+                        "text-sm font-semibold tabular-nums",
+                        payoutMode === "full"
+                          ? (expectedFee === 0 ? "text-muted-foreground" : isCovered ? "text-green-700" : "text-amber-700")
+                          : (actualPayout >= 0 ? "text-foreground" : "text-red-700")
+                      )}>
+                        {payoutMode === "full"
+                          ? (expectedFee > 0 ? `$${fmt(expectedFee)}` : "—")
+                          : `${actualPayout >= 0 ? "" : "−"}$${fmt(Math.abs(actualPayout))}`
+                        }
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary line */}
+            {payoutMode === "full" && totalMemberFees > 0 && (
+              <div className="flex justify-between items-center border-t border-border/40 pt-2.5 mt-1">
+                <span className="text-xs text-muted-foreground">After member fees</span>
+                <span className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  profitAfterMemberFees >= 0 ? "text-green-700" : "text-red-700"
+                )}>
+                  {profitAfterMemberFees >= 0 ? "+" : "−"}${fmt(Math.abs(profitAfterMemberFees))}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Smart Insights */}
       {insights.length > 0 && (
