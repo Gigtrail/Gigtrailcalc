@@ -394,7 +394,7 @@ export default function RunForm() {
       try {
         const vName = vals.venueName?.trim();
         if (vName) {
-          await createOrUpdateVenue.mutateAsync({ data: { name: vName, city: vals.destination || "" } });
+          await createOrUpdateVenue.mutateAsync({ data: { venueName: vName, city: vals.destination || "" } });
         }
 
         const payload = {
@@ -804,7 +804,12 @@ export default function RunForm() {
                           </FormControl>
                           {routeCalcFailed && (
                             <p className="text-xs text-amber-600">
-                              Couldn't calculate route — enter distance manually
+                              Route auto-calc failed — enter distance manually above, or make sure you select a location from the dropdown suggestions
+                            </p>
+                          )}
+                          {!routeCalcFailed && (
+                            <p className="text-xs text-muted-foreground">
+                              Auto-filled when you select locations from the dropdown, or enter manually
                             </p>
                           )}
                           <FormMessage />

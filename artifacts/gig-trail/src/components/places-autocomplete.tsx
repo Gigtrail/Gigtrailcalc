@@ -17,20 +17,30 @@ interface PlacesAutocompleteProps {
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
-// Singleton script loader
+// Singleton script loader — tracks which key was loaded so key changes force a reload
 type ScriptStatus = "idle" | "loading" | "loaded" | "error";
 let scriptStatus: ScriptStatus = "idle";
+let loadedApiKey: string | null = null;
 const readyCallbacks: Array<() => void> = [];
 
 function loadGoogleMaps(apiKey: string): void {
-  if (scriptStatus === "loaded") {
+  // Already loaded with the same key — fire callbacks immediately
+  if (scriptStatus === "loaded" && loadedApiKey === apiKey) {
     readyCallbacks.forEach(cb => cb());
     readyCallbacks.length = 0;
     return;
   }
+  // Key changed — remove old script and reset
+  if (loadedApiKey && loadedApiKey !== apiKey) {
+    const old = document.querySelector(`script[src*="maps.googleapis.com"]`);
+    if (old) old.remove();
+    scriptStatus = "idle";
+    loadedApiKey = null;
+  }
   if (scriptStatus === "loading") return;
 
   scriptStatus = "loading";
+  loadedApiKey = apiKey;
   const script = document.createElement("script");
   script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&callback=__gmapsReady`;
   script.async = true;
