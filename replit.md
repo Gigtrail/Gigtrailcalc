@@ -106,8 +106,9 @@ A full-stack web app for touring musicians to calculate whether a single show or
 
 ### App tables (lib/db/src/schema/)
 - `users` — user accounts linked to Clerk (id = Clerk userId, email, stripeCustomerId, stripeSubscriptionId, plan)
-- `profiles` — artist/band profiles (has userId)
-- `vehicles` — vehicles with fuel consumption (has userId)
+- `profiles` — artist/band profiles (has userId); `defaultVehicleId` = per-act default garage vehicle
+- `vehicles` — vehicles with fuel consumption (has userId); `isDefault` = legacy global default (replaced by per-act via profiles.defaultVehicleId)
+- `vehicle_act_assignments` — many-to-many: vehicles ↔ profiles (acts); composite PK (vehicleId, actId)
 - `runs` — single show calculations (has userId); includes `calculation_snapshot jsonb` storing the full result at time of calculation
 - `tours` — multi-stop tour headers (has userId)
 - `tour_stops` — individual stops within a tour
@@ -121,7 +122,8 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/api/me` — current user + plan + limits
 - `/api/me/sync-plan` — POST to resync plan from Stripe (called after checkout success)
 - `/api/profiles` — CRUD for profiles (filtered by userId)
-- `/api/vehicles` — CRUD for vehicles (filtered by userId)
+- `/api/vehicles` — CRUD for vehicles (filtered by userId); GET returns `assignedActIds[]` per vehicle; POST/PATCH accept `actIds[]` + `defaultForActIds[]`
+- `/api/vehicles/:id/act-assignments` — PUT to replace act assignments for a vehicle
 - `/api/runs` — CRUD for single show runs (filtered by userId)
 - `/api/tours` — CRUD for tours + stops (filtered by userId)
 - `/api/dashboard/summary` — aggregated stats (for userId)

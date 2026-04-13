@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateVehicle, useUpdateVehicle, useGetVehicle } from "@workspace/api-client-react";
+import { useCreateVehicle, useUpdateVehicle, useGetVehicle, useGetProfiles, useSetVehicleActAssignments, getGetVehiclesQueryKey, getGetProfilesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -25,9 +25,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Truck, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, Save, Truck, Info, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
+import { useQueryClient } from "@tanstack/react-query";
 
 const garageVehicleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -36,7 +37,6 @@ const garageVehicleSchema = z.object({
   avgConsumption: z.coerce.number().min(0.1, "Must be greater than 0"),
   tankSizeLitres: z.coerce.number().optional().nullable(),
   maxPassengers: z.coerce.number().optional().nullable(),
-  isDefault: z.boolean().optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -49,6 +49,7 @@ export default function GarageVehicleForm() {
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
   const [showEstimator, setShowEstimator] = useState(false);
+  const queryClient = useQueryClient();
 
   const isEditing = !!id;
   const vehicleId = isEditing ? parseInt(id) : 0;
@@ -56,9 +57,15 @@ export default function GarageVehicleForm() {
   const { data: vehicle, isLoading: isLoadingVehicle } = useGetVehicle(vehicleId, {
     query: { enabled: isEditing, queryKey: ["vehicle", vehicleId] },
   });
+  const { data: profiles } = useGetProfiles();
 
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
+  const setActAssignments = useSetVehicleActAssignments();
+
+  // Act assignment state (separate from main form)
+  const [selectedActIds, setSelectedActIds] = useState<number[]>([]);
+  const [defaultForActIds, setDefaultForActIds] = useState<number[]>([]);
 
   const form = useForm<GarageVehicleFormValues>({
     resolver: zodResolver(garageVehicleSchema),
@@ -69,7 +76,6 @@ export default function GarageVehicleForm() {
       avgConsumption: 11.5,
       tankSizeLitres: null,
       maxPassengers: null,
-      isDefault: false,
       notes: "",
     },
   });
@@ -85,16 +91,45 @@ export default function GarageVehicleForm() {
         avgConsumption: vehicle.avgConsumption,
         tankSizeLitres: vehicle.tankSizeLitres,
         maxPassengers: vehicle.maxPassengers,
-        isDefault: vehicle.isDefault ?? false,
         notes: vehicle.notes || "",
       });
+      // Load existing assignments
+      const existingActIds = vehicle.assignedActIds ?? [];
+      setSelectedActIds(existingActIds);
+      // Load which acts have this as default
+      if (profiles) {
+        const defaultActs = profiles
+          .filter((p) => p.defaultVehicleId === vehicle.id && existingActIds.includes(p.id))
+          .map((p) => p.id);
+        setDefaultForActIds(defaultActs);
+      }
     }
-  }, [vehicle, form]);
+  }, [vehicle, form, profiles]);
+
+  const toggleActId = (actId: number) => {
+    setSelectedActIds((prev) => {
+      if (prev.includes(actId)) {
+        // If removing an act, also remove from defaultFor
+        setDefaultForActIds((d) => d.filter((id) => id !== actId));
+        return prev.filter((id) => id !== actId);
+      } else {
+        return [...prev, actId];
+      }
+    });
+  };
+
+  const toggleDefaultForAct = (actId: number) => {
+    setDefaultForActIds((prev) =>
+      prev.includes(actId) ? prev.filter((id) => id !== actId) : [...prev, actId]
+    );
+  };
 
   const onSubmit = (data: GarageVehicleFormValues) => {
     const payload = {
       ...data,
       vehicleType: data.vehicleType || "van",
+      actIds: selectedActIds,
+      defaultForActIds,
     };
 
     if (isEditing) {
@@ -102,6 +137,8 @@ export default function GarageVehicleForm() {
         { id: vehicleId, data: payload },
         {
           onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
             toast({ title: "Vehicle updated" });
             setLocation("/garage");
           },
@@ -115,6 +152,8 @@ export default function GarageVehicleForm() {
         { data: payload },
         {
           onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
             toast({ title: "Vehicle added to garage" });
             setLocation("/garage");
           },
@@ -237,24 +276,6 @@ export default function GarageVehicleForm() {
                   )}
                 />
               </div>
-
-              <FormField
-                control={form.control}
-                name="isDefault"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                    <div>
-                      <FormLabel className="font-medium">Default vehicle</FormLabel>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Mark this as your primary touring vehicle.
-                      </p>
-                    </div>
-                    <FormControl>
-                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
             </CardContent>
           </Card>
 
@@ -305,7 +326,6 @@ export default function GarageVehicleForm() {
                         />
                       </FormControl>
 
-                      {/* Help section — always visible */}
                       <div className="mt-2 rounded-md border border-border/40 bg-muted/30 p-3 space-y-2">
                         <div className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
                           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary/60" />
@@ -318,40 +338,34 @@ export default function GarageVehicleForm() {
                         <div className="text-xs font-mono bg-background/70 border border-border/30 rounded px-2.5 py-1.5 text-center text-foreground/70">
                           L/100km = (Litres Used ÷ Km Driven) × 100
                         </div>
-
-                        {/* Estimator toggle — Pro only */}
-                        {isPro && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setShowEstimator(v => !v)}
-                              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
-                            >
-                              {showEstimator ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              Help me estimate
-                            </button>
-                            {showEstimator && (
-                              <div className="grid grid-cols-3 gap-2 pt-1">
-                                {[
-                                  { label: "Small car", range: "6–9 L/100km" },
-                                  { label: "Van", range: "10–14 L/100km" },
-                                  { label: "Bus", range: "15–25 L/100km" },
-                                ].map(({ label, range }) => (
-                                  <div
-                                    key={label}
-                                    className="rounded border border-border/40 bg-background/60 px-2 py-1.5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                                    onClick={() => {
-                                      const mid = parseFloat(range.split("–")[0]) + 1;
-                                      field.onChange(mid);
-                                    }}
-                                  >
-                                    <div className="text-xs font-medium text-foreground">{label}</div>
-                                    <div className="text-[11px] text-muted-foreground">{range}</div>
-                                  </div>
-                                ))}
+                        <button
+                          type="button"
+                          onClick={() => setShowEstimator(v => !v)}
+                          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
+                        >
+                          {showEstimator ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          Help me estimate
+                        </button>
+                        {showEstimator && (
+                          <div className="grid grid-cols-3 gap-2 pt-1">
+                            {[
+                              { label: "Small car", range: "6–9 L/100km" },
+                              { label: "Van", range: "10–14 L/100km" },
+                              { label: "Bus", range: "15–25 L/100km" },
+                            ].map(({ label, range }) => (
+                              <div
+                                key={label}
+                                className="rounded border border-border/40 bg-background/60 px-2 py-1.5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                                onClick={() => {
+                                  const mid = parseFloat(range.split("–")[0]) + 1;
+                                  field.onChange(mid);
+                                }}
+                              >
+                                <div className="text-xs font-medium text-foreground">{label}</div>
+                                <div className="text-[11px] text-muted-foreground">{range}</div>
                               </div>
-                            )}
-                          </>
+                            ))}
+                          </div>
                         )}
                       </div>
 
@@ -411,6 +425,56 @@ export default function GarageVehicleForm() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Act Assignments */}
+          {profiles && profiles.length > 0 && (
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader>
+                <CardTitle>Act Assignments</CardTitle>
+                <CardDescription>
+                  Assign this vehicle to one or more acts. Each act can have its own default vehicle.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {profiles.map((profile) => {
+                  const isAssigned = selectedActIds.includes(profile.id);
+                  const isDefault = defaultForActIds.includes(profile.id);
+                  return (
+                    <div key={profile.id} className="flex items-center gap-3 rounded-lg border border-border/40 p-3 bg-background/40">
+                      <Checkbox
+                        id={`act-${profile.id}`}
+                        checked={isAssigned}
+                        onCheckedChange={() => toggleActId(profile.id)}
+                      />
+                      <label htmlFor={`act-${profile.id}`} className="flex-1 text-sm font-medium cursor-pointer">
+                        {profile.name}
+                        <span className="text-xs text-muted-foreground ml-2 font-normal">{profile.actType}</span>
+                      </label>
+                      {isAssigned && (
+                        <button
+                          type="button"
+                          onClick={() => toggleDefaultForAct(profile.id)}
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md border transition-colors ${
+                            isDefault
+                              ? "border-primary/60 bg-primary/10 text-primary font-medium"
+                              : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                        >
+                          <Star className="w-3 h-3" />
+                          {isDefault ? "Default" : "Set default"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                {selectedActIds.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Select at least one act to assign this vehicle to for calculations.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-border/50 bg-card/50">
             <CardHeader>

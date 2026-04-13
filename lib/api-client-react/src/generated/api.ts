@@ -30,6 +30,7 @@ import type {
   Profile,
   Run,
   SearchVenuesParams,
+  SetVehicleActAssignmentsBody,
   Tour,
   TourStop,
   TourWithStops,
@@ -1042,6 +1043,88 @@ export const useDeleteVehicle = <
   TContext
 > => {
   return useMutation(getDeleteVehicleMutationOptions(options));
+};
+
+/**
+ * @summary Set act assignments for a vehicle
+ */
+export const getSetVehicleActAssignmentsUrl = (id: number) => {
+  return `/api/vehicles/${id}/act-assignments`;
+};
+
+export const setVehicleActAssignments = async (
+  id: number,
+  setVehicleActAssignmentsBody: BodyType<SetVehicleActAssignmentsBody>,
+  options?: RequestInit,
+): Promise<Vehicle> => {
+  return customFetch<Vehicle>(getSetVehicleActAssignmentsUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setVehicleActAssignmentsBody),
+  });
+};
+
+export const getSetVehicleActAssignmentsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setVehicleActAssignments>>,
+    TError,
+    { id: number; data: BodyType<SetVehicleActAssignmentsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setVehicleActAssignments>>,
+  TError,
+  { id: number; data: BodyType<SetVehicleActAssignmentsBody> },
+  TContext
+> => {
+  const mutationKey = ["setVehicleActAssignments"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setVehicleActAssignments>>,
+    { id: number; data: BodyType<SetVehicleActAssignmentsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+    return setVehicleActAssignments(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetVehicleActAssignmentsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setVehicleActAssignments>>
+>;
+export type SetVehicleActAssignmentsMutationError = ErrorType<unknown>;
+
+export const useSetVehicleActAssignments = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setVehicleActAssignments>>,
+    TError,
+    { id: number; data: BodyType<SetVehicleActAssignmentsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setVehicleActAssignments>>,
+  TError,
+  { id: number; data: BodyType<SetVehicleActAssignmentsBody> },
+  TContext
+> => {
+  return useMutation(getSetVehicleActAssignmentsMutationOptions(options));
 };
 
 /**

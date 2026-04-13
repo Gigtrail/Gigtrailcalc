@@ -1,5 +1,6 @@
 export * from "./profiles";
 export * from "./vehicles";
+export * from "./vehicleActAssignments";
 export * from "./runs";
 export * from "./venues";
 export * from "./tours";

@@ -1,6 +1,14 @@
-import { useGetVehicles, useDeleteVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
+import {
+  useGetVehicles,
+  useDeleteVehicle,
+  useGetProfiles,
+  useUpdateProfile,
+  useSetVehicleActAssignments,
+  getGetVehiclesQueryKey,
+  getGetProfilesQueryKey,
+} from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
-import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, Users } from "lucide-react";
+import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, Users, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,16 +37,30 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Garage() {
   const { data: vehicles, isLoading } = useGetVehicles();
+  const { data: profiles } = useGetProfiles();
   const deleteVehicle = useDeleteVehicle();
+  const updateProfile = useUpdateProfile();
+  const setActAssignments = useSetVehicleActAssignments();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [, setLocation] = useLocation();
+
+  // Build a map: profileId -> profile name
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
 
   const handleDelete = (id: number, name: string) => {
     deleteVehicle.mutate(
@@ -50,6 +72,21 @@ export default function Garage() {
         },
         onError: () => {
           toast({ title: "Failed to remove vehicle", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleSetDefault = (vehicleId: number, actId: number, actName: string) => {
+    updateProfile.mutate(
+      { id: actId, data: { defaultVehicleId: vehicleId } as never },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+          toast({ title: `Set as default vehicle for "${actName}"` });
+        },
+        onError: () => {
+          toast({ title: "Failed to set default vehicle", variant: "destructive" });
         },
       }
     );
@@ -151,7 +188,7 @@ export default function Garage() {
             <h3 className="text-lg font-medium">No custom vehicles yet</h3>
             <p className="text-muted-foreground mb-4 text-sm">
               {isPro
-                ? "Add a vehicle to track fuel specs, tank size, and member assignments."
+                ? "Add a vehicle to track fuel specs, tank size, and assign it to your acts."
                 : "Upgrade to Pro to add custom vehicles to your garage."}
             </p>
             <Button onClick={handleAddVehicle}>
@@ -168,6 +205,15 @@ export default function Garage() {
             {vehicles?.map((vehicle) => {
               const sv = getStandardVehicle(vehicle.vehicleType);
               const Icon = sv.Icon;
+              const assignedActIds = vehicle.assignedActIds ?? [];
+              const assignedActNames = assignedActIds
+                .map((id) => profileMap.get(id))
+                .filter(Boolean) as string[];
+              // Which acts have this vehicle as their default?
+              const defaultForActs = (profiles ?? [])
+                .filter((p) => p.defaultVehicleId === vehicle.id)
+                .map((p) => p.id);
+
               return (
                 <Card key={vehicle.id} className="group hover:shadow-sm transition-all border-border/50 bg-card/50">
                   <CardHeader className="pb-2 flex flex-row items-start justify-between">
@@ -178,7 +224,7 @@ export default function Garage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <CardTitle className="text-base leading-tight">{vehicle.name}</CardTitle>
-                          {vehicle.isDefault && (
+                          {defaultForActs.length > 0 && (
                             <Badge variant="secondary" className="text-[10px] py-0 h-4 gap-0.5">
                               <Star className="w-2.5 h-2.5" />
                               Default
@@ -237,9 +283,59 @@ export default function Garage() {
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground capitalize">{vehicle.fuelType}</div>
+
+                    {/* Assigned acts */}
+                    {assignedActNames.length > 0 && (
+                      <div className="pt-1 flex items-center gap-1 flex-wrap">
+                        <span className="text-xs text-muted-foreground">Assigned to:</span>
+                        {assignedActNames.map((name) => (
+                          <Badge key={name} variant="outline" className="text-[10px] py-0 h-4 font-normal">
+                            {name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
                     {vehicle.notes && (
-                      <div className="pt-2 mt-2 border-t border-border/40 text-xs text-muted-foreground italic">
+                      <div className="pt-2 mt-1 border-t border-border/40 text-xs text-muted-foreground italic">
                         "{vehicle.notes}"
+                      </div>
+                    )}
+
+                    {/* Set as default per act */}
+                    {isPro && assignedActIds.length > 0 && (
+                      <div className="pt-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1 w-full">
+                              <Star className="w-3 h-3" />
+                              Set as default for act
+                              <ChevronDown className="w-3 h-3 ml-auto" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-48">
+                            <DropdownMenuLabel className="text-xs">Choose act</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {assignedActIds.map((actId) => {
+                              const actName = profileMap.get(actId);
+                              if (!actName) return null;
+                              const isCurrentDefault = defaultForActs.includes(actId);
+                              return (
+                                <DropdownMenuItem
+                                  key={actId}
+                                  onClick={() => handleSetDefault(vehicle.id, actId, actName)}
+                                  className="text-xs"
+                                  disabled={isCurrentDefault}
+                                >
+                                  {isCurrentDefault && <Star className="w-3 h-3 mr-2 text-primary" />}
+                                  {!isCurrentDefault && <span className="w-3 h-3 mr-2" />}
+                                  {actName}
+                                  {isCurrentDefault && <span className="ml-auto text-muted-foreground">current</span>}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     )}
                   </CardContent>
@@ -253,7 +349,8 @@ export default function Garage() {
       <div className="pt-2 border-t border-border/30">
         <p className="text-xs text-muted-foreground">
           Standard vehicle types (Small Car, SUV/Wagon, Van, Bus) are configured directly in each{" "}
-          <Link href="/profiles" className="text-primary underline underline-offset-2">Profile</Link>.
+          <Link href="/profiles" className="text-primary underline underline-offset-2">Profile</Link>.{" "}
+          Different acts can use different vehicles — assign vehicles per act for accurate touring costs.
         </p>
       </div>
 
@@ -275,10 +372,10 @@ export default function Garage() {
               Keep using standard types
             </Button>
             <Button
-              onClick={() => { setShowUpgradeModal(false); setLocation("/billing"); }}
+              onClick={() => setLocation("/billing")}
               className="w-full sm:w-auto"
             >
-              Upgrade to Pro
+              View Plans
             </Button>
           </DialogFooter>
         </DialogContent>

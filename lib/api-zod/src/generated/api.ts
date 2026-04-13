@@ -212,6 +212,7 @@ export const GetVehiclesResponseItem = zod.object({
   assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
+  assignedActIds: zod.array(zod.number()),
 });
 export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
 
@@ -228,6 +229,8 @@ export const CreateVehicleBody = zod.object({
   isDefault: zod.boolean().nullish(),
   assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
+  actIds: zod.array(zod.number()).nullish(),
+  defaultForActIds: zod.array(zod.number()).nullish(),
 });
 
 /**
@@ -249,6 +252,7 @@ export const GetVehicleResponse = zod.object({
   assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
+  assignedActIds: zod.array(zod.number()),
 });
 
 /**
@@ -268,6 +272,8 @@ export const UpdateVehicleBody = zod.object({
   isDefault: zod.boolean().nullish(),
   assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
+  actIds: zod.array(zod.number()).nullish(),
+  defaultForActIds: zod.array(zod.number()).nullish(),
 });
 
 export const UpdateVehicleResponse = zod.object({
@@ -282,6 +288,19 @@ export const UpdateVehicleResponse = zod.object({
   assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
+  assignedActIds: zod.array(zod.number()),
+});
+
+/**
+ * @summary Set act assignments for a vehicle
+ */
+export const SetVehicleActAssignmentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SetVehicleActAssignmentsBody = zod.object({
+  actIds: zod.array(zod.number()),
+  defaultForActIds: zod.array(zod.number()).optional(),
 });
 
 /**

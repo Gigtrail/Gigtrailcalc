@@ -1,0 +1,160 @@
+Refactor the Garage feature to support quick vehicle setup, full management, and assignment of vehicles to one or multiple acts.
+
+Goal:
+Allow users to quickly create vehicles, manage them in detail, and assign them to different acts (profiles) for more accurate calculations.
+
+Core Concepts:
+- Users can have multiple vehicles
+- Users can have multiple acts (profiles)
+- Vehicles can be assigned to one or more acts
+- Each act can have a default vehicle
+
+-----------------------------------
+1. Garage Box (Main Screen)
+-----------------------------------
+
+Keep Garage box simple and focused on usage.
+
+Display:
+- Current default vehicle (based on selected act/profile)
+- Vehicle name
+- Vehicle type
+- Fuel consumption (L/100km)
+- Fuel type
+- Label: "Used for this act’s calculations"
+
+Add:
+- Dropdown to switch between available vehicles for the current act
+- "+ Quick Add Vehicle" button
+- "Manage Garage" button
+
+-----------------------------------
+2. Quick Add Vehicle
+-----------------------------------
+
+Add a lightweight modal for fast setup.
+
+Fields:
+- Vehicle Type (required)
+  - Small Car
+  - SUV / Wagon
+  - Van
+  - Bus
+- Nickname (optional)
+- Fuel consumption (pre-filled, editable)
+- Fuel type (auto-filled, editable if simple)
+
+NEW:
+- Assign to Acts (simple multi-select or checkboxes)
+  - Default: auto-select current act
+  - Allow selecting multiple acts if easy
+
+Optional checkbox:
+[ ] Make this the default vehicle for this act
+
+Behavior:
+- Save vehicle with selected act assignments
+- Vehicle appears immediately in dropdown for relevant acts
+
+Keep Quick Add minimal — no advanced fields.
+
+-----------------------------------
+3. Manage Garage (Full Control)
+-----------------------------------
+
+Enhance existing Manage Garage screen.
+
+Each vehicle card should show:
+- Name
+- Type
+- Fuel consumption
+- Fuel type
+- Default badge (if default for an act)
+
+NEW:
+- Show assigned acts:
+  e.g. "Assigned to: Solo, Duo"
+
+Actions:
+- Edit
+- Delete
+- Set as default (per act)
+
+-----------------------------------
+4. Edit Vehicle (Expanded)
+-----------------------------------
+
+In edit mode, allow:
+
+- Change vehicle details
+- Assign/unassign acts (multi-select)
+- Set as default for one or more acts
+
+Rules:
+- A vehicle can belong to multiple acts
+- Each act can only have ONE default vehicle
+
+-----------------------------------
+5. Default Vehicle Logic
+-----------------------------------
+
+- Default vehicle is tied to the selected act/profile
+- When user switches acts:
+  → vehicle updates automatically
+- If no default is set for an act:
+  → use last used or prompt user to select one
+
+-----------------------------------
+6. Data Structure (Important)
+-----------------------------------
+
+Vehicles:
+- id
+- user_id
+- name
+- type
+- fuel_consumption
+- fuel_type
+
+Vehicle_Act_Assignments:
+- vehicle_id
+- act_id
+
+Act_Default_Vehicle:
+- act_id
+- vehicle_id
+
+-----------------------------------
+7. Remove Duplication
+-----------------------------------
+
+Garage box should NOT include:
+- full vehicle setup UI
+- advanced config fields
+
+All detailed setup belongs in:
+Manage Garage
+
+-----------------------------------
+8. UX Goals
+-----------------------------------
+
+Garage box:
+- fast
+- simple
+- act-aware
+
+Quick Add:
+- minimal friction
+- usable in seconds
+
+Manage Garage:
+- full control
+- clear relationships between vehicles and acts
+
+-----------------------------------
+9. Nice to Have
+-----------------------------------
+
+- Small helper text:
+"Different acts can use different vehicles. Assign vehicles per act for accurate touring costs."

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, getGetVehiclesQueryKey, getGetProfilesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,15 +25,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search } from "lucide-react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search, Plus, Star } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
-import { getStandardVehicle } from "@/lib/garage-constants";
+import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
 import {
   Dialog,
@@ -187,7 +188,22 @@ export default function RunForm() {
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
   const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
   const [attendanceCount, setAttendanceCount] = useState<number>(0);
+  // Garage box state
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddType, setQuickAddType] = useState("van");
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddConsumption, setQuickAddConsumption] = useState(11.5);
+  const [quickAddFuelType, setQuickAddFuelType] = useState("petrol");
+  const [quickAddMakeDefault, setQuickAddMakeDefault] = useState(true);
+  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false);
+  // Track which vehicle is selected for this run (may differ from profile.defaultVehicleId locally)
+  const [runVehicleId, setRunVehicleId] = useState<number | null>(null);
+
   const createOrUpdateVenue = useCreateOrUpdateVenue();
+  const { data: vehicles } = useGetVehicles();
+  const updateProfile = useUpdateProfile();
+  const createVehicle = useCreateVehicle();
+  const queryClient = useQueryClient();
 
   const trackCalculation = useTrackCalculation();
 
@@ -373,9 +389,14 @@ export default function RunForm() {
       const perNightRate = accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE;
       const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * perNightRate : 0;
 
+      // Use selected garage vehicle's consumption if available
+      const selectedVehicle = runVehicleId ? vehicles?.find(v => v.id === runVehicleId) : null;
+      const vehicleConsumptionOverride = selectedVehicle ? { vehicleConsumption: selectedVehicle.avgConsumption } : {};
+
       // Pass room overrides only — accommodationNights comes from the form value the user set
       const computed = computeGigResults(vals, {
         ...routeOverride,
+        ...vehicleConsumptionOverride,
         accommodationRequired: accomRequired,
         singleRooms: accomSingleRooms,
         doubleRooms: accomDoubleRooms,
@@ -621,6 +642,18 @@ export default function RunForm() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formValues.originLat, formValues.originLng, formValues.destinationLat, formValues.destinationLng, distanceMode]);
 
+  // Sync local vehicle selection when profile changes
+  useEffect(() => {
+    const profile = profiles?.find(p => p.id === formValues.profileId);
+    setRunVehicleId(profile?.defaultVehicleId ?? null);
+  }, [formValues.profileId, profiles]);
+
+  // Sync Quick Add fuel consumption when type changes
+  useEffect(() => {
+    const sv = STANDARD_VEHICLES.find((v) => v.key === quickAddType);
+    if (sv) setQuickAddConsumption(sv.fuelConsumptionL100km);
+  }, [quickAddType]);
+
   const onSubmit = (data: RunFormValues) => {
     const computed = calculationResult ?? computeGigResults(data);
     const payload = {
@@ -716,33 +749,105 @@ export default function RunForm() {
                         </FormItem>
                       )}
                     />
-                    {/* Vehicle — read from selected profile */}
+                    {/* Garage Box — vehicle selector for current act */}
                     {(() => {
                       const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
-                      return (
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium leading-none">Vehicle</label>
-                          {selectedProfile ? (
-                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
-                              <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                              <span className="text-foreground">
-                                {selectedProfile.vehicleName
-                                  ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
-                                  : getStandardVehicle(selectedProfile.vehicleType).displayName}
-                              </span>
-                              <span className="text-muted-foreground ml-auto text-xs">
-                                {selectedProfile.fuelConsumption} L/100km
-                              </span>
-                            </div>
-                          ) : (
+                      if (!selectedProfile) {
+                        return (
+                          <div className="space-y-1.5">
+                            <label className="text-sm font-medium leading-none">Vehicle</label>
                             <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px] text-muted-foreground">
                               Select a profile to set vehicle
                             </div>
+                          </div>
+                        );
+                      }
+
+                      // Vehicles assigned to this act (garage vehicles)
+                      const actVehicles = (vehicles ?? []).filter(v => v.assignedActIds?.includes(selectedProfile.id));
+                      // Currently selected vehicle (from garage)
+                      const activeVehicle = actVehicles.find(v => v.id === runVehicleId) ?? null;
+                      // Fallback: show profile-based vehicle (free tier or no garage vehicle)
+                      const profileVehicleLabel = selectedProfile.vehicleName
+                        ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
+                        : getStandardVehicle(selectedProfile.vehicleType).displayName;
+                      const profileFuelConsumption = selectedProfile.fuelConsumption;
+
+                      const handleVehicleSwitch = (vehicleId: string) => {
+                        const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
+                        setRunVehicleId(vid);
+                        if (vid !== null) {
+                          updateProfile.mutate(
+                            { id: selectedProfile.id, data: { defaultVehicleId: vid } as never },
+                            {
+                              onSuccess: () => {
+                                queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+                              },
+                            }
+                          );
+                        }
+                      };
+
+                      return (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium leading-none">Vehicle</label>
+                            {isPro && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuickAddName("");
+                                  setQuickAddType("van");
+                                  setQuickAddMakeDefault(true);
+                                  setShowQuickAdd(true);
+                                }}
+                                className="text-xs text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
+                              >
+                                <span className="text-base leading-none">+</span> Quick Add Vehicle
+                              </button>
+                            )}
+                          </div>
+
+                          {actVehicles.length > 0 ? (
+                            <Select
+                              value={runVehicleId?.toString() ?? "profile"}
+                              onValueChange={handleVehicleSwitch}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="profile">
+                                  {profileVehicleLabel} — {profileFuelConsumption} L/100km (profile default)
+                                </SelectItem>
+                                {actVehicles.map(v => (
+                                  <SelectItem key={v.id} value={v.id.toString()}>
+                                    {v.name} — {v.avgConsumption} L/100km
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                              <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="text-foreground">{profileVehicleLabel}</span>
+                              <span className="text-muted-foreground ml-auto text-xs">{profileFuelConsumption} L/100km</span>
+                            </div>
                           )}
-                          <p className="text-xs text-muted-foreground">
-                            Vehicle is set in your profile.{" "}
-                            <a href="/profiles" className="text-primary underline underline-offset-2">Edit profile</a>
-                          </p>
+
+                          {activeVehicle && (
+                            <p className="text-xs text-muted-foreground">
+                              {activeVehicle.fuelType} · {activeVehicle.avgConsumption} L/100km · Used for this act's calculations
+                            </p>
+                          )}
+                          {!activeVehicle && (
+                            <p className="text-xs text-muted-foreground">
+                              {isPro
+                                ? <>Add garage vehicles and assign them to this act for quick switching. <a href="/garage" className="text-primary underline underline-offset-2">Manage Garage</a></>
+                                : <>Vehicle is set in your profile. <a href="/profiles" className="text-primary underline underline-offset-2">Edit profile</a></>
+                              }
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -1383,6 +1488,127 @@ export default function RunForm() {
             </Button>
             <Button onClick={() => { setShowLimitModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
               See Pro plans
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Vehicle Modal */}
+      <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-primary" />
+              Quick Add Vehicle
+            </DialogTitle>
+            <DialogDescription>
+              Add a vehicle to your garage and assign it to this act instantly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Vehicle Type</label>
+              <select
+                value={quickAddType}
+                onChange={e => setQuickAddType(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {STANDARD_VEHICLES.map(sv => (
+                  <option key={sv.key} value={sv.key}>{sv.displayName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nickname <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <input
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                placeholder="Tour Van, The Beast..."
+                value={quickAddName}
+                onChange={e => setQuickAddName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Fuel Usage (L/100km)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={quickAddConsumption}
+                  onChange={e => setQuickAddConsumption(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Fuel Type</label>
+                <select
+                  value={quickAddFuelType}
+                  onChange={e => setQuickAddFuelType(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="petrol">Petrol</option>
+                  <option value="diesel">Diesel</option>
+                  <option value="electric">Electric</option>
+                  <option value="LPG">LPG</option>
+                </select>
+              </div>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={quickAddMakeDefault}
+                onChange={e => setQuickAddMakeDefault(e.target.checked)}
+                className="rounded border-input"
+              />
+              <Star className="w-3.5 h-3.5 text-primary" />
+              Set as default vehicle for this act
+            </label>
+          </div>
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowQuickAdd(false)}>Cancel</Button>
+            <Button
+              disabled={quickAddSubmitting}
+              onClick={async () => {
+                const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
+                if (!selectedProfile) return;
+                setQuickAddSubmitting(true);
+                const name = quickAddName.trim() || STANDARD_VEHICLES.find(v => v.key === quickAddType)?.displayName || quickAddType;
+                createVehicle.mutate(
+                  {
+                    data: {
+                      name,
+                      vehicleType: quickAddType,
+                      fuelType: quickAddFuelType,
+                      avgConsumption: quickAddConsumption,
+                      actIds: [selectedProfile.id],
+                      defaultForActIds: quickAddMakeDefault ? [selectedProfile.id] : [],
+                    },
+                  },
+                  {
+                    onSuccess: (newVehicle) => {
+                      queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+                      if (quickAddMakeDefault) {
+                        setRunVehicleId(newVehicle.id);
+                      }
+                      setShowQuickAdd(false);
+                      setQuickAddSubmitting(false);
+                      toast({ title: `"${name}" added to garage and assigned to ${selectedProfile.name}` });
+                    },
+                    onError: () => {
+                      setQuickAddSubmitting(false);
+                      toast({ title: "Failed to add vehicle", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+            >
+              {quickAddSubmitting ? "Adding..." : (
+                <>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Vehicle
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

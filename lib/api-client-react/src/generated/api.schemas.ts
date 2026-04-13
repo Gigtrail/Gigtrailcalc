@@ -116,6 +116,7 @@ export interface Vehicle {
   /** @nullable */
   notes: string | null;
   createdAt: string;
+  assignedActIds: number[];
 }
 
 export interface CreateVehicleBody {
@@ -133,6 +134,13 @@ export interface CreateVehicleBody {
   assignedMemberIds?: string | null;
   /** @nullable */
   notes?: string | null;
+  actIds?: number[] | null;
+  defaultForActIds?: number[] | null;
+}
+
+export interface SetVehicleActAssignmentsBody {
+  actIds: number[];
+  defaultForActIds?: number[];
 }
 
 export interface Venue {
