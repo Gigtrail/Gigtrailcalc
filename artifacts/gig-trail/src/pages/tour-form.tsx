@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
 import { useCreateTour, useUpdateTour, useGetTour, useGetProfiles, useGetVehicles } from "@workspace/api-client-react";
@@ -27,6 +27,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, Save, Navigation } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useEffect } from "react";
+import { differenceInDays, parseISO } from "date-fns";
 
 const tourSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -104,6 +105,26 @@ export default function TourForm() {
       });
     }
   }, [tour, profiles, vehicles, form]);
+
+  const watchedStartDate = useWatch({ control: form.control, name: "startDate" });
+  const watchedEndDate = useWatch({ control: form.control, name: "endDate" });
+
+  useEffect(() => {
+    if (watchedStartDate && watchedEndDate) {
+      try {
+        const start = parseISO(watchedStartDate);
+        const end = parseISO(watchedEndDate);
+        const days = differenceInDays(end, start) + 1;
+        if (days >= 1) {
+          form.setValue("daysOnTour", days, { shouldDirty: true });
+        }
+      } catch {
+        // ignore invalid dates
+      }
+    }
+  }, [watchedStartDate, watchedEndDate, form]);
+
+  const datesProvided = !!(watchedStartDate && watchedEndDate);
 
   const handleProfileChange = (val: string) => {
     const pId = val === "none" ? null : parseInt(val);
@@ -338,12 +359,18 @@ export default function TourForm() {
                           min="1"
                           step="1"
                           placeholder="e.g. 5"
+                          readOnly={datesProvided}
                           {...field}
                           value={field.value ?? ""}
-                          onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          onChange={e => !datesProvided && field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          className={datesProvided ? "bg-muted/50 cursor-default select-none" : ""}
                         />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">Used to estimate accommodation nights across the run</p>
+                      <p className="text-xs text-muted-foreground">
+                        {datesProvided
+                          ? "Calculated from start and end dates"
+                          : "Set start & end dates to auto-calculate, or enter manually"}
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
