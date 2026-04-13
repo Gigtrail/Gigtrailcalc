@@ -342,7 +342,7 @@ export default function Onboarding() {
           <div className="flex flex-col gap-2 pt-1">
             <Link href="/billing">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                Upgrade to Pro — AU$5/mo
+                Upgrade to Pro — AU$12/mo
               </Button>
             </Link>
             <Button

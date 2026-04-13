@@ -50,7 +50,7 @@ export default function Landing() {
 
         <section className="w-full space-y-6" id="plans">
           <p className="text-xs uppercase tracking-widest text-muted-foreground/50 font-medium">Plans</p>
-          <div className="grid sm:grid-cols-3 gap-px bg-border/30 rounded-xl overflow-hidden border border-border/30">
+          <div className="grid sm:grid-cols-2 gap-px bg-border/30 rounded-xl overflow-hidden border border-border/30 max-w-xl mx-auto w-full">
             {[
               {
                 name: "Free",
@@ -82,21 +82,6 @@ export default function Landing() {
                 cta: "Go Pro",
                 highlight: true,
                 badge: "Most popular",
-              },
-              {
-                name: "Pro Plus",
-                tagline: "For multiple projects",
-                price: "AU$15",
-                period: "/mo",
-                yearlyNote: "or AU$99/year",
-                features: [
-                  "Up to 10 act profiles",
-                  "Up to 10 vehicles",
-                  "Everything in Pro",
-                ],
-                cta: "Go Pro Plus",
-                highlight: false,
-                badge: null,
               },
             ].map(({ name, tagline, price, period, yearlyNote, features, cta, highlight, badge }) => (
               <div

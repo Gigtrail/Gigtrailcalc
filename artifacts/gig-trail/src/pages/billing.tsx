@@ -68,22 +68,6 @@ const STATIC_PLANS: StaticPlan[] = [
       "Save and compare shows",
     ],
   },
-  {
-    key: "unlimited",
-    name: "Pro Plus",
-    tagline: "For multiple projects",
-    monthlyPrice: "AU$15",
-    yearlyPrice: "AU$99",
-    monthlyPeriod: "per month",
-    yearlyPeriod: "per year",
-    yearlyNote: "Save ~45%",
-    features: [
-      "Up to 10 act profiles",
-      "Multiple touring setups",
-      "Up to 10 vehicles",
-      "Everything in Pro",
-    ],
-  },
 ];
 
 export default function Billing() {
@@ -225,7 +209,7 @@ export default function Billing() {
       </div>
 
       {/* Plan cards */}
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
         {STATIC_PLANS.map((staticPlan) => {
           const isCurrentPlan = plan === staticPlan.key;
           const currentIndex = PLAN_ORDER.indexOf(plan as any);

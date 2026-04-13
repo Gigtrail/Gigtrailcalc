@@ -122,7 +122,7 @@ export function AppSidebar() {
                 <Zap className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-medium text-primary">Upgrade to Pro</span>
               </div>
-              <p className="text-xs text-muted-foreground">Unlock tours, unlimited runs & more from AU$5/mo</p>
+              <p className="text-xs text-muted-foreground">Unlock tours, unlimited runs & more from AU$12/mo</p>
             </div>
           </Link>
         )}

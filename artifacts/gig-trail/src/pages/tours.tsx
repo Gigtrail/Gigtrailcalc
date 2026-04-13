@@ -43,12 +43,12 @@ export default function Tours() {
           <h2 className="text-xl font-semibold mb-2">Tour Builder is a Pro feature</h2>
           <p className="text-muted-foreground mb-6 max-w-md">
             Plan multi-stop tours, track routing and fuel, and see the full financial picture 
-            across every show. Upgrade to Pro for AU$5/month.
+            across every show. Upgrade to Pro for AU$12/month.
           </p>
           <Link href="/billing">
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Crown className="w-4 h-4 mr-2" />
-              Upgrade to Pro — AU$5/mo
+              Upgrade to Pro — AU$12/mo
             </Button>
           </Link>
           <p className="text-xs text-muted-foreground mt-3">Cancel anytime · Your data is always preserved</p>
