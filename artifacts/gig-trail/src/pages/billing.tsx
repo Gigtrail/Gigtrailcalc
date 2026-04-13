@@ -184,8 +184,21 @@ export default function Billing() {
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
+  const updatePlan = useUpdateUserPlan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleAdminSelfPlanChange = async (newPlan: string) => {
+    if (!me?.userId || newPlan === plan) return;
+    try {
+      await updatePlan.mutateAsync({ userId: me.userId, plan: newPlan });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      refetch();
+      toast({ title: "Plan updated", description: `Your plan is now ${newPlan}.` });
+    } catch (e: any) {
+      toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
+    }
+  };
 
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const isSuccess = searchParams.get("success") === "1";
@@ -279,17 +292,35 @@ export default function Billing() {
             </div>
             <Badge className={PLAN_COLORS[plan] || PLAN_COLORS.free}>{PLAN_LABELS[plan]}</Badge>
           </div>
-          {me?.hasStripeCustomer && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleManageBilling}
-              disabled={customerPortal.isPending}
-            >
-              {customerPortal.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-              Manage Billing
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {role === "admin" && me?.userId && (
+              <Select
+                value={plan === "unlimited" ? "pro" : plan}
+                onValueChange={handleAdminSelfPlanChange}
+                disabled={updatePlan.isPending}
+              >
+                <SelectTrigger className="h-8 text-xs w-28">
+                  {updatePlan.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {me?.hasStripeCustomer && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManageBilling}
+                disabled={customerPortal.isPending}
+              >
+                {customerPortal.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Manage Billing
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
