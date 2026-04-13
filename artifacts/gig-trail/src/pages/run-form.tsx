@@ -147,7 +147,7 @@ export default function RunForm() {
       origin: "",
       destination: "",
       distanceKm: 0,
-      returnTrip: false,
+      returnTrip: true,
       fuelPrice: 1.5,
       showType: "Flat Fee",
       fee: 0,
@@ -925,7 +925,7 @@ export default function RunForm() {
                     {/* Distance — Auto/Manual toggle */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium leading-none">Distance (km, one way)</label>
+                        <label className="text-sm font-medium leading-none">Distance to venue</label>
                         <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
                           <button
                             type="button"
@@ -975,14 +975,46 @@ export default function RunForm() {
                           )}
                         />
                       )}
+
+                      {/* One way only toggle + total distance */}
+                      <FormField
+                        control={form.control}
+                        name="returnTrip"
+                        render={({ field }) => (
+                          <div className="flex items-center justify-between pt-0.5">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <Checkbox
+                                checked={!field.value}
+                                onCheckedChange={(checked) => field.onChange(!checked)}
+                              />
+                              <span className="text-sm text-muted-foreground">One way only</span>
+                            </label>
+                            {(Number(formValues.distanceKm) || 0) > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                Total:{" "}
+                                <span className="font-medium text-foreground">
+                                  {(Number(formValues.distanceKm) * (field.value ? 2 : 1)).toFixed(0)} km
+                                </span>
+                                {field.value ? " (return)" : " (one way)"}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      />
+
                       {routeCalcFailed && distanceMode === "auto" && (
                         <p className="text-xs text-amber-600">
                           Route auto-calc failed — switch to Manual or make sure you select locations from the dropdown suggestions
                         </p>
                       )}
-                      {distanceMode === "auto" && !routeCalcFailed && (
+                      {distanceMode === "auto" && !routeCalcFailed && (Number(formValues.distanceKm) || 0) === 0 && (
                         <p className="text-xs text-muted-foreground">
                           Calculated automatically when you select both locations
+                        </p>
+                      )}
+                      {distanceMode === "manual" && (Number(formValues.distanceKm) || 0) === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Return trip is included automatically — check "One way only" if needed.
                         </p>
                       )}
                     </div>
@@ -1000,29 +1032,6 @@ export default function RunForm() {
                       )}
                     />
                   </div>
-
-                  <FormField
-                    control={form.control}
-                    name="returnTrip"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>
-                            Include Return Trip
-                          </FormLabel>
-                          <p className="text-sm text-muted-foreground">
-                            Multiplies distance by 2 for fuel calculation
-                          </p>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
                 </CardContent>
               </Card>
 

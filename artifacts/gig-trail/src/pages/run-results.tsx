@@ -349,19 +349,20 @@ export default function RunResults() {
             <div className="grid grid-cols-2 gap-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                <span className="text-muted-foreground">One-way</span>
+                <span className="text-muted-foreground">Distance to venue</span>
               </div>
               <div className="text-sm font-medium text-right">{distanceKm.toFixed(1)} km</div>
 
-              {formData.returnTrip && (
-                <>
-                  <div className="flex items-center gap-2 text-sm">
-                    <RotateCcw className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-muted-foreground">Total (return)</span>
-                  </div>
-                  <div className="text-sm font-medium text-right">{(distanceKm * 2).toFixed(1)} km</div>
-                </>
-              )}
+              <div className="flex items-center gap-2 text-sm">
+                <RotateCcw className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-muted-foreground">Total travel distance</span>
+              </div>
+              <div className="text-sm font-medium text-right">
+                {formData.returnTrip ? (distanceKm * 2).toFixed(1) : distanceKm.toFixed(1)} km
+                <span className="text-xs text-muted-foreground ml-1">
+                  {formData.returnTrip ? "(return)" : "(one way)"}
+                </span>
+              </div>
 
               {totalDriveMinutes !== null && (
                 <>
