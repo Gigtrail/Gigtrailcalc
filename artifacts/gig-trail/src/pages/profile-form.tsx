@@ -2,7 +2,16 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateProfile, useUpdateProfile, useGetProfile } from "@workspace/api-client-react";
+import {
+  useCreateProfile,
+  useUpdateProfile,
+  useGetProfile,
+  useGetVehicles,
+  useCreateVehicle,
+  getGetVehiclesQueryKey,
+  getGetProfilesQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +25,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Settings2, BookUser, BedDouble, Wrench } from "lucide-react";
+import { ChevronLeft, Save, Settings2, BookUser, BedDouble, Wrench, Plus, Star, Truck, CheckCircle2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
 import { Link } from "wouter";
 import { useEffect, useRef, useState } from "react";
@@ -55,6 +73,7 @@ const profileSchema = z.object({
   vehicleName: z.string().optional().nullable(),
   fuelConsumption: z.coerce.number().min(0),
   defaultFuelPrice: z.coerce.number().min(0).optional().nullable(),
+  defaultVehicleId: z.number().optional().nullable(),
   maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
 }).superRefine((data, ctx) => {
@@ -85,9 +104,19 @@ export default function ProfileForm() {
 
   const createProfile = useCreateProfile();
   const updateProfile = useUpdateProfile();
+  const createVehicle = useCreateVehicle();
+  const queryClient = useQueryClient();
+
+  const { data: vehicles } = useGetVehicles();
 
   const [actSetupOpen, setActSetupOpen] = useState(false);
   const [memberLibraryOpen, setMemberLibraryOpen] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [quickAddType, setQuickAddType] = useState(STANDARD_VEHICLES[2].key);
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddConsumption, setQuickAddConsumption] = useState(STANDARD_VEHICLES[2].fuelConsumptionL100km);
+  const [quickAddFuelType, setQuickAddFuelType] = useState("petrol");
+  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -110,6 +139,7 @@ export default function ProfileForm() {
       vehicleName: "",
       fuelConsumption: 11.5,
       defaultFuelPrice: null,
+      defaultVehicleId: null,
       maxDriveHoursPerDay: 8,
       notes: "",
     },
@@ -118,6 +148,7 @@ export default function ProfileForm() {
   const actType = form.watch("actType");
   const vehicleType = form.watch("vehicleType");
   const accommodationRequired = form.watch("accommodationRequired");
+  const defaultVehicleIdWatch = form.watch("defaultVehicleId");
   const singleRoomsDefaultWatch = form.watch("singleRoomsDefault") ?? 0;
   const doubleRoomsDefaultWatch = form.watch("doubleRoomsDefault") ?? 0;
   const memberLibraryWatch = form.watch("memberLibrary") ?? [];
@@ -160,6 +191,7 @@ export default function ProfileForm() {
         vehicleName: profile.vehicleName || "",
         fuelConsumption: profile.fuelConsumption ?? 11.5,
         defaultFuelPrice: profile.defaultFuelPrice ?? null,
+        defaultVehicleId: profile.defaultVehicleId ?? null,
         maxDriveHoursPerDay: profile.maxDriveHoursPerDay ?? 8,
         notes: profile.notes || "",
       });
@@ -475,8 +507,8 @@ export default function ProfileForm() {
                   <CardTitle>Garage</CardTitle>
                   <CardDescription className="mt-1">
                     {isPro
-                      ? "Choose your standard vehicle or customise fuel consumption for accurate cost calculations."
-                      : "Pick the vehicle that best matches how you tour. Upgrade to Pro to customise fuel figures."}
+                      ? "Select your vehicle for this act. Garage vehicles use exact fuel figures for accurate cost calculations."
+                      : "Pick the vehicle that best matches how you tour. Upgrade to Pro to add custom vehicles."}
                   </CardDescription>
                 </div>
                 {isPro && (
@@ -485,96 +517,212 @@ export default function ProfileForm() {
                     className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2 shrink-0 mt-1"
                   >
                     <Wrench className="w-3.5 h-3.5" />
-                    Manage garage
+                    Manage Garage
                   </Link>
                 )}
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* Standard Vehicle Selection — same for free and pro */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Vehicle Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {STANDARD_VEHICLES.map((sv) => {
-                    const isSelected = vehicleType === sv.key;
-                    return (
-                      <button
-                        key={sv.key}
-                        type="button"
-                        onClick={() => {
-                          form.setValue("vehicleType", sv.key);
-                          form.setValue("fuelConsumption", sv.fuelConsumptionL100km);
-                        }}
-                        className={`flex flex-col items-start gap-1 py-3 px-3 rounded-lg border text-left text-xs font-medium transition-all ${
-                          isSelected
-                            ? "border-primary bg-primary/10 text-primary shadow-sm"
-                            : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <sv.Icon className="w-4 h-4 shrink-0" />
-                          <span className="font-semibold">{sv.displayName}</span>
+
+              {isPro ? (() => {
+                const allVehicles = vehicles ?? [];
+
+                return (
+                  <div className="space-y-4">
+                    {/* Garage Vehicles — from database */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">Your Garage Vehicles</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickAdd(true)}
+                          className="flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Quick Add Vehicle
+                        </button>
+                      </div>
+
+                      {allVehicles.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-4 py-5 text-center">
+                          <Truck className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-40" />
+                          <p className="text-sm text-muted-foreground">No vehicles yet — add one to get started</p>
+                          <div className="flex items-center justify-center gap-3 mt-3">
+                            <Link href="/garage" className="text-xs text-primary underline underline-offset-2">
+                              Manage Garage
+                            </Link>
+                            <span className="text-muted-foreground text-xs">or</span>
+                            <button
+                              type="button"
+                              onClick={() => setShowQuickAdd(true)}
+                              className="text-xs text-primary underline underline-offset-2"
+                            >
+                              Quick Add Vehicle
+                            </button>
+                          </div>
                         </div>
-                        <span className="text-[10px] opacity-80 leading-snug pl-0.5">
-                          {sv.shortDescription}
-                        </span>
-                        <span className="text-[10px] opacity-60 pl-0.5">
-                          {sv.fuelConsumptionL100km} L/100km
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!isPro && (
+                      ) : (
+                        <div className="grid grid-cols-1 gap-2">
+                          {/* "No garage vehicle" option */}
+                          <button
+                            type="button"
+                            onClick={() => form.setValue("defaultVehicleId", null, { shouldValidate: true })}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left text-sm transition-all ${
+                              defaultVehicleIdWatch == null
+                                ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {defaultVehicleIdWatch == null
+                              ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              : <div className="w-4 h-4 rounded-full border border-muted-foreground/40 shrink-0" />
+                            }
+                            <span className="font-medium">Use profile vehicle type (fallback)</span>
+                          </button>
+
+                          {allVehicles.map(v => {
+                            const isSelected = defaultVehicleIdWatch === v.id;
+                            return (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => form.setValue("defaultVehicleId", v.id, { shouldValidate: true })}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left text-sm transition-all ${
+                                  isSelected
+                                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                    : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                                }`}
+                              >
+                                {isSelected
+                                  ? <Star className="w-4 h-4 shrink-0 fill-primary" />
+                                  : <div className="w-4 h-4 rounded-full border border-muted-foreground/40 shrink-0" />
+                                }
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold truncate">{v.name}</div>
+                                  <div className="text-[11px] opacity-70">{v.fuelType} · {v.avgConsumption} L/100km</div>
+                                </div>
+                                {isSelected && (
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/20 text-primary shrink-0">Default</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Separator */}
+                    <div className="border-t border-border/40 pt-4 space-y-3">
+                      <label className="text-sm font-medium text-muted-foreground">Profile Vehicle Type (fallback)</label>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Used when no garage vehicle is selected above.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {STANDARD_VEHICLES.map((sv) => {
+                          const isSelected = vehicleType === sv.key;
+                          return (
+                            <button
+                              key={sv.key}
+                              type="button"
+                              onClick={() => {
+                                form.setValue("vehicleType", sv.key);
+                                form.setValue("fuelConsumption", sv.fuelConsumptionL100km);
+                              }}
+                              className={`flex flex-col items-start gap-1 py-3 px-3 rounded-lg border text-left text-xs font-medium transition-all ${
+                                isSelected
+                                  ? "border-primary bg-primary/10 text-primary shadow-sm"
+                                  : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <sv.Icon className="w-4 h-4 shrink-0" />
+                                <span className="font-semibold">{sv.displayName}</span>
+                              </div>
+                              <span className="text-[10px] opacity-60 pl-0.5">
+                                {sv.fuelConsumptionL100km} L/100km
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Pro: custom fuel consumption override */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="vehicleName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Fallback Nickname (optional)</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g. The Band Van"
+                                {...field}
+                                value={field.value || ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="fuelConsumption"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Fallback Fuel (L / 100km)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" step="0.1" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              })() : (
+                /* Free: standard vehicle type picker only */
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Vehicle Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {STANDARD_VEHICLES.map((sv) => {
+                      const isSelected = vehicleType === sv.key;
+                      return (
+                        <button
+                          key={sv.key}
+                          type="button"
+                          onClick={() => {
+                            form.setValue("vehicleType", sv.key);
+                            form.setValue("fuelConsumption", sv.fuelConsumptionL100km);
+                          }}
+                          className={`flex flex-col items-start gap-1 py-3 px-3 rounded-lg border text-left text-xs font-medium transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/10 text-primary shadow-sm"
+                              : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <sv.Icon className="w-4 h-4 shrink-0" />
+                            <span className="font-semibold">{sv.displayName}</span>
+                          </div>
+                          <span className="text-[10px] opacity-80 leading-snug pl-0.5">
+                            {sv.shortDescription}
+                          </span>
+                          <span className="text-[10px] opacity-60 pl-0.5">
+                            {sv.fuelConsumptionL100km} L/100km
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <p className="text-xs text-muted-foreground pt-0.5">
                     Standard presets —{" "}
-                    <Link
-                      href="/billing"
-                      className="text-primary underline underline-offset-2"
-                    >
-                      unlock custom fuel figures in Pro
+                    <Link href="/billing" className="text-primary underline underline-offset-2">
+                      unlock custom vehicles in Pro
                     </Link>
                   </p>
-                )}
-              </div>
-
-              {/* Pro: vehicle nickname + custom fuel consumption */}
-              {isPro && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="vehicleName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nickname (optional)</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g. The Band Van"
-                            {...field}
-                            value={field.value || ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="fuelConsumption"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fuel Consumption (L / 100km)</FormLabel>
-                        <FormControl>
-                          <Input type="number" min="0" step="0.1" {...field} />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Override the standard figure for your actual vehicle.
-                        </p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
               )}
 
@@ -679,6 +827,125 @@ export default function ProfileForm() {
         activeMemberIds={activeMemberIdsWatch}
         onSave={handleLibrarySave}
       />
+
+      {/* Quick Add Vehicle Modal */}
+      <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-primary" />
+              Quick Add Vehicle
+            </DialogTitle>
+            <DialogDescription>
+              Add a vehicle to your garage and assign it to this act.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Vehicle Type</label>
+              <Select
+                value={quickAddType}
+                onValueChange={(v) => {
+                  setQuickAddType(v as typeof quickAddType);
+                  const sv = STANDARD_VEHICLES.find(s => s.key === v);
+                  if (sv) setQuickAddConsumption(sv.fuelConsumptionL100km);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STANDARD_VEHICLES.map(sv => (
+                    <SelectItem key={sv.key} value={sv.key}>{sv.displayName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Nickname <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <Input
+                placeholder="Tour Van, The Beast..."
+                value={quickAddName}
+                onChange={e => setQuickAddName(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Fuel Usage (L/100km)</label>
+                <Input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={quickAddConsumption}
+                  onChange={e => setQuickAddConsumption(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Fuel Type</label>
+                <Select value={quickAddFuelType} onValueChange={setQuickAddFuelType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="petrol">Petrol</SelectItem>
+                    <SelectItem value="diesel">Diesel</SelectItem>
+                    <SelectItem value="electric">Electric</SelectItem>
+                    <SelectItem value="LPG">LPG</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowQuickAdd(false)}>Cancel</Button>
+            <Button
+              disabled={quickAddSubmitting}
+              onClick={async () => {
+                setQuickAddSubmitting(true);
+                const name = quickAddName.trim() || STANDARD_VEHICLES.find(v => v.key === quickAddType)?.displayName || quickAddType;
+                const actIds = isEditing ? [profileId] : [];
+                const defaultForActIds = isEditing ? [profileId] : [];
+                createVehicle.mutate(
+                  {
+                    data: {
+                      name,
+                      vehicleType: quickAddType,
+                      fuelType: quickAddFuelType,
+                      avgConsumption: quickAddConsumption,
+                      actIds,
+                      defaultForActIds,
+                    },
+                  },
+                  {
+                    onSuccess: (newVehicle) => {
+                      queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+                      queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+                      form.setValue("defaultVehicleId", newVehicle.id, { shouldValidate: true });
+                      setShowQuickAdd(false);
+                      setQuickAddSubmitting(false);
+                      setQuickAddName("");
+                      toast({ title: `"${name}" added to your garage` });
+                    },
+                    onError: () => {
+                      setQuickAddSubmitting(false);
+                      toast({ title: "Failed to add vehicle", variant: "destructive" });
+                    },
+                  }
+                );
+              }}
+            >
+              {quickAddSubmitting ? "Adding..." : (
+                <>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Vehicle
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
