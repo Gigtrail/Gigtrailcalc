@@ -1,12 +1,14 @@
+import { useState, useMemo } from "react";
 import { useGetRuns, useDeleteRun, getGetRunsQueryKey } from "@workspace/api-client-react";
-import { Link } from "wouter";
-import { Plus, Trash2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, SlidersHorizontal, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay } from "date-fns";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,15 +20,112 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+type SortKey = "date" | "fee" | "totalCost" | "profit" | "merch";
+type SortDir = "asc" | "desc";
+type ProfitFilter = "all" | "profit" | "tight" | "loss";
+type WouldDoFilter = "all" | "yes" | "maybe" | "no";
+
+const fmt = (n: number | null | undefined) =>
+  n == null ? "—" : `$${Math.round(Math.abs(n)).toLocaleString()}`;
+
+function profitCategory(profit: number | null | undefined, income: number | null | undefined): "profit" | "tight" | "loss" {
+  const p = profit ?? 0;
+  const i = income ?? 0;
+  if (p < 0) return "loss";
+  if (i === 0) return p > 0 ? "profit" : "loss";
+  return p / i >= 0.2 ? "profit" : "tight";
+}
+
+function ProfitCell({ profit, income }: { profit?: number | null; income?: number | null }) {
+  const cat = profitCategory(profit, income);
+  const val = profit ?? 0;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 font-semibold tabular-nums",
+        cat === "profit" && "text-emerald-700",
+        cat === "tight" && "text-amber-600",
+        cat === "loss" && "text-red-600"
+      )}
+    >
+      {cat === "profit" && <TrendingUp className="w-3 h-3 flex-shrink-0" />}
+      {cat === "tight" && <Minus className="w-3 h-3 flex-shrink-0" />}
+      {cat === "loss" && <TrendingDown className="w-3 h-3 flex-shrink-0" />}
+      {val < 0 ? "−" : ""}{fmt(val)}
+    </span>
+  );
+}
+
+function WouldDoCell({ val }: { val?: string | null }) {
+  if (!val) return <span className="text-muted-foreground/50 text-xs">—</span>;
+  const map: Record<string, { label: string; cls: string }> = {
+    yes: { label: "Yes", cls: "border-emerald-300 text-emerald-700 bg-emerald-50" },
+    maybe: { label: "Maybe", cls: "border-amber-300 text-amber-700 bg-amber-50" },
+    no: { label: "No", cls: "border-red-300 text-red-700 bg-red-50" },
+  };
+  const entry = map[val.toLowerCase()] ?? { label: val, cls: "" };
+  return <Badge variant="outline" className={cn("text-xs", entry.cls)}>{entry.label}</Badge>;
+}
+
+function SortHeader({
+  label, sortKey: key, current, dir, onSort,
+}: { label: string; sortKey: SortKey; current: SortKey; dir: SortDir; onSort: (k: SortKey) => void }) {
+  const active = current === key;
+  return (
+    <th
+      className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors whitespace-nowrap"
+      onClick={() => onSort(key)}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        {active ? (
+          dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-40" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-card/60 border border-border/50 rounded-lg px-4 py-3">
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+      <p className="text-xl font-bold leading-tight mt-0.5">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
 
 export default function Runs() {
   const { data: runs, isLoading } = useGetRuns();
   const deleteRun = useDeleteRun();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
-  const handleDelete = (id: number) => {
+  const [search, setSearch] = useState("");
+  const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
+  const [wouldDoFilter, setWouldDoFilter] = useState<WouldDoFilter>("all");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const handleDelete = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
     deleteRun.mutate(
       { id },
       {
@@ -34,145 +133,333 @@ export default function Runs() {
           queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
           toast({ title: "Show deleted" });
         },
-        onError: () => {
-          toast({ title: "Failed to delete show", variant: "destructive" });
-        },
+        onError: () => toast({ title: "Failed to delete show", variant: "destructive" }),
       }
     );
   };
 
-  const getStatusColor = (profit: number, income: number) => {
-    if (income === 0) return profit > 0 ? "status-bar-worth" : "status-bar-loss";
-    const margin = profit / income;
-    if (margin > 0.2) return "status-bar-worth";
-    if (profit > 0) return "status-bar-tight";
-    return "status-bar-loss";
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
   };
 
-  const getStatusText = (profit: number, income: number) => {
-    if (income === 0) return profit > 0 ? "Worth the Drive" : "Probably Not Worth It";
-    const margin = profit / income;
-    if (margin > 0.2) return "Worth the Drive";
-    if (profit > 0) return "Tight Margins";
-    return "Probably Not Worth It";
+  const allStates = useMemo(() => {
+    const states = new Set<string>();
+    runs?.forEach(r => { if (r.state) states.add(r.state); });
+    return Array.from(states).sort();
+  }, [runs]);
+
+  const summaryStats = useMemo(() => {
+    if (!runs?.length) return null;
+    const total = runs.length;
+    const totalRevenue = runs.reduce((s, r) => s + (r.totalIncome ?? 0), 0);
+    const totalProfit = runs.reduce((s, r) => s + (r.totalProfit ?? 0), 0);
+    const avgProfit = total ? totalProfit / total : 0;
+    const venueProfits: Record<string, number> = {};
+    runs.forEach(r => {
+      if (r.venueName) {
+        venueProfits[r.venueName] = (venueProfits[r.venueName] ?? 0) + (r.totalProfit ?? 0);
+      }
+    });
+    const bestVenue = Object.entries(venueProfits).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+    return { total, totalRevenue, totalProfit, avgProfit, bestVenue };
+  }, [runs]);
+
+  const filtered = useMemo(() => {
+    if (!runs) return [];
+    let result = [...runs];
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(r =>
+        r.venueName?.toLowerCase().includes(q) ||
+        r.destination?.toLowerCase().includes(q) ||
+        r.city?.toLowerCase().includes(q) ||
+        r.state?.toLowerCase().includes(q) ||
+        r.origin?.toLowerCase().includes(q)
+      );
+    }
+
+    if (profitFilter !== "all") {
+      result = result.filter(r => profitCategory(r.totalProfit, r.totalIncome) === profitFilter);
+    }
+
+    if (wouldDoFilter !== "all") {
+      result = result.filter(r => r.wouldDoAgain?.toLowerCase() === wouldDoFilter);
+    }
+
+    if (stateFilter !== "all") {
+      result = result.filter(r => r.state === stateFilter);
+    }
+
+    if (dateFrom) {
+      const from = startOfDay(parseISO(dateFrom));
+      result = result.filter(r => {
+        const d = r.showDate ? parseISO(r.showDate) : parseISO(r.createdAt);
+        return d >= from;
+      });
+    }
+
+    if (dateTo) {
+      const to = endOfDay(parseISO(dateTo));
+      result = result.filter(r => {
+        const d = r.showDate ? parseISO(r.showDate) : parseISO(r.createdAt);
+        return d <= to;
+      });
+    }
+
+    result.sort((a, b) => {
+      let av = 0, bv = 0;
+      if (sortKey === "date") {
+        av = new Date(a.showDate ?? a.createdAt).getTime();
+        bv = new Date(b.showDate ?? b.createdAt).getTime();
+      } else if (sortKey === "fee") {
+        av = a.totalIncome ?? 0; bv = b.totalIncome ?? 0;
+      } else if (sortKey === "totalCost") {
+        av = a.totalCost ?? 0; bv = b.totalCost ?? 0;
+      } else if (sortKey === "profit") {
+        av = a.totalProfit ?? 0; bv = b.totalProfit ?? 0;
+      } else if (sortKey === "merch") {
+        av = a.merchEstimate ?? 0; bv = b.merchEstimate ?? 0;
+      }
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+
+    return result;
+  }, [runs, search, profitFilter, wouldDoFilter, stateFilter, dateFrom, dateTo, sortKey, sortDir]);
+
+  const hasActiveFilters = profitFilter !== "all" || wouldDoFilter !== "all" || stateFilter !== "all" || dateFrom || dateTo;
+
+  const clearFilters = () => {
+    setProfitFilter("all"); setWouldDoFilter("all");
+    setStateFilter("all"); setDateFrom(""); setDateTo("");
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Past Shows</h1>
-          <p className="text-muted-foreground mt-1">Your saved calculations.</p>
+          <p className="text-muted-foreground mt-0.5 text-sm">Your touring spreadsheet.</p>
         </div>
         <Button asChild>
           <Link href="/runs/new">
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-4 h-4 mr-1.5" />
             New Calculation
           </Link>
         </Button>
       </div>
 
+      {/* Summary Stats */}
+      {summaryStats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard label="Total Shows" value={summaryStats.total.toString()} />
+          <StatCard label="Total Revenue" value={`$${Math.round(summaryStats.totalRevenue).toLocaleString()}`} />
+          <StatCard
+            label="Total Profit"
+            value={`${summaryStats.totalProfit < 0 ? "−" : ""}$${Math.round(Math.abs(summaryStats.totalProfit)).toLocaleString()}`}
+            sub={`avg $${Math.round(Math.abs(summaryStats.avgProfit)).toLocaleString()} / show`}
+          />
+          <StatCard label="Best Venue" value={summaryStats.bestVenue} />
+        </div>
+      )}
+
+      {/* Search + Filters */}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" />
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search venue, location…"
+              className="pl-8"
+            />
+          </div>
+          <Button
+            variant={showFilters || hasActiveFilters ? "default" : "outline"}
+            size="icon"
+            onClick={() => setShowFilters(v => !v)}
+            className="flex-shrink-0"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </Button>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="icon" onClick={clearFilters} className="flex-shrink-0 text-muted-foreground">
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 p-3 bg-muted/30 border border-border/50 rounded-lg">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">From</label>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">To</label>
+              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Profit</label>
+              <Select value={profitFilter} onValueChange={v => setProfitFilter(v as ProfitFilter)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="profit">Strong profit</SelectItem>
+                  <SelectItem value="tight">Tight margins</SelectItem>
+                  <SelectItem value="loss">Loss</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Would Do Again</label>
+              <Select value={wouldDoFilter} onValueChange={v => setWouldDoFilter(v as WouldDoFilter)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="maybe">Maybe</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {allStates.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">State</label>
+                <Select value={stateFilter} onValueChange={setStateFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All states</SelectItem>
+                    {allStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-6 w-1/2" />
-                <Skeleton className="h-4 w-1/3 mt-1" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-24" />
-              </CardContent>
-            </Card>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full rounded-md" />
           ))}
         </div>
-      ) : runs?.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-4">
-          Your past shows will appear here once you run your first calculation.
-        </p>
+      ) : !runs?.length ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <p className="text-sm">No past shows yet — run your first calculation to see it here.</p>
+          <Button asChild className="mt-4">
+            <Link href="/runs/new">Start a Calculation</Link>
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <p className="text-sm">No shows match your filters.</p>
+          <button onClick={clearFilters} className="text-primary text-sm underline underline-offset-2 mt-1">Clear filters</button>
+        </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {runs?.map((run) => (
-            <Card key={run.id} className="group hover-elevate transition-all border-border/50 bg-card/50 overflow-hidden">
-              <div className="flex h-full">
-                <div className={`w-2 flex-shrink-0 ${getStatusColor(run.totalProfit || 0, run.totalIncome || 0)}`} />
-                <div className="flex-1 flex flex-col min-w-0">
-                  <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <CardTitle className="text-lg leading-snug truncate">
-                        {run.venueName || `${run.origin || "?"} → ${run.destination || "?"}`}
-                      </CardTitle>
-                      {run.venueName && (run.origin || run.destination) && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {run.origin} → {run.destination}
-                        </p>
+        <div className="border border-border/60 rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border/60">
+                <tr>
+                  <SortHeader label="Date" sortKey="date" current={sortKey} dir={sortDir} onSort={handleSort} />
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Venue</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Location</th>
+                  <SortHeader label="Fee" sortKey="fee" current={sortKey} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Costs" sortKey="totalCost" current={sortKey} dir={sortDir} onSort={handleSort} />
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Accommodation</th>
+                  <SortHeader label="Net Profit" sortKey="profit" current={sortKey} dir={sortDir} onSort={handleSort} />
+                  <SortHeader label="Merch" sortKey="merch" current={sortKey} dir={sortDir} onSort={handleSort} />
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Do Again?</th>
+                  <th className="px-3 py-2.5 w-8" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {filtered.map((run, idx) => {
+                  const dateStr = run.showDate
+                    ? format(parseISO(run.showDate + "T00:00:00"), "d MMM yy")
+                    : format(parseISO(run.createdAt), "d MMM yy");
+                  const venueName = run.venueName || `${run.origin || "?"} → ${run.destination || "?"}`;
+                  const location = [run.city, run.state].filter(Boolean).join(", ") || run.destination || "—";
+
+                  return (
+                    <tr
+                      key={run.id}
+                      className={cn(
+                        "group cursor-pointer transition-colors",
+                        idx % 2 === 0 ? "bg-card/20" : "bg-transparent",
+                        "hover:bg-primary/5"
                       )}
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <span className="text-xs text-muted-foreground">
-                          {run.showDate
-                            ? format(new Date(run.showDate + "T00:00:00"), 'MMM d, yyyy')
-                            : format(new Date(run.createdAt), 'MMM d, yyyy')}
-                        </span>
-                        {run.actType && (
-                          <Badge variant="outline" className="text-xs">{run.actType}</Badge>
-                        )}
-                        <Badge variant="outline" className="text-xs">{run.showType}</Badge>
-                        {run.status && run.status !== "draft" ? (
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${
-                              run.status === "confirmed" ? "border-green-300 text-green-700 bg-green-50" :
-                              run.status === "cancelled" ? "border-red-300 text-red-700 bg-red-50" :
-                              run.status === "completed" ? "border-blue-300 text-blue-700 bg-blue-50" :
-                              "border-border"
-                            }`}
-                          >
-                            {run.status.charAt(0).toUpperCase() + run.status.slice(1)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
-                            Draft
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Show</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure? This will permanently delete this saved run.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(run.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </CardHeader>
-                  <CardContent className="mt-auto pt-3 flex items-end justify-between">
-                    <div>
-                      <div className={`text-2xl font-bold ${(run.totalProfit || 0) >= 0 ? "text-foreground" : "text-red-600"}`}>
-                        {(run.totalProfit || 0) < 0 ? "−" : ""}${Math.abs(run.totalProfit || 0).toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{getStatusText(run.totalProfit || 0, run.totalIncome || 0)}</p>
-                    </div>
-                    <Button variant="secondary" size="sm" asChild>
-                      <Link href={`/runs/results?runId=${run.id}`}>View Result</Link>
-                    </Button>
-                  </CardContent>
-                </div>
-              </div>
-            </Card>
-          ))}
+                      onClick={() => navigate(`/runs/results?runId=${run.id}`)}
+                    >
+                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-xs">{dateStr}</td>
+                      <td className="px-3 py-2.5 font-medium max-w-[180px]">
+                        <span className="truncate block">{venueName}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{location}</td>
+                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmt(run.totalIncome)}</td>
+                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground">{fmt(run.totalCost)}</td>
+                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground text-xs">
+                        {run.accommodationRequired && run.accommodationCost ? fmt(run.accommodationCost) : <span className="text-muted-foreground/40">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <ProfitCell profit={run.totalProfit} income={run.totalIncome} />
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground text-xs">
+                        {run.merchEstimate ? fmt(run.merchEstimate) : <span className="text-muted-foreground/40">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <WouldDoCell val={run.wouldDoAgain} />
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Show</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Permanently delete <strong>{venueName}</strong>? This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={e => handleDelete(e, run.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-2 border-t border-border/40 bg-muted/20">
+            <p className="text-xs text-muted-foreground">
+              {filtered.length} of {runs?.length ?? 0} show{runs?.length !== 1 ? "s" : ""}
+              {hasActiveFilters && " (filtered)"}
+              {" · "}Click any row to view saved result
+            </p>
+          </div>
         </div>
       )}
     </div>
