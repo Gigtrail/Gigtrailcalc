@@ -5,7 +5,6 @@ import { Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, SlidersHorizonta
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
@@ -65,16 +64,6 @@ function ProfitCell({ profit, income }: { profit?: number | null; income?: numbe
   );
 }
 
-function WouldDoCell({ val }: { val?: string | null }) {
-  if (!val) return <span className="text-muted-foreground/50 text-xs">—</span>;
-  const map: Record<string, { label: string; cls: string }> = {
-    yes: { label: "Yes", cls: "border-emerald-300 text-emerald-700 bg-emerald-50" },
-    maybe: { label: "Maybe", cls: "border-amber-300 text-amber-700 bg-amber-50" },
-    no: { label: "No", cls: "border-red-300 text-red-700 bg-red-50" },
-  };
-  const entry = map[val.toLowerCase()] ?? { label: val, cls: "" };
-  return <Badge variant="outline" className={cn("text-xs", entry.cls)}>{entry.label}</Badge>;
-}
 
 function SortHeader({
   label, sortKey: key, current, dir, onSort,
@@ -375,7 +364,6 @@ export default function Runs() {
                   <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Accommodation</th>
                   <SortHeader label="Net Profit" sortKey="profit" current={sortKey} dir={sortDir} onSort={handleSort} />
                   <SortHeader label="Merch" sortKey="merch" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Do Again?</th>
                   <th className="px-3 py-2.5 w-8" />
                 </tr>
               </thead>
@@ -412,9 +400,6 @@ export default function Runs() {
                       </td>
                       <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground text-xs">
                         {run.merchEstimate ? fmt(run.merchEstimate) : <span className="text-muted-foreground/40">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <WouldDoCell val={run.wouldDoAgain} />
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <AlertDialog>
