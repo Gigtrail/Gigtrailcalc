@@ -302,8 +302,8 @@ export default function Garage() {
                       </div>
                     )}
 
-                    {/* Set as default per act */}
-                    {isPro && assignedActIds.length > 0 && (
+                    {/* Set as default / assign per act — shows ALL profiles */}
+                    {isPro && (profiles ?? []).length > 0 && (
                       <div className="pt-1">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -313,24 +313,53 @@ export default function Garage() {
                               <ChevronDown className="w-3 h-3 ml-auto" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-48">
+                          <DropdownMenuContent align="start" className="w-56">
                             <DropdownMenuLabel className="text-xs">Choose act</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            {assignedActIds.map((actId) => {
-                              const actName = profileMap.get(actId);
-                              if (!actName) return null;
-                              const isCurrentDefault = defaultForActs.includes(actId);
+                            {(profiles ?? []).map((profile) => {
+                              const isAssigned = assignedActIds.includes(profile.id);
+                              const isCurrentDefault = defaultForActs.includes(profile.id);
                               return (
                                 <DropdownMenuItem
-                                  key={actId}
-                                  onClick={() => handleSetDefault(vehicle.id, actId, actName)}
-                                  className="text-xs"
+                                  key={profile.id}
                                   disabled={isCurrentDefault}
+                                  className="text-xs"
+                                  onClick={() => {
+                                    if (!isAssigned) {
+                                      // Assign vehicle to this act first, then set as default
+                                      const newActIds = [...assignedActIds, profile.id];
+                                      setActAssignments.mutate(
+                                        {
+                                          id: vehicle.id,
+                                          data: { actIds: newActIds, defaultForActIds: [profile.id] },
+                                        },
+                                        {
+                                          onSuccess: () => {
+                                            queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+                                            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+                                            toast({ title: `Assigned to "${profile.name}" and set as default` });
+                                          },
+                                          onError: () => {
+                                            toast({ title: "Failed to assign vehicle", variant: "destructive" });
+                                          },
+                                        }
+                                      );
+                                    } else {
+                                      handleSetDefault(vehicle.id, profile.id, profile.name);
+                                    }
+                                  }}
                                 >
-                                  {isCurrentDefault && <Star className="w-3 h-3 mr-2 text-primary" />}
-                                  {!isCurrentDefault && <span className="w-3 h-3 mr-2" />}
-                                  {actName}
-                                  {isCurrentDefault && <span className="ml-auto text-muted-foreground">current</span>}
+                                  {isCurrentDefault
+                                    ? <Star className="w-3 h-3 mr-2 text-primary fill-primary" />
+                                    : <span className="w-3 h-3 mr-2 inline-block" />
+                                  }
+                                  <span className="flex-1">{profile.name}</span>
+                                  {isCurrentDefault && (
+                                    <span className="ml-2 text-muted-foreground">current</span>
+                                  )}
+                                  {!isAssigned && (
+                                    <span className="ml-2 text-muted-foreground/60 text-[10px]">+ assign</span>
+                                  )}
                                 </DropdownMenuItem>
                               );
                             })}

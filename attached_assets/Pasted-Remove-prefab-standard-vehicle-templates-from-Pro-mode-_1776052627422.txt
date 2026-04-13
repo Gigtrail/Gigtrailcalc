@@ -1,0 +1,59 @@
+Remove prefab / standard vehicle templates from Pro mode in Gig Trail.
+
+Goal:
+In Pro mode, users should only work with their own saved custom vehicles. The prefab vehicle options like Small Car, SUV/Wagon, Van, and Bus should no longer appear as selectable vehicle cards in the Garage/Profile experience for Pro users.
+
+What to change:
+
+1. Pro mode behaviour
+- If user plan = pro:
+  - hide/remove the prefab vehicle type cards:
+    - Small Car
+    - SUV / Wagon
+    - Van
+    - Bus
+- Do not show standard vehicle presets as the main vehicle selection UI in Pro mode
+
+2. Pro mode should use custom vehicles only
+- In Pro mode, the Garage section should show:
+  - current default vehicle
+  - saved custom vehicles assigned to the current act (or all if not act-filtered yet)
+  - quick switch dropdown
+  - quick add vehicle button
+  - manage garage button
+
+3. Quick Add still allowed
+- Keep "+ Quick Add Vehicle" in Pro mode
+- When using Quick Add:
+  - user can still choose a vehicle type template as a starting point
+  - but this should happen inside the add flow only
+  - not as visible prefab vehicle cards on the main Garage screen
+
+4. Free mode behaviour
+- If user plan = free:
+  - standard/prefab vehicle options can still remain if needed for simple setup
+  - OR keep current free logic unchanged
+
+5. UI cleanup
+- Remove duplicated standard vehicle setup box from Pro Garage view
+- Pro Garage should feel like:
+  - custom vehicle manager
+  - not a starter template selector
+
+6. Data logic
+- Prefab vehicle types should only be used as defaults/templates when creating a new vehicle
+- They should not be stored or shown as separate active vehicle choices unless the user has saved them as actual vehicles
+
+7. Empty state for Pro users
+If Pro user has no saved vehicles yet, show:
+- "No custom vehicles yet"
+- "+ Quick Add Vehicle"
+- "Manage Garage"
+
+Optional helper text:
+"Add your own touring vehicles here. You can start with a standard type and customise it."
+
+8. Expected result
+- Pro users no longer see prefab vehicle cards in the Garage section
+- Pro users only see real saved custom vehicles
+- Standard vehicle types are available only inside the add/edit flow as templates
