@@ -53,6 +53,14 @@ export default function TourDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
+  const toggleStop = (id: number) =>
+    setExpandedStops(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
   const [showPastShowModal, setShowPastShowModal] = useState(false);
   const [pastShowSearch, setPastShowSearch] = useState("");
   const [importingRunId, setImportingRunId] = useState<number | null>(null);
@@ -332,73 +340,94 @@ export default function TourDetail() {
                             </span>
                           </div>
                         )}
-                        <div className="p-4 flex items-start gap-4 group hover:bg-card transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 font-bold border border-secondary/30 mt-1">
+
+                        {/* Collapsed row — always visible */}
+                        <div
+                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer group"
+                          onClick={() => toggleStop(stop.id)}
+                        >
+                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
                             {i + 1}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <div className="font-bold text-lg">{stop.city}</div>
-                              <div className="flex items-center gap-2">
-                                {stopCalc && (
-                                  <div className={`font-bold text-sm ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
-                                    {fmt(stopCalc.net)} net
-                                  </div>
-                                )}
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex">
-                                  <Button
-                                    variant="ghost" size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                    onClick={() => setLocation(`/tours/${tourId}/stops/${stop.id}/edit`)}
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Delete Stop</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          Remove {stop.city} from the tour?
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction
-                                          onClick={() => handleDeleteStop(stop.id)}
-                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                        >
-                                          Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 mt-1 text-sm text-muted-foreground">
-                              {stop.date && (
-                                <span className="flex items-center">
-                                  <Calendar className="w-3 h-3 mr-1" />
-                                  {format(new Date(stop.date), "MMM d")}
-                                </span>
-                              )}
-                              {stop.venueName && <span>· {stop.venueName}</span>}
-                              <Badge variant="outline" className="font-normal text-[10px] py-0">
-                                {stop.showType}
-                              </Badge>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold truncate">
+                              {stop.venueName || stop.city}
+                            </span>
+                            {stop.venueName && stop.city && stop.venueName !== stop.city && (
+                              <span className="text-xs text-muted-foreground ml-1.5 truncate">{stop.city}</span>
+                            )}
+                          </div>
+                          {stop.date && (
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {format(new Date(stop.date), "MMM d")}
+                            </span>
+                          )}
+                          {stopCalc && (
+                            <span className={`text-sm font-bold shrink-0 ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
+                              {fmt(stopCalc.totalIncome)}
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expandedStops.has(stop.id) ? "rotate-180" : ""}`}
+                          />
+                        </div>
+
+                        {/* Expanded stats */}
+                        {expandedStops.has(stop.id) && (
+                          <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 space-y-2">
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-2">
+                              <Badge variant="outline" className="font-normal text-[10px] py-0">{stop.showType}</Badge>
                               {stopCalc && (
-                                <span className="text-xs">
-                                  {fmt(stopCalc.totalIncome)} in · {fmt(stopCalc.totalCosts)} costs
-                                </span>
+                                <>
+                                  <span>{fmt(stopCalc.totalIncome)} income</span>
+                                  <span>·</span>
+                                  <span>{fmt(stopCalc.totalCosts)} costs</span>
+                                  <span>·</span>
+                                  <span className={`font-semibold ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
+                                    {fmt(stopCalc.net)} net
+                                  </span>
+                                </>
                               )}
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={e => { e.stopPropagation(); setLocation(`/tours/${tourId}/stops/${stop.id}/edit`); }}
+                              >
+                                <Edit className="w-3 h-3 mr-1" /> Edit
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="w-3 h-3 mr-1" /> Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Stop</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Remove {stop.venueName || stop.city} from the tour?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteStop(stop.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
