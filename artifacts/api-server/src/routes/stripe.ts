@@ -63,59 +63,61 @@ router.post("/stripe/portal", requireAuth, async (req, res): Promise<void> => {
 router.post("/stripe/admin/setup-plans", async (req, res): Promise<void> => {
   try {
     const stripe = await (await import("../stripeClient")).getUncachableStripeClient();
-    const { targetProductId } = req.body ?? {};
+    const { monthlyProductId, yearlyProductId } = req.body ?? {};
+    const results: any[] = [];
 
-    let product: any;
-    if (targetProductId) {
-      // Update specific product (e.g. production product ID)
-      product = await stripe.products.update(targetProductId, { metadata: { plan: "pro" } });
-    } else {
-      // Find or create the Pro product
-      const existing = await stripe.products.list({ active: true, limit: 20 });
-      product = existing.data.find((p: any) => p.metadata?.plan === "pro");
-      if (!product) {
-        product = await stripe.products.create({ name: "Gig Trail Pro", metadata: { plan: "pro" } });
+    async function setupProduct(productId: string | undefined, interval: "month" | "year", unitAmount: number) {
+      let product: any;
+      if (productId) {
+        product = await stripe.products.update(productId, { metadata: { plan: "pro" } });
+      } else {
+        const existing = await stripe.products.list({ active: true, limit: 20 });
+        product = existing.data.find((p: any) => p.metadata?.plan === "pro" && p.prices?.some?.((pr: any) => pr.recurring?.interval === interval));
+        if (!product) {
+          product = (interval === "month")
+            ? existing.data.find((p: any) => p.metadata?.plan === "pro")
+            : null;
+        }
+        if (!product) {
+          product = await stripe.products.create({ name: "Gig Trail Pro", metadata: { plan: "pro" } });
+        }
       }
+
+      // Ensure the correct price exists on this product
+      const prices = await stripe.prices.list({ product: product.id, active: true, limit: 10 });
+      const hasCorrectPrice = prices.data.some((p: any) => p.unit_amount === unitAmount && p.recurring?.interval === interval);
+
+      // Archive prices for the same interval but wrong amount (leave other intervals intact)
+      for (const p of prices.data as any[]) {
+        if (p.recurring?.interval === interval && p.unit_amount !== unitAmount) {
+          await stripe.prices.update(p.id, { active: false });
+        }
+      }
+
+      const price = hasCorrectPrice
+        ? prices.data.find((p: any) => p.unit_amount === unitAmount && p.recurring?.interval === interval)
+        : await stripe.prices.create({ product: product.id, unit_amount: unitAmount, currency: "aud", recurring: { interval }, nickname: interval === "month" ? "Pro Monthly AU$12/mo" : "Pro Yearly AU$79/yr" });
+
+      // Touch to fire product.updated webhook → syncs product row into DB
+      await stripe.products.update(product.id, { description: "Gig Trail Pro — unlimited calculations and smart tour planning." });
+
+      return { product: { id: product.id, name: product.name, metadata: product.metadata }, price: { id: (price as any).id, amount: (price as any).unit_amount, interval } };
     }
 
-    // Check existing active prices
-    const allPrices = await stripe.prices.list({ product: product.id, active: true, limit: 20 });
-    const hasMonthly = allPrices.data.some((p: any) => p.unit_amount === 1200 && p.recurring?.interval === "month");
-    const hasYearly  = allPrices.data.some((p: any) => p.unit_amount === 7900 && p.recurring?.interval === "year");
+    // Setup monthly product (provided or find/create)
+    results.push(await setupProduct(monthlyProductId, "month", 1200));
 
-    // Archive stale prices (anything not matching new amounts)
-    for (const p of allPrices.data as any[]) {
-      const isNewMonthly = p.unit_amount === 1200 && p.recurring?.interval === "month";
-      const isNewYearly  = p.unit_amount === 7900 && p.recurring?.interval === "year";
-      if (!isNewMonthly && !isNewYearly) {
-        await stripe.prices.update(p.id, { active: false });
-      }
+    // Setup yearly product only if a separate ID is provided
+    if (yearlyProductId) {
+      results.push(await setupProduct(yearlyProductId, "year", 7900));
     }
 
-    const monthly = hasMonthly
-      ? allPrices.data.find((p: any) => p.unit_amount === 1200 && p.recurring?.interval === "month")
-      : await stripe.prices.create({ product: product.id, unit_amount: 1200, currency: "aud", recurring: { interval: "month" }, nickname: "Pro Monthly AU$12/mo" });
-
-    const yearly = hasYearly
-      ? allPrices.data.find((p: any) => p.unit_amount === 7900 && p.recurring?.interval === "year")
-      : await stripe.prices.create({ product: product.id, unit_amount: 7900, currency: "aud", recurring: { interval: "year" }, nickname: "Pro Yearly AU$79/yr" });
-
-    // Touch the product to trigger product.updated webhook (syncs product row into DB)
-    await stripe.products.update(product.id, { description: "Gig Trail Pro plan — unlimited calculations and smart tour planning." });
-
-    // Also trigger sync
+    // Trigger backfill sync
     const { getStripeSync } = await import("../stripeClient");
     const sync = await getStripeSync();
     sync.syncBackfill().catch(() => {});
 
-    res.json({
-      ok: true,
-      product: { id: product.id, name: product.name, metadata: product.metadata },
-      prices: [
-        { id: (monthly as any).id, amount: (monthly as any).unit_amount, interval: "month" },
-        { id: (yearly as any).id, amount: (yearly as any).unit_amount, interval: "year" },
-      ],
-    });
+    res.json({ ok: true, results });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

@@ -99,10 +99,24 @@ export default function Billing() {
 
   const handleUpgrade = async (planKey: string) => {
     const products = plansData?.data ?? [];
-    const product = products.find((p) => p.metadata?.plan === planKey);
-    const price = period === "yearly"
-      ? (product?.prices?.find((p) => p.recurring?.interval === "year") ?? product?.prices?.[0])
-      : (product?.prices?.find((p) => p.recurring?.interval === "month") ?? product?.prices?.[0]);
+    // Support both: one product with multiple prices, or separate products per interval
+    const matching = products.filter((p) => p.metadata?.plan === planKey);
+    const targetInterval = period === "yearly" ? "year" : "month";
+    const fallbackInterval = period === "yearly" ? "month" : "year";
+
+    let price: any;
+    for (const p of matching) {
+      price = p.prices?.find((pr) => pr.recurring?.interval === targetInterval);
+      if (price) break;
+    }
+    if (!price) {
+      for (const p of matching) {
+        price = p.prices?.find((pr) => pr.recurring?.interval === fallbackInterval);
+        if (price) break;
+      }
+    }
+    if (!price) price = matching[0]?.prices?.[0];
+
     if (!price) {
       toast({ title: "Plan not available", description: "Please try again later.", variant: "destructive" });
       return;
