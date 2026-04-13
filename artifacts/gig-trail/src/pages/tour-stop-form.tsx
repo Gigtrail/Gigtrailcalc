@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateTourStop, useUpdateTourStop, useGetTourStops, useGetTour } from "@workspace/api-client-react";
+import { useCreateTourStop, useUpdateTourStop, useGetTourStops, useGetTour, useGetProfile } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, Save } from "lucide-react";
+import { ChevronLeft, Save, Home, Building2, Pencil } from "lucide-react";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useEffect, useMemo } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
@@ -46,6 +47,7 @@ const stopSchema = z.object({
   merchEstimate: z.coerce.number().optional().nullable(),
   marketingCost: z.coerce.number().optional().nullable(),
   accommodationCost: z.coerce.number().optional().nullable(),
+  accommodationMode: z.string().optional().nullable(),
   extraCosts: z.coerce.number().optional().nullable(),
   distanceOverride: z.coerce.number().optional().nullable(),
   fuelPriceOverride: z.coerce.number().optional().nullable(),
@@ -73,6 +75,24 @@ export default function TourStopForm() {
     query: { enabled: !!tourId, queryKey: ['tourStops', tourId] }
   });
   
+  const { data: profile } = useGetProfile(tour?.profileId || 0, {
+    query: { enabled: !!tour?.profileId, queryKey: ["profile", tour?.profileId] },
+  });
+
+  const profileNightlyRate = profile
+    ? (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE
+    : 0;
+
+  const profileAccomSummary = (() => {
+    if (!profile || !profile.accommodationRequired) return "Profile says accommodation not required";
+    const parts: string[] = [];
+    if (profile.singleRoomsDefault) parts.push(`${profile.singleRoomsDefault} single`);
+    if (profile.doubleRoomsDefault) parts.push(`${profile.doubleRoomsDefault} double`);
+    return parts.length > 0
+      ? `${parts.join(" + ")} room${parts.length > 1 || (profile.singleRoomsDefault || 0) + (profile.doubleRoomsDefault || 0) > 1 ? "s" : ""} · $${profileNightlyRate}/night`
+      : "No rooms configured in profile";
+  })();
+
   const createStop = useCreateTourStop();
   const updateStop = useUpdateTourStop();
 
@@ -97,6 +117,7 @@ export default function TourStopForm() {
       merchEstimate: 0,
       marketingCost: 0,
       accommodationCost: 0,
+      accommodationMode: "profile_default",
       extraCosts: 0,
       distanceOverride: null,
       fuelPriceOverride: null,
@@ -176,6 +197,7 @@ export default function TourStopForm() {
         merchEstimate: stop.merchEstimate,
         marketingCost: stop.marketingCost,
         accommodationCost: stop.accommodationCost,
+        accommodationMode: stop.accommodationMode || "profile_default",
         extraCosts: stop.extraCosts,
         distanceOverride: stop.distanceOverride,
         fuelPriceOverride: stop.fuelPriceOverride,
@@ -186,6 +208,12 @@ export default function TourStopForm() {
       form.setValue("stopOrder", stops.length);
     }
   }, [stop, stops, isEditing, form]);
+
+  useEffect(() => {
+    if (!isEditing && profileNightlyRate > 0 && form.getValues("accommodationMode") === "profile_default") {
+      form.setValue("accommodationCost", profileNightlyRate);
+    }
+  }, [profileNightlyRate, isEditing, form]);
 
   const onSubmit = (data: StopFormValues) => {
     // If not editing and date is empty, set it to null instead of empty string
@@ -509,20 +537,79 @@ export default function TourStopForm() {
                   <CardTitle>Other Costs</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="accommodationCost"
-                      render={({ field }) => (
+                  {/* Accommodation mode selector */}
+                  <FormField
+                    control={form.control}
+                    name="accommodationMode"
+                    render={({ field }) => {
+                      const mode = field.value || "profile_default";
+                      return (
                         <FormItem>
-                          <FormLabel>Accommodation ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
+                          <FormLabel>Accommodation</FormLabel>
+                          <div className="flex gap-2 flex-wrap">
+                            {[
+                              { value: "profile_default", label: "Use Profile Default", Icon: Home },
+                              { value: "venue_provided", label: "Provided by Venue", Icon: Building2 },
+                              { value: "manual", label: "Edit Manually", Icon: Pencil },
+                            ].map(({ value, label, Icon }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => {
+                                  field.onChange(value);
+                                  if (value === "profile_default") {
+                                    form.setValue("accommodationCost", profileNightlyRate || 0);
+                                  } else if (value === "venue_provided") {
+                                    form.setValue("accommodationCost", 0);
+                                  }
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                                  mode === value
+                                    ? "bg-secondary text-secondary-foreground border-secondary"
+                                    : "bg-background border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {mode === "profile_default" && (
+                            <p className="text-xs text-muted-foreground mt-2 bg-muted/40 px-3 py-2 rounded-md border border-border/30">
+                              Using profile accommodation: {profileAccomSummary}
+                              {profileNightlyRate > 0 && (
+                                <span className="ml-1 font-medium text-foreground">= ${profileNightlyRate.toFixed(2)}/night</span>
+                              )}
+                            </p>
+                          )}
+                          {mode === "venue_provided" && (
+                            <p className="text-xs text-muted-foreground mt-2 bg-muted/40 px-3 py-2 rounded-md border border-border/30">
+                              Accommodation covered by venue — cost set to $0
+                            </p>
+                          )}
+                          {mode === "manual" && (
+                            <FormField
+                              control={form.control}
+                              name="accommodationCost"
+                              render={({ field: costField }) => (
+                                <FormItem className="mt-2">
+                                  <FormLabel className="text-xs text-muted-foreground">Accommodation Cost ($)</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" min="0" {...costField} value={costField.value || 0} className="max-w-xs" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
                           <FormMessage />
                         </FormItem>
-                      )}
-                    />
+                      );
+                    }}
+                  />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="extraCosts"

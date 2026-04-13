@@ -1,0 +1,143 @@
+Update the “Add Past Show” flow so Accommodation is smarter and pulled from the selected profile by default, with simple override options.
+
+GOAL:
+When adding a past show, Accommodation should not just be a blank manual number.
+It should default from the selected profile’s accommodation setup, but also allow:
+- Provided by Venue
+- Manual Edit / Override
+
+==================================================
+1. ACCOMMODATION DEFAULT BEHAVIOUR
+==================================================
+
+When user opens “Add Past Show”:
+
+- Read the selected act/profile
+- Pull that profile’s accommodation settings
+- Use those settings as the default accommodation basis
+
+This means:
+- room requirements should come from profile
+- accommodation type / room count should come from profile
+- estimated accommodation cost should auto-populate if accommodation is required
+
+If profile says accommodation is not required:
+- default accommodation cost = 0
+
+==================================================
+2. REPLACE SIMPLE ACCOMMODATION INPUT WITH 3 OPTIONS
+==================================================
+
+In the Other Costs / Accommodation area, replace the plain manual accommodation field with an accommodation mode selector.
+
+Add 3 options:
+
+1. Use Profile Default
+2. Provided by Venue
+3. Edit Manually
+
+Suggested UI:
+Accommodation:
+- radio buttons, segmented control, or dropdown
+
+==================================================
+3. OPTION LOGIC
+==================================================
+
+A) Use Profile Default
+- This should be the default selected option
+- Pull accommodation requirements from the selected profile
+- Auto-calculate accommodation cost using current accommodation logic
+- Show a small summary like:
+  “Using profile accommodation: 1 single + 2 double”
+
+B) Provided by Venue
+- Set accommodation cost to $0
+- Show a small note:
+  “Accommodation covered by venue”
+- Save this state clearly in the past show record
+
+C) Edit Manually
+- Allow user to manually enter accommodation cost
+- Keep it simple:
+  - manual accommodation cost input
+- Optional: allow manual notes if easy
+  - e.g. “Stayed with friends” or “Only needed 1 room”
+
+==================================================
+4. PROFILE-BASED ACCOMMODATION SUMMARY
+==================================================
+
+When “Use Profile Default” is selected, show a helper summary under the field:
+
+Examples:
+- “Using profile accommodation: 1 queen room”
+- “Using profile accommodation: 1 single + 2 double”
+- “Profile says accommodation not required”
+
+This should help users understand where the number is coming from.
+
+==================================================
+5. SAVE DATA PROPERLY
+==================================================
+
+When saving a past show, store:
+- accommodation_mode
+  - profile_default
+  - venue_provided
+  - manual
+- accommodation_cost
+- accommodation_summary if useful
+- profile_id used for calculation
+
+This is important so past shows can be reopened later and still show the same logic that was originally used.
+
+==================================================
+6. EDITING EXISTING PAST SHOWS
+==================================================
+
+When opening an existing past show:
+- load the saved accommodation mode
+- show the correct state:
+  - profile default
+  - provided by venue
+  - manual override
+
+Do not recalculate in a way that breaks historic accuracy unless the user explicitly changes it.
+
+==================================================
+7. UI / WORDING
+==================================================
+
+Use clear wording:
+
+Label:
+Accommodation
+
+Options:
+- Use Profile Default
+- Provided by Venue
+- Edit Manually
+
+If manual is selected, show:
+Accommodation Cost ($)
+
+Keep the UI simple and musician-friendly.
+
+==================================================
+8. IMPORTANT IMPLEMENTATION NOTES
+==================================================
+
+- Reuse existing profile accommodation data
+- Do not duplicate profile setup logic
+- Keep profile default as the main path
+- Provided by Venue should be a fast one-click option
+- Manual edit should remain available as an override
+- Preserve saved values exactly for past show history
+
+EXPECTED RESULT:
+- Adding a past show feels faster
+- Accommodation comes from the profile by default
+- User can quickly mark accommodation as provided by venue
+- User can still manually override when needed
+- Past shows retain the correct accommodation mode and value

@@ -25,6 +25,7 @@ export const tourStopsTable = pgTable("tour_stops", {
   extraCosts: numeric("extra_costs", { precision: 10, scale: 2 }),
   distanceOverride: numeric("distance_override", { precision: 10, scale: 2 }),
   fuelPriceOverride: numeric("fuel_price_override", { precision: 6, scale: 3 }),
+  accommodationMode: text("accommodation_mode"),
   notes: text("notes"),
 });
 

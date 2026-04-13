@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
-  Clock, History, Search,
+  Clock, History, Search, Home, Building2, Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -56,6 +56,10 @@ export default function TourDetail() {
   const [showPastShowModal, setShowPastShowModal] = useState(false);
   const [pastShowSearch, setPastShowSearch] = useState("");
   const [importingRunId, setImportingRunId] = useState<number | null>(null);
+  type RunItem = NonNullable<typeof pastRuns>[number];
+  const [selectedRun, setSelectedRun] = useState<RunItem | null>(null);
+  const [accomMode, setAccomMode] = useState<"profile_default" | "venue_provided" | "manual">("profile_default");
+  const [manualAccomCost, setManualAccomCost] = useState<string>("");
 
   const { data: tour, isLoading: isLoadingTour } = useGetTour(tourId, {
     query: { enabled: !!tourId, queryKey: ["tour", tourId] },
@@ -107,9 +111,35 @@ export default function TourDetail() {
     );
   };
 
-  const handleImportPastShow = (run: typeof pastRuns extends (infer U)[] | undefined ? U : never) => {
+  const closePastShowModal = () => {
+    setShowPastShowModal(false);
+    setPastShowSearch("");
+    setSelectedRun(null);
+    setAccomMode("profile_default");
+    setManualAccomCost("");
+  };
+
+  const handleSelectRun = (run: RunItem) => {
+    setSelectedRun(run);
+    setAccomMode("profile_default");
+    setManualAccomCost(nightlyAccomRate > 0 ? String(nightlyAccomRate) : "");
+  };
+
+  const handleConfirmImport = () => {
+    if (!selectedRun) return;
+    const run = selectedRun;
     setImportingRunId(run.id);
     const nextOrder = (stops?.length ?? 0) + 1;
+
+    let accomCost: number | null = null;
+    if (accomMode === "profile_default") {
+      accomCost = nightlyAccomRate > 0 ? nightlyAccomRate : 0;
+    } else if (accomMode === "venue_provided") {
+      accomCost = 0;
+    } else {
+      accomCost = parseFloat(manualAccomCost) || 0;
+    }
+
     createStop.mutate(
       {
         tourId,
@@ -127,14 +157,15 @@ export default function TourDetail() {
           guarantee: run.guarantee ?? null,
           merchEstimate: run.merchEstimate ?? null,
           marketingCost: run.marketingCost ?? null,
+          accommodationCost: accomCost,
+          accommodationMode: accomMode,
           stopOrder: nextOrder,
         },
       },
       {
         onSuccess: (newStop) => {
           queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
-          setShowPastShowModal(false);
-          setPastShowSearch("");
+          closePastShowModal();
           setImportingRunId(null);
           toast({ title: `"${run.venueName || run.destination || run.city}" added to trail` });
           setLocation(`/tours/${tourId}/stops/${newStop.id}/edit`);
@@ -191,6 +222,15 @@ export default function TourDetail() {
     return { text: "Tight Margins", color: "status-tight", Icon: AlertTriangle };
   };
   const status = getStatus();
+
+  const profileAccomSummary = (() => {
+    if (!profile) return null;
+    if (!profile.accommodationRequired) return "Profile says accommodation not required";
+    const parts: string[] = [];
+    if (profile.singleRoomsDefault) parts.push(`${profile.singleRoomsDefault} single`);
+    if (profile.doubleRoomsDefault) parts.push(`${profile.doubleRoomsDefault} double`);
+    return parts.length > 0 ? `${parts.join(" + ")} room${parts.length > 1 || (profile.singleRoomsDefault || 0) + (profile.doubleRoomsDefault || 0) > 1 ? "s" : ""}` : null;
+  })();
 
   const filteredRuns = (pastRuns ?? []).filter(r => {
     if (!pastShowSearch) return true;
@@ -694,67 +734,179 @@ export default function TourDetail() {
       </div>
 
       {/* Add Past Show Modal */}
-      <Dialog open={showPastShowModal} onOpenChange={open => { setShowPastShowModal(open); if (!open) setPastShowSearch(""); }}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+      <Dialog open={showPastShowModal} onOpenChange={open => { if (!open) closePastShowModal(); else setShowPastShowModal(true); }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
+              {selectedRun && (
+                <button
+                  onClick={() => { setSelectedRun(null); setAccomMode("profile_default"); }}
+                  className="text-muted-foreground hover:text-foreground transition-colors mr-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
               <History className="w-5 h-5" />
-              Add Past Show
+              {selectedRun ? "Confirm Show Import" : "Add Past Show"}
             </DialogTitle>
             <DialogDescription>
-              Import a saved show into this tour trail. The stop will be pre-filled and editable.
+              {selectedRun
+                ? "Review the show and set accommodation before adding to the trail."
+                : "Import a saved show into this tour trail. The stop will be pre-filled and editable."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by venue, city or date…"
-              className="pl-9"
-              value={pastShowSearch}
-              onChange={e => setPastShowSearch(e.target.value)}
-            />
-          </div>
+          {!selectedRun ? (
+            <>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by venue, city or date…"
+                  className="pl-9"
+                  value={pastShowSearch}
+                  onChange={e => setPastShowSearch(e.target.value)}
+                />
+              </div>
 
-          <div className="overflow-y-auto flex-1 space-y-2 pr-1">
-            {!pastRuns ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Loading past shows…</p>
-            ) : filteredRuns.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                {pastShowSearch ? "No shows match your search." : "No past shows yet."}
-              </p>
-            ) : (
-              filteredRuns.map(run => (
-                <button
-                  key={run.id}
-                  disabled={importingRunId === run.id}
-                  onClick={() => handleImportPastShow(run)}
-                  className="w-full text-left flex items-start justify-between p-3 rounded-lg border border-border/50 bg-background/60 hover:bg-card hover:border-primary/40 transition-colors group"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">
-                      {run.venueName || run.destination || run.city || "Unknown venue"}
-                    </div>
-                    <div className="text-xs text-muted-foreground flex gap-2 mt-0.5 flex-wrap">
-                      {run.destination && <span>{run.destination}</span>}
-                      {run.showDate && <span>· {format(new Date(run.showDate), "MMM d, yyyy")}</span>}
-                      <span>· {run.showType}</span>
-                    </div>
-                  </div>
-                  <div className="text-right ml-3 shrink-0">
-                    {run.totalProfit != null && (
-                      <div className={`text-sm font-bold ${(run.totalProfit ?? 0) >= 0 ? "text-secondary" : "text-destructive"}`}>
-                        {fmt(run.totalProfit ?? 0)}
+              <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                {!pastRuns ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">Loading past shows…</p>
+                ) : filteredRuns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    {pastShowSearch ? "No shows match your search." : "No past shows yet."}
+                  </p>
+                ) : (
+                  filteredRuns.map(run => (
+                    <button
+                      key={run.id}
+                      onClick={() => handleSelectRun(run)}
+                      className="w-full text-left flex items-start justify-between p-3 rounded-lg border border-border/50 bg-background/60 hover:bg-card hover:border-primary/40 transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">
+                          {run.venueName || run.destination || run.city || "Unknown venue"}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex gap-2 mt-0.5 flex-wrap">
+                          {run.destination && <span>{run.destination}</span>}
+                          {run.showDate && <span>· {format(new Date(run.showDate), "MMM d, yyyy")}</span>}
+                          <span>· {run.showType}</span>
+                        </div>
                       </div>
-                    )}
-                    <div className="text-xs text-primary group-hover:underline mt-0.5">
-                      {importingRunId === run.id ? "Adding…" : "Add to trail →"}
-                    </div>
+                      <div className="text-right ml-3 shrink-0">
+                        {run.totalProfit != null && (
+                          <div className={`text-sm font-bold ${(run.totalProfit ?? 0) >= 0 ? "text-secondary" : "text-destructive"}`}>
+                            {fmt(run.totalProfit ?? 0)}
+                          </div>
+                        )}
+                        <div className="text-xs text-primary group-hover:underline mt-0.5">Select →</div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col gap-4 overflow-y-auto flex-1 pr-1">
+              {/* Show summary */}
+              <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                <div className="font-semibold text-base">
+                  {selectedRun.venueName || selectedRun.destination || selectedRun.city || "Unknown venue"}
+                </div>
+                <div className="text-xs text-muted-foreground flex gap-2 mt-1 flex-wrap">
+                  {selectedRun.destination && <span>{selectedRun.destination}</span>}
+                  {selectedRun.showDate && <span>· {format(new Date(selectedRun.showDate), "MMM d, yyyy")}</span>}
+                  <span>· {selectedRun.showType}</span>
+                  {selectedRun.fee != null && <span>· {fmt(selectedRun.fee)}</span>}
+                </div>
+              </div>
+
+              {/* Accommodation mode selector */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Accommodation</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    {
+                      value: "profile_default" as const,
+                      label: "Use Profile Default",
+                      Icon: Home,
+                      desc: profileAccomSummary
+                        ? `${profileAccomSummary}${nightlyAccomRate > 0 ? ` · ${fmt(nightlyAccomRate)}/night` : ""}`
+                        : "No profile accommodation configured",
+                    },
+                    {
+                      value: "venue_provided" as const,
+                      label: "Provided by Venue",
+                      Icon: Building2,
+                      desc: "Accommodation covered by venue — set to $0",
+                    },
+                    {
+                      value: "manual" as const,
+                      label: "Edit Manually",
+                      Icon: Pencil,
+                      desc: "Enter a custom amount",
+                    },
+                  ].map(({ value, label, Icon, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setAccomMode(value);
+                        if (value === "profile_default") setManualAccomCost(String(nightlyAccomRate || 0));
+                        else if (value === "venue_provided") setManualAccomCost("0");
+                      }}
+                      className={`flex items-start gap-3 p-3 rounded-lg border text-sm transition-colors text-left w-full ${
+                        accomMode === value
+                          ? "bg-secondary/10 border-secondary text-foreground"
+                          : "bg-background/60 border-border/50 text-muted-foreground hover:border-border hover:text-foreground"
+                      }`}
+                    >
+                      <div className={`mt-0.5 p-1 rounded-md shrink-0 ${accomMode === value ? "bg-secondary/20" : "bg-muted"}`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground">{label}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {accomMode === "manual" && (
+                  <div className="mt-2">
+                    <label className="text-xs text-muted-foreground block mb-1">Accommodation Cost ($)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="0.00"
+                      value={manualAccomCost}
+                      onChange={e => setManualAccomCost(e.target.value)}
+                      className="max-w-xs"
+                    />
                   </div>
-                </button>
-              ))
-            )}
-          </div>
+                )}
+
+                {accomMode === "profile_default" && nightlyAccomRate > 0 && (
+                  <p className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-md">
+                    Will add <span className="font-medium text-foreground">{fmt(nightlyAccomRate)}</span> accommodation to this stop
+                  </p>
+                )}
+                {accomMode === "profile_default" && nightlyAccomRate === 0 && (
+                  <p className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-md">
+                    {!profile ? "No act profile set on this tour" : "Profile accommodation set to $0"}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                variant="secondary"
+                className="w-full mt-auto"
+                disabled={!!importingRunId}
+                onClick={handleConfirmImport}
+              >
+                {importingRunId ? "Adding to trail…" : "Add to Trail"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

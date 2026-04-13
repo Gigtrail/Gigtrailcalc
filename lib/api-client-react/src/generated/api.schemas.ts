@@ -461,6 +461,8 @@ export interface TourStop {
   /** @nullable */
   accommodationCost: number | null;
   /** @nullable */
+  accommodationMode?: string | null;
+  /** @nullable */
   extraCosts: number | null;
   /** @nullable */
   distanceOverride: number | null;
@@ -502,6 +504,8 @@ export interface CreateTourStopBody {
   marketingCost?: number | null;
   /** @nullable */
   accommodationCost?: number | null;
+  /** @nullable */
+  accommodationMode?: string | null;
   /** @nullable */
   extraCosts?: number | null;
   /** @nullable */
