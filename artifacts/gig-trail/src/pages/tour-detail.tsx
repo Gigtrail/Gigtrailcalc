@@ -216,9 +216,13 @@ export default function TourDetail() {
         : (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE)
     : 0;
 
+  const legacyVehicle = !isLoadingTourVehicles && (tourVehicles?.length ?? 0) === 0 && tour?.vehicleId
+    ? allVehicles?.find(v => v.id === tour.vehicleId) ?? null
+    : null;
+
   const calc = useMemo(() => {
     if (!stops) return null;
-    const vehicles = tourVehicles && tourVehicles.length > 0
+    let vehicles = tourVehicles && tourVehicles.length > 0
       ? tourVehicles.map(tv => ({
           id: tv.vehicle.id,
           name: tv.vehicle.name,
@@ -226,6 +230,14 @@ export default function TourDetail() {
           avgConsumption: tv.vehicle.avgConsumption,
         }))
       : null;
+    if (!vehicles && legacyVehicle) {
+      vehicles = [{
+        id: legacyVehicle.id,
+        name: legacyVehicle.name,
+        fuelType: legacyVehicle.fuelType,
+        avgConsumption: Number(legacyVehicle.avgConsumption),
+      }];
+    }
     return calculateTour(
       stops,
       tour?.startLocation,
@@ -240,7 +252,7 @@ export default function TourDetail() {
       profile?.accommodationRequired ?? null,
       vehicles,
     );
-  }, [stops, tour, tourVehicles, nightlyAccomRate, profile]);
+  }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
@@ -819,9 +831,7 @@ export default function TourDetail() {
               <CardContent>
                 {isLoadingTourVehicles ? (
                   <div className="text-xs text-muted-foreground">Loading…</div>
-                ) : (tourVehicles?.length ?? 0) === 0 ? (
-                  <div className="text-sm text-muted-foreground italic mb-2">No vehicles — fuel cost will be $0.00</div>
-                ) : (
+                ) : (tourVehicles?.length ?? 0) > 0 ? (
                   <ul className="space-y-1 mb-2">
                     {tourVehicles!.map(tv => (
                       <li key={tv.id} className="flex items-center justify-between gap-1 text-xs">
@@ -841,6 +851,17 @@ export default function TourDetail() {
                       </li>
                     ))}
                   </ul>
+                ) : legacyVehicle ? (
+                  <ul className="space-y-1 mb-2">
+                    <li className="flex items-center justify-between gap-1 text-xs">
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium truncate">{legacyVehicle.name}</span>
+                        <span className="text-muted-foreground">{legacyVehicle.fuelType} · {Number(legacyVehicle.avgConsumption)} L/100km</span>
+                      </div>
+                    </li>
+                  </ul>
+                ) : (
+                  <div className="text-sm text-muted-foreground italic mb-2">No vehicles — fuel cost will be $0.00</div>
                 )}
                 {(allVehicles?.length ?? 0) > 0 && (
                   <Button
@@ -1074,7 +1095,7 @@ export default function TourDetail() {
                 </div>
               )}
 
-              {(!tourVehicles || tourVehicles.length === 0) && sortedStops.length > 0 && (
+              {(!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0 && (
                 <p className="text-xs text-amber-500 bg-amber-500/10 rounded p-2">
                   Add a vehicle to this tour to include fuel cost estimates.
                 </p>
