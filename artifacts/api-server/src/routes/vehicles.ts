@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db, vehiclesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -44,6 +44,9 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  if (parsed.data.isDefault) {
+    await db.update(vehiclesTable).set({ isDefault: false }).where(eq(vehiclesTable.userId, userId));
+  }
   const [vehicle] = await db.insert(vehiclesTable).values({
     ...parsed.data,
     userId,
@@ -83,6 +86,11 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.avgConsumption != null) updateData.avgConsumption = String(parsed.data.avgConsumption);
   if (parsed.data.tankSizeLitres != null) updateData.tankSizeLitres = String(parsed.data.tankSizeLitres);
+  if (parsed.data.isDefault) {
+    await db.update(vehiclesTable).set({ isDefault: false }).where(
+      and(eq(vehiclesTable.userId, userId), ne(vehiclesTable.id, params.data.id))
+    );
+  }
   const [vehicle] = await db.update(vehiclesTable).set(updateData).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
