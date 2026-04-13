@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, Save, Home, Building2, Pencil } from "lucide-react";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { VenueSearch } from "@/components/venue-search";
 import { useEffect, useMemo } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -310,13 +311,28 @@ export default function TourStopForm() {
                   <CardTitle>Location & Venue</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Venue autocomplete — fills venueName + city (destination) + lat/lng */}
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium leading-none">Venue</label>
+                    <VenueSearch
+                      venueName={form.watch("venueName") || ""}
+                      destination={form.watch("city") || ""}
+                      onSelect={(venue) => {
+                        form.setValue("venueName", venue.venueName);
+                        form.setValue("city", venue.destination || venue.suburb || "");
+                        form.setValue("cityLat", venue.lat ?? null);
+                        form.setValue("cityLng", venue.lng ?? null);
+                      }}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="city"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>City</FormLabel>
+                          <FormLabel>Destination</FormLabel>
                           <FormControl>
                             <PlacesAutocomplete
                               value={field.value || ""}
@@ -325,9 +341,10 @@ export default function TourStopForm() {
                                 form.setValue("cityLat", place?.lat ?? null);
                                 form.setValue("cityLng", place?.lng ?? null);
                               }}
-                              placeholder="Austin, TX"
+                              placeholder="City or address"
                             />
                           </FormControl>
+                          <p className="text-[11px] text-muted-foreground">Auto-filled from venue — edit to override</p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -346,20 +363,6 @@ export default function TourStopForm() {
                       )}
                     />
                   </div>
-                  
-                  <FormField
-                    control={form.control}
-                    name="venueName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Venue (Optional)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="The Continental Club" {...field} value={field.value || ""} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/40">
                      <FormField

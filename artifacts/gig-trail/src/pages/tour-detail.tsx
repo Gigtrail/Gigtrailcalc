@@ -11,7 +11,7 @@ import {
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
   Clock, History, Search, Home, Building2, Pencil,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +69,7 @@ export default function TourDetail() {
   const [accomMode, setAccomMode] = useState<"profile_default" | "venue_provided" | "manual">("profile_default");
   const [manualAccomCost, setManualAccomCost] = useState<string>("");
   const [pendingDate, setPendingDate] = useState<string | null>(null);
+  const [trailFilter, setTrailFilter] = useState<"all" | "open" | "weekend">("all");
 
   const { data: tour, isLoading: isLoadingTour } = useGetTour(tourId, {
     query: { enabled: !!tourId, queryKey: ["tour", tourId] },
@@ -229,6 +230,21 @@ export default function TourDetail() {
   const daySlots = calc?.daySlots ?? [];
   const hasDaySlots = daySlots.length > 0;
 
+  // Trail filter helpers
+  const isWeekendDay = (dateStr: string) => {
+    const dow = getDay(parseISO(dateStr)); // 0=Sun, 1=Mon...5=Fri, 6=Sat
+    return dow === 0 || dow === 5 || dow === 6;
+  };
+  const filteredDaySlots = hasDaySlots ? daySlots.filter(day => {
+    if (trailFilter === "all") return true;
+    const isWknd = isWeekendDay(day.date);
+    const hasShow = !!day.stop;
+    if (trailFilter === "open") return !hasShow || isWknd;   // empty days + booked weekends
+    /* weekend */ return isWknd || hasShow;                  // all weekends + booked weekdays
+  }) : daySlots;
+  const openDaysCount = daySlots.filter(d => !d.stop || isWeekendDay(d.date)).length;
+  const weekendFocusCount = daySlots.filter(d => isWeekendDay(d.date) || !!d.stop).length;
+
   const formatDailyCost = (food: number, accom: number, accomVenue: boolean): string => {
     if (food === 0 && accom === 0 && !accomVenue) return "";
     const parts: string[] = [];
@@ -319,10 +335,31 @@ export default function TourDetail() {
 
           {/* Trail stops */}
           <Card className="border-border/50 bg-card/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-secondary" /> The Trail
-              </CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Navigation className="w-4 h-4 text-secondary" /> The Trail
+                </CardTitle>
+                {hasDaySlots && (
+                  <div className="flex gap-1">
+                    {(["all", "open", "weekend"] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setTrailFilter(f)}
+                        className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                          trailFilter === f
+                            ? "bg-secondary/20 text-secondary border-secondary/40 font-medium"
+                            : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
+                        }`}
+                      >
+                        {f === "all" && "All Days"}
+                        {f === "open" && `Open Days${openDaysCount > 0 ? ` (${openDaysCount})` : ""}`}
+                        {f === "weekend" && `Weekend Focus${weekendFocusCount > 0 ? ` (${weekendFocusCount})` : ""}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {!hasDaySlots && sortedStops.length === 0 ? (
@@ -379,7 +416,12 @@ export default function TourDetail() {
                   )}
 
                   {/* Day-slot trail (when tour dates are set) */}
-                  {hasDaySlots && daySlots.map((day) => {
+                  {hasDaySlots && filteredDaySlots.length === 0 && (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      No days match this filter — try switching to All Days.
+                    </div>
+                  )}
+                  {hasDaySlots && filteredDaySlots.map((day) => {
                     const dailyCostLine = formatDailyCost(day.dailyFoodCost, day.dailyAccomCost, day.accomCoveredByVenue);
 
                     if (!day.stop) {

@@ -1,0 +1,270 @@
+Revise the Trail day-view filter feature and also add Google venue autocomplete to the Add Show flow.
+
+GOAL:
+Make long tours easier to scan and book into by:
+1. adding day-view filters
+2. allowing venue fields in Add Show to use Google autocomplete and auto-fill location data
+
+This should keep the tour builder fast, practical, and musician-friendly.
+
+==================================================
+1. ADD DAY VIEW FILTERS
+==================================================
+
+Add a view filter bar above the Trail day list:
+
+- All Days
+- Open Days
+- Weekend Focus
+
+This is display logic only.
+It must NOT affect saved data, calculations, routing, or totals.
+
+--------------------------------------------------
+A. ALL DAYS
+--------------------------------------------------
+
+Show every day in chronological order:
+- booked show days
+- empty / no show days
+
+This should remain the default view.
+
+--------------------------------------------------
+B. OPEN DAYS
+--------------------------------------------------
+
+Show:
+- all days with no show booked
+
+Also keep visible:
+- any booked Friday / Saturday / Sunday days for context
+
+Hide:
+- booked Monday to Thursday days
+
+Purpose:
+Let users quickly see where they still have room in the run, while keeping key weekend bookings visible.
+
+--------------------------------------------------
+C. WEEKEND FOCUS
+--------------------------------------------------
+
+Show:
+- all Fridays
+- all Saturdays
+- all Sundays
+- any booked weekdays
+
+Hide:
+- empty Monday to Thursday days
+
+Purpose:
+Let users focus on strong booking dates while still seeing already-booked weekdays.
+
+--------------------------------------------------
+D. FILTER BAR UI
+--------------------------------------------------
+
+Use a clean segmented control or button group:
+
+[ All Days ] [ Open Days ] [ Weekend Focus ]
+
+Requirements:
+- switching filters updates visible rows instantly
+- preserve current styling
+- mobile-friendly
+
+Nice to have:
+- show counts:
+  - Open Days (9)
+  - Weekend Focus (6)
+
+==================================================
+2. ADD GOOGLE VENUE AUTOCOMPLETE TO "ADD SHOW"
+==================================================
+
+Upgrade the Add Show flow so venue entry uses Google Places autocomplete and auto-fills destination/location details.
+
+Goal:
+Speed up show entry, reduce typing, improve location accuracy, and support better route calculations.
+
+--------------------------------------------------
+A. REPLACE / UPGRADE VENUE INPUT
+--------------------------------------------------
+
+In the Add Show form, make the Venue field a searchable autocomplete field using Google Places API.
+
+Field label:
+- Venue
+
+Placeholder:
+- "Search venue, address, or place"
+
+Behaviour:
+- start suggestions after 3 characters
+- debounce requests to avoid excessive API calls
+- show dropdown suggestions as user types
+
+--------------------------------------------------
+B. WHEN A VENUE IS SELECTED
+--------------------------------------------------
+
+When the user selects a Google result, automatically populate:
+
+- venue_name
+- formatted_address
+- suburb / locality if available
+- state / region if available
+- postcode if available
+- country
+- latitude
+- longitude
+
+Use this selected place as the destination for routing and distance calculations.
+
+--------------------------------------------------
+C. KEEP MANUAL ENTRY AVAILABLE
+--------------------------------------------------
+
+Not every venue will be in Google, especially house concerts, halls, paddocks, private events, or rural venues.
+
+Add a fallback option:
+- "Enter venue manually"
+
+Manual mode should allow:
+- Venue Name
+- Destination / Address
+
+If manual mode is used:
+- save text fields normally
+- use text destination for routing/geocoding if possible
+
+--------------------------------------------------
+D. AUTO-FILL DISPLAY
+--------------------------------------------------
+
+Once a place is selected, show:
+
+- Venue name as the main selected item
+- Full address underneath in smaller text
+
+This should make it clear what destination will be used.
+
+--------------------------------------------------
+E. GOOGLE API IMPLEMENTATION NOTES
+--------------------------------------------------
+
+Use Google Places autocomplete for search.
+Use returned place details to fill structured fields.
+
+Important:
+- debounce input
+- do not call API on every keystroke
+- begin search after 3 characters
+- handle no-result states cleanly
+- keep API key secure on backend or approved client setup
+- do not break the form if Google lookup fails
+
+If autocomplete fails:
+- allow manual entry immediately
+
+==================================================
+3. ADD SHOW FORM LOGIC
+==================================================
+
+When user clicks + Add Show on a day slot:
+
+Open the Add Show form for that exact day.
+
+The form should support:
+- selected date pre-filled
+- venue autocomplete
+- income fields
+- accommodation logic as already built
+- notes
+- save into that specific day slot
+
+Rules:
+- one show per day for now
+- selected show replaces "No show booked" for that day
+
+==================================================
+4. PAST SHOW IMPORT SHOULD STILL WORK
+==================================================
+
+Keep the Past Show button on open days.
+
+User should still be able to:
+- import from past shows
+- then edit imported data if needed
+
+Imported shows should also preserve:
+- date
+- venue
+- income
+- accommodation mode
+- notes
+- location if available
+
+==================================================
+5. DATA / STATE REQUIREMENTS
+==================================================
+
+Store structured location data for shows when Google autocomplete is used.
+
+Recommended fields:
+- venue_name
+- formatted_address
+- locality
+- region
+- postcode
+- country
+- latitude
+- longitude
+- place_id if useful
+
+If manually entered:
+- store entered venue_name
+- store destination text
+- leave structured location fields optional/null if unavailable
+
+==================================================
+6. KEEP TOUR LOGIC INTACT
+==================================================
+
+These changes must NOT break:
+- days on tour
+- daily cost rows
+- route calculations between booked show days
+- blank/open day logic
+- accommodation logic
+- totals and summaries
+
+Google-selected venue data should improve routing accuracy where possible.
+
+==================================================
+7. UX GOAL
+==================================================
+
+The Trail page should now feel like:
+- a clear day-by-day planner
+- easy to scan with filters
+- fast to fill with real venue data
+- easy to use on mobile and desktop
+
+Keep it practical.
+Do not overdesign.
+Do not turn it into a full calendar app.
+
+==================================================
+EXPECTED RESULT
+==================================================
+
+- Users can switch between All Days, Open Days, and Weekend Focus
+- Long tours are easier to scan
+- Open booking opportunities stand out
+- Clicking Add Show opens a form with Google venue autocomplete
+- Selecting a venue auto-fills destination/location data
+- Manual venue entry is still supported
+- Route and distance accuracy improve without adding friction
