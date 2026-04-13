@@ -27,7 +27,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChevronLeft, Save, Truck, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { STANDARD_VEHICLES } from "@/lib/garage-constants";
+import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
 
 const garageVehicleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -80,7 +80,7 @@ export default function GarageVehicleForm() {
     if (vehicle) {
       form.reset({
         name: vehicle.name,
-        vehicleType: vehicle.vehicleType ?? "van",
+        vehicleType: normaliseVehicleKey(vehicle.vehicleType),
         fuelType: vehicle.fuelType,
         avgConsumption: vehicle.avgConsumption,
         tankSizeLitres: vehicle.tankSizeLitres,
