@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -26,65 +27,82 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ChevronLeft, Save, Truck } from "lucide-react";
 import { useEffect } from "react";
+import { STANDARD_VEHICLES } from "@/lib/garage-constants";
 
-const vehicleSchema = z.object({
+const garageVehicleSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  vehicleType: z.string().optional().nullable(),
   fuelType: z.string().min(1, "Fuel type is required"),
   avgConsumption: z.coerce.number().min(0.1, "Must be greater than 0"),
+  tankSizeLitres: z.coerce.number().optional().nullable(),
   maxPassengers: z.coerce.number().optional().nullable(),
+  isDefault: z.boolean().optional(),
   notes: z.string().optional().nullable(),
 });
 
-type VehicleFormValues = z.infer<typeof vehicleSchema>;
+type GarageVehicleFormValues = z.infer<typeof garageVehicleSchema>;
 
-export default function VehicleForm() {
+export default function GarageVehicleForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
-  
+
   const isEditing = !!id;
   const vehicleId = isEditing ? parseInt(id) : 0;
-  
+
   const { data: vehicle, isLoading: isLoadingVehicle } = useGetVehicle(vehicleId, {
-    query: { enabled: isEditing, queryKey: ['vehicle', vehicleId] }
+    query: { enabled: isEditing, queryKey: ["vehicle", vehicleId] },
   });
-  
+
   const createVehicle = useCreateVehicle();
   const updateVehicle = useUpdateVehicle();
-  
-  const form = useForm<VehicleFormValues>({
-    resolver: zodResolver(vehicleSchema),
+
+  const form = useForm<GarageVehicleFormValues>({
+    resolver: zodResolver(garageVehicleSchema),
     defaultValues: {
       name: "",
+      vehicleType: "van",
       fuelType: "petrol",
-      avgConsumption: 10,
+      avgConsumption: 11.5,
+      tankSizeLitres: null,
       maxPassengers: null,
+      isDefault: false,
       notes: "",
     },
   });
+
+  const vehicleTypeWatch = form.watch("vehicleType");
 
   useEffect(() => {
     if (vehicle) {
       form.reset({
         name: vehicle.name,
+        vehicleType: vehicle.vehicleType ?? "van",
         fuelType: vehicle.fuelType,
         avgConsumption: vehicle.avgConsumption,
+        tankSizeLitres: vehicle.tankSizeLitres,
         maxPassengers: vehicle.maxPassengers,
+        isDefault: vehicle.isDefault ?? false,
         notes: vehicle.notes || "",
       });
     }
   }, [vehicle, form]);
 
-  const onSubmit = (data: VehicleFormValues) => {
+  const onSubmit = (data: GarageVehicleFormValues) => {
+    const payload = {
+      ...data,
+      vehicleType: data.vehicleType || "van",
+    };
+
     if (isEditing) {
       updateVehicle.mutate(
-        { id: vehicleId, data },
+        { id: vehicleId, data: payload },
         {
           onSuccess: () => {
             toast({ title: "Vehicle updated" });
-            setLocation("/vehicles");
+            setLocation("/garage");
           },
           onError: () => {
             toast({ title: "Failed to update vehicle", variant: "destructive" });
@@ -93,14 +111,14 @@ export default function VehicleForm() {
       );
     } else {
       createVehicle.mutate(
-        { data },
+        { data: payload },
         {
           onSuccess: () => {
-            toast({ title: "Vehicle created" });
-            setLocation("/vehicles");
+            toast({ title: "Vehicle added to garage" });
+            setLocation("/garage");
           },
           onError: () => {
-            toast({ title: "Failed to create vehicle", variant: "destructive" });
+            toast({ title: "Failed to add vehicle", variant: "destructive" });
           },
         }
       );
@@ -117,23 +135,23 @@ export default function VehicleForm() {
     return (
       <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/vehicles")} className="h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/garage")} className="h-8 w-8">
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-3xl font-bold tracking-tight">Custom Vehicles</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Custom Garage Vehicles</h1>
         </div>
         <div className="rounded-lg border border-border/50 bg-card/50 p-8 text-center space-y-4">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
             <Truck className="w-7 h-7 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Custom vehicles are a Pro feature</h2>
-            <p className="text-muted-foreground mt-1">
-              Upgrade to Pro to match your real setup and get more accurate results.
+            <h2 className="text-xl font-semibold">Custom garage vehicles are a Pro feature</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Upgrade to Pro to add your own vehicles with custom fuel figures, tank size, and more.
             </p>
           </div>
           <div className="flex gap-3 justify-center">
-            <Button variant="outline" onClick={() => setLocation("/vehicles")}>Back to vehicles</Button>
+            <Button variant="outline" onClick={() => setLocation("/garage")}>Back to Garage</Button>
             <Button onClick={() => setLocation("/billing")}>Upgrade to Pro</Button>
           </div>
         </div>
@@ -144,23 +162,27 @@ export default function VehicleForm() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl mx-auto">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/vehicles")} className="h-8 w-8">
+        <Button variant="ghost" size="icon" onClick={() => setLocation("/garage")} className="h-8 w-8">
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Vehicle" : "New Vehicle"}</h1>
-          <p className="text-muted-foreground mt-1">Add your van or car to calculate fuel costs.</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {isEditing ? "Edit Vehicle" : "Add to Garage"}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Custom vehicle details for accurate cost calculations.
+          </p>
         </div>
       </div>
 
-      <Card className="border-border/50 bg-card/50">
-        <CardHeader>
-          <CardTitle>Vehicle Details</CardTitle>
-          <CardDescription>Information used for cost calculations.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Card className="border-border/50 bg-card/50">
+            <CardHeader>
+              <CardTitle>Vehicle Details</CardTitle>
+              <CardDescription>Name and type information.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -175,14 +197,80 @@ export default function VehicleForm() {
                     </FormItem>
                   )}
                 />
-                
+
+                <FormField
+                  control={form.control}
+                  name="vehicleType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Base Type</FormLabel>
+                      <Select
+                        onValueChange={(val) => {
+                          field.onChange(val);
+                          const sv = STANDARD_VEHICLES.find((v) => v.key === val);
+                          if (sv) {
+                            form.setValue("avgConsumption", sv.fuelConsumptionL100km);
+                            form.setValue("tankSizeLitres", sv.tankSizeLitres);
+                          }
+                        }}
+                        value={field.value ?? "van"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {STANDARD_VEHICLES.map((sv) => (
+                            <SelectItem key={sv.key} value={sv.key}>
+                              {sv.displayName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Selecting a type pre-fills the fuel figures below.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="isDefault"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                    <div>
+                      <FormLabel className="font-medium">Default vehicle</FormLabel>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Mark this as your primary touring vehicle.
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 bg-card/50">
+            <CardHeader>
+              <CardTitle>Fuel & Range</CardTitle>
+              <CardDescription>Used to calculate travel costs.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="fuelType"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Fuel Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select fuel type" />
@@ -216,50 +304,97 @@ export default function VehicleForm() {
 
                 <FormField
                   control={form.control}
+                  name="tankSizeLitres"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tank Size (litres, optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="e.g. 70"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value === "" ? null : Number(e.target.value))
+                          }
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Used to estimate how many fill-ups per trip.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="maxPassengers"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Max Passengers (Optional)</FormLabel>
+                      <FormLabel>Max Passengers (optional)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="1" {...field} value={field.value || ""} />
+                        <Input
+                          type="number"
+                          min="1"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value === "" ? null : Number(e.target.value))
+                          }
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+            </CardContent>
+          </Card>
 
+          <Card className="border-border/50 bg-card/50">
+            <CardHeader>
+              <CardTitle>Notes</CardTitle>
+              <CardDescription>Any quirks or reminders about this vehicle.</CardDescription>
+            </CardHeader>
+            <CardContent>
               <FormField
                 control={form.control}
                 name="notes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Trail Notes</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Needs oil checked every 1000km..." className="min-h-[100px]" {...field} value={field.value || ""} />
+                      <Textarea
+                        placeholder="Needs oil checked every 1,000km. Good for long haul..."
+                        className="min-h-[100px]"
+                        {...field}
+                        value={field.value || ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            </CardContent>
+          </Card>
 
-              <div className="flex justify-end pt-4">
-                <Button type="button" variant="ghost" onClick={() => setLocation("/vehicles")} className="mr-2">
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Saving..." : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      {isEditing ? "Save Changes" : "Create Vehicle"}
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setLocation("/garage")}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isEditing ? "Save Changes" : "Add to Garage"}
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </div>
   );
 }

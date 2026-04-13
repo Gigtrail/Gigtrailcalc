@@ -203,9 +203,13 @@ export const TrackCalculationResponse = zod.object({
 export const GetVehiclesResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean(),
+  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -216,9 +220,13 @@ export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
  */
 export const CreateVehicleBody = zod.object({
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
+  isDefault: zod.boolean().nullish(),
+  assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -232,9 +240,13 @@ export const GetVehicleParams = zod.object({
 export const GetVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean(),
+  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
 });
@@ -248,18 +260,26 @@ export const UpdateVehicleParams = zod.object({
 
 export const UpdateVehicleBody = zod.object({
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
+  isDefault: zod.boolean().nullish(),
+  assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
 });
 
 export const UpdateVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean(),
+  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
 });

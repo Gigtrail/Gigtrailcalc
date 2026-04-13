@@ -41,10 +41,10 @@ A full-stack web app for touring musicians to calculate whether a single show or
 
 ### Onboarding Flow
 - Route: `/onboarding` — full-screen (no sidebar), protected, shown automatically to new users with 0 profiles
-- Fields: Act Name, Act Type (Solo/Duo/Band card buttons), Number of People (auto-filled from type), Home Base, Vehicle (Car/Van/Bus card buttons), Fuel Price
-- On submit: creates vehicle via `POST /vehicles`, then profile via `POST /profiles` (with `defaultVehicleId`)
-- Redirects to `/runs/new?profileId=X&vehicleId=Y&origin=...&fuelPrice=...` for prefilled calculator
-- Run form reads URL params and prefills form fields after profiles/vehicles load
+- Fields: Act Name, Act Type (Solo/Duo/Band card buttons), Number of People (auto-filled from type), Home Base, Vehicle (4 standard cards: Small Car/SUV/Van/Bus), Fuel Price
+- On submit: creates profile via `POST /profiles` with vehicleType + fuelConsumption + defaultFuelPrice (no separate vehicle record created)
+- Redirects to `/runs/new?profileId=X&origin=...&fuelPrice=...` for prefilled calculator
+- Run form reads URL params and prefills form fields after profiles load
 - `HomeRedirect` uses `SignedInRedirect` component that calls `useGetProfiles` to detect new users
 
 ### Subscription Plans (Stripe)
@@ -61,8 +61,13 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - Create and save Solo, Duo, and Band profiles
 - Store people count, home base, vehicle, accommodation and food averages
 
-### Vehicles
-- Save vehicles with fuel type (petrol/diesel/electric/LPG) and L/100km consumption
+### Garage
+- **Standard vehicle types** (all plans): Small Car (7.5 L/100km), SUV/Wagon (10 L/100km), Van (11.5 L/100km), Bus (16 L/100km)
+- **Key constants**: `STANDARD_VEHICLES` and helpers (`normaliseVehicleKey`, `getStandardVehicle`) in `artifacts/gig-trail/src/lib/garage-constants.ts`
+- **Profile Garage section**: 2×2 card grid for free users (read-only presets); Pro users get same 4 cards + nickname field + custom fuel consumption input + "Manage garage" link
+- **Legacy vehicle type normalisation**: Old values ("Car" → "small_car", "Van" → "van", "Bus" → "bus") handled by `normaliseVehicleKey()`
+- **Custom garage vehicles** (Pro only): `/garage` page + `/garage/new` + `/garage/:id/edit` — stored in `vehiclesTable` with new fields: `vehicleType`, `tankSizeLitres`, `isDefault`, `assignedMemberIds`
+- **vehicleType field in profiles** uses new lowercase keys: "small_car", "suv_wagon", "van", "bus"
 
 ### Single Show Calculator
 - Flat Fee, Ticketed Show (with deal types), and Hybrid show types
@@ -133,7 +138,9 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/runs/*` — Single Show Calculator
 - `/tours/*` — Tour Builder
 - `/profiles/*` — Profile management
-- `/vehicles/*` — Vehicle management
+- `/garage` — Garage (custom vehicle management, Pro)
+- `/garage/new` — Add custom vehicle
+- `/garage/:id/edit` — Edit custom vehicle
 
 ## Important Notes
 

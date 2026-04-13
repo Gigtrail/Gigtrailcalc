@@ -32,6 +32,7 @@ import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import { getStandardVehicle } from "@/lib/garage-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
 import {
   Dialog,
@@ -711,8 +712,8 @@ export default function RunForm() {
                               <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                               <span className="text-foreground">
                                 {selectedProfile.vehicleName
-                                  ? `${selectedProfile.vehicleName} (${selectedProfile.vehicleType})`
-                                  : selectedProfile.vehicleType}
+                                  ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
+                                  : getStandardVehicle(selectedProfile.vehicleType).displayName}
                               </span>
                               <span className="text-muted-foreground ml-auto text-xs">
                                 {selectedProfile.fuelConsumption} L/100km

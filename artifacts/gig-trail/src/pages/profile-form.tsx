@@ -15,15 +15,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Car, Truck, Bus, Settings2, BookUser, BedDouble } from "lucide-react";
+import { ChevronLeft, Save, Settings2, BookUser, BedDouble, Wrench } from "lucide-react";
+import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
+import { Link } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
@@ -33,12 +28,6 @@ import { ActSetupDialog, type ActSetupData } from "@/components/act-setup-dialog
 import { MemberLibraryDialog } from "@/components/member-library-dialog";
 import type { Member } from "@/types/member";
 import { migrateOldMembers, derivePeopleCount, resolveActiveMembers } from "@/lib/member-utils";
-
-const VEHICLE_PRESETS = [
-  { label: "Car", value: "Car", consumption: 7, Icon: Car },
-  { label: "Van", value: "Van", consumption: 10, Icon: Truck },
-  { label: "Bus", value: "Bus", consumption: 16, Icon: Bus },
-] as const;
 
 const memberWithIdSchema = z.object({
   id: z.string(),
@@ -117,9 +106,9 @@ export default function ProfileForm() {
       accommodationRequired: false,
       singleRoomsDefault: 0,
       doubleRoomsDefault: 0,
-      vehicleType: "Van",
+      vehicleType: "van",
       vehicleName: "",
-      fuelConsumption: 10,
+      fuelConsumption: 11.5,
       defaultFuelPrice: null,
       maxDriveHoursPerDay: 8,
       notes: "",
@@ -167,9 +156,9 @@ export default function ProfileForm() {
         accommodationRequired: profile.accommodationRequired ?? false,
         singleRoomsDefault: profile.singleRoomsDefault ?? 0,
         doubleRoomsDefault: profile.doubleRoomsDefault ?? 0,
-        vehicleType: profile.vehicleType || "Van",
+        vehicleType: normaliseVehicleKey(profile.vehicleType || "van"),
         vehicleName: profile.vehicleName || "",
-        fuelConsumption: profile.fuelConsumption ?? 10,
+        fuelConsumption: profile.fuelConsumption ?? 11.5,
         defaultFuelPrice: profile.defaultFuelPrice ?? null,
         maxDriveHoursPerDay: profile.maxDriveHoursPerDay ?? 8,
         notes: profile.notes || "",
@@ -478,92 +467,86 @@ export default function ProfileForm() {
             </CardContent>
           </Card>
 
-          {/* Vehicle */}
+          {/* Garage */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader>
-              <CardTitle>Vehicle</CardTitle>
-              <CardDescription>
-                {isPro
-                  ? "Customise your vehicle and fuel consumption."
-                  : "Choose your vehicle type. Simple presets — customise in Pro."}
-              </CardDescription>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Garage</CardTitle>
+                  <CardDescription className="mt-1">
+                    {isPro
+                      ? "Choose your standard vehicle or customise fuel consumption for accurate cost calculations."
+                      : "Pick the vehicle that best matches how you tour. Upgrade to Pro to customise fuel figures."}
+                  </CardDescription>
+                </div>
+                {isPro && (
+                  <Link
+                    href="/garage"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2 shrink-0 mt-1"
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    Manage garage
+                  </Link>
+                )}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {!isPro ? (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Vehicle Type</label>
-                  <div className="flex gap-2">
-                    {VEHICLE_PRESETS.map((preset) => (
+            <CardContent className="space-y-5">
+              {/* Standard Vehicle Selection — same for free and pro */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Vehicle Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {STANDARD_VEHICLES.map((sv) => {
+                    const isSelected = vehicleType === sv.key;
+                    return (
                       <button
-                        key={preset.value}
+                        key={sv.key}
                         type="button"
                         onClick={() => {
-                          form.setValue("vehicleType", preset.value);
-                          form.setValue("fuelConsumption", preset.consumption);
+                          form.setValue("vehicleType", sv.key);
+                          form.setValue("fuelConsumption", sv.fuelConsumptionL100km);
                         }}
-                        className={`flex-1 flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg border text-xs font-medium transition-all ${
-                          vehicleType === preset.value
+                        className={`flex flex-col items-start gap-1 py-3 px-3 rounded-lg border text-left text-xs font-medium transition-all ${
+                          isSelected
                             ? "border-primary bg-primary/10 text-primary shadow-sm"
                             : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
                         }`}
                       >
-                        <preset.Icon className="w-5 h-5" />
-                        <span>{preset.label}</span>
-                        <span className="text-[10px] opacity-70">{preset.consumption} L/100km</span>
+                        <div className="flex items-center gap-2">
+                          <sv.Icon className="w-4 h-4 shrink-0" />
+                          <span className="font-semibold">{sv.displayName}</span>
+                        </div>
+                        <span className="text-[10px] opacity-80 leading-snug pl-0.5">
+                          {sv.shortDescription}
+                        </span>
+                        <span className="text-[10px] opacity-60 pl-0.5">
+                          {sv.fuelConsumptionL100km} L/100km
+                        </span>
                       </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Simple presets —{" "}
-                    <a
+                    );
+                  })}
+                </div>
+                {!isPro && (
+                  <p className="text-xs text-muted-foreground pt-0.5">
+                    Standard presets —{" "}
+                    <Link
                       href="/billing"
                       className="text-primary underline underline-offset-2"
                     >
-                      customise in Pro
-                    </a>
+                      unlock custom fuel figures in Pro
+                    </Link>
                   </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="vehicleType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vehicle Type</FormLabel>
-                        <Select
-                          onValueChange={(val) => {
-                            field.onChange(val);
-                            const preset = VEHICLE_PRESETS.find((p) => p.value === val);
-                            if (preset) form.setValue("fuelConsumption", preset.consumption);
-                          }}
-                          value={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {VEHICLE_PRESETS.map((p) => (
-                              <SelectItem key={p.value} value={p.value}>
-                                {p.label}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="Custom">Custom</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                )}
+              </div>
 
+              {/* Pro: vehicle nickname + custom fuel consumption */}
+              {isPro && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="vehicleName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Vehicle Name (optional)</FormLabel>
+                        <FormLabel>Nickname (optional)</FormLabel>
                         <FormControl>
                           <Input
                             placeholder="e.g. The Band Van"
@@ -585,97 +568,71 @@ export default function ProfileForm() {
                         <FormControl>
                           <Input type="number" min="0" step="0.1" {...field} />
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="defaultFuelPrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Default Fuel Price ($/L)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="e.g. 1.85"
-                            {...field}
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(e.target.value === "" ? null : e.target.value)
-                            }
-                          />
-                        </FormControl>
                         <p className="text-xs text-muted-foreground">
-                          Used as a fallback when no fuel price is entered on the calculator form.
+                          Override the standard figure for your actual vehicle.
                         </p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </div>
+              )}
 
-                  {canUseAdvancedDriving(plan as Plan) && (
-                    <FormField
-                      control={form.control}
-                      name="maxDriveHoursPerDay"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Preferred max driving hours per day</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="24"
-                              step="1"
-                              {...field}
-                              value={field.value ?? 8}
-                            />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground">
-                            Used to recommend stopovers and accommodation nights on the results
-                            screen.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+              {/* Default Fuel Price — both plans */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="defaultFuelPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Fuel Price ($/L)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="e.g. 1.85"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(e) =>
+                            field.onChange(e.target.value === "" ? null : e.target.value)
+                          }
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Fallback when no price is entered on the calculator.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-              )}
+                />
 
-              {!isPro && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {isPro && canUseAdvancedDriving(plan as Plan) && (
                   <FormField
                     control={form.control}
-                    name="defaultFuelPrice"
+                    name="maxDriveHoursPerDay"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Default Fuel Price ($/L)</FormLabel>
+                        <FormLabel>Max drive hours per day</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="e.g. 1.85"
+                            min="1"
+                            max="24"
+                            step="1"
                             {...field}
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(e.target.value === "" ? null : e.target.value)
-                            }
+                            value={field.value ?? 8}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
-                          Fallback fuel price for calculations.
+                          Guides stopover and accommodation recommendations.
                         </p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
 

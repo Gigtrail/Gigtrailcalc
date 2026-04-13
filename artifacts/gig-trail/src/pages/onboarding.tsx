@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useCreateProfile, useCreateVehicle } from "@workspace/api-client-react";
+import { useCreateProfile } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan } from "@/hooks/use-plan";
@@ -15,7 +15,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Car, Truck, Bus, User, Users, Music2, Loader2, Lock, Zap } from "lucide-react";
+import { User, Users, Music2, Loader2, Lock, Zap } from "lucide-react";
+import { STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { Link } from "wouter";
 
 const ACT_TYPES = [
@@ -24,11 +25,6 @@ const ACT_TYPES = [
   { type: "Band", icon: Music2, people: 4, desc: "Full crew", locked: true },
 ];
 
-const VEHICLE_OPTIONS = [
-  { type: "Car", icon: Car, consumption: 7, name: "Car Setup", desc: "7 L/100km" },
-  { type: "Van", icon: Truck, consumption: 10, name: "Van Setup", desc: "10 L/100km" },
-  { type: "Bus", icon: Bus, consumption: 16, name: "Bus Setup", desc: "16 L/100km" },
-];
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
@@ -42,7 +38,7 @@ export default function Onboarding() {
   const [homeBase, setHomeBase] = useState("");
   const [homeBaseLat, setHomeBaseLat] = useState<number | undefined>(undefined);
   const [homeBaseLng, setHomeBaseLng] = useState<number | undefined>(undefined);
-  const [vehicleType, setVehicleType] = useState("Car");
+  const [vehicleType, setVehicleType] = useState("van");
   const [fuelPrice, setFuelPrice] = useState("2.00");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,7 +51,6 @@ export default function Onboarding() {
   }, []);
 
   const createProfile = useCreateProfile();
-  const createVehicle = useCreateVehicle();
 
   const handleActTypeClick = (type: string, locked: boolean) => {
     if (locked && !isPro) {
@@ -86,17 +81,9 @@ export default function Onboarding() {
 
     setIsSubmitting(true);
     try {
-      const vehicleOption = VEHICLE_OPTIONS.find(v => v.type === vehicleType)!;
+      const sv = STANDARD_VEHICLES.find(v => v.key === vehicleType) ?? STANDARD_VEHICLES[2];
       const parsedFuelPrice = parseFloat(fuelPrice) || 2.00;
       const peopleCount = getPeopleCount();
-
-      const vehicle = await createVehicle.mutateAsync({
-        data: {
-          name: vehicleOption.name,
-          fuelType: "petrol",
-          avgConsumption: vehicleOption.consumption,
-        },
-      });
 
       const profile = await createProfile.mutateAsync({
         data: {
@@ -106,7 +93,9 @@ export default function Onboarding() {
           homeBase: homeBase.trim(),
           homeBaseLat: homeBaseLat ?? null,
           homeBaseLng: homeBaseLng ?? null,
-          defaultVehicleId: vehicle.id,
+          vehicleType: sv.key,
+          fuelConsumption: sv.fuelConsumptionL100km,
+          defaultFuelPrice: parsedFuelPrice,
           avgAccomPerNight: 0,
           avgFoodPerDay: 0,
         },
@@ -116,7 +105,6 @@ export default function Onboarding() {
 
       const params = new URLSearchParams({
         profileId: String(profile.id),
-        vehicleId: String(vehicle.id),
         origin: homeBase.trim(),
         fuelPrice: String(parsedFuelPrice),
       });
@@ -241,23 +229,25 @@ export default function Onboarding() {
           <div className="p-5 space-y-3">
             <div>
               <Label className="text-sm font-semibold text-foreground">What do you travel in?</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">Simple setup — customise in Pro</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Standard presets — customise in Pro</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {VEHICLE_OPTIONS.map(({ type, icon: Icon, desc }) => (
+            <div className="grid grid-cols-2 gap-2">
+              {STANDARD_VEHICLES.map((sv) => (
                 <button
-                  key={type}
+                  key={sv.key}
                   type="button"
-                  onClick={() => setVehicleType(type)}
-                  className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                    vehicleType === type
+                  onClick={() => setVehicleType(sv.key)}
+                  className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 transition-all cursor-pointer text-left ${
+                    vehicleType === sv.key
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:bg-primary/5"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-sm font-semibold">{type}</span>
-                  <span className="text-xs opacity-60">{desc}</span>
+                  <div className="flex items-center gap-1.5">
+                    <sv.Icon className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">{sv.displayName}</span>
+                  </div>
+                  <span className="text-xs opacity-60 pl-0.5">{sv.fuelConsumptionL100km} L/100km</span>
                 </button>
               ))}
             </div>

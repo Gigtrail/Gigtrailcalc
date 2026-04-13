@@ -1,0 +1,231 @@
+Refactor the current Vehicle tab into a new section called **Garage**.
+
+## Goal
+Make vehicle setup feel like a real touring asset system.
+
+The free version should stay simple and fast.
+The Pro version should unlock multiple vehicles and allow those vehicles to be linked to band members.
+
+---
+
+## 1. Rename the section
+
+Change all UI references from:
+
+- Vehicle
+- Vehicle Tab
+- Vehicle Settings
+
+to:
+
+- Garage
+
+Use “Garage” consistently in:
+- navigation
+- section headings
+- labels
+- saved profile references
+- any empty states
+- upgrade prompts
+
+---
+
+## 2. Free version Garage rules
+
+In the free version, the user can choose **one active touring vehicle** from **4 standard models only**.
+
+### Free vehicle options:
+1. Small Car
+2. SUV / Wagon
+3. Van
+4. Bus
+
+These should be prebuilt standard models, not custom editable vehicles.
+
+Each model should include default values for:
+- vehicle_type
+- display_name
+- fuel_consumption_l_per_100km
+- tank_size_litres
+- short_description
+
+Suggested defaults:
+- Small Car → 7.5 L/100km, 50L tank
+- SUV / Wagon → 10.0 L/100km, 65L tank
+- Van → 11.5 L/100km, 70L tank
+- Bus → 16.0 L/100km, 100L tank
+
+### Free version constraints:
+- only 1 active vehicle
+- no adding extra vehicles
+- no deleting or creating custom vehicles
+- no editing fuel specs
+- no linking to band members
+- no multi-vehicle calculations
+
+### Free UX:
+- user sees the 4 standard models as selectable cards or buttons
+- one can be selected as the active vehicle
+- active vehicle is used automatically in show calculations
+- if helpful, allow a simple nickname field only if easy, but do not allow true custom vehicle creation
+
+---
+
+## 3. Pro version Garage rules
+
+In Pro, the Garage becomes a full vehicle management system.
+
+Pro users should be able to:
+
+- add multiple vehicles
+- edit vehicle details
+- delete vehicles
+- set one default vehicle
+- assign one or more band members to each vehicle
+
+### Pro vehicle fields:
+Each custom or editable vehicle should support:
+- id
+- name
+- vehicle_type
+- fuel_consumption_l_per_100km
+- tank_size_litres
+- is_default
+- assigned_member_ids (array)
+
+Optional future-safe fields:
+- notes
+- sleep_capacity
+- gear_capacity
+- depreciation_per_km
+- maintenance_per_km
+
+Do not fully build advanced calculations for optional fields yet unless already needed.
+Just structure the data model so they can be added later.
+
+---
+
+## 4. Band member linking
+
+For Pro users, each vehicle should support linking band members to that vehicle.
+
+### Example:
+Vehicle: Tour Van
+Assigned members:
+- Julian
+- Beci
+
+or
+
+Vehicle: Car 1
+Assigned members:
+- Julian
+
+Vehicle: Car 2
+Assigned members:
+- Beci
+- Bass Player
+
+### Requirements:
+- use band member IDs, not just names, if the band member system already has unique IDs
+- support multiple members per vehicle
+- support zero assigned members if needed
+- assigned members should be editable in the Garage UI
+
+If member data already exists elsewhere in the app, connect to that existing source instead of duplicating it.
+
+---
+
+## 5. Free vs Pro gating
+
+### Free users:
+Show only:
+- 4 standard vehicle options
+- one active selection
+
+If they try to:
+- add another vehicle
+- edit specs
+- assign members
+
+show an upgrade prompt like:
+
+“Upgrade to Pro to manage multiple vehicles and assign vehicles to band members.”
+
+### Pro users:
+Unlock:
+- multiple saved vehicles
+- custom/editable vehicles
+- member linking
+- default vehicle management
+
+---
+
+## 6. Default Garage behavior
+
+The app should always know which vehicle setup is the default.
+
+### Free:
+The selected standard model is the default active vehicle.
+
+### Pro:
+One saved vehicle should be marked as the default.
+This default vehicle should be used automatically in calculations unless a show-level override is added later.
+
+If no vehicle exists yet for a Pro user:
+- show a helpful empty state
+- prompt them to create their first vehicle
+
+---
+
+## 7. Data model expectations
+
+Please refactor the current vehicle storage so it supports both free and pro cleanly.
+
+### Suggested structure
+
+For free users:
+- selected_standard_vehicle_key
+
+For pro users:
+- garage_vehicles: array of vehicle objects
+- default_vehicle_id
+
+Suggested standard vehicle keys:
+- small_car
+- suv_wagon
+- van
+- bus
+
+Suggested standard vehicle definitions:
+```json
+{
+  "small_car": {
+    "vehicle_type": "small_car",
+    "display_name": "Small Car",
+    "fuel_consumption_l_per_100km": 7.5,
+    "tank_size_litres": 50,
+    "short_description": "Best for solo or very light touring."
+  },
+  "suv_wagon": {
+    "vehicle_type": "suv_wagon",
+    "display_name": "SUV / Wagon",
+    "fuel_consumption_l_per_100km": 10.0,
+    "tank_size_litres": 65,
+    "short_description": "More room for gear and short regional runs."
+  },
+  "van": {
+    "vehicle_type": "van",
+    "display_name": "Van",
+    "fuel_consumption_l_per_100km": 11.5,
+    "tank_size_litres": 70,
+    "short_description": "A practical touring setup for duo and band travel."
+  },
+  "bus": {
+    "vehicle_type": "bus",
+    "display_name": "Bus",
+    "fuel_consumption_l_per_100km": 16.0,
+    "tank_size_litres": 100,
+    "short_description": "Best for larger touring setups and long runs."
+  }
+}

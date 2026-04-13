@@ -19,6 +19,8 @@ function serializeVehicle(v: typeof vehiclesTable.$inferSelect) {
   return {
     ...v,
     avgConsumption: Number(v.avgConsumption),
+    tankSizeLitres: v.tankSizeLitres != null ? Number(v.tankSizeLitres) : null,
+    isDefault: v.isDefault ?? false,
     createdAt: v.createdAt instanceof Date ? v.createdAt.toISOString() : String(v.createdAt),
   };
 }
@@ -46,6 +48,7 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
     ...parsed.data,
     userId,
     avgConsumption: String(parsed.data.avgConsumption),
+    tankSizeLitres: parsed.data.tankSizeLitres != null ? String(parsed.data.tankSizeLitres) : null,
   }).returning();
   res.status(201).json(GetVehicleResponse.parse(serializeVehicle(vehicle)));
 });
@@ -79,6 +82,7 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.avgConsumption != null) updateData.avgConsumption = String(parsed.data.avgConsumption);
+  if (parsed.data.tankSizeLitres != null) updateData.tankSizeLitres = String(parsed.data.tankSizeLitres);
   const [vehicle] = await db.update(vehiclesTable).set(updateData).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });

@@ -21,6 +21,8 @@ import Tours from "@/pages/tours";
 import TourForm from "@/pages/tour-form";
 import TourDetail from "@/pages/tour-detail";
 import TourStopForm from "@/pages/tour-stop-form";
+import Garage from "@/pages/vehicles";
+import GarageVehicleForm from "@/pages/vehicle-form";
 import Onboarding from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
 import { useGetProfiles, setAuthTokenGetter } from "@workspace/api-client-react";
@@ -164,6 +166,15 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/profiles/:id/edit">
               {() => <ProtectedRoute component={ProfileForm} />}
+            </Route>
+            <Route path="/garage">
+              {() => <ProtectedRoute component={Garage} />}
+            </Route>
+            <Route path="/garage/new">
+              {() => <ProtectedRoute component={GarageVehicleForm} />}
+            </Route>
+            <Route path="/garage/:id/edit">
+              {() => <ProtectedRoute component={GarageVehicleForm} />}
             </Route>
 
             <Route path="/runs">

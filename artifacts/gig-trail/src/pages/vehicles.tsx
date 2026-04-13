@@ -1,13 +1,15 @@
 import { useGetVehicles, useDeleteVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
-import { Plus, Truck, Fuel, Users, Edit, Trash2, Lock } from "lucide-react";
+import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { usePlan } from "@/hooks/use-plan";
+import { getStandardVehicle } from "@/lib/garage-constants";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +30,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-export default function Vehicles() {
+export default function Garage() {
   const { data: vehicles, isLoading } = useGetVehicles();
   const deleteVehicle = useDeleteVehicle();
   const queryClient = useQueryClient();
@@ -38,16 +40,16 @@ export default function Vehicles() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [, setLocation] = useLocation();
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: number, name: string) => {
     deleteVehicle.mutate(
       { id },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
-          toast({ title: "Vehicle deleted" });
+          toast({ title: `"${name}" removed from garage` });
         },
         onError: () => {
-          toast({ title: "Failed to delete vehicle", variant: "destructive" });
+          toast({ title: "Failed to remove vehicle", variant: "destructive" });
         },
       }
     );
@@ -57,7 +59,7 @@ export default function Vehicles() {
     if (!isPro) {
       setShowUpgradeModal(true);
     } else {
-      setLocation("/vehicles/new");
+      setLocation("/garage/new");
     }
   };
 
@@ -65,124 +67,184 @@ export default function Vehicles() {
     if (!isPro) {
       setShowUpgradeModal(true);
     } else {
-      setLocation(`/vehicles/${id}/edit`);
+      setLocation(`/garage/${id}/edit`);
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Vehicles</h1>
-          <p className="text-muted-foreground mt-1">Manage your fleet and fuel consumption.</p>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/profiles")} className="h-8 w-8">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Garage</h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your custom touring vehicles and fuel settings.
+            </p>
+          </div>
         </div>
-        <Button onClick={handleAddVehicle}>
-          {!isPro ? <Lock className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-          New Vehicle
-        </Button>
+        {isPro && (
+          <Button onClick={handleAddVehicle}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Vehicle
+          </Button>
+        )}
       </div>
 
       {!isPro && (
         <div className="rounded-lg border border-border/50 bg-muted/30 p-4 flex items-start gap-3">
-          <Lock className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <Lock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
           <div className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Free plan</span> — custom vehicles are a Pro feature.
-            Use Car, Van, or Bus presets in the calculator.{" "}
-            <Button variant="link" className="h-auto p-0 text-primary text-sm" onClick={() => setShowUpgradeModal(true)}>
-              Upgrade to Pro
+            <span className="font-medium text-foreground">Custom garage vehicles are a Pro feature.</span>{" "}
+            Standard vehicle types (Small Car, SUV/Wagon, Van, Bus) are available on all plans in your profile.{" "}
+            <Button variant="link" className="h-auto p-0 text-primary text-sm" onClick={() => setLocation("/billing")}>
+              Upgrade to Pro →
             </Button>
           </div>
         </div>
       )}
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-4 w-20 mt-1" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-2/3" />
-              </CardContent>
-            </Card>
-          ))}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold">
+            {isPro ? "Your custom vehicles" : "Custom vehicles (Pro)"}
+          </h2>
+          {!isPro && (
+            <Button size="sm" onClick={() => setShowUpgradeModal(true)}>
+              <Lock className="w-3.5 h-3.5 mr-1.5" />
+              Upgrade
+            </Button>
+          )}
         </div>
-      ) : vehicles?.length === 0 ? (
-        <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
-          <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-50" />
-          <h3 className="text-lg font-medium">No vehicles yet</h3>
-          <p className="text-muted-foreground mb-4">
-            {isPro ? "Add a vehicle to calculate travel costs." : "Upgrade to Pro to add custom vehicles."}
-          </p>
-          <Button onClick={handleAddVehicle}>
-            {isPro ? "Add Vehicle" : "Upgrade to Pro"}
-          </Button>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {vehicles?.map((vehicle) => (
-            <Card key={vehicle.id} className="group hover-elevate transition-all border-border/50 bg-card/50">
-              <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="text-xl">{vehicle.name}</CardTitle>
-                  <div className="text-sm text-primary font-medium mt-1">{vehicle.fuelType}</div>
-                </div>
-                <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleEditVehicle(vehicle.id)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
+
+        {isLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-20 mt-1" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-2/3" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : vehicles?.length === 0 ? (
+          <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
+            <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
+            <h3 className="text-lg font-medium">No custom vehicles yet</h3>
+            <p className="text-muted-foreground mb-4 text-sm">
+              {isPro
+                ? "Add a vehicle to track fuel specs, tank size, and member assignments."
+                : "Upgrade to Pro to add custom vehicles to your garage."}
+            </p>
+            <Button onClick={handleAddVehicle}>
+              {isPro ? (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Vehicle
+                </>
+              ) : "Upgrade to Pro"}
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {vehicles?.map((vehicle) => {
+              const sv = getStandardVehicle(vehicle.vehicleType);
+              const Icon = sv.Icon;
+              return (
+                <Card key={vehicle.id} className="group hover:shadow-sm transition-all border-border/50 bg-card/50">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between">
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Icon className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <CardTitle className="text-base leading-tight">{vehicle.name}</CardTitle>
+                          {vehicle.isDefault && (
+                            <Badge variant="secondary" className="text-[10px] py-0 h-4 gap-0.5">
+                              <Star className="w-2.5 h-2.5" />
+                              Default
+                            </Badge>
+                          )}
+                        </div>
+                        <CardDescription className="mt-0.5 text-xs">{sv.displayName}</CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex space-x-1 shrink-0 ml-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => handleEditVehicle(vehicle.id)}
+                      >
+                        <Edit className="h-3.5 w-3.5" />
                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Vehicle</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure? This will permanently delete "{vehicle.name}".
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(vehicle.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Fuel className="w-4 h-4 mr-2 opacity-70" />
-                  {vehicle.avgConsumption} L/100km
-                </div>
-                {vehicle.maxPassengers && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Users className="w-4 h-4 mr-2 opacity-70" />
-                    Max {vehicle.maxPassengers} passengers
-                  </div>
-                )}
-                {vehicle.notes && (
-                  <div className="pt-3 mt-3 border-t border-border/40 text-sm text-muted-foreground italic">
-                    "{vehicle.notes}"
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove from Garage</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure? This will permanently delete "{vehicle.name}" from your garage.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(vehicle.id, vehicle.name)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <Fuel className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+                        {vehicle.avgConsumption} L/100km
+                      </div>
+                      {vehicle.tankSizeLitres && (
+                        <div className="flex items-center text-sm text-muted-foreground">
+                          <Droplets className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+                          {vehicle.tankSizeLitres}L tank
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground capitalize">{vehicle.fuelType}</div>
+                    {vehicle.notes && (
+                      <div className="pt-2 mt-2 border-t border-border/40 text-xs text-muted-foreground italic">
+                        "{vehicle.notes}"
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="pt-2 border-t border-border/30">
+        <p className="text-xs text-muted-foreground">
+          Standard vehicle types (Small Car, SUV/Wagon, Van, Bus) are configured directly in each{" "}
+          <Link href="/profiles" className="text-primary underline underline-offset-2">Profile</Link>.
+        </p>
+      </div>
 
       <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
         <DialogContent className="sm:max-w-md">
@@ -191,17 +253,20 @@ export default function Vehicles() {
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <Truck className="w-5 h-5 text-primary" />
               </div>
-              <DialogTitle className="text-xl">Custom vehicles are a Pro feature</DialogTitle>
+              <DialogTitle className="text-xl">Custom garage vehicles are a Pro feature</DialogTitle>
             </div>
             <DialogDescription className="text-base">
-              Upgrade to Pro to match your real setup and get more accurate results.
+              Upgrade to Pro to add custom vehicles with your real fuel figures, tank size, and more.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowUpgradeModal(false)} className="w-full sm:w-auto">
-              Keep using presets
+              Keep using standard types
             </Button>
-            <Button onClick={() => { setShowUpgradeModal(false); setLocation("/billing"); }} className="w-full sm:w-auto">
+            <Button
+              onClick={() => { setShowUpgradeModal(false); setLocation("/billing"); }}
+              className="w-full sm:w-auto"
+            >
               Upgrade to Pro
             </Button>
           </DialogFooter>

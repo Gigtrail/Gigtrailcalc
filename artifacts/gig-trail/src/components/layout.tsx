@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock } from "lucide-react";
+import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Wrench } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -26,6 +26,7 @@ const navItems = [
   { title: "Past Shows", url: "/runs", icon: Clock },
   { title: "Tour Builder", url: "/tours", icon: Navigation },
   { title: "Profiles", url: "/profiles", icon: Guitar },
+  { title: "Garage", url: "/garage", icon: Wrench },
 ];
 
 function isNavActive(itemUrl: string, location: string): boolean {
@@ -41,6 +42,9 @@ function isNavActive(itemUrl: string, location: string): boolean {
   }
   if (itemUrl === "/dashboard") {
     return location === "/dashboard";
+  }
+  if (itemUrl === "/garage") {
+    return location === "/garage" || location.startsWith("/garage/");
   }
   return location === itemUrl || location.startsWith(itemUrl + "/");
 }

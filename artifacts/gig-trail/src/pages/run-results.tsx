@@ -25,6 +25,7 @@ import { usePlan } from "@/hooks/use-plan";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
+import { getStandardVehicle } from "@/lib/garage-constants";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -389,7 +390,9 @@ export default function RunResults() {
                     <span className="text-muted-foreground">Vehicle</span>
                   </div>
                   <div className="text-sm font-medium text-right">
-                    {vehicleName ? `${vehicleName} (${vehicleType})` : vehicleType}
+                    {vehicleName
+                      ? `${vehicleName} (${getStandardVehicle(vehicleType).displayName})`
+                      : getStandardVehicle(vehicleType).displayName}
                   </div>
                 </>
               )}
