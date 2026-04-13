@@ -55,9 +55,12 @@ function toDbRun(data: Record<string, unknown>) {
     'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit',
     'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',
   ]);
+  const dateFields = new Set(['showDate']);
   for (const [k, v] of Object.entries(data)) {
     if (typeof v === 'number' && numericFields.has(k)) {
       result[k] = String(v);
+    } else if (dateFields.has(k)) {
+      result[k] = (v === "" || v == null) ? null : v;
     } else {
       result[k] = v;
     }
