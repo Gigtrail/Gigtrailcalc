@@ -11,7 +11,7 @@ import {
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
   Clock, History, Search, Home, Building2, Pencil,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -43,8 +43,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
-import { calculateTour, fmt } from "@/lib/tour-calculator";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
+import { calculateTour, fmt, formatDriveTime } from "@/lib/tour-calculator";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -201,6 +201,8 @@ export default function TourDetail() {
       consumption,
       tour?.daysOnTour ?? null,
       nightlyAccomRate,
+      tour?.startDate ?? null,
+      tour?.endDate ?? null,
     );
   }, [stops, tour, vehicle, nightlyAccomRate]);
 
@@ -211,7 +213,54 @@ export default function TourDetail() {
     return <div className="p-8 text-center text-muted-foreground">Tour not found.</div>;
   }
 
-  const sortedStops = stops ? [...stops].sort((a, b) => a.stopOrder - b.stopOrder) : [];
+  const sortedStops = stops ? [...stops].sort((a, b) => {
+    const da = a.date ? a.date.split('T')[0] : null;
+    const db = b.date ? b.date.split('T')[0] : null;
+    if (da && db && da !== db) return da < db ? -1 : 1;
+    return a.stopOrder - b.stopOrder;
+  }) : [];
+
+  const tourStartDate = tour.startDate ? tour.startDate.split('T')[0] : null;
+  const tourEndDate = tour.endDate ? tour.endDate.split('T')[0] : null;
+
+  const outOfRangeStops = sortedStops.filter(stop => {
+    if (!stop.date) return false;
+    const d = stop.date.split('T')[0];
+    return (tourStartDate && d < tourStartDate) || (tourEndDate && d > tourEndDate);
+  });
+
+  type TrailItem =
+    | { kind: 'stop'; stop: typeof sortedStops[0]; stopIndex: number }
+    | { kind: 'blank'; dates: string[] };
+
+  const trailItems = useMemo<TrailItem[]>(() => {
+    const blankDates = (calc?.blankDays ?? []).map(b => b.date).sort();
+    const getDate = (s: typeof sortedStops[0]) => s.date ? s.date.split('T')[0] : null;
+    const items: TrailItem[] = [];
+
+    for (let i = 0; i < sortedStops.length; i++) {
+      const stop = sortedStops[i];
+      const thisDate = getDate(stop);
+      const prevDate = i === 0 ? tourStartDate : getDate(sortedStops[i - 1]);
+
+      if (prevDate && thisDate) {
+        const blanksHere = blankDates.filter(d => d > prevDate && d < thisDate);
+        if (blanksHere.length > 0) items.push({ kind: 'blank', dates: blanksHere });
+      }
+      items.push({ kind: 'stop', stop, stopIndex: i });
+    }
+
+    if (sortedStops.length > 0 && tourEndDate) {
+      const lastDate = getDate(sortedStops[sortedStops.length - 1]);
+      if (lastDate) {
+        const trailing = blankDates.filter(d => d > lastDate && d <= tourEndDate);
+        if (trailing.length > 0) items.push({ kind: 'blank', dates: trailing });
+      }
+    }
+
+    return items;
+  }, [calc?.blankDays, sortedStops, tourStartDate, tourEndDate]);
+
   const daysOnTour = tour.daysOnTour ?? null;
   const accommodationNights = daysOnTour != null ? Math.max(0, daysOnTour - 1) : null;
   const daysWarning = daysOnTour != null && sortedStops.length > 0 && daysOnTour < sortedStops.length;
@@ -291,6 +340,19 @@ export default function TourDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Out-of-range stop warning */}
+          {outOfRangeStops.length > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <span className="font-semibold">
+                  {outOfRangeStops.length} stop{outOfRangeStops.length > 1 ? "s" : ""} outside tour dates.
+                </span>{" "}
+                {outOfRangeStops.map(s => s.venueName || s.city).join(", ")} — edit the stop or adjust the tour dates.
+              </div>
+            </div>
+          )}
+
           {/* Trail stops */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader className="flex flex-row items-center justify-between">
@@ -325,19 +387,57 @@ export default function TourDetail() {
                     </div>
                   )}
 
-                  {sortedStops.map((stop, i) => {
+                  {trailItems.map((item) => {
+                    if (item.kind === 'blank') {
+                      const count = item.dates.length;
+                      const firstLabel = format(parseISO(item.dates[0]), "MMM d");
+                      const rangeLabel = count === 1
+                        ? firstLabel
+                        : `${firstLabel} – ${format(parseISO(item.dates[count - 1]), "MMM d")}`;
+                      return (
+                        <div key={`blank-${item.dates[0]}`} className="px-4 py-2.5 flex items-center gap-3 bg-muted/5 border-y border-dashed border-border/30">
+                          <div className="w-7 h-7 rounded-full bg-muted/40 flex items-center justify-center shrink-0 border border-border/30">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs text-muted-foreground font-medium">{rangeLabel}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              · {count === 1 ? "Blank Day" : `${count} Blank Days`} — Travel / Rest
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const { stop, stopIndex: i } = item;
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const leg = calc?.legs[tour.startLocation ? i : i];
+                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+                    const isOutOfRange = (() => {
+                      if (!stop.date) return false;
+                      const d = stop.date.split('T')[0];
+                      return (tourStartDate && d < tourStartDate) || (tourEndDate && d > tourEndDate);
+                    })();
+
                     return (
                       <div key={stop.id}>
                         {leg && leg.distanceKm > 0 && (
-                          <div className="px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground bg-muted/10 border-b border-border/30">
-                            <Fuel className="w-3 h-3 shrink-0" />
-                            <span>
-                              {leg.from} → {leg.to}: {leg.distanceKm} km
-                              {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? " (enter distance override)" : " (est.)"}
-                              {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
-                            </span>
+                          <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
+                            <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                            <div>
+                              <span>
+                                {leg.from} → {leg.to}: {leg.distanceKm} km
+                                {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? " (enter distance override)" : " (est.)"}
+                                {leg.driveTimeMinutes > 0 && ` · ${formatDriveTime(leg.driveTimeMinutes)}`}
+                                {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
+                              </span>
+                              {driveWarning && (
+                                <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  Long drive — may exceed comfortable daily limit
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -346,7 +446,7 @@ export default function TourDetail() {
                           className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer group"
                           onClick={() => toggleStop(stop.id)}
                         >
-                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border ${isOutOfRange ? "bg-amber-400/20 text-amber-600 border-amber-400/40" : "bg-secondary/20 text-secondary border-secondary/30"}`}>
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -355,6 +455,9 @@ export default function TourDetail() {
                             </span>
                             {stop.venueName && stop.city && stop.venueName !== stop.city && (
                               <span className="text-xs text-muted-foreground ml-1.5 truncate">{stop.city}</span>
+                            )}
+                            {isOutOfRange && (
+                              <span className="ml-2 text-[10px] text-amber-500 font-medium">outside tour dates</span>
                             )}
                           </div>
                           {stop.date && (
@@ -436,14 +539,24 @@ export default function TourDetail() {
                     const returnLeg = calc?.legs[calc.legs.length - 1];
                     const isReturnLeg = tour.returnHome && returnLeg && sortedStops.length > 0 &&
                       returnLeg.to !== sortedStops[sortedStops.length - 1]?.city;
+                    const returnDriveWarn = isReturnLeg && returnLeg && returnLeg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
                     return isReturnLeg ? (
-                      <div className="px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground bg-muted/10">
-                        <Fuel className="w-3 h-3 shrink-0" />
-                        <span>
-                          {returnLeg.from} → {returnLeg.to}: {returnLeg.distanceKm} km
-                          {returnLeg.source === "unknown" ? " (enter distance override)" : returnLeg.source === "manual" ? " (manual)" : " (est.)"}
-                          {returnLeg.fuelCost > 0 && ` · fuel ~${fmt(returnLeg.fuelCost)}`}
-                        </span>
+                      <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground ${returnDriveWarn ? "bg-amber-500/5" : "bg-muted/10"}`}>
+                        <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                        <div>
+                          <span>
+                            {returnLeg.from} → {returnLeg.to}: {returnLeg.distanceKm} km
+                            {returnLeg.source === "unknown" ? " (enter distance override)" : returnLeg.source === "manual" ? " (manual)" : " (est.)"}
+                            {returnLeg.driveTimeMinutes > 0 && ` · ${formatDriveTime(returnLeg.driveTimeMinutes)}`}
+                            {returnLeg.fuelCost > 0 && ` · fuel ~${fmt(returnLeg.fuelCost)}`}
+                          </span>
+                          {returnDriveWarn && (
+                            <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              Long drive — may exceed comfortable daily limit
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : null;
                   })()}
@@ -465,6 +578,12 @@ export default function TourDetail() {
                         <span className="text-muted-foreground">Total Distance </span>
                         <span className="font-semibold">{calc.totalDistance} km</span>
                       </div>
+                      {calc.totalDriveTimeMinutes > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Est. Drive Time </span>
+                          <span className="font-semibold">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
+                        </div>
+                      )}
                       {calc.totalFuelUsedLitres > 0 && (
                         <div>
                           <span className="text-muted-foreground">Fuel Used </span>
@@ -582,9 +701,21 @@ export default function TourDetail() {
                 {daysOnTour != null ? (
                   <>
                     <div className="text-xl font-bold">{daysOnTour} day{daysOnTour !== 1 ? "s" : ""}</div>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {accommodationNights} night{accommodationNights !== 1 ? "s" : ""} accommodation
-                      {nightlyAccomRate > 0 && ` · ${fmt(nightlyAccomRate)}/night`}
+                    <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
+                      {calc && (calc.showDays > 0 || calc.blankDayCount > 0) && (
+                        <div className="flex gap-3 text-xs">
+                          {calc.showDays > 0 && (
+                            <span className="text-secondary font-medium">{calc.showDays} show{calc.showDays !== 1 ? "s" : ""}</span>
+                          )}
+                          {calc.blankDayCount > 0 && (
+                            <span>{calc.blankDayCount} blank</span>
+                          )}
+                        </div>
+                      )}
+                      <div>
+                        {accommodationNights} night{accommodationNights !== 1 ? "s" : ""} accommodation
+                        {nightlyAccomRate > 0 && ` · ${fmt(nightlyAccomRate)}/night`}
+                      </div>
                     </div>
                     {daysWarning && (
                       <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
@@ -747,6 +878,18 @@ export default function TourDetail() {
                     <div className="flex justify-between text-muted-foreground">
                       <span>Days on tour</span>
                       <span className="font-medium text-foreground">{daysOnTour}</span>
+                    </div>
+                  )}
+                  {calc && calc.showDays > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Show days / blank</span>
+                      <span className="font-medium text-foreground">{calc.showDays} / {calc.blankDayCount}</span>
+                    </div>
+                  )}
+                  {calc && calc.totalDriveTimeMinutes > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Est. drive time</span>
+                      <span className="font-medium text-foreground">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
                     </div>
                   )}
                 </div>

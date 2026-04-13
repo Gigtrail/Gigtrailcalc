@@ -12,6 +12,7 @@ export interface TourStopInput {
   id: number;
   city: string;
   stopOrder: number;
+  date?: string | null;
   showType: string;
   fee?: number | null;
   capacity?: number | null;
@@ -47,10 +48,16 @@ export interface StopCalc {
   net: number;
 }
 
+export interface BlankDay {
+  date: string;
+}
+
 export interface TourCalcResult {
   legs: TourLeg[];
   stopCalcs: StopCalc[];
+  blankDays: BlankDay[];
   totalDistance: number;
+  totalDriveTimeMinutes: number;
   totalFuelUsedLitres: number;
   totalFuelCost: number;
   totalShowIncome: number;
@@ -70,6 +77,44 @@ export interface TourCalcResult {
   netProfit: number;
   avgPerShow: number;
   avgFuelPrice: number;
+  showDays: number;
+  blankDayCount: number;
+}
+
+function getISODate(str: string | null | undefined): string | null {
+  if (!str) return null;
+  return str.split('T')[0];
+}
+
+function detectBlankDays(
+  sortedStops: TourStopInput[],
+  startDate?: string | null,
+  endDate?: string | null,
+): BlankDay[] {
+  const showDates = new Set<string>();
+  for (const s of sortedStops) {
+    const d = getISODate(s.date);
+    if (d) showDates.add(d);
+  }
+
+  const allShowDates = [...showDates].sort();
+  if (allShowDates.length === 0 && !startDate && !endDate) return [];
+
+  const rangeStart = getISODate(startDate) ?? allShowDates[0] ?? null;
+  const rangeEnd = getISODate(endDate) ?? allShowDates[allShowDates.length - 1] ?? null;
+  if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) return [];
+
+  const blanks: BlankDay[] = [];
+  const cur = new Date(rangeStart + 'T00:00:00Z');
+  const end = new Date(rangeEnd + 'T00:00:00Z');
+
+  while (cur <= end) {
+    const d = cur.toISOString().split('T')[0];
+    if (!showDates.has(d)) blanks.push({ date: d });
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  return blanks;
 }
 
 export function calcShowIncome(stop: TourStopInput): number {
@@ -102,6 +147,15 @@ export function calcShowIncome(stop: TourStopInput): number {
   return doorIncome;
 }
 
+export function formatDriveTime(minutes: number): string {
+  if (minutes <= 0) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} hr`;
+  return `${h} hr ${m} min`;
+}
+
 export function calculateTour(
   stops: TourStopInput[],
   startLocation: string | null | undefined,
@@ -110,8 +164,16 @@ export function calculateTour(
   vehicleConsumptionLPer100: number | null | undefined,
   daysOnTour?: number | null,
   nightlyAccomRate?: number | null,
+  startDate?: string | null,
+  endDate?: string | null,
 ): TourCalcResult {
-  const sortedStops = [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
+  const sortedStops = [...stops].sort((a, b) => {
+    const da = getISODate(a.date);
+    const db = getISODate(b.date);
+    if (da && db && da !== db) return da < db ? -1 : 1;
+    return a.stopOrder - b.stopOrder;
+  });
+
   const consumption = n(vehicleConsumptionLPer100);
 
   type LocationNode = { name: string; stop?: TourStopInput };
@@ -130,14 +192,17 @@ export function calculateTour(
     const destStop = locations[i + 1].stop;
 
     let distanceKm: number;
+    let driveTimeMinutes: number;
     let source: DistanceSource;
 
     if (destStop && n(destStop.distanceOverride) > 0) {
       distanceKm = n(destStop.distanceOverride);
+      driveTimeMinutes = Math.round((distanceKm / 80) * 60);
       source = 'manual';
     } else {
       const est = estimateLegDistance(from, to);
       distanceKm = est.distanceKm;
+      driveTimeMinutes = est.driveTimeMinutes;
       source = est.source;
     }
 
@@ -145,7 +210,7 @@ export function calculateTour(
     const fuelUsedLitres = consumption > 0 ? (distanceKm * consumption) / 100 : 0;
     const fuelCost = fuelUsedLitres * fuelPrice.pricePerLitre;
 
-    legs.push({ from, to, distanceKm, source, fuelPrice, fuelUsedLitres, fuelCost });
+    legs.push({ from, to, distanceKm, driveTimeMinutes, source, fuelPrice, fuelUsedLitres, fuelCost });
   }
 
   const stopCalcs: StopCalc[] = sortedStops.map(stop => {
@@ -168,7 +233,18 @@ export function calculateTour(
     };
   });
 
+  const blankDays = detectBlankDays(sortedStops, startDate, endDate);
+
+  const showDates = new Set<string>();
+  for (const s of sortedStops) {
+    const d = getISODate(s.date);
+    if (d) showDates.add(d);
+  }
+  const showDays = showDates.size;
+  const blankDayCount = blankDays.length;
+
   const totalDistance = legs.reduce((s, l) => s + l.distanceKm, 0);
+  const totalDriveTimeMinutes = legs.reduce((s, l) => s + l.driveTimeMinutes, 0);
   const totalFuelUsedLitres = legs.reduce((s, l) => s + l.fuelUsedLitres, 0);
   const totalFuelCost = legs.reduce((s, l) => s + l.fuelCost, 0);
 
@@ -180,7 +256,6 @@ export function calculateTour(
   const totalMarketing = stopCalcs.reduce((s, c) => s + c.marketing, 0);
   const totalExtraCosts = stopCalcs.reduce((s, c) => s + c.extraCosts, 0);
 
-  // Days-on-tour driven accommodation
   const days = n(daysOnTour);
   const accommodationNights = days > 0 ? Math.max(0, days - 1) : 0;
   const rate = n(nightlyAccomRate);
@@ -197,7 +272,9 @@ export function calculateTour(
   return {
     legs,
     stopCalcs,
+    blankDays,
     totalDistance,
+    totalDriveTimeMinutes,
     totalFuelUsedLitres,
     totalFuelCost,
     totalShowIncome,
@@ -213,6 +290,8 @@ export function calculateTour(
     netProfit,
     avgPerShow,
     avgFuelPrice,
+    showDays,
+    blankDayCount,
   };
 }
 

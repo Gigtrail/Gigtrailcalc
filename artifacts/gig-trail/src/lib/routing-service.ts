@@ -131,8 +131,11 @@ export interface RouteLeg {
   from: string;
   to: string;
   distanceKm: number;
+  driveTimeMinutes: number;
   source: DistanceSource;
 }
+
+const AVG_ROAD_SPEED_KMH = 80;
 
 export function estimateLegDistance(from: string, to: string): RouteLeg {
   const fromKey = normalizeCity(from);
@@ -142,13 +145,10 @@ export function estimateLegDistance(from: string, to: string): RouteLeg {
   const toCoords = CITY_COORDS[toKey];
 
   if (fromCoords && toCoords) {
-    return {
-      from,
-      to,
-      distanceKm: haversineKm(fromCoords.lat, fromCoords.lon, toCoords.lat, toCoords.lon),
-      source: 'estimate',
-    };
+    const distanceKm = haversineKm(fromCoords.lat, fromCoords.lon, toCoords.lat, toCoords.lon);
+    const driveTimeMinutes = distanceKm > 0 ? Math.round((distanceKm / AVG_ROAD_SPEED_KMH) * 60) : 0;
+    return { from, to, distanceKm, driveTimeMinutes, source: 'estimate' };
   }
 
-  return { from, to, distanceKm: 0, source: 'unknown' };
+  return { from, to, distanceKm: 0, driveTimeMinutes: 0, source: 'unknown' };
 }

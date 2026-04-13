@@ -215,8 +215,26 @@ export default function TourStopForm() {
     }
   }, [profileNightlyRate, isEditing, form]);
 
+  const watchedDate = useWatch({ control: form.control, name: "date" });
+
+  useEffect(() => {
+    if (!watchedDate) {
+      form.clearErrors("date");
+      return;
+    }
+    const tourStart = tour?.startDate?.split('T')[0];
+    const tourEnd = tour?.endDate?.split('T')[0];
+    if (tourStart && watchedDate < tourStart) {
+      form.setError("date", { type: "manual", message: "This stop falls outside the selected tour dates." });
+    } else if (tourEnd && watchedDate > tourEnd) {
+      form.setError("date", { type: "manual", message: "This stop falls outside the selected tour dates." });
+    } else {
+      form.clearErrors("date");
+    }
+  }, [watchedDate, tour?.startDate, tour?.endDate, form]);
+
   const onSubmit = (data: StopFormValues) => {
-    // If not editing and date is empty, set it to null instead of empty string
+    if (form.formState.errors.date) return;
     const payload = { ...data, tourId };
     if (!payload.date) payload.date = null;
 
