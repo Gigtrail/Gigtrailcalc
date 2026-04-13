@@ -1,0 +1,305 @@
+Replit prompt:
+
+Refactor the Trail / Tour logic in Gig Trail so it behaves like a real touring run planner.
+
+GOAL:
+Make the Trail page smarter, more accurate, and easier to trust by improving:
+1. date validation
+2. drive time / distance between stops
+3. blank days between shows
+4. route logic
+5. summary clarity
+6. calculation reliability
+
+==================================================
+1. EVENT DATES MUST FALL WITHIN TOUR DATES
+==================================================
+
+Add validation so every stop/show date must fall within the tour start and end dates.
+
+Rules:
+- Each stop date must be:
+  - on or after the tour start date
+  - on or before the tour end date
+
+If a stop falls outside the tour range:
+- show inline validation error
+- prevent save until fixed
+
+Suggested error text:
+- "This stop falls outside the selected tour dates."
+
+Also:
+- if the user changes the overall tour dates later, re-check all existing stops
+- show a warning if any stops are now invalid
+
+==================================================
+2. SHOW DRIVE DISTANCE + DRIVE TIME BETWEEN STOPS
+==================================================
+
+For every segment in the trail, calculate and display:
+
+- distance between locations
+- estimated drive time
+
+Examples:
+- Start → Stop 1
+- Stop 1 → Stop 2
+- Stop 2 → Stop 3
+- Final Stop → Return Home
+
+Display format example:
+- "356 km • 4 hr 12 min"
+- or
+- "356 km / 4h 12m"
+
+Use:
+- actual coordinates if available
+- fallback to location text if needed
+
+If route lookup fails:
+- show:
+  - "Drive time unavailable"
+  - allow manual distance override if already supported
+
+==================================================
+3. AUTO-RECOGNISE BLANK DAYS BETWEEN SHOWS
+==================================================
+
+Add support for blank days between stops so the tour reflects real downtime between shows.
+
+Definition:
+- A blank day is a day within the tour date range where there is no show booked.
+
+Requirements:
+- Detect gaps between show dates automatically
+- Show blank days visually in the trail between stops
+
+Example:
+- Show on Apr 19
+- next show on Apr 21
+- Apr 20 should appear as a blank day between them
+
+Suggested display:
+- "Blank Day"
+- date shown clearly
+- optional subtitle like:
+  - "Travel / Rest Day"
+  - "No show booked"
+
+Blank days should:
+- count toward total Days on Tour
+- count toward accommodation nights unless otherwise excluded later
+- help users see pacing in the run
+
+Keep this lightweight:
+- do not make blank days full show cards
+- show them as simple inserted timeline rows/cards between stops
+
+==================================================
+4. USE CHRONOLOGICAL STOP ORDER
+==================================================
+
+Ensure trail logic is based on the actual stop order.
+
+Rules:
+- Default order should be chronological by stop date
+- If two stops are on the same day, preserve manual order if that feature exists
+- Route calculations must use the actual ordered sequence of stops
+
+Sequence should be:
+
+Start location
+→ Stop 1
+→ Blank Day(s) if any
+→ Stop 2
+→ Blank Day(s) if any
+→ Stop 3
+→ Return home
+
+==================================================
+5. ADD DRIVE TIME WARNINGS / TOURING INSIGHT
+==================================================
+
+Use drive time between stops to surface useful warnings.
+
+Examples:
+- If drive time between two stops exceeds the profile/vehicle max drive hours per day:
+  show warning:
+  "This leg exceeds your preferred max drive time."
+
+- If the stop date sequence makes travel unrealistic:
+  show warning:
+  "This schedule may be too tight based on drive time."
+
+- If two shows are on consecutive days with long travel:
+  highlight the segment visually
+
+- If there are multiple blank days between shows:
+  optionally show:
+  "2 days between shows"
+
+This should help users catch bad routing decisions.
+
+==================================================
+6. IMPROVE RETURN LEG LOGIC
+==================================================
+
+Make sure the return leg is always handled clearly.
+
+Requirements:
+- If return-to-home is enabled, calculate:
+  - final stop → home base
+  - distance
+  - drive time
+  - fuel cost contribution
+
+Display it clearly in the trail:
+- "Return: Yackandandah VIC 3749, Australia"
+
+And show segment details above or below it.
+
+If one-way mode exists:
+- hide the return leg completely
+
+==================================================
+7. CLEAN UP DAYS ON TOUR LOGIC
+==================================================
+
+Days on Tour should work cleanly with stop dates.
+
+Rules:
+- If tour start + end dates are set:
+  auto-calculate days_on_tour from those dates
+- Do not make the user manually maintain a conflicting Days on Tour number
+- Tour dates should be the source of truth
+
+Formula:
+- days_on_tour = end_date - start_date + 1
+
+Display this clearly in the Days on Tour card.
+
+If dates are missing:
+- show "Not set"
+
+Also show:
+- total show days
+- total blank days
+
+Example:
+- Days on Tour: 7
+- Show Days: 4
+- Blank Days: 3
+
+==================================================
+8. ACCOMMODATION LOGIC SHOULD USE TOUR LENGTH + BLANK DAYS
+==================================================
+
+Accommodation should be based on the tour structure, not just a blank cost field.
+
+Rules:
+- base accommodation nights on total days on tour
+- nights = days_on_tour - 1
+- blank days between shows should count as nights away
+- apply act/profile accommodation settings
+- include venue-provided accommodation overrides per stop if supported
+- avoid double counting
+
+Optional future-ready behaviour:
+- if a stop is marked "Accommodation Provided by Venue"
+  subtract that night from paid accommodation total if logic supports it cleanly
+
+For now, keep the logic simple and transparent.
+
+==================================================
+9. STOP CARD IMPROVEMENTS
+==================================================
+
+Each stop card should show cleaner summary data.
+
+Display:
+- stop number
+- venue / location
+- event date
+- fee type
+- gross income
+- costs
+- net
+- segment distance/time from previous stop
+
+Example:
+- Apr 19 • Oodies Cafe
+- Flat Fee • $3,150 gross • $0 costs
+- Drive from previous stop: 356 km • 4h 12m
+
+For blank days, show:
+- date
+- "Blank Day"
+- optional note:
+  "Travel / Rest Day"
+
+This makes the trail much easier to scan.
+
+==================================================
+10. TOUR SUMMARY IMPROVEMENTS
+==================================================
+
+Add or improve top-level summary calculations for the whole run.
+
+Include:
+- total distance
+- total estimated drive time
+- total days on tour
+- total show days
+- total blank days
+- total income
+- total expenses
+- total estimated net profit
+- estimated accommodation nights
+
+Optional:
+- average income per show
+- average drive time per leg
+
+==================================================
+11. VALIDATION / EMPTY STATE / UX TIDY-UP
+==================================================
+
+Add general polish:
+
+- If no tour dates are set:
+  show a prompt to set them
+- If no stops are added:
+  keep empty state simple
+- If stop dates are outside the range:
+  highlight problem clearly
+- If route data is loading:
+  show loading state
+- If route data fails:
+  show graceful fallback
+- If blank days exist, make them easy to understand at a glance
+
+Keep the UI practical and readable.
+Do not overdesign.
+
+==================================================
+12. IMPORTANT IMPLEMENTATION NOTES
+==================================================
+
+- Reuse existing stop, trail, profile, and vehicle data where possible
+- Do not overbuild drag-and-drop routing yet unless already partially implemented
+- Focus on accurate calculations and trustworthy display first
+- Keep logic extensible for future features like:
+  - multiple shows on one day
+  - venue-provided accommodation per stop
+  - different vehicles per tour segment
+  - multiple departure locations
+  - manual blank day notes later
+
+EXPECTED RESULT:
+- Stops must fit inside the tour date range
+- Drive distance and drive time appear between all stops
+- Blank days between shows are automatically shown
+- Tour dates, days on tour, blank days, and calculations stay consistent
+- Users get better warnings for unrealistic routing
+- The Trail page feels like a real touring planner, not just a list
