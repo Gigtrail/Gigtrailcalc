@@ -517,30 +517,32 @@ export default function RunForm() {
       const origin = params.get("origin");
       const fuelPrice = params.get("fuelPrice");
 
-      let autoProfileId: number | null = null;
-      if (urlProfileId) {
-        autoProfileId = Number(urlProfileId);
-      } else {
-        const lastUsed = localStorage.getItem(LAST_PROFILE_KEY);
-        const lastUsedNum = lastUsed ? parseInt(lastUsed) : null;
-        if (lastUsedNum && profiles.find(p => p.id === lastUsedNum)) {
-          autoProfileId = lastUsedNum;
+      // Apply URL-driven overrides (from onboarding redirect)
+      if (origin) form.setValue("origin", origin);
+      if (fuelPrice) form.setValue("fuelPrice", Number(fuelPrice));
+
+      // Only auto-select a profile if one isn't already set
+      const currentProfileId = form.getValues("profileId");
+      if (!currentProfileId) {
+        let autoProfileId: number | null = null;
+        if (urlProfileId) {
+          autoProfileId = Number(urlProfileId);
         } else {
-          autoProfileId = profiles[0].id;
+          const lastUsed = localStorage.getItem(LAST_PROFILE_KEY);
+          const lastUsedNum = lastUsed ? parseInt(lastUsed) : null;
+          if (lastUsedNum && profiles.find(p => p.id === lastUsedNum)) {
+            autoProfileId = lastUsedNum;
+          } else {
+            autoProfileId = profiles[0].id;
+          }
         }
-      }
 
-      form.reset({
-        ...form.getValues(),
-        profileId: autoProfileId,
-        origin: origin || form.getValues("origin") || "",
-        fuelPrice: fuelPrice ? Number(fuelPrice) : form.getValues("fuelPrice"),
-      });
-
-      if (autoProfileId) {
-        localStorage.setItem(LAST_PROFILE_KEY, autoProfileId.toString());
-        const profile = profiles.find(p => p.id === autoProfileId);
-        if (profile) applyProfileValues(profile);
+        if (autoProfileId) {
+          form.setValue("profileId", autoProfileId);
+          localStorage.setItem(LAST_PROFILE_KEY, autoProfileId.toString());
+          const profile = profiles.find(p => p.id === autoProfileId);
+          if (profile) applyProfileValues(profile);
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
