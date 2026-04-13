@@ -215,6 +215,16 @@ export default function TourStopForm() {
     }
   }, [profileNightlyRate, isEditing, form]);
 
+  useEffect(() => {
+    if (!isEditing) {
+      const params = new URLSearchParams(window.location.search);
+      const dateParam = params.get('date');
+      if (dateParam && !form.getValues("date")) {
+        form.setValue("date", dateParam);
+      }
+    }
+  }, [isEditing, form]);
+
   const watchedDate = useWatch({ control: form.control, name: "date" });
 
   useEffect(() => {

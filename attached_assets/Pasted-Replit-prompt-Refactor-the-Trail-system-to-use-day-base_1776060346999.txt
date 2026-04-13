@@ -1,0 +1,290 @@
+Replit prompt:
+
+Refactor the Trail system to use day-based tour slots instead of one large blank-days block.
+
+GOAL:
+Turn the tour into a day-by-day planner so users can see every day of the run, add shows directly onto specific dates, and understand daily touring costs using profile defaults like accommodation and food/day.
+
+This should feel like a practical tour builder for musicians, not a calendar app.
+
+==================================================
+1. GENERATE DAY SLOTS FROM TOUR DATES
+==================================================
+
+When a user sets:
+- tour start date
+- tour end date
+
+Automatically generate a list of individual day slots.
+
+Each day slot should include:
+- exact date
+- day number (Day 1, Day 2, etc.)
+- status:
+  - empty
+  - show booked
+
+Formula:
+- total_days_on_tour = end_date - start_date + 1
+
+Tour dates are the source of truth.
+
+==================================================
+2. REPLACE THE SINGLE "BLANK DAYS" BLOCK
+==================================================
+
+Remove the large combined blank-days row such as:
+- "12 Blank Days — Travel / Rest"
+
+Replace it with one row/card per day.
+
+For example:
+
+Apr 19 — Day 1 — Show booked
+Apr 20 — Day 2 — No show booked
+Apr 21 — Day 3 — No show booked
+Apr 22 — Day 4 — Show booked
+
+This should make the run easier to understand and edit.
+
+==================================================
+3. EACH DAY ROW SHOULD BE ACTIONABLE
+==================================================
+
+Each day row should display:
+
+- Date
+- Day number
+- Status:
+  - No show booked
+  - Show details if a show exists
+
+If no show exists, show action buttons:
+- + Add Show
+- + Add Past Show
+
+If a show exists, show:
+- venue / show name
+- fee summary
+- net or gross summary if available
+- edit button
+- remove button if supported
+
+==================================================
+4. ADD SHOWS TO SPECIFIC DAYS
+==================================================
+
+When user clicks:
+- + Add Show
+or
+- + Add Past Show
+
+Attach that show to the selected day slot.
+
+Rules:
+- one show per day for now
+- adding a show replaces the empty state for that date
+- imported past show data should remain editable after being added
+
+==================================================
+5. SHOW DAILY COST FOR EACH DAY
+==================================================
+
+Add a daily cost display for every day slot.
+
+Goal:
+Show the user what that day costs them even if there is no show booked.
+
+Daily cost should be based on the selected profile defaults:
+- food/day
+- accommodation requirements/settings
+
+Display a small line on each day row such as:
+- Daily cost: $90
+or
+- Daily cost: $50 food + $120 accom
+
+==================================================
+6. DAILY COST LOGIC
+==================================================
+
+Use the selected act/profile as the source of truth for daily cost logic.
+
+For each day slot, calculate:
+
+A) Food/day
+- Use the profile’s food/day value
+- Apply it to every tour day
+
+B) Accommodation/day
+- Use the profile’s accommodation settings
+- Calculate the daily accommodation estimate based on room requirements from the profile
+
+Examples:
+- 1 queen room
+- 1 single + 2 double
+- no accommodation required
+
+If the profile says accommodation is not required:
+- accommodation daily cost = 0
+
+If profile accommodation has a known nightly estimate:
+- use that estimate
+
+If accommodation is venue-provided for a booked show on that day:
+- show daily accommodation cost = 0 for that day
+- still apply food/day unless otherwise changed later
+
+==================================================
+7. SHOW DAILY COST BREAKDOWN CLEARLY
+==================================================
+
+For each day row, show a small breakdown.
+
+Examples:
+- Daily cost: $50 food + $140 accom
+- Daily cost: $50 food
+- Daily cost: $0 (venue covers accom, no daily food set)
+- Daily cost: $190 total
+
+For blank days:
+- still show the daily cost
+- blank days should count as real touring days, not invisible gaps
+
+==================================================
+8. TOUR SUMMARY SHOULD ROLL UP DAILY COSTS
+==================================================
+
+Update tour summary cards/calculations to include:
+
+- total days on tour
+- total show days
+- total blank days
+- total food/day cost across the run
+- total accommodation cost across the run
+- total daily cost across the run
+- total income
+- total expenses
+- net estimated result
+
+This should make it very obvious what a long gap between shows is costing.
+
+==================================================
+9. ROUTE CALCULATION SHOULD ONLY USE SHOW DAYS
+==================================================
+
+Route calculation should happen only between days that have shows.
+
+Sequence:
+- Start location
+- first booked show day
+- next booked show day
+- next booked show day
+- return home
+
+Blank days should remain visible in the timeline, but they do not create extra route segments unless future logic is added.
+
+==================================================
+10. DATE VALIDATION
+==================================================
+
+All shows added to the trail must sit within the tour date range.
+
+Rules:
+- show date must be on or after the tour start date
+- show date must be on or before the tour end date
+
+If invalid:
+- show inline validation error
+- prevent save
+
+Suggested error:
+- "This show falls outside the selected tour dates."
+
+==================================================
+11. DAY ROW UX
+==================================================
+
+Keep the UI lightweight and easy to scan.
+
+For empty days, show something like:
+- Day 4 — Apr 22
+- No show booked
+- Daily cost: $190
+- + Add Show
+- + Add Past Show
+
+For show days, show something like:
+- Day 5 — Apr 23
+- Oodies Cafe
+- Flat Fee • $3,150
+- Daily cost: $50 food + $0 accom
+- Drive from previous show: 356 km • 4h 12m
+
+==================================================
+12. PROFILE-BASED DAILY COST RULES
+==================================================
+
+Use selected act/profile values consistently.
+
+Profile should control:
+- food/day
+- accommodation requirement
+- accommodation setup / room needs
+- accommodation estimated nightly cost if stored
+
+Do not duplicate profile logic manually in multiple places.
+Reuse existing profile cost logic where possible.
+
+==================================================
+13. IMPORTANT EDGE CASES
+==================================================
+
+Handle these cleanly:
+
+- No profile selected:
+  - show daily cost as unavailable or prompt user to pick a profile
+
+- No accommodation estimate available in profile:
+  - still show food/day
+  - mark accom estimate as not set if needed
+
+- Venue-provided accommodation on a booked day:
+  - set accom to 0 for that day
+  - reflect this in the row and totals
+
+- Changing profile:
+  - regenerate daily cost rows for the whole tour
+
+- Changing tour dates:
+  - regenerate all day slots
+  - preserve shows where possible if still within range
+
+==================================================
+14. KEEP IT SIMPLE
+==================================================
+
+Do NOT:
+- build a full calendar view
+- support multiple shows per day yet
+- add drag-and-drop yet
+- overcomplicate blank day logic
+
+Focus on:
+- one row per tour day
+- easy adding of shows
+- visible daily cost
+- clearer tour economics
+
+==================================================
+EXPECTED RESULT
+==================================================
+
+- User sets tour dates
+- App generates one row per day of the run
+- Each day clearly shows whether a show is booked
+- Empty days remain visible and actionable
+- User can add a show or import a past show directly onto a day
+- Every day shows a daily cost using profile food/day and accommodation defaults
+- Tour totals become much more realistic and useful
+- Long gaps between shows become financially obvious

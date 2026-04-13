@@ -24,6 +24,7 @@ export interface TourStopInput {
   merchEstimate?: number | null;
   marketingCost?: number | null;
   accommodationCost?: number | null;
+  accommodationMode?: string | null;
   extraCosts?: number | null;
   distanceOverride?: number | null;
   fuelPriceOverride?: number | null;
@@ -52,10 +53,25 @@ export interface BlankDay {
   date: string;
 }
 
+/** One slot per calendar day of the tour */
+export interface DaySlot {
+  date: string;
+  dayNumber: number;
+  stop?: TourStopInput;
+  /** Drive leg arriving at this day's show (undefined for blank days) */
+  incomingLeg?: TourLeg;
+  dailyFoodCost: number;
+  /** Accom cost for this day: 0 if venue-provided or accom not required */
+  dailyAccomCost: number;
+  dailyTotalCost: number;
+  accomCoveredByVenue: boolean;
+}
+
 export interface TourCalcResult {
   legs: TourLeg[];
   stopCalcs: StopCalc[];
   blankDays: BlankDay[];
+  daySlots: DaySlot[];
   totalDistance: number;
   totalDriveTimeMinutes: number;
   totalFuelUsedLitres: number;
@@ -63,14 +79,18 @@ export interface TourCalcResult {
   totalShowIncome: number;
   totalMerchIncome: number;
   grossIncome: number;
-  /** Per-stop manual accommodation costs (stop-level entries) */
+  /** Per-stop manual accommodation costs (show nights, set when stop was added) */
   totalStopAccommodation: number;
-  /** Days-on-tour based accommodation estimate (from profile room settings) */
-  tourAccommodationCost: number;
-  /** Total accommodation = stopLevel + tourLevel */
+  /** Profile-based accommodation cost for blank days only */
+  blankDayAccomCost: number;
+  /** Total accommodation = stopLevel + blankDayAccomCost */
   totalAccommodation: number;
-  /** Number of nights implied by daysOnTour (daysOnTour - 1) */
+  /** @deprecated use blankDayAccomCost; kept for compatibility */
+  tourAccommodationCost: number;
+  /** Number of blank (non-show) days in the tour range */
   accommodationNights: number;
+  /** Total food cost across all tour days (profileFoodPerDay × totalDays) */
+  totalFoodCost: number;
   totalMarketing: number;
   totalExtraCosts: number;
   totalExpenses: number;
@@ -115,6 +135,68 @@ function detectBlankDays(
   }
 
   return blanks;
+}
+
+function buildDaySlots(
+  sortedStops: TourStopInput[],
+  legs: TourLeg[],
+  startDate: string,
+  endDate: string,
+  hasStartLocation: boolean,
+  foodPerDay: number,
+  accomRequired: boolean,
+  nightlyAccomRate: number,
+): DaySlot[] {
+  const stopByDate = new Map<string, { stop: TourStopInput; stopIndex: number }>();
+  for (let i = 0; i < sortedStops.length; i++) {
+    const d = getISODate(sortedStops[i].date);
+    if (d) stopByDate.set(d, { stop: sortedStops[i], stopIndex: i });
+  }
+
+  const slots: DaySlot[] = [];
+  const cur = new Date(startDate + 'T00:00:00Z');
+  const end = new Date(endDate + 'T00:00:00Z');
+  let dayNum = 1;
+
+  while (cur <= end) {
+    const date = cur.toISOString().split('T')[0];
+    const entry = stopByDate.get(date);
+
+    let incomingLeg: TourLeg | undefined;
+    if (entry) {
+      const legIndex = hasStartLocation ? entry.stopIndex : entry.stopIndex - 1;
+      if (legIndex >= 0 && legIndex < legs.length) {
+        incomingLeg = legs[legIndex];
+      }
+    }
+
+    const accomCoveredByVenue = entry?.stop.accommodationMode === 'venue_provided';
+
+    let dailyAccomCost: number;
+    if (!accomRequired) {
+      dailyAccomCost = 0;
+    } else if (entry) {
+      dailyAccomCost = accomCoveredByVenue ? 0 : n(entry.stop.accommodationCost);
+    } else {
+      dailyAccomCost = nightlyAccomRate;
+    }
+
+    slots.push({
+      date,
+      dayNumber: dayNum,
+      stop: entry?.stop,
+      incomingLeg,
+      dailyFoodCost: foodPerDay,
+      dailyAccomCost,
+      dailyTotalCost: foodPerDay + dailyAccomCost,
+      accomCoveredByVenue,
+    });
+
+    dayNum++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  return slots;
 }
 
 export function calcShowIncome(stop: TourStopInput): number {
@@ -166,6 +248,8 @@ export function calculateTour(
   nightlyAccomRate?: number | null,
   startDate?: string | null,
   endDate?: string | null,
+  profileFoodPerDay?: number | null,
+  profileAccomRequired?: boolean | null,
 ): TourCalcResult {
   const sortedStops = [...stops].sort((a, b) => {
     const da = getISODate(a.date);
@@ -256,15 +340,36 @@ export function calculateTour(
   const totalMarketing = stopCalcs.reduce((s, c) => s + c.marketing, 0);
   const totalExtraCosts = stopCalcs.reduce((s, c) => s + c.extraCosts, 0);
 
-  const days = n(daysOnTour);
-  const accommodationNights = days > 0 ? Math.max(0, days - 1) : 0;
+  const rangeStart = getISODate(startDate);
+  const rangeEnd = getISODate(endDate);
+  const hasStartLocation = !!startLocation?.trim();
+  const foodPerDay = n(profileFoodPerDay);
+  const accomRequired = profileAccomRequired ?? false;
   const rate = n(nightlyAccomRate);
-  const tourAccommodationCost = accommodationNights > 0 && rate > 0
-    ? accommodationNights * rate
-    : 0;
 
-  const totalAccommodation = totalStopAccommodation + tourAccommodationCost;
-  const totalExpenses = totalFuelCost + totalAccommodation + totalMarketing + totalExtraCosts;
+  const daySlots =
+    rangeStart && rangeEnd && rangeStart <= rangeEnd
+      ? buildDaySlots(sortedStops, legs, rangeStart, rangeEnd, hasStartLocation, foodPerDay, accomRequired, rate)
+      : [];
+
+  const totalFoodCost = daySlots.reduce((s, d) => s + d.dailyFoodCost, 0);
+
+  let blankDayAccomCost: number;
+  let accommodationNights: number;
+
+  if (daySlots.length > 0) {
+    const blankSlots = daySlots.filter(d => !d.stop);
+    blankDayAccomCost = blankSlots.reduce((s, d) => s + d.dailyAccomCost, 0);
+    accommodationNights = blankSlots.length;
+  } else {
+    const days = n(daysOnTour);
+    accommodationNights = days > 0 ? Math.max(0, days - 1) : 0;
+    blankDayAccomCost = accommodationNights > 0 && rate > 0 ? accommodationNights * rate : 0;
+  }
+
+  const totalAccommodation = totalStopAccommodation + blankDayAccomCost;
+
+  const totalExpenses = totalFuelCost + totalAccommodation + totalFoodCost + totalMarketing + totalExtraCosts;
   const netProfit = grossIncome - totalExpenses;
   const avgPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
   const avgFuelPrice = totalFuelUsedLitres > 0 ? totalFuelCost / totalFuelUsedLitres : 0;
@@ -273,6 +378,7 @@ export function calculateTour(
     legs,
     stopCalcs,
     blankDays,
+    daySlots,
     totalDistance,
     totalDriveTimeMinutes,
     totalFuelUsedLitres,
@@ -281,9 +387,11 @@ export function calculateTour(
     totalMerchIncome,
     grossIncome,
     totalStopAccommodation,
-    tourAccommodationCost,
+    blankDayAccomCost,
     totalAccommodation,
+    tourAccommodationCost: blankDayAccomCost,
     accommodationNights,
+    totalFoodCost,
     totalMarketing,
     totalExtraCosts,
     totalExpenses,

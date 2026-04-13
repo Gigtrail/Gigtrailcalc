@@ -68,6 +68,7 @@ export default function TourDetail() {
   const [selectedRun, setSelectedRun] = useState<RunItem | null>(null);
   const [accomMode, setAccomMode] = useState<"profile_default" | "venue_provided" | "manual">("profile_default");
   const [manualAccomCost, setManualAccomCost] = useState<string>("");
+  const [pendingDate, setPendingDate] = useState<string | null>(null);
 
   const { data: tour, isLoading: isLoadingTour } = useGetTour(tourId, {
     query: { enabled: !!tourId, queryKey: ["tour", tourId] },
@@ -125,6 +126,7 @@ export default function TourDetail() {
     setSelectedRun(null);
     setAccomMode("profile_default");
     setManualAccomCost("");
+    setPendingDate(null);
   };
 
   const handleSelectRun = (run: RunItem) => {
@@ -154,7 +156,7 @@ export default function TourDetail() {
         data: {
           city: run.destination || run.city || "Unknown",
           venueName: run.venueName ?? null,
-          date: run.showDate ?? null,
+          date: pendingDate ?? run.showDate ?? null,
           showType: run.showType ?? "Flat Fee",
           fee: run.fee ?? null,
           capacity: run.capacity ?? null,
@@ -187,7 +189,9 @@ export default function TourDetail() {
   };
 
   const nightlyAccomRate = profile
-    ? (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE
+    ? (profile.avgAccomPerNight > 0
+        ? profile.avgAccomPerNight
+        : (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE)
     : 0;
 
   const calc = useMemo(() => {
@@ -203,8 +207,10 @@ export default function TourDetail() {
       nightlyAccomRate,
       tour?.startDate ?? null,
       tour?.endDate ?? null,
+      profile?.avgFoodPerDay ?? null,
+      profile?.accommodationRequired ?? null,
     );
-  }, [stops, tour, vehicle, nightlyAccomRate]);
+  }, [stops, tour, vehicle, nightlyAccomRate, profile]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
@@ -220,49 +226,20 @@ export default function TourDetail() {
     return a.stopOrder - b.stopOrder;
   }) : [];
 
-  const tourStartDate = tour.startDate ? tour.startDate.split('T')[0] : null;
-  const tourEndDate = tour.endDate ? tour.endDate.split('T')[0] : null;
+  const daySlots = calc?.daySlots ?? [];
+  const hasDaySlots = daySlots.length > 0;
 
-  const outOfRangeStops = sortedStops.filter(stop => {
-    if (!stop.date) return false;
-    const d = stop.date.split('T')[0];
-    return (tourStartDate && d < tourStartDate) || (tourEndDate && d > tourEndDate);
-  });
-
-  type TrailItem =
-    | { kind: 'stop'; stop: typeof sortedStops[0]; stopIndex: number }
-    | { kind: 'blank'; dates: string[] };
-
-  const trailItems = useMemo<TrailItem[]>(() => {
-    const blankDates = (calc?.blankDays ?? []).map(b => b.date).sort();
-    const getDate = (s: typeof sortedStops[0]) => s.date ? s.date.split('T')[0] : null;
-    const items: TrailItem[] = [];
-
-    for (let i = 0; i < sortedStops.length; i++) {
-      const stop = sortedStops[i];
-      const thisDate = getDate(stop);
-      const prevDate = i === 0 ? tourStartDate : getDate(sortedStops[i - 1]);
-
-      if (prevDate && thisDate) {
-        const blanksHere = blankDates.filter(d => d > prevDate && d < thisDate);
-        if (blanksHere.length > 0) items.push({ kind: 'blank', dates: blanksHere });
-      }
-      items.push({ kind: 'stop', stop, stopIndex: i });
-    }
-
-    if (sortedStops.length > 0 && tourEndDate) {
-      const lastDate = getDate(sortedStops[sortedStops.length - 1]);
-      if (lastDate) {
-        const trailing = blankDates.filter(d => d > lastDate && d <= tourEndDate);
-        if (trailing.length > 0) items.push({ kind: 'blank', dates: trailing });
-      }
-    }
-
-    return items;
-  }, [calc?.blankDays, sortedStops, tourStartDate, tourEndDate]);
+  const formatDailyCost = (food: number, accom: number, accomVenue: boolean): string => {
+    if (food === 0 && accom === 0 && !accomVenue) return "";
+    const parts: string[] = [];
+    if (food > 0) parts.push(`${fmt(food)} food`);
+    if (accomVenue) parts.push(`$0.00 accom (venue covers)`);
+    else if (accom > 0) parts.push(`${fmt(accom)} accom`);
+    return parts.join(" + ");
+  };
 
   const daysOnTour = tour.daysOnTour ?? null;
-  const accommodationNights = daysOnTour != null ? Math.max(0, daysOnTour - 1) : null;
+  const accommodationNights = calc?.accommodationNights ?? (daysOnTour != null ? Math.max(0, daysOnTour - 1) : null);
   const daysWarning = daysOnTour != null && sortedStops.length > 0 && daysOnTour < sortedStops.length;
 
   const netProfit = calc?.netProfit ?? 0;
@@ -340,19 +317,6 @@ export default function TourDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
 
-          {/* Out-of-range stop warning */}
-          {outOfRangeStops.length > 0 && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-400">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <span className="font-semibold">
-                  {outOfRangeStops.length} stop{outOfRangeStops.length > 1 ? "s" : ""} outside tour dates.
-                </span>{" "}
-                {outOfRangeStops.map(s => s.venueName || s.city).join(", ")} — edit the stop or adjust the tour dates.
-              </div>
-            </div>
-          )}
-
           {/* Trail stops */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader className="flex flex-row items-center justify-between">
@@ -361,11 +325,24 @@ export default function TourDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {sortedStops.length === 0 ? (
+              {!hasDaySlots && sortedStops.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground space-y-3">
                   <MapPin className="w-8 h-8 mx-auto opacity-50" />
-                  <p>No stops added yet.</p>
+                  {tour.startDate && tour.endDate ? (
+                    <p>No shows yet — use the buttons below each day to add them.</p>
+                  ) : (
+                    <>
+                      <p>No stops added yet.</p>
+                      <p className="text-xs opacity-70">Set tour start and end dates to unlock the day-by-day trail builder.</p>
+                    </>
+                  )}
                   <div className="flex items-center justify-center gap-3">
+                    {!tour.startDate && (
+                      <Button variant="outline" size="sm" onClick={() => setLocation(`/tours/${tourId}/edit`)}>
+                        <Calendar className="w-4 h-4 mr-1.5" />
+                        Set Tour Dates
+                      </Button>
+                    )}
                     <Button variant="default" size="sm" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
                       <Plus className="w-4 h-4 mr-1.5" />
                       Add your first stop
@@ -387,39 +364,182 @@ export default function TourDetail() {
                     </div>
                   )}
 
-                  {trailItems.map((item) => {
-                    if (item.kind === 'blank') {
-                      const count = item.dates.length;
-                      const firstLabel = format(parseISO(item.dates[0]), "MMM d");
-                      const rangeLabel = count === 1
-                        ? firstLabel
-                        : `${firstLabel} – ${format(parseISO(item.dates[count - 1]), "MMM d")}`;
+                  {/* No-dates prompt when stops exist but no day slots */}
+                  {!hasDaySlots && sortedStops.length > 0 && (
+                    <div className="px-4 py-3 flex items-center gap-3 bg-amber-500/5 border-b border-amber-400/20">
+                      <Calendar className="w-4 h-4 shrink-0 text-amber-600" />
+                      <p className="text-xs text-amber-700 dark:text-amber-400 flex-1">
+                        Set tour start and end dates to unlock the full day-by-day trail view.
+                      </p>
+                      <Button variant="outline" size="sm" className="h-6 text-xs px-2 shrink-0"
+                        onClick={() => setLocation(`/tours/${tourId}/edit`)}>
+                        Set Dates →
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Day-slot trail (when tour dates are set) */}
+                  {hasDaySlots && daySlots.map((day) => {
+                    const dailyCostLine = formatDailyCost(day.dailyFoodCost, day.dailyAccomCost, day.accomCoveredByVenue);
+
+                    if (!day.stop) {
                       return (
-                        <div key={`blank-${item.dates[0]}`} className="px-4 py-2.5 flex items-center gap-3 bg-muted/5 border-y border-dashed border-border/30">
-                          <div className="w-7 h-7 rounded-full bg-muted/40 flex items-center justify-center shrink-0 border border-border/30">
-                            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                        <div key={day.date} className="px-4 py-3 flex items-start gap-3 hover:bg-muted/10 transition-colors">
+                          <div className="w-7 h-7 rounded-full bg-muted/30 flex items-center justify-center shrink-0 border border-border/30 text-[10px] font-bold text-muted-foreground mt-0.5">
+                            {day.dayNumber}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="text-xs text-muted-foreground font-medium">{rangeLabel}</span>
-                            <span className="text-xs text-muted-foreground ml-2">
-                              · {count === 1 ? "Blank Day" : `${count} Blank Days`} — Travel / Rest
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-medium">{format(parseISO(day.date), "MMM d")}</span>
+                              <span className="text-muted-foreground/50 text-xs">·</span>
+                              <span className="text-sm text-muted-foreground italic">No show booked</span>
+                            </div>
+                            {dailyCostLine && (
+                              <div className="text-xs text-muted-foreground mt-0.5">Daily cost: {dailyCostLine}</div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                              onClick={() => setLocation(`/tours/${tourId}/stops/new?date=${day.date}`)}
+                            >
+                              <Plus className="w-3 h-3 mr-1" /> Add Show
+                            </Button>
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                              onClick={() => { setPendingDate(day.date); setShowPastShowModal(true); }}
+                            >
+                              <History className="w-3 h-3 mr-1" /> Past Show
+                            </Button>
                           </div>
                         </div>
                       );
                     }
 
-                    const { stop, stopIndex: i } = item;
+                    const stop = day.stop;
+                    const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
+                    const leg = day.incomingLeg;
+                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+
+                    return (
+                      <div key={day.date}>
+                        {leg && leg.distanceKm > 0 && (
+                          <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
+                            <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                            <div>
+                              <span>
+                                {leg.from} → {leg.to}: {leg.distanceKm} km
+                                {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? " (enter distance override)" : " (est.)"}
+                                {leg.driveTimeMinutes > 0 && ` · ${formatDriveTime(leg.driveTimeMinutes)}`}
+                                {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
+                              </span>
+                              {driveWarning && (
+                                <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  Long drive — may exceed comfortable daily limit
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div
+                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer"
+                          onClick={() => toggleStop(stop.id)}
+                        >
+                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
+                            {day.dayNumber}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-muted-foreground">
+                              {format(parseISO(day.date), "MMM d")}
+                              {stop.showType && <span className="ml-1.5 text-muted-foreground/60">· {stop.showType}</span>}
+                            </div>
+                            <div className="font-semibold truncate">{stop.venueName || stop.city}</div>
+                            {stop.venueName && stop.city && stop.venueName !== stop.city && (
+                              <div className="text-xs text-muted-foreground truncate">{stop.city}</div>
+                            )}
+                            {dailyCostLine && (
+                              <div className="text-xs text-muted-foreground mt-0.5">Daily cost: {dailyCostLine}</div>
+                            )}
+                          </div>
+                          {stopCalc && (
+                            <span className={`text-sm font-bold shrink-0 ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
+                              {fmt(stopCalc.totalIncome)}
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expandedStops.has(stop.id) ? "rotate-180" : ""}`}
+                          />
+                        </div>
+
+                        {expandedStops.has(stop.id) && (
+                          <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 space-y-2">
+                            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-2">
+                              <Badge variant="outline" className="font-normal text-[10px] py-0">{stop.showType}</Badge>
+                              {stopCalc && (
+                                <>
+                                  <span>{fmt(stopCalc.totalIncome)} income</span>
+                                  <span>·</span>
+                                  <span>{fmt(stopCalc.totalCosts)} costs</span>
+                                  <span>·</span>
+                                  <span className={`font-semibold ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
+                                    {fmt(stopCalc.net)} net
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={e => { e.stopPropagation(); setLocation(`/tours/${tourId}/stops/${stop.id}/edit`); }}
+                              >
+                                <Edit className="w-3 h-3 mr-1" /> Edit
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost" size="sm"
+                                    className="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="w-3 h-3 mr-1" /> Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Stop</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Remove {stop.venueName || stop.city} from the tour?
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeleteStop(stop.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Fallback: stops without tour dates (legacy view) */}
+                  {!hasDaySlots && sortedStops.map((stop, i) => {
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const legIndex = tour.startLocation ? i : i - 1;
                     const leg = legIndex >= 0 ? calc?.legs[legIndex] : undefined;
                     const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
-                    const isOutOfRange = (() => {
-                      if (!stop.date) return false;
-                      const d = stop.date.split('T')[0];
-                      return (tourStartDate && d < tourStartDate) || (tourEndDate && d > tourEndDate);
-                    })();
-
                     return (
                       <div key={stop.id}>
                         {leg && leg.distanceKm > 0 && (
@@ -441,30 +561,21 @@ export default function TourDetail() {
                             </div>
                           </div>
                         )}
-
-                        {/* Collapsed row — always visible */}
                         <div
-                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer group"
+                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer"
                           onClick={() => toggleStop(stop.id)}
                         >
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold border ${isOutOfRange ? "bg-amber-400/20 text-amber-600 border-amber-400/40" : "bg-secondary/20 text-secondary border-secondary/30"}`}>
+                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <span className="font-semibold truncate">
-                              {stop.venueName || stop.city}
-                            </span>
+                            <div className="font-semibold truncate">{stop.venueName || stop.city}</div>
                             {stop.venueName && stop.city && stop.venueName !== stop.city && (
-                              <span className="text-xs text-muted-foreground ml-1.5 truncate">{stop.city}</span>
-                            )}
-                            {isOutOfRange && (
-                              <span className="ml-2 text-[10px] text-amber-500 font-medium">outside tour dates</span>
+                              <span className="text-xs text-muted-foreground truncate">{stop.city}</span>
                             )}
                           </div>
                           {stop.date && (
-                            <span className="text-xs text-muted-foreground shrink-0">
-                              {format(new Date(stop.date), "MMM d")}
-                            </span>
+                            <span className="text-xs text-muted-foreground shrink-0">{format(new Date(stop.date), "MMM d")}</span>
                           )}
                           {stopCalc && (
                             <span className={`text-sm font-bold shrink-0 ${stopCalc.net >= 0 ? "text-secondary" : "text-destructive"}`}>
@@ -475,8 +586,6 @@ export default function TourDetail() {
                             className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expandedStops.has(stop.id) ? "rotate-180" : ""}`}
                           />
                         </div>
-
-                        {/* Expanded stats */}
                         {expandedStops.has(stop.id) && (
                           <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 space-y-2">
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-2">
@@ -853,41 +962,55 @@ export default function TourDetail() {
                 )}
               </div>
 
-              {calc && sortedStops.length > 0 && (
+              {calc && (sortedStops.length > 0 || hasDaySlots) && (
                 <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Gross income</span>
                     <span className="font-medium text-foreground">{fmt(calc.grossIncome)}</span>
                   </div>
+                  {calc.totalFoodCost > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Food cost</span>
+                      <span className="font-medium text-destructive">{fmt(calc.totalFoodCost)}</span>
+                    </div>
+                  )}
+                  {calc.totalAccommodation > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Accommodation</span>
+                      <span className="font-medium text-destructive">{fmt(calc.totalAccommodation)}</span>
+                    </div>
+                  )}
+                  {calc.totalFuelCost > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Fuel</span>
+                      <span className="font-medium text-destructive">{fmt(calc.totalFuelCost)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Total expenses</span>
                     <span className="font-medium text-destructive">{fmt(calc.totalExpenses)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/30">
-                    <span>Average per show</span>
-                    <span className={`font-medium ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
-                      {fmt(calc.avgPerShow)}
-                    </span>
-                  </div>
-                  {sortedStops.length > 1 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Shows</span>
-                      <span className="font-medium text-foreground">{sortedStops.length}</span>
+                  {sortedStops.length > 0 && (
+                    <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/30">
+                      <span>Average per show</span>
+                      <span className={`font-medium ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
+                        {fmt(calc.avgPerShow)}
+                      </span>
                     </div>
                   )}
-                  {daysOnTour != null && (
+                  {(hasDaySlots ? daySlots.length : daysOnTour) != null && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Days on tour</span>
-                      <span className="font-medium text-foreground">{daysOnTour}</span>
+                      <span className="font-medium text-foreground">{hasDaySlots ? daySlots.length : daysOnTour}</span>
                     </div>
                   )}
-                  {calc && calc.showDays > 0 && (
+                  {calc.showDays > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Show days / blank</span>
                       <span className="font-medium text-foreground">{calc.showDays} / {calc.blankDayCount}</span>
                     </div>
                   )}
-                  {calc && calc.totalDriveTimeMinutes > 0 && (
+                  {calc.totalDriveTimeMinutes > 0 && (
                     <div className="flex justify-between text-muted-foreground">
                       <span>Est. drive time</span>
                       <span className="font-medium text-foreground">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
