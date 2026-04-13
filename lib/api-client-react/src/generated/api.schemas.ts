@@ -571,3 +571,20 @@ export interface DashboardRecent {
 export type SearchVenuesParams = {
   q: string;
 };
+
+export interface TourVehicleAssignment {
+  id: number;
+  tourId: number;
+  vehicleId: number;
+  vehicle: {
+    id: number;
+    name: string;
+    fuelType: string;
+    avgConsumption: number;
+    vehicleType: string | null;
+  };
+}
+
+export interface AddTourVehicleBody {
+  vehicleId: number;
+}

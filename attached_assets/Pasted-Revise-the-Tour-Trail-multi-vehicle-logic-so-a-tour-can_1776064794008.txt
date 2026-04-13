@@ -1,0 +1,207 @@
+Revise the Tour / Trail multi-vehicle logic so a tour can have multiple active vehicles for the full run, and clearly show fuel usage and fuel cost per vehicle.
+
+GOAL:
+Allow users to assign multiple saved vehicles to one tour, calculate the full-tour fuel usage for each vehicle, and show a clear per-vehicle breakdown.
+
+This is for cases like:
+- two vans doing the whole tour
+- band van + gear van
+- two cars travelling the same run
+
+This is NOT a vehicle-change-by-date feature.
+All assigned vehicles are assumed to travel the full tour unless changed later in a future update.
+
+==================================================
+1. SUPPORT MULTIPLE ACTIVE VEHICLES PER TOUR
+==================================================
+
+Each tour should be able to have one or more active vehicles assigned to it.
+
+Examples:
+- 1 bus
+- 2 vans
+- van + car
+- gear van + band van
+
+Vehicles must come from the user’s saved custom vehicles.
+
+==================================================
+2. TOUR VEHICLES DATA MODEL
+==================================================
+
+Create or update a tour vehicle relationship table:
+
+- trail_vehicles
+  - trail_id
+  - vehicle_id
+
+Rules:
+- a tour can have multiple vehicles
+- a saved vehicle can be used on multiple tours
+- do not allow duplicate assignment of the same vehicle to the same tour
+
+==================================================
+3. UI: REPLACE SINGLE VEHICLE CARD WITH TOUR VEHICLES
+==================================================
+
+Replace the current single Vehicle card behaviour with a Tour Vehicles card/section.
+
+Show all assigned vehicles for the current tour.
+
+For each vehicle display:
+- vehicle name
+- fuel type
+- fuel consumption (L/100km)
+- estimated litres used for the full tour
+- estimated fuel cost for the full tour
+
+Example:
+Tour Vehicles
+- The Beast — diesel — 16 L/100km — 320L used — $608
+- Beci’s Van — petrol — 10 L/100km — 200L used — $380
+
+Also show:
+- Total Fuel Cost
+- Total Litres Used
+
+Add button:
+- Manage Tour Vehicles
+
+If no vehicles assigned:
+- show empty state:
+  "No vehicles assigned to this tour yet"
+- button:
+  "+ Add Vehicle to Tour"
+
+==================================================
+4. MANAGE TOUR VEHICLES FLOW
+==================================================
+
+Create a simple modal or management view where the user can:
+- see their saved custom vehicles
+- assign one or more vehicles to the current tour
+- remove vehicles from the current tour
+
+Keep it simple:
+- checkbox list or add/remove buttons is fine
+
+Do NOT add:
+- vehicle-by-day logic
+- segment switching
+- drag and drop
+
+==================================================
+5. FUEL USAGE CALCULATION PER VEHICLE
+==================================================
+
+For each assigned vehicle, calculate estimated litres used across the full tour.
+
+Formula:
+litres_used = (total_tour_distance_km / 100) × vehicle_l_per_100km
+
+Round and display cleanly.
+
+Examples:
+- 2,000 km tour with 16 L/100km vehicle = 320L used
+- 2,000 km tour with 10 L/100km vehicle = 200L used
+
+This is important:
+Users must be able to see how much fuel each van/car is using, not just the dollar cost.
+
+==================================================
+6. FUEL COST CALCULATION PER VEHICLE
+==================================================
+
+For each assigned vehicle, calculate:
+
+vehicle_fuel_cost = litres_used × fuel_price_per_litre
+
+If fuel type logic already exists:
+- support separate fuel prices by fuel type if available
+- e.g. diesel price and petrol price
+
+If separate fuel prices do not exist yet:
+- use the same fuel price input for all vehicles for now
+
+Then calculate:
+- total_fuel_cost = sum of all vehicle fuel costs
+- total_litres_used = sum of all litres_used
+
+==================================================
+7. ROUTE / DISTANCE LOGIC
+==================================================
+
+Keep route logic the same:
+- calculate full tour distance from:
+  start → booked shows in order → return
+
+Then apply that total tour distance to each assigned vehicle.
+
+Do NOT split route distance between vehicles in this step.
+
+==================================================
+8. SUMMARY / EXPENSES UPDATES
+==================================================
+
+Update the Expenses / Fuel area so users can see:
+
+- total tour distance
+- fuel used per vehicle
+- fuel cost per vehicle
+- total litres used
+- total fuel cost
+
+Suggested display example:
+
+Fuel Breakdown
+- The Beast: 320L used • $608
+- Beci’s Van: 200L used • $380
+
+Totals
+- Total Litres Used: 520L
+- Total Fuel Cost: $988
+
+This should feel clear and trustworthy.
+
+==================================================
+9. TOUR VEHICLE RULES
+==================================================
+
+- If only one vehicle is assigned, behaviour should feel like current single-vehicle mode
+- If multiple vehicles are assigned, all should be included in the total
+- If no vehicles are assigned, show a warning or empty state
+- Tour vehicle assignment is specific to the tour
+- Do not modify the saved Garage records when assigning/removing from a tour
+
+==================================================
+10. KEEP IT SIMPLE
+==================================================
+
+Do NOT add in this step:
+- vehicle changes by date
+- partial-route vehicle usage
+- member-specific vehicles
+- trailer logic
+- convoy occupancy logic
+- fuel stops or live fuel pricing
+
+Focus only on:
+- multiple active vehicles for the whole tour
+- litres used per vehicle
+- fuel cost per vehicle
+- clean total fuel breakdown
+
+==================================================
+EXPECTED RESULT
+==================================================
+
+- A tour can have multiple active vehicles assigned
+- Each vehicle shows:
+  - name
+  - fuel type
+  - L/100km
+  - litres used for the full tour
+  - fuel cost for the full tour
+- Users can clearly see how much fuel each van/car is using
+- Total fuel usage and total fuel cost are rolled into tour expenses
+- The tour becomes much more realistic for bands travelling in multiple vehicles

@@ -5,4 +5,5 @@ export * from "./runs";
 export * from "./venues";
 export * from "./tours";
 export * from "./tourStops";
+export * from "./tourVehicles";
 export * from "./users";

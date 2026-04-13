@@ -67,6 +67,22 @@ export interface DaySlot {
   accomCoveredByVenue: boolean;
 }
 
+export interface VehicleInput {
+  id: number;
+  name: string;
+  fuelType: string;
+  avgConsumption: number;
+}
+
+export interface VehicleFuelBreakdown {
+  vehicleId: number;
+  vehicleName: string;
+  fuelType: string;
+  consumptionLPer100: number;
+  totalLitres: number;
+  totalCost: number;
+}
+
 export interface TourCalcResult {
   legs: TourLeg[];
   stopCalcs: StopCalc[];
@@ -99,6 +115,8 @@ export interface TourCalcResult {
   avgFuelPrice: number;
   showDays: number;
   blankDayCount: number;
+  /** Per-vehicle fuel usage breakdown (populated when vehicles array is passed) */
+  vehicleFuelBreakdown: VehicleFuelBreakdown[];
 }
 
 function getISODate(str: string | null | undefined): string | null {
@@ -250,6 +268,7 @@ export function calculateTour(
   endDate?: string | null,
   profileFoodPerDay?: number | null,
   profileAccomRequired?: boolean | null,
+  vehicles?: VehicleInput[] | null,
 ): TourCalcResult {
   const sortedStops = [...stops].sort((a, b) => {
     const da = getISODate(a.date);
@@ -258,7 +277,10 @@ export function calculateTour(
     return a.stopOrder - b.stopOrder;
   });
 
-  const consumption = n(vehicleConsumptionLPer100);
+  const fleetVehicles = vehicles && vehicles.length > 0 ? vehicles : null;
+  const consumption = fleetVehicles
+    ? fleetVehicles.reduce((s, v) => s + n(v.avgConsumption), 0)
+    : n(vehicleConsumptionLPer100);
 
   type LocationNode = { name: string; stop?: TourStopInput };
   const locations: LocationNode[] = [];
@@ -374,6 +396,22 @@ export function calculateTour(
   const avgPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
   const avgFuelPrice = totalFuelUsedLitres > 0 ? totalFuelCost / totalFuelUsedLitres : 0;
 
+  const vehicleFuelBreakdown: VehicleFuelBreakdown[] = fleetVehicles
+    ? fleetVehicles.map(v => {
+        const vConsumption = n(v.avgConsumption);
+        const vTotalLitres = vConsumption > 0 ? (totalDistance * vConsumption) / 100 : 0;
+        const vTotalCost = vTotalLitres * avgFuelPrice;
+        return {
+          vehicleId: v.id,
+          vehicleName: v.name,
+          fuelType: v.fuelType,
+          consumptionLPer100: vConsumption,
+          totalLitres: vTotalLitres,
+          totalCost: vTotalCost,
+        };
+      })
+    : [];
+
   return {
     legs,
     stopCalcs,
@@ -400,6 +438,7 @@ export function calculateTour(
     avgFuelPrice,
     showDays,
     blankDayCount,
+    vehicleFuelBreakdown,
   };
 }
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, toursTable, tourStopsTable } from "@workspace/db";
+import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateTourBody,
@@ -19,6 +19,12 @@ import {
   UpdateTourStopBody,
   UpdateTourStopResponse,
   DeleteTourStopParams,
+  GetTourVehiclesParams,
+  GetTourVehiclesResponse,
+  AddTourVehicleParams,
+  AddTourVehicleBody,
+  AddTourVehicleResponse,
+  DeleteTourVehicleParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -207,6 +213,75 @@ router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Pro
     res.status(404).json({ error: "Stop not found" });
     return;
   }
+  res.sendStatus(204);
+});
+
+// ─── Tour Vehicles ──────────────────────────────────────────────────────────
+
+router.get("/tours/:tourId/vehicles", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const params = GetTourVehiclesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [tour] = await db.select({ id: toursTable.id }).from(toursTable).where(and(eq(toursTable.id, params.data.tourId), eq(toursTable.userId, userId)));
+  if (!tour) { res.status(404).json({ error: "Tour not found" }); return; }
+
+  const rows = await db
+    .select({
+      id: tourVehiclesTable.id,
+      tourId: tourVehiclesTable.tourId,
+      vehicleId: tourVehiclesTable.vehicleId,
+      vehicle: {
+        id: vehiclesTable.id,
+        name: vehiclesTable.name,
+        fuelType: vehiclesTable.fuelType,
+        avgConsumption: vehiclesTable.avgConsumption,
+        vehicleType: vehiclesTable.vehicleType,
+      },
+    })
+    .from(tourVehiclesTable)
+    .innerJoin(vehiclesTable, eq(tourVehiclesTable.vehicleId, vehiclesTable.id))
+    .where(eq(tourVehiclesTable.tourId, params.data.tourId));
+
+  res.json(GetTourVehiclesResponse.parse(rows.map(r => ({
+    ...r,
+    vehicle: { ...r.vehicle, avgConsumption: Number(r.vehicle.avgConsumption) },
+  }))));
+});
+
+router.post("/tours/:tourId/vehicles", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const params = AddTourVehicleParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const body = AddTourVehicleBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const [tour] = await db.select({ id: toursTable.id }).from(toursTable).where(and(eq(toursTable.id, params.data.tourId), eq(toursTable.userId, userId)));
+  if (!tour) { res.status(404).json({ error: "Tour not found" }); return; }
+
+  const [veh] = await db.select().from(vehiclesTable).where(and(eq(vehiclesTable.id, body.data.vehicleId), eq(vehiclesTable.userId, userId)));
+  if (!veh) { res.status(404).json({ error: "Vehicle not found" }); return; }
+
+  const [row] = await db.insert(tourVehiclesTable).values({ tourId: params.data.tourId, vehicleId: body.data.vehicleId }).onConflictDoNothing().returning();
+  if (!row) { res.status(409).json({ error: "Vehicle already assigned" }); return; }
+
+  res.status(201).json(AddTourVehicleResponse.parse({
+    id: row.id, tourId: row.tourId, vehicleId: row.vehicleId,
+    vehicle: { id: veh.id, name: veh.name, fuelType: veh.fuelType, avgConsumption: Number(veh.avgConsumption), vehicleType: veh.vehicleType },
+  }));
+});
+
+router.delete("/tours/:tourId/vehicles/:vehicleId", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const params = DeleteTourVehicleParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [tour] = await db.select({ id: toursTable.id }).from(toursTable).where(and(eq(toursTable.id, params.data.tourId), eq(toursTable.userId, userId)));
+  if (!tour) { res.status(404).json({ error: "Tour not found" }); return; }
+
+  await db.delete(tourVehiclesTable).where(and(eq(tourVehiclesTable.tourId, params.data.tourId), eq(tourVehiclesTable.vehicleId, params.data.vehicleId)));
   res.sendStatus(204);
 });
 

@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddTourVehicleBody,
   CreateProfileBody,
   CreateRunBody,
   CreateTourBody,
@@ -33,6 +34,7 @@ import type {
   SetVehicleActAssignmentsBody,
   Tour,
   TourStop,
+  TourVehicleAssignment,
   TourWithStops,
   TrackCalculationResponse,
   Vehicle,
@@ -2747,4 +2749,128 @@ export function useGetDashboardRecent<
   };
 
   return { ...query, queryKey: queryOptions.queryKey };
+}
+
+// ─── Tour Vehicles ──────────────────────────────────────────────────────────
+
+export const getGetTourVehiclesUrl = (tourId: number) =>
+  `/api/tours/${tourId}/vehicles`;
+
+export const getTourVehicles = async (
+  tourId: number,
+  options?: RequestInit,
+): Promise<TourVehicleAssignment[]> =>
+  customFetch<TourVehicleAssignment[]>(getGetTourVehiclesUrl(tourId), {
+    ...options,
+    method: "GET",
+  });
+
+export const getGetTourVehiclesQueryKey = (tourId: number) =>
+  [`/api/tours/${tourId}/vehicles`] as const;
+
+export const getGetTourVehiclesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTourVehicles>>,
+  TError = ErrorType<unknown>,
+>(
+  tourId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTourVehicles>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetTourVehiclesQueryKey(tourId);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTourVehicles>>> = ({ signal }) =>
+    getTourVehicles(tourId, { signal, ...requestOptions });
+  return { queryKey, queryFn, enabled: !!tourId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTourVehicles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGetTourVehicles<
+  TData = Awaited<ReturnType<typeof getTourVehicles>>,
+  TError = ErrorType<unknown>,
+>(
+  tourId: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getTourVehicles>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTourVehiclesQueryOptions(tourId, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const addTourVehicle = async (
+  tourId: number,
+  body: AddTourVehicleBody,
+  options?: RequestInit,
+): Promise<TourVehicleAssignment> =>
+  customFetch<TourVehicleAssignment>(getGetTourVehiclesUrl(tourId), {
+    ...options,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export function useAddTourVehicle<
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addTourVehicle>>,
+    TError,
+    { tourId: number; data: AddTourVehicleBody },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addTourVehicle>>,
+  TError,
+  { tourId: number; data: AddTourVehicleBody },
+  TContext
+> {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addTourVehicle>>,
+    { tourId: number; data: AddTourVehicleBody }
+  > = ({ tourId, data }) => addTourVehicle(tourId, data, requestOptions);
+  return useMutation({ mutationFn, ...mutationOptions });
+}
+
+export const deleteTourVehicle = async (
+  tourId: number,
+  vehicleId: number,
+  options?: RequestInit,
+): Promise<void> =>
+  customFetch<void>(`/api/tours/${tourId}/vehicles/${vehicleId}`, {
+    ...options,
+    method: "DELETE",
+  });
+
+export function useDeleteTourVehicle<
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTourVehicle>>,
+    TError,
+    { tourId: number; vehicleId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTourVehicle>>,
+  TError,
+  { tourId: number; vehicleId: number },
+  TContext
+> {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTourVehicle>>,
+    { tourId: number; vehicleId: number }
+  > = ({ tourId, vehicleId }) => deleteTourVehicle(tourId, vehicleId, requestOptions);
+  return useMutation({ mutationFn, ...mutationOptions });
 }

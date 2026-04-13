@@ -1,7 +1,9 @@
 import { useLocation, useParams } from "wouter";
 import {
-  useGetTour, useGetTourStops, useGetProfile, useGetVehicle,
+  useGetTour, useGetTourStops, useGetProfile,
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
+  useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
+  getGetTourVehiclesQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,15 +82,19 @@ export default function TourDetail() {
   const { data: profile } = useGetProfile(tour?.profileId || 0, {
     query: { enabled: !!tour?.profileId, queryKey: ["profile", tour?.profileId] },
   });
-  const { data: vehicle } = useGetVehicle(tour?.vehicleId || 0, {
-    query: { enabled: !!tour?.vehicleId, queryKey: ["vehicle", tour?.vehicleId] },
-  });
   const { data: allVehicles } = useGetVehicles();
+  const { data: tourVehicles, isLoading: isLoadingTourVehicles } = useGetTourVehicles(tourId, {
+    query: { enabled: !!tourId },
+  });
   const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal } });
+
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
 
   const deleteStop = useDeleteTourStop();
   const createStop = useCreateTourStop();
   const updateTour = useUpdateTour();
+  const addTourVehicleMutation = useAddTourVehicle();
+  const deleteTourVehicleMutation = useDeleteTourVehicle();
 
   const handleDeleteStop = (stopId: number) => {
     deleteStop.mutate(
@@ -106,16 +112,31 @@ export default function TourDetail() {
     );
   };
 
-  const handleSwitchVehicle = (vehicleId: number, vehicleName: string) => {
-    updateTour.mutate(
-      { id: tourId, data: { name: tour!.name, vehicleId, returnHome: tour!.returnHome } },
+  const handleAddTourVehicle = (vehicleId: number, vehicleName: string) => {
+    addTourVehicleMutation.mutate(
+      { tourId, data: { vehicleId } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
-          toast({ title: `Vehicle switched to "${vehicleName}"` });
+          queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+          toast({ title: `"${vehicleName}" added to tour fleet` });
         },
         onError: () => {
-          toast({ title: "Failed to switch vehicle", variant: "destructive" });
+          toast({ title: "Failed to add vehicle", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleRemoveTourVehicle = (vehicleId: number, vehicleName: string) => {
+    deleteTourVehicleMutation.mutate(
+      { tourId, vehicleId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+          toast({ title: `"${vehicleName}" removed from tour fleet` });
+        },
+        onError: () => {
+          toast({ title: "Failed to remove vehicle", variant: "destructive" });
         },
       }
     );
@@ -197,21 +218,29 @@ export default function TourDetail() {
 
   const calc = useMemo(() => {
     if (!stops) return null;
-    const consumption = vehicle?.avgConsumption != null ? Number(vehicle.avgConsumption) : null;
+    const vehicles = tourVehicles && tourVehicles.length > 0
+      ? tourVehicles.map(tv => ({
+          id: tv.vehicle.id,
+          name: tv.vehicle.name,
+          fuelType: tv.vehicle.fuelType,
+          avgConsumption: tv.vehicle.avgConsumption,
+        }))
+      : null;
     return calculateTour(
       stops,
       tour?.startLocation,
       tour?.endLocation,
       tour?.returnHome ?? false,
-      consumption,
+      null,
       tour?.daysOnTour ?? null,
       nightlyAccomRate,
       tour?.startDate ?? null,
       tour?.endDate ?? null,
       profile?.avgFoodPerDay ?? null,
       profile?.accommodationRequired ?? null,
+      vehicles,
     );
-  }, [stops, tour, vehicle, nightlyAccomRate, profile]);
+  }, [stops, tour, tourVehicles, nightlyAccomRate, profile]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
@@ -780,68 +809,48 @@ export default function TourDetail() {
               </CardContent>
             </Card>
 
-            {/* Vehicle card with switcher */}
+            {/* Multi-vehicle fleet card */}
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Truck className="w-4 h-4" /> Vehicle
+                  <Truck className="w-4 h-4" /> Tour Fleet
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold">{vehicle?.name || "None"}</div>
-                {vehicle && (
-                  <div className="text-sm text-muted-foreground mt-1">
-                    {vehicle.fuelType} · {vehicle.avgConsumption} L/100km
-                  </div>
-                )}
-                {(allVehicles?.length ?? 0) > 1 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 text-xs mt-2 w-full gap-1">
-                        Switch vehicle
-                        <ChevronDown className="w-3 h-3 ml-auto" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuLabel className="text-xs">Choose vehicle</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {allVehicles?.map(v => (
-                        <DropdownMenuItem
-                          key={v.id}
-                          disabled={v.id === tour.vehicleId}
-                          className="text-xs"
-                          onClick={() => handleSwitchVehicle(v.id, v.name)}
+                {isLoadingTourVehicles ? (
+                  <div className="text-xs text-muted-foreground">Loading…</div>
+                ) : (tourVehicles?.length ?? 0) === 0 ? (
+                  <div className="text-sm text-muted-foreground italic mb-2">No vehicles — fuel cost will be $0.00</div>
+                ) : (
+                  <ul className="space-y-1 mb-2">
+                    {tourVehicles!.map(tv => (
+                      <li key={tv.id} className="flex items-center justify-between gap-1 text-xs">
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">{tv.vehicle.name}</span>
+                          <span className="text-muted-foreground">{tv.vehicle.fuelType} · {tv.vehicle.avgConsumption} L/100km</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemoveTourVehicle(tv.vehicle.id, tv.vehicle.name)}
+                          disabled={deleteTourVehicleMutation.isPending}
                         >
-                          {v.id === tour.vehicleId && <span className="w-2 h-2 rounded-full bg-primary mr-2 shrink-0 inline-block" />}
-                          {v.id !== tour.vehicleId && <span className="w-2 h-2 mr-2 shrink-0 inline-block" />}
-                          <span className="flex-1 truncate">{v.name}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-                {!vehicle && (allVehicles?.length ?? 0) > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-7 text-xs mt-2 w-full gap-1">
-                        Select vehicle
-                        <ChevronDown className="w-3 h-3 ml-auto" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuLabel className="text-xs">Choose vehicle</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      {allVehicles?.map(v => (
-                        <DropdownMenuItem
-                          key={v.id}
-                          className="text-xs"
-                          onClick={() => handleSwitchVehicle(v.id, v.name)}
-                        >
-                          {v.name}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                {(allVehicles?.length ?? 0) > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs w-full gap-1"
+                    onClick={() => setShowVehicleModal(true)}
+                  >
+                    <Plus className="w-3 h-3" /> Add vehicle
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -1065,7 +1074,7 @@ export default function TourDetail() {
                 </div>
               )}
 
-              {!vehicle && sortedStops.length > 0 && (
+              {(!tourVehicles || tourVehicles.length === 0) && sortedStops.length > 0 && (
                 <p className="text-xs text-amber-500 bg-amber-500/10 rounded p-2">
                   Add a vehicle to this tour to include fuel cost estimates.
                 </p>
@@ -1249,6 +1258,52 @@ export default function TourDetail() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Vehicle to Tour Modal */}
+      <Dialog open={showVehicleModal} onOpenChange={setShowVehicleModal}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="w-4 h-4" /> Add Vehicle to Tour
+            </DialogTitle>
+            <DialogDescription>
+              Select a vehicle from your garage to add to this tour's fleet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {(() => {
+              const assignedIds = new Set((tourVehicles ?? []).map(tv => tv.vehicle.id));
+              const available = (allVehicles ?? []).filter(v => !assignedIds.has(v.id));
+              if (available.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {(allVehicles?.length ?? 0) === 0
+                      ? "No vehicles in your garage yet."
+                      : "All garage vehicles are already assigned to this tour."}
+                  </p>
+                );
+              }
+              return available.map(v => (
+                <button
+                  key={v.id}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md border border-border/50 hover:bg-muted/50 transition-colors text-left"
+                  disabled={addTourVehicleMutation.isPending}
+                  onClick={() => {
+                    handleAddTourVehicle(v.id, v.name);
+                    setShowVehicleModal(false);
+                  }}
+                >
+                  <div>
+                    <div className="text-sm font-medium">{v.name}</div>
+                    <div className="text-xs text-muted-foreground">{v.fuelType} · {Number(v.avgConsumption)} L/100km</div>
+                  </div>
+                  <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+              ));
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

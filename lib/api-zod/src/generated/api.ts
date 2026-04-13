@@ -1022,3 +1022,45 @@ export const GetDashboardRecentResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Get vehicles assigned to a tour
+ */
+export const GetTourVehiclesParams = zod.object({
+  tourId: zod.coerce.number(),
+});
+
+export const TourVehicleItem = zod.object({
+  id: zod.number(),
+  tourId: zod.number(),
+  vehicleId: zod.number(),
+  vehicle: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    fuelType: zod.string(),
+    avgConsumption: zod.number(),
+    vehicleType: zod.string().nullable(),
+  }),
+});
+export const GetTourVehiclesResponse = zod.array(TourVehicleItem);
+
+/**
+ * @summary Add a vehicle to a tour
+ */
+export const AddTourVehicleParams = zod.object({
+  tourId: zod.coerce.number(),
+});
+
+export const AddTourVehicleBody = zod.object({
+  vehicleId: zod.number(),
+});
+
+export const AddTourVehicleResponse = TourVehicleItem;
+
+/**
+ * @summary Remove a vehicle from a tour
+ */
+export const DeleteTourVehicleParams = zod.object({
+  tourId: zod.coerce.number(),
+  vehicleId: zod.coerce.number(),
+});
