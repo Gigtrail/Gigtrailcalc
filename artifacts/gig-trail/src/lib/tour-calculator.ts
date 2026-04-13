@@ -11,6 +11,8 @@ function n(val: unknown): number {
 export interface TourStopInput {
   id: number;
   city: string;
+  cityLat?: number | null;
+  cityLng?: number | null;
   stopOrder: number;
   date?: string | null;
   showType: string;
@@ -282,10 +284,10 @@ export function calculateTour(
     ? fleetVehicles.reduce((s, v) => s + n(v.avgConsumption), 0)
     : n(vehicleConsumptionLPer100);
 
-  type LocationNode = { name: string; stop?: TourStopInput };
+  type LocationNode = { name: string; lat?: number | null; lng?: number | null; stop?: TourStopInput };
   const locations: LocationNode[] = [];
   if (startLocation?.trim()) locations.push({ name: startLocation.trim() });
-  for (const stop of sortedStops) locations.push({ name: stop.city, stop });
+  for (const stop of sortedStops) locations.push({ name: stop.city, lat: stop.cityLat, lng: stop.cityLng, stop });
   if (returnHome) {
     const dest = endLocation?.trim() || startLocation?.trim();
     if (dest) locations.push({ name: dest });
@@ -296,6 +298,8 @@ export function calculateTour(
     const from = locations[i].name;
     const to = locations[i + 1].name;
     const destStop = locations[i + 1].stop;
+    const srcNode = locations[i];
+    const dstNode = locations[i + 1];
 
     let distanceKm: number;
     let driveTimeMinutes: number;
@@ -306,7 +310,7 @@ export function calculateTour(
       driveTimeMinutes = Math.round((distanceKm / 80) * 60);
       source = 'manual';
     } else {
-      const est = estimateLegDistance(from, to);
+      const est = estimateLegDistance(from, to, srcNode.lat, srcNode.lng, dstNode.lat, dstNode.lng);
       distanceKm = est.distanceKm;
       driveTimeMinutes = est.driveTimeMinutes;
       source = est.source;

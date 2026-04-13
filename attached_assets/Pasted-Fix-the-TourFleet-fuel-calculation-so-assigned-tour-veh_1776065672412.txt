@@ -1,0 +1,182 @@
+Fix the TourFleet fuel calculation so assigned tour vehicles are included in the final tally.
+
+GOAL:
+TourFleet has been established, but fuel costs from the assigned vehicles are not appearing in the final calculation / final tally.
+Make sure all active tour vehicles contribute to total fuel cost, total expenses, and final net result.
+
+==================================================
+1. AUDIT CURRENT DATA FLOW
+==================================================
+
+Find where the final tour calculation gets its expense inputs.
+
+Check:
+- where total tour distance is calculated
+- where selected / assigned tour vehicles are loaded
+- where fuel price is read
+- where total expenses are built
+- where final net profit is calculated
+
+Likely issue:
+TourFleet exists in UI/state, but the final calculation is still using old single-vehicle logic or not reading TourFleet at all.
+
+==================================================
+2. LOAD TOUR VEHICLES INTO FINAL CALCULATION
+==================================================
+
+Ensure the final calculation reads all vehicles assigned to the current tour.
+
+Source:
+- trail_vehicles or equivalent TourFleet relationship
+- join with saved vehicle records
+
+For each assigned vehicle, load:
+- vehicle id
+- vehicle name
+- fuel type
+- l_per_100km
+
+If no assigned vehicles:
+- fuel calculation should show 0 or warning state
+- do not silently fail
+
+==================================================
+3. CALCULATE FUEL USAGE PER VEHICLE
+==================================================
+
+For each assigned vehicle, calculate litres used for the full tour distance.
+
+Formula:
+litres_used = (total_tour_distance_km / 100) * vehicle_l_per_100km
+
+Return/display rounded values cleanly.
+
+==================================================
+4. CALCULATE FUEL COST PER VEHICLE
+==================================================
+
+For each assigned vehicle, calculate:
+
+fuel_cost = litres_used * fuel_price_per_litre
+
+If separate fuel prices exist by fuel type:
+- use correct matching fuel price for petrol/diesel
+
+If only one fuel price exists:
+- use the shared fuel price for all vehicles
+
+==================================================
+5. SUM ALL TOUR VEHICLE FUEL COSTS
+==================================================
+
+Create:
+- total_fuel_litres = sum of litres_used across all tour vehicles
+- total_fuel_cost = sum of fuel_cost across all tour vehicles
+
+These totals must be used in the final calculation.
+
+==================================================
+6. INJECT FUEL INTO FINAL EXPENSES
+==================================================
+
+Make sure total_fuel_cost is included in the final expenses tally.
+
+The final expenses should include:
+- fuel
+- accommodation
+- food/day
+- member fees if included in expense logic
+- other tour expenses
+
+Important:
+Replace any old single-vehicle fuel logic with TourFleet total fuel cost logic.
+
+==================================================
+7. UPDATE FINAL NET RESULT
+==================================================
+
+Final net should be something like:
+
+final_net = total_income - total_expenses
+
+Where:
+total_expenses includes total_fuel_cost from ALL assigned tour vehicles
+
+==================================================
+8. SHOW FUEL BREAKDOWN IN UI
+==================================================
+
+In the fuel / expenses area, clearly show:
+
+Fuel Breakdown
+- Vehicle Name
+- L/100km
+- Litres Used
+- Fuel Cost
+
+Example:
+- The Beast — 16 L/100km — 320L — $608
+- Beci’s Van — 10 L/100km — 200L — $380
+
+Totals:
+- Total Litres Used: 520L
+- Total Fuel Cost: $988
+
+This is important so users can trust the final tally.
+
+==================================================
+9. DEBUGGING / SAFETY CHECKS
+==================================================
+
+Add temporary debug logging while fixing:
+
+Log:
+- total_tour_distance_km
+- assigned tour vehicles loaded
+- litres_used per vehicle
+- fuel_cost per vehicle
+- total_fuel_cost
+- final_expenses before fuel
+- final_expenses after fuel
+
+Check for:
+- null/undefined fuel price
+- distance = 0 unexpectedly
+- TourFleet not loaded
+- stale state in summary component
+- old single-vehicle calculation still running
+
+==================================================
+10. FALLBACK / EMPTY STATES
+==================================================
+
+If TourFleet exists but no vehicle is assigned:
+- show:
+  "No vehicles assigned to this tour"
+- fuel total = 0
+- allow user to add a vehicle
+
+If fuel price missing:
+- show:
+  "Fuel price not set"
+- do not silently return zero without explanation
+
+==================================================
+11. KEEP IT SIMPLE
+==================================================
+
+Do NOT add new features in this step.
+Just fix the calculation pipeline so:
+- TourFleet vehicles are loaded
+- fuel is calculated per vehicle
+- fuel is summed
+- total fuel is added into final expenses and final net
+
+==================================================
+EXPECTED RESULT
+==================================================
+
+- All vehicles assigned in TourFleet are included in the final tour calculation
+- Each vehicle shows litres used and fuel cost
+- Total fuel cost appears in the expenses summary
+- Final tally/net result correctly includes fuel from the whole tour fleet

@@ -137,12 +137,19 @@ export interface RouteLeg {
 
 const AVG_ROAD_SPEED_KMH = 80;
 
-export function estimateLegDistance(from: string, to: string): RouteLeg {
-  const fromKey = normalizeCity(from);
-  const toKey = normalizeCity(to);
+export function estimateLegDistance(
+  from: string,
+  to: string,
+  fromLat?: number | null,
+  fromLng?: number | null,
+  toLat?: number | null,
+  toLng?: number | null,
+): RouteLeg {
+  const fromCoordsFromDB = fromLat != null && fromLng != null ? { lat: fromLat, lon: fromLng } : null;
+  const toCoordsFromDB = toLat != null && toLng != null ? { lat: toLat, lon: toLng } : null;
 
-  const fromCoords = CITY_COORDS[fromKey];
-  const toCoords = CITY_COORDS[toKey];
+  const fromCoords = fromCoordsFromDB ?? CITY_COORDS[normalizeCity(from)];
+  const toCoords = toCoordsFromDB ?? CITY_COORDS[normalizeCity(to)];
 
   if (fromCoords && toCoords) {
     const distanceKm = haversineKm(fromCoords.lat, fromCoords.lon, toCoords.lat, toCoords.lon);

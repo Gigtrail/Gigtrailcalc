@@ -1056,11 +1056,36 @@ export default function TourDetail() {
                       <span className="font-medium text-destructive">{fmt(calc.totalAccommodation)}</span>
                     </div>
                   )}
-                  {calc.totalFuelCost > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Fuel</span>
-                      <span className="font-medium text-destructive">{fmt(calc.totalFuelCost)}</span>
+                  {calc.totalFuelCost > 0 ? (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Fuel</span>
+                        <span className="font-medium text-destructive">{fmt(calc.totalFuelCost)}</span>
+                      </div>
+                      {calc.vehicleFuelBreakdown.length > 1 && (
+                        <div className="pl-3 space-y-0.5 border-l-2 border-amber-800/30">
+                          {calc.vehicleFuelBreakdown.map(vfb => (
+                            <div key={vfb.vehicleId} className="flex justify-between text-xs text-muted-foreground/70">
+                              <span>{vfb.vehicleName} <span className="opacity-60">({vfb.consumptionLPer100}L/100km)</span></span>
+                              <span>{fmt(vfb.totalCost)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    (() => {
+                      const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
+                      if (!hasVehicles) return null;
+                      const hasRoute = (tour?.startLocation?.trim() || sortedStops.length > 1);
+                      if (!hasRoute) return (
+                        <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5">
+                          <span className="mt-0.5 shrink-0">⚠</span>
+                          <span>Fuel not calculated — add a <strong>Start Location</strong> or a second stop so a route distance can be worked out</span>
+                        </div>
+                      );
+                      return null;
+                    })()
                   )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Total expenses</span>

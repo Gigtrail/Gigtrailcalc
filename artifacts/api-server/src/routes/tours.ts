@@ -44,6 +44,8 @@ function serializeTour(t: typeof toursTable.$inferSelect) {
 function serializeStop(s: typeof tourStopsTable.$inferSelect) {
   return {
     ...s,
+    cityLat: s.cityLat != null ? Number(s.cityLat) : null,
+    cityLng: s.cityLng != null ? Number(s.cityLng) : null,
     fee: s.fee != null ? Number(s.fee) : null,
     ticketPrice: s.ticketPrice != null ? Number(s.ticketPrice) : null,
     expectedAttendancePct: s.expectedAttendancePct != null ? Number(s.expectedAttendancePct) : null,
