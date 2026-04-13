@@ -1,0 +1,153 @@
+Update the **Single Show Calculator** so distance is treated as a **return trip by default**.
+
+## Goal
+Make the calculator match real-world touring logic more naturally.
+
+Most users think in terms of:
+- “The venue is 120 km away”
+
+But the real travel cost is usually:
+- 120 km there
+- 120 km back
+
+So the calculator should assume **return trip automatically** unless the user explicitly says otherwise.
+
+---
+
+## 1. Default distance logic
+
+In the Single Show Calculator:
+
+- the user enters a trip distance
+- by default, treat that entered number as a **one-way distance to the venue**
+- automatically calculate the **return trip total** in the background
+
+### Example:
+User enters:
+- 120 km
+
+Calculator uses:
+- 240 km total travel distance
+
+---
+
+## 2. Add a simple checkbox toggle
+
+Add a checkbox or toggle near the distance field:
+
+**[ ] One way only**
+
+Default state:
+- unchecked
+
+Meaning:
+- unchecked = calculate return trip automatically
+- checked = only calculate the entered distance as a one-way total
+
+---
+
+## 3. Recommended field labels
+
+### Distance input label:
+**Distance to venue**
+
+### Helper text:
+**We’ll calculate the return trip automatically unless this is one way only.**
+
+Alternative helper text:
+**Enter the one-way distance. Return trip is included by default.**
+
+---
+
+## 4. Display the calculation clearly
+
+The UI should make it obvious what total distance is being used.
+
+### Example display:
+- Distance to venue: 120 km
+- Return trip applied
+- Total travel distance: 240 km
+
+If checkbox is enabled:
+- Distance to venue: 120 km
+- One way only
+- Total travel distance: 120 km
+
+This should help avoid confusion.
+
+---
+
+## 5. Calculation behavior
+
+### Default behavior:
+- total_distance_km = entered_distance_km × 2
+
+### If “One way only” is checked:
+- total_distance_km = entered_distance_km
+
+All downstream calculations should use:
+- fuel cost
+- vehicle wear / depreciation later
+- accommodation logic if needed later
+- total travel cost
+- profit calculations
+
+---
+
+## 6. Save behavior
+
+If the app saves show drafts or calculator history, also save:
+- entered_distance_km
+- is_one_way_only
+- calculated_total_distance_km
+
+This prevents confusion when users reopen a show later.
+
+---
+
+## 7. Backward compatibility
+
+If older shows only stored a single distance value:
+- do not break old records
+- only apply the new default logic to new calculations or when editing with the updated UI
+- if needed, migrate carefully and avoid silently changing historical totals
+
+---
+
+## 8. UX rules
+
+Keep it simple:
+- return trip should feel automatic and normal
+- one-way should be the exception
+- do not make users manually double the number themselves
+- do not force extra steps unless they specifically need one-way
+
+This should reduce mistakes and make the calculator feel smarter.
+
+---
+
+## 9. Suggested UI layout
+
+### Distance section example:
+**Distance to venue**
+[ 120 ] km
+
+☐ One way only
+
+Helper text:
+**Return trip is included automatically by default.**
+
+Then below:
+**Total travel distance: 240 km**
+
+---
+
+## 10. Important product intent
+
+The calculator should reflect how most touring musicians actually think:
+
+- they know how far away the show is
+- they do not want to manually work out return distance every time
+- they still need the option to handle one-way situations when relevant
+
+Please implement this in a way that keeps the form fast and intuitive.

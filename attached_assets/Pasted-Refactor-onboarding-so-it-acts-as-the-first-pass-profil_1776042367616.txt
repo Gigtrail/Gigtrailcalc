@@ -1,0 +1,333 @@
+Refactor onboarding so it acts as the **first-pass profile setup**.
+
+## Goal
+When a user signs up, the onboarding flow should automatically create and populate their profile using the answers they give during onboarding.
+
+The user should feel like:
+- “I’m just answering a few quick setup questions”
+- not “I’m filling out onboarding and then having to do it all again in Profile”
+
+Add reassuring copy like:
+
+**Don’t worry — you can change this later.**
+
+---
+
+## Core product intent
+
+Right now there is too much duplication between:
+- onboarding
+- edit profile
+- act setup
+- garage / accommodation defaults
+
+We want onboarding to become the **initial profile builder**.
+
+That means:
+- onboarding writes directly into profile data
+- profile screen shows what they already selected
+- user does not need to repeat the same setup after signup
+
+---
+
+## 1. Update onboarding messaging
+
+On the onboarding screen, change the tone so it is clear this is setting up their profile.
+
+### Suggested heading:
+**Let’s set up your profile**
+
+### Suggested subheading:
+**Takes about 30 seconds — we’ll use this to run your numbers. Don’t worry, you can change this later.**
+
+Alternative:
+**Answer a few quick questions so Gig Trail can personalise your setup. You can update everything later.**
+
+Important:
+- keep it friendly
+- reduce pressure
+- make it feel temporary and editable
+
+---
+
+## 2. Onboarding should write directly to profile
+
+When the user completes onboarding, save those values into the main profile / act profile / garage defaults immediately.
+
+Do not store onboarding as a separate temporary structure unless needed internally.
+The onboarding result should become the user’s actual starting profile.
+
+### Fields that onboarding should populate
+
+#### Profile basics
+- act_name
+- home_base
+
+#### Act setup
+- act_type (solo / duo / band)
+- any starter member count or starter structure if needed
+
+#### Garage / vehicle defaults
+- selected_standard_vehicle_key
+- fuel_price_per_litre
+
+#### Accommodation defaults
+- accommodation_required
+- accommodation_type
+- or “not required” if that is the selected default
+
+#### Other starter defaults if already supported
+- notes
+- touring assumptions
+- anything else currently duplicated later in profile
+
+---
+
+## 3. Make profile reflect onboarding immediately
+
+After onboarding is completed:
+- the Edit Profile screen should already be filled out
+- Garage should already show the selected vehicle
+- Act Setup should already reflect the selected act type
+- Accommodation should already reflect the chosen default
+- fuel price should already be saved
+
+The user should feel like:
+“I already set this up.”
+
+They should not land in profile and see:
+- empty states
+- “No act configured yet”
+- missing setup
+- prompts to enter the same data again
+
+---
+
+## 4. Fix the empty state problem after onboarding
+
+If a user selected an act type during onboarding, the profile should not still say:
+
+**No act configured yet.**
+
+Instead:
+- create the starter act setup automatically from onboarding
+- if Solo: create a simple solo act structure
+- if Duo: create a 2-member starter structure
+- if Band: create the starter band structure allowed for that plan
+
+### Example:
+If user selects Solo during onboarding:
+- profile should show Solo as configured
+- optionally create a default member like:
+  - Member 1 = user / performer
+or
+- show “Solo act configured” instead of empty state
+
+Do not make them set act type twice.
+
+---
+
+## 5. Add a clear reassurance line during onboarding
+
+Somewhere visible in onboarding, include copy like:
+
+- **Don’t worry — you can change this later**
+- **You can update this anytime in Profile**
+- **This just gives you a starting setup**
+
+This should reduce signup friction.
+
+Recommended placement:
+- under the intro text at top
+or
+- as a muted helper line at the bottom of the card
+
+---
+
+## 6. Suggested onboarding flow
+
+Keep it quick and practical.
+
+### Step contents can include:
+- Act Name
+- Act Type
+- Home Base
+- Garage / touring vehicle
+- Fuel Price
+- Accommodation default if needed
+
+If some of these are currently spread across onboarding and profile, consolidate them so onboarding becomes the one source for initial setup.
+
+Do not ask the same thing again later unless the user explicitly edits it.
+
+---
+
+## 7. Profile architecture changes
+
+Refactor the logic so onboarding is not separate from profile creation.
+
+### Desired behavior:
+- user completes onboarding
+- app creates or updates profile object
+- app creates or updates act setup object
+- app creates or updates garage defaults
+- app creates or updates accommodation defaults
+
+### Avoid:
+- onboarding_state only
+- separate temp data that never syncs
+- needing a second manual “setup act” step after signup
+
+---
+
+## 8. Act Setup auto-creation rules
+
+When onboarding is completed, generate the starting act setup automatically.
+
+### Solo
+- create a valid solo setup
+- mark act type as solo
+- no empty state
+
+### Duo
+- create a valid duo setup
+- create 2 starter member slots if the current data model expects members
+
+### Band
+- if available on plan, create a starter band setup
+- if Band is Pro-only, keep the current gating, but make the locked state clear
+
+If exact member names are not collected in onboarding, create placeholder members only if needed internally.
+Examples:
+- Member 1
+- Member 2
+or
+- Performer
+- Performer 2
+
+But avoid ugly placeholder UX if possible.
+
+---
+
+## 9. Garage integration
+
+The vehicle chosen during onboarding should automatically become the profile’s current Garage selection.
+
+### Free users:
+- selected_standard_vehicle_key = chosen onboarding vehicle
+
+### Pro users:
+- either:
+  - set the default vehicle from onboarding
+  - or create the first garage vehicle automatically if needed
+
+Do not make the user pick their touring vehicle again in profile unless they want to edit it.
+
+---
+
+## 10. Accommodation integration
+
+If onboarding includes accommodation defaults, those choices should also populate Profile.
+
+The Accommodation section in Edit Profile should reflect the onboarding selection immediately.
+
+For example:
+- Not required
+- Queen
+- Twin
+- etc
+
+Do not show “Managed via Act Setup” with no meaningful saved result if onboarding already asked for this.
+
+---
+
+## 11. Edit Profile UX after onboarding
+
+The Edit Profile screen should feel like an editable summary of what onboarding already created.
+
+### Good outcome:
+- Act Name is filled
+- Home Base is filled
+- Act Setup is configured
+- Accommodation is configured
+- Garage is configured
+
+### Bad outcome:
+- Act Name filled
+- everything else still empty / disconnected
+
+---
+
+## 12. Improve labels and helper copy
+
+In onboarding and profile, use helper text that reinforces continuity.
+
+### Examples:
+Under onboarding title:
+**We’ll use this to personalise your calculator and build your starting profile.**
+
+Under profile sections:
+**Set during onboarding — you can edit this anytime.**
+
+Optional:
+show a small badge or helper text like:
+**Added during signup**
+
+Only if it feels clean.
+
+---
+
+## 13. Backward compatibility
+
+For existing users:
+- do not break current profiles
+- only apply the new onboarding-to-profile sync for new signups
+- if needed, support migration from older incomplete onboarding data
+
+---
+
+## 14. Success criteria
+
+A new user should be able to:
+
+1. sign up
+2. complete onboarding once
+3. go to Edit Profile
+4. see that their profile is already mostly filled out
+5. only edit things if they want to
+
+There should be no need to immediately re-enter:
+- act type
+- home base
+- vehicle
+- accommodation
+- fuel defaults
+
+---
+
+## 15. Implementation priorities
+
+Please implement in this order:
+
+1. Update onboarding copy to explain this sets up their profile
+2. Save onboarding values directly into profile data
+3. Auto-create Act Setup from onboarding act type
+4. Auto-set Garage vehicle from onboarding vehicle choice
+5. Auto-set Accommodation defaults from onboarding
+6. Remove empty states that appear even after onboarding is complete
+7. Make Edit Profile reflect the saved onboarding values
+8. Add “Don’t worry — you can change this later” helper copy
+
+---
+
+## 16. Important UX rule
+
+Onboarding should feel like:
+- fast
+- forgiving
+- useful
+
+Not like:
+- a second form they have to redo later
+
+The system should treat onboarding as the user’s **starter profile setup**, not a disconnected intro flow.

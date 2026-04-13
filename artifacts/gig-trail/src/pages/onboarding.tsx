@@ -26,6 +26,30 @@ const ACT_TYPES = [
 ];
 
 
+function generateStarterMembers(actType: string): { bandMembersJson: string; activeMemberIdsJson: string } {
+  const configs: Record<string, Array<{ name: string; role: string }>> = {
+    Solo: [{ name: "You", role: "Performer" }],
+    Duo: [{ name: "Member 1", role: "Performer" }, { name: "Member 2", role: "Performer" }],
+    Band: [
+      { name: "Member 1", role: "Performer" },
+      { name: "Member 2", role: "Performer" },
+      { name: "Member 3", role: "Performer" },
+      { name: "Member 4", role: "Performer" },
+    ],
+  };
+  const memberConfigs = configs[actType] ?? configs["Solo"];
+  const members = memberConfigs.map((m, i) => ({
+    id: `member-${i + 1}`,
+    name: m.name,
+    role: m.role,
+    expectedGigFee: 0,
+  }));
+  return {
+    bandMembersJson: JSON.stringify(members),
+    activeMemberIdsJson: JSON.stringify(members.map(m => m.id)),
+  };
+}
+
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -85,6 +109,8 @@ export default function Onboarding() {
       const parsedFuelPrice = parseFloat(fuelPrice) || 2.00;
       const peopleCount = getPeopleCount();
 
+      const { bandMembersJson, activeMemberIdsJson } = generateStarterMembers(actType);
+
       const profile = await createProfile.mutateAsync({
         data: {
           name: actName.trim(),
@@ -98,6 +124,8 @@ export default function Onboarding() {
           defaultFuelPrice: parsedFuelPrice,
           avgAccomPerNight: 0,
           avgFoodPerDay: 0,
+          bandMembers: bandMembersJson,
+          activeMemberIds: activeMemberIdsJson,
         },
       });
 
@@ -134,10 +162,12 @@ export default function Onboarding() {
             alt="The Gig Trail"
             className="h-16 w-auto mx-auto"
           />
-          <h1 className="text-3xl font-bold text-foreground">Let's set up your act</h1>
+          <h1 className="text-3xl font-bold text-foreground">Let's set up your profile</h1>
           <p className="text-muted-foreground text-sm">
-            Takes 30 seconds — we'll use this to run your numbers.{" "}
-            <span className="text-muted-foreground/60">Change it anytime.</span>
+            Takes about 30 seconds. We'll use this to personalise your calculator and build your starting profile.
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            Don't worry — you can change everything later.
           </p>
         </div>
 

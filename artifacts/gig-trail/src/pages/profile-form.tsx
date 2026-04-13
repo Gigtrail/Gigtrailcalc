@@ -333,7 +333,7 @@ export default function ProfileForm() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {activeMemberIdsWatch.length === 0 && memberLibraryWatch.length === 0 ? (
+              {activeMemberIdsWatch.length === 0 && memberLibraryWatch.length === 0 && !["Solo", "Duo", "Band"].includes(actType) ? (
                 <div className="text-center py-6 rounded-lg border border-dashed border-border/60 bg-muted/20">
                   <Settings2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
                   <p className="text-sm text-muted-foreground">No act configured yet.</p>
