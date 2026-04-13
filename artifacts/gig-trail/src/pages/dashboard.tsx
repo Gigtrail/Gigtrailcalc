@@ -17,7 +17,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Trail Overview</h1>
           <p className="text-muted-foreground mt-1">Here's how your numbers are looking.</p>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+        <div className="flex gap-2">
           <Button asChild variant="default">
             <Link href="/runs/new">
               <Map className="w-4 h-4 mr-2" />
