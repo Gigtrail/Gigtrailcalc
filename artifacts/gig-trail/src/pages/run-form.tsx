@@ -186,6 +186,7 @@ export default function RunForm() {
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
   const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
+  const [attendanceCount, setAttendanceCount] = useState<number>(0);
   const createOrUpdateVenue = useCreateOrUpdateVenue();
 
   const trackCalculation = useTrackCalculation();
@@ -583,6 +584,10 @@ export default function RunForm() {
         state: run.state ?? "",
         country: run.country ?? "",
       });
+      // Convert stored % back to a headcount for the UI
+      const cap = Number(run.capacity) || 0;
+      const pct = Number(run.expectedAttendancePct) || 0;
+      setAttendanceCount(cap > 0 ? Math.round((pct / 100) * cap) : 0);
     }
   }, [run, profiles, form]);
 
@@ -1057,22 +1062,37 @@ export default function RunForm() {
                         />
                       </div>
                       
-                      <FormField
-                        control={form.control}
-                        name="expectedAttendancePct"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Expected Attendance (%)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" max="100" {...field} value={field.value || 0} />
-                            </FormControl>
-                            {calculationResult && (
-                              <p className="text-xs text-muted-foreground">Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross</p>
-                            )}
-                            <FormMessage />
-                          </FormItem>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium leading-none">Expected Attendance</label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={formValues.capacity || undefined}
+                            value={attendanceCount || 0}
+                            onChange={e => {
+                              const count = Math.max(0, parseInt(e.target.value) || 0);
+                              const cap = Number(formValues.capacity) || 0;
+                              setAttendanceCount(count);
+                              form.setValue(
+                                "expectedAttendancePct",
+                                cap > 0 ? Math.min(100, Math.round((count / cap) * 100)) : 0
+                              );
+                            }}
+                            placeholder="e.g. 120"
+                          />
+                          {(formValues.capacity || 0) > 0 && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                              {Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}%
+                            </span>
+                          )}
+                        </div>
+                        {calculationResult && (
+                          <p className="text-xs text-muted-foreground">
+                            Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross
+                          </p>
                         )}
-                      />
+                      </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
