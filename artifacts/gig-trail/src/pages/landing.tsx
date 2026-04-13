@@ -48,7 +48,7 @@ export default function Landing() {
           <p className="text-muted-foreground/60 text-sm">Free to start · No credit card needed</p>
         </section>
 
-        <section className="w-full space-y-6">
+        <section className="w-full space-y-6" id="plans">
           <p className="text-xs uppercase tracking-widest text-muted-foreground/50 font-medium">Plans</p>
           <div className="grid sm:grid-cols-3 gap-px bg-border/30 rounded-xl overflow-hidden border border-border/30">
             {[
@@ -56,16 +56,29 @@ export default function Landing() {
                 name: "Free",
                 tagline: "Try it out",
                 price: "AU$0",
-                features: ["Basic show calculator", "5 saved runs", "1 act · 1 vehicle", "10 calcs/week"],
+                period: null,
+                features: [
+                  "5 free calcs/week",
+                  "1 act · 1 vehicle",
+                  "5 saved shows",
+                  "Basic calculator",
+                ],
                 cta: "Get started",
                 highlight: false,
                 badge: null,
               },
               {
                 name: "Pro",
-                tagline: "For working musicians",
-                price: "AU$5 /mo",
-                features: ["1 act profile", "Unlimited runs", "Full tour builder", "Accommodation insights"],
+                tagline: "Plan smarter tours",
+                price: "AU$12",
+                period: "/mo",
+                yearlyNote: "or AU$79/year — best value",
+                features: [
+                  "Unlimited calculations",
+                  "Multiple vehicles",
+                  "Accommodation automation",
+                  "Full profit breakdowns",
+                ],
                 cta: "Go Pro",
                 highlight: true,
                 badge: "Most popular",
@@ -73,13 +86,19 @@ export default function Landing() {
               {
                 name: "Pro Plus",
                 tagline: "For multiple projects",
-                price: "AU$7.99 /mo",
-                features: ["Up to 10 act profiles", "Multiple vehicles", "Everything in Pro"],
+                price: "AU$15",
+                period: "/mo",
+                yearlyNote: "or AU$99/year",
+                features: [
+                  "Up to 10 act profiles",
+                  "Up to 10 vehicles",
+                  "Everything in Pro",
+                ],
                 cta: "Go Pro Plus",
                 highlight: false,
                 badge: null,
               },
-            ].map(({ name, tagline, price, features, cta, highlight, badge }) => (
+            ].map(({ name, tagline, price, period, yearlyNote, features, cta, highlight, badge }) => (
               <div
                 key={name}
                 className={`flex flex-col gap-4 p-6 relative ${
@@ -98,7 +117,13 @@ export default function Landing() {
                     {name}
                   </div>
                   <div className="text-xs text-muted-foreground/60 mb-2">{tagline}</div>
-                  <div className="text-xl font-bold text-foreground">{price}</div>
+                  <div className="flex items-baseline gap-0.5">
+                    <span className="text-xl font-bold text-foreground">{price}</span>
+                    {period && <span className="text-xs text-muted-foreground">{period}</span>}
+                  </div>
+                  {"yearlyNote" in { yearlyNote } && yearlyNote && (
+                    <div className="text-[11px] text-muted-foreground/70 mt-0.5">{yearlyNote}</div>
+                  )}
                 </div>
                 <ul className="space-y-1.5 flex-1">
                   {features.map((f) => (

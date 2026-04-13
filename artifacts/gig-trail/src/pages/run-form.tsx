@@ -1378,7 +1378,7 @@ export default function RunForm() {
                   </p>
                 )}
                 {!calcUsage && !isPro && (
-                  <p className="text-xs text-center text-muted-foreground">10 free calculations per week</p>
+                  <p className="text-xs text-center text-muted-foreground">5 free calculations per week</p>
                 )}
                 {isEditing && (
                   <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
@@ -1398,18 +1398,24 @@ export default function RunForm() {
               <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
                 <Lock className="w-5 h-5 text-amber-600" />
               </div>
-              <DialogTitle className="text-xl">You've used your 10 free calculations this week</DialogTitle>
+              <DialogTitle className="text-xl">You've used your 5 free calculations this week</DialogTitle>
             </div>
-            <DialogDescription className="text-base">
-              Upgrade to Pro for unlimited calculations and advanced features like routing and fuel automation.
+            <DialogDescription className="text-base leading-relaxed">
+              Upgrade to Gig Trail Pro for unlimited calculations and smarter tour planning — so you never have to guess if a gig is worth the drive.
             </DialogDescription>
           </DialogHeader>
+          <div className="px-1 pb-1 text-sm text-muted-foreground space-y-1">
+            <p>✓ Unlimited calculations</p>
+            <p>✓ Multiple vehicles in Garage</p>
+            <p>✓ Assign vehicles to band members</p>
+            <p>✓ Accommodation automation</p>
+          </div>
           <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowLimitModal(false)} className="w-full sm:w-auto">
               Come back next week
             </Button>
-            <Button onClick={() => { setShowLimitModal(false); window.location.href = "/#plans"; }} className="w-full sm:w-auto">
-              Upgrade to Pro
+            <Button onClick={() => { setShowLimitModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
+              See Pro plans
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,0 +1,267 @@
+Implement the following pricing and usage structure for Gig Trail.
+
+## Goal
+Set a clearer free vs Pro model that feels fair to users, protects API usage, and positions Gig Trail as a serious touring tool.
+
+We want:
+- Free plan = useful but limited
+- Pro plan = clear value upgrade
+- pricing = $12/month or $79/year
+
+---
+
+## 1. Pricing structure
+
+Update the app’s pricing model to:
+
+### Free
+- 5 calculations per week
+
+### Pro
+- $12/month
+- $79/year
+
+Where pricing is shown, make sure the yearly plan is clearly presented as the best value option.
+
+### Recommended yearly helper copy:
+- Best value
+- Save 45%
+- Less than $7/month
+
+Use whichever feels cleanest in the UI.
+
+---
+
+## 2. Free usage limit
+
+Change the free plan usage allowance from 10 calculations to:
+
+- 5 calculations per week
+
+This weekly limit should apply to the Single Show Calculator / show calculations.
+
+### Requirements:
+- track number of calculations used this week
+- reset automatically each week
+- show remaining usage clearly where appropriate
+- do not break existing calculation logic
+
+### Example copy:
+- 1 of 5 free calculations used this week
+- 5 of 5 free calculations used this week
+
+---
+
+## 3. Weekly reset behavior
+
+Implement weekly reset logic for free calculations.
+
+### Requirements:
+- usage should reset every 7 days or on a defined weekly cycle
+- keep implementation simple and reliable
+- if there is already an existing usage tracking system, update it instead of rebuilding everything from scratch
+
+Store enough data to know:
+- current usage count
+- reset date / week window
+
+---
+
+## 4. Pro entitlements
+
+When a user upgrades to Pro, unlock:
+
+- unlimited calculations
+- Garage Pro features
+- multiple vehicles
+- assign vehicles to band members
+- accommodation automation / custom limits where applicable
+- full calculator access
+- future Pro-only advanced logistics features
+
+Do not hardcode only the current features if the app already has a feature-flag structure.
+If feature gating exists, update it cleanly.
+
+---
+
+## 5. Pricing UI updates
+
+Wherever pricing is shown in:
+- upgrade prompts
+- paywalls
+- pricing cards
+- locked feature messages
+- settings / billing
+- calculator upgrade banners
+
+update it to:
+
+- $12/month
+- $79/year
+
+### Recommended pricing card copy:
+
+Gig Trail Pro  
+Plan smarter tours and see your real profit.
+
+- Unlimited calculations
+- Multiple vehicles in Garage
+- Assign vehicles to band members
+- Accommodation automation
+- Full profit breakdowns
+- Save and compare shows
+
+$12/month  
+or $79/year
+
+You can adapt wording to fit the current design system, but keep the meaning.
+
+---
+
+## 6. Improve upgrade messaging
+
+Do not frame Pro as only “more calculations”.
+
+Instead, frame it around:
+- smarter tour planning
+- real profit
+- avoiding bad gig decisions
+- better touring tools
+
+### Good upgrade message examples:
+- Plan smarter tours
+- See your real profit
+- Avoid losing money on gigs
+- Upgrade to unlock unlimited calculations and Pro touring tools
+
+### Avoid weak messaging like:
+- Buy more uses
+- Need more calculations?
+
+---
+
+## 7. Update calculator usage banner
+
+Where the calculator currently shows free usage, update the language to reflect the new weekly limit.
+
+### Example:
+- 1 of 5 free calculations used this week
+- Upgrade for unlimited calculations
+
+If the user is Pro:
+- remove the free-limit warning
+or
+- replace with a Pro status indicator if useful
+
+---
+
+## 8. Upgrade prompt after limit reached
+
+When a free user reaches 5 of 5 calculations, show an upgrade state.
+
+### Recommended copy direction:
+“You’ve planned your week.
+Upgrade to Gig Trail Pro for unlimited calculations and smarter tour planning.”
+
+Alternative:
+“You’ve used your 5 free calculations for this week.
+Upgrade to Pro to keep planning.”
+
+Do not make the message feel harsh or punishing.
+
+---
+
+## 9. Annual plan emphasis
+
+In pricing UI, visually emphasise yearly plan.
+
+### Requirements:
+- yearly plan should feel like the recommended option
+- can use a badge such as:
+  - Best value
+  - Most popular
+  - Save 45%
+
+### Annual math reference:
+$79/year is roughly $6.58/month
+
+You do not have to show the exact monthly breakdown unless it helps conversion.
+
+---
+
+## 10. Feature gating alignment
+
+Make sure these experiences align with the new pricing:
+
+### Free
+- 5 calculations per week
+- 1 standard Garage vehicle
+- no multiple vehicles
+- no per-member vehicle linking
+- simplified defaults
+
+### Pro
+- unlimited calculations
+- Garage Pro
+- multiple vehicles
+- assign vehicles to members
+- advanced touring controls
+- future advanced cost features
+
+If the app already has partial gating, clean up inconsistencies.
+
+---
+
+## 11. Existing users / backward compatibility
+
+If there are existing users already on a previous free limit or old pricing:
+- do not break the app
+- update displayed pricing going forward
+- preserve existing Pro access if relevant
+- update free usage limit logic cleanly
+
+If there is existing billing configuration, make sure the new display matches the actual configured products.
+
+---
+
+## 12. Product intent
+
+This pricing should position Gig Trail as:
+- affordable
+- useful
+- serious
+- built for working musicians
+
+It should not feel like a cheap gimmick.
+
+The app is not just a calculator.
+It is a decision tool to help musicians avoid bad gigs and plan better tours.
+
+That positioning should come through in upgrade messaging and pricing UI.
+
+---
+
+## 13. Implementation priorities
+
+Please implement in this order:
+
+1. Change free usage from 10 to 5 calculations per week
+2. Add / confirm weekly reset logic
+3. Update upgrade banners and calculator usage text
+4. Update all pricing displays to $12/month and $79/year
+5. Emphasise yearly plan in pricing UI
+6. Align Pro feature gating with Garage and calculator features
+7. Improve paywall / upgrade wording to focus on value, not just limits
+
+---
+
+## 14. UX rule
+
+The upgrade flow should feel like:
+- a smart next step
+- unlocking better planning tools
+
+Not:
+- a punishment for using the app
+
+Please implement this cleanly and consistently across the app.

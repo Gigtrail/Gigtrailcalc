@@ -14,7 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 
-const FREE_CALC_LIMIT = 10;
+const FREE_CALC_LIMIT = 5;
 
 function todayString() {
   return new Date().toISOString().split("T")[0];

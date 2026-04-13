@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Crown, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal } from "@/hooks/use-plan";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 const PLAN_ORDER = ["free", "pro", "unlimited"] as const;
 const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Pro Plus" };
@@ -16,43 +17,66 @@ const PLAN_COLORS: Record<string, string> = {
   unlimited: "bg-accent/10 text-accent border border-accent/30",
 };
 
-const STATIC_PLANS = [
+type Period = "monthly" | "yearly";
+
+interface StaticPlan {
+  key: string;
+  name: string;
+  tagline: string;
+  badge?: string;
+  monthlyPrice: string;
+  yearlyPrice: string;
+  monthlyPeriod: string;
+  yearlyPeriod: string;
+  yearlyNote?: string;
+  features: string[];
+}
+
+const STATIC_PLANS: StaticPlan[] = [
   {
     key: "free",
     name: "Free",
     tagline: "Try it out",
-    price: "AU$0",
-    period: "forever",
+    monthlyPrice: "AU$0",
+    yearlyPrice: "AU$0",
+    monthlyPeriod: "forever",
+    yearlyPeriod: "forever",
     features: [
+      "5 free calculations per week",
       "1 act profile",
       "Solo, Duo & Band (up to 3 members)",
-      "Basic show calculator",
-      "5 saved runs",
-      "10 calculations per week",
+      "5 saved shows",
+      "Standard vehicle (1)",
     ],
   },
   {
     key: "pro",
     name: "Pro",
-    tagline: "For working musicians",
+    tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
-    price: "AU$5",
-    period: "per month",
+    monthlyPrice: "AU$12",
+    yearlyPrice: "AU$79",
+    monthlyPeriod: "per month",
+    yearlyPeriod: "per year",
+    yearlyNote: "Less than AU$7/month · Save 45%",
     features: [
-      "1 act profile",
-      "Unlimited band members",
-      "Unlimited runs & calculations",
-      "Max driving hours & overnight planning",
-      "Full tour builder",
-      "Routing & fuel estimates",
+      "Unlimited calculations",
+      "Multiple vehicles in Garage",
+      "Assign vehicles to band members",
+      "Accommodation automation",
+      "Full profit breakdowns",
+      "Save and compare shows",
     ],
   },
   {
     key: "unlimited",
     name: "Pro Plus",
     tagline: "For multiple projects",
-    price: "AU$7.99",
-    period: "per month",
+    monthlyPrice: "AU$15",
+    yearlyPrice: "AU$99",
+    monthlyPeriod: "per month",
+    yearlyPeriod: "per year",
+    yearlyNote: "Save ~45%",
     features: [
       "Up to 10 act profiles",
       "Multiple touring setups",
@@ -63,7 +87,8 @@ const STATIC_PLANS = [
 ];
 
 export default function Billing() {
-  const [location] = useLocation();
+  const [, setLocation] = useLocation();
+  const [period, setPeriod] = useState<Period>("yearly");
   const { plan, me, isLoading, refetch } = usePlan();
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
@@ -93,7 +118,9 @@ export default function Billing() {
   const handleUpgrade = async (planKey: string) => {
     const products = plansData?.data ?? [];
     const product = products.find((p) => p.metadata?.plan === planKey);
-    const price = product?.prices?.[0];
+    const price = period === "yearly"
+      ? (product?.prices?.find((p) => p.recurring?.interval === "year") ?? product?.prices?.[0])
+      : (product?.prices?.find((p) => p.recurring?.interval === "month") ?? product?.prices?.[0]);
     if (!price) {
       toast({ title: "Plan not available", description: "Please try again later.", variant: "destructive" });
       return;
@@ -133,6 +160,7 @@ export default function Billing() {
         </div>
       </div>
 
+      {/* Current plan */}
       <Card className="bg-card border-border/40">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-medium text-muted-foreground">Current Plan</CardTitle>
@@ -160,41 +188,96 @@ export default function Billing() {
         </CardContent>
       </Card>
 
+      {/* Billing period toggle */}
+      <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center rounded-full border border-border/60 overflow-hidden text-sm bg-card">
+          <button
+            type="button"
+            onClick={() => setPeriod("monthly")}
+            className={cn(
+              "px-5 py-2 transition-colors",
+              period === "monthly"
+                ? "bg-primary text-primary-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            onClick={() => setPeriod("yearly")}
+            className={cn(
+              "px-5 py-2 transition-colors flex items-center gap-2",
+              period === "yearly"
+                ? "bg-primary text-primary-foreground font-medium"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+          >
+            Yearly
+            <span className={cn(
+              "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full",
+              period === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
+            )}>
+              Save 45%
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Plan cards */}
       <div className="grid md:grid-cols-3 gap-4">
         {STATIC_PLANS.map((staticPlan) => {
           const isCurrentPlan = plan === staticPlan.key;
           const currentIndex = PLAN_ORDER.indexOf(plan as any);
           const planIndex = PLAN_ORDER.indexOf(staticPlan.key as any);
           const isUpgrade = planIndex > currentIndex;
-          const isDowngrade = planIndex < currentIndex;
+          const isPaidPlan = staticPlan.key !== "free";
+          const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
+          const displayPeriod = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
+          const showBestValue = period === "yearly" && isPaidPlan;
 
           return (
             <Card
               key={staticPlan.key}
-              className={`border relative ${isCurrentPlan ? "border-primary bg-primary/5" : staticPlan.key === "pro" ? "border-primary/40 bg-card shadow-md" : "border-border/40 bg-card"} transition-all`}
+              className={cn(
+                "border relative transition-all",
+                isCurrentPlan
+                  ? "border-primary bg-primary/5"
+                  : staticPlan.key === "pro"
+                  ? "border-primary/40 bg-card shadow-md"
+                  : "border-border/40 bg-card"
+              )}
             >
-              {"badge" in staticPlan && staticPlan.badge && (
+              {staticPlan.badge && !showBestValue && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-primary text-primary-foreground text-xs shadow-sm px-3 py-0.5">
                     {staticPlan.badge}
                   </Badge>
                 </div>
               )}
+              {showBestValue && staticPlan.key === "pro" && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-green-600 text-white text-xs shadow-sm px-3 py-0.5">
+                    Best value
+                  </Badge>
+                </div>
+              )}
               <CardContent className="p-5 space-y-4 pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-semibold text-foreground flex items-center gap-2">
-                      {staticPlan.name}
-                      {isCurrentPlan && (
-                        <Badge className="bg-primary/10 text-primary text-xs border border-primary/30">Current</Badge>
-                      )}
-                    </div>
-                    {"tagline" in staticPlan && (
-                      <div className="text-xs text-muted-foreground mt-0.5">{staticPlan.tagline}</div>
+                <div>
+                  <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                    {staticPlan.name}
+                    {isCurrentPlan && (
+                      <Badge className="bg-primary/10 text-primary text-xs border border-primary/30">Current</Badge>
                     )}
-                    <div className="text-2xl font-bold text-foreground mt-2">{staticPlan.price}</div>
-                    <div className="text-xs text-muted-foreground">{staticPlan.period}</div>
                   </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{staticPlan.tagline}</div>
+                  <div className="mt-2">
+                    <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
+                    <span className="text-xs text-muted-foreground ml-1">{displayPeriod}</span>
+                  </div>
+                  {period === "yearly" && staticPlan.yearlyNote && (
+                    <div className="text-xs text-green-600 font-medium mt-0.5">{staticPlan.yearlyNote}</div>
+                  )}
                 </div>
 
                 <ul className="space-y-1.5">
@@ -221,14 +304,12 @@ export default function Billing() {
                   </Button>
                 ) : (
                   <Button
-                    className={`w-full ${isUpgrade ? "bg-primary hover:bg-primary/90 text-primary-foreground" : ""}`}
+                    className={cn("w-full", isUpgrade ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "")}
                     variant={isUpgrade ? "default" : "outline"}
                     onClick={() => handleUpgrade(staticPlan.key)}
                     disabled={createCheckout.isPending}
                   >
-                    {createCheckout.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                    ) : null}
+                    {createCheckout.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                     {isUpgrade ? `Upgrade to ${staticPlan.name}` : `Switch to ${staticPlan.name}`}
                   </Button>
                 )}
@@ -238,6 +319,18 @@ export default function Billing() {
         })}
       </div>
 
+      {/* Value message */}
+      <Card className="bg-primary/5 border-primary/20">
+        <CardContent className="p-5">
+          <h3 className="font-semibold mb-1 text-foreground">Gig Trail Pro is built for working musicians</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Stop guessing if a gig is worth the drive. Pro gives you unlimited calculations, smarter vehicle management,
+            and accommodation planning — so you can make better decisions for every show, every time.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Downgrade info */}
       <Card className="bg-card border-border/40">
         <CardContent className="p-5">
           <h3 className="font-semibold mb-3">What happens when you downgrade?</h3>
@@ -248,11 +341,11 @@ export default function Billing() {
             </li>
             <li className="flex items-start gap-2">
               <XCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-              Over-limit items are locked until you upgrade again (e.g. if Free plan allows 5 runs and you have 12, you can still see all 12 but can't add new ones).
+              Over-limit items are locked until you upgrade again (e.g. if Free allows 5 saved shows and you have 12, you can see all 12 but can't add new ones).
             </li>
             <li className="flex items-start gap-2">
               <XCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-              Tour Builder and ticketed show features are hidden on the Free plan.
+              Tour Builder and advanced features are hidden on the Free plan.
             </li>
           </ul>
         </CardContent>
