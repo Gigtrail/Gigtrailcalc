@@ -423,16 +423,20 @@ export default function TourDetail() {
                   )}
                   {hasDaySlots && filteredDaySlots.map((day) => {
                     const dailyCostLine = formatDailyCost(day.dailyFoodCost, day.dailyAccomCost, day.accomCoveredByVenue);
+                    const dow = getDay(parseISO(day.date)); // 0=Sun 5=Fri 6=Sat
+                    const isFriSat = dow === 5 || dow === 6;
+                    const isSun = dow === 0;
+                    const dayDateLabel = format(parseISO(day.date), "EEE MMM d");
 
                     if (!day.stop) {
                       return (
                         <div key={day.date} className="px-4 py-3 flex items-start gap-3 hover:bg-muted/10 transition-colors">
-                          <div className="w-7 h-7 rounded-full bg-muted/30 flex items-center justify-center shrink-0 border border-border/30 text-[10px] font-bold text-muted-foreground mt-0.5">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5 border ${isFriSat ? "bg-secondary/10 border-secondary/30 text-secondary" : isSun ? "bg-secondary/5 border-secondary/20 text-secondary/70" : "bg-muted/30 border-border/30 text-muted-foreground"}`}>
                             {day.dayNumber}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-medium">{format(parseISO(day.date), "MMM d")}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-sm ${isFriSat ? "font-semibold text-secondary" : isSun ? "font-medium text-secondary/80" : "font-medium"}`}>{dayDateLabel}</span>
                               <span className="text-muted-foreground/50 text-xs">·</span>
                               <span className="text-sm text-muted-foreground italic">No show booked</span>
                             </div>
@@ -496,7 +500,7 @@ export default function TourDetail() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-muted-foreground">
-                              {format(parseISO(day.date), "MMM d")}
+                              <span className={isFriSat ? "text-secondary font-semibold" : isSun ? "text-secondary/70 font-medium" : ""}>{dayDateLabel}</span>
                               {stop.showType && <span className="ml-1.5 text-muted-foreground/60">· {stop.showType}</span>}
                             </div>
                             <div className="font-semibold truncate">{stop.venueName || stop.city}</div>
