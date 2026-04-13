@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Truck } from "lucide-react";
-import { useEffect } from "react";
+import { ChevronLeft, Save, Truck, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState } from "react";
 import { STANDARD_VEHICLES } from "@/lib/garage-constants";
 
 const garageVehicleSchema = z.object({
@@ -48,6 +48,7 @@ export default function GarageVehicleForm() {
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
+  const [showEstimator, setShowEstimator] = useState(false);
 
   const isEditing = !!id;
   const vehicleId = isEditing ? parseInt(id) : 0;
@@ -292,11 +293,68 @@ export default function GarageVehicleForm() {
                   control={form.control}
                   name="avgConsumption"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Avg. Consumption (L/100km)</FormLabel>
+                    <FormItem className="col-span-1 md:col-span-2">
+                      <FormLabel>Fuel Usage (L/100km)</FormLabel>
                       <FormControl>
-                        <Input type="number" min="0.1" step="0.1" {...field} />
+                        <Input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          placeholder="e.g. 10.5 — typical van: 10–14"
+                          {...field}
+                        />
                       </FormControl>
+
+                      {/* Help section — always visible */}
+                      <div className="mt-2 rounded-md border border-border/40 bg-muted/30 p-3 space-y-2">
+                        <div className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
+                          <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary/60" />
+                          <span>
+                            <strong className="text-foreground">Not sure what your fuel usage is?</strong><br />
+                            Fill your tank, reset your trip meter, drive normally, then fill up again.
+                            Divide litres used by km driven, then multiply by 100.
+                          </span>
+                        </div>
+                        <div className="text-xs font-mono bg-background/70 border border-border/30 rounded px-2.5 py-1.5 text-center text-foreground/70">
+                          L/100km = (Litres Used ÷ Km Driven) × 100
+                        </div>
+
+                        {/* Estimator toggle — Pro only */}
+                        {isPro && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setShowEstimator(v => !v)}
+                              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors font-medium"
+                            >
+                              {showEstimator ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              Help me estimate
+                            </button>
+                            {showEstimator && (
+                              <div className="grid grid-cols-3 gap-2 pt-1">
+                                {[
+                                  { label: "Small car", range: "6–9 L/100km" },
+                                  { label: "Van", range: "10–14 L/100km" },
+                                  { label: "Bus", range: "15–25 L/100km" },
+                                ].map(({ label, range }) => (
+                                  <div
+                                    key={label}
+                                    className="rounded border border-border/40 bg-background/60 px-2 py-1.5 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                                    onClick={() => {
+                                      const mid = parseFloat(range.split("–")[0]) + 1;
+                                      field.onChange(mid);
+                                    }}
+                                  >
+                                    <div className="text-xs font-medium text-foreground">{label}</div>
+                                    <div className="text-[11px] text-muted-foreground">{range}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
                       <FormMessage />
                     </FormItem>
                   )}
