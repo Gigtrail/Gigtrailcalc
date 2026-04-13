@@ -23,7 +23,7 @@ let scriptStatus: ScriptStatus = "idle";
 let loadedApiKey: string | null = null;
 const readyCallbacks: Array<() => void> = [];
 
-function loadGoogleMaps(apiKey: string): void {
+export function loadGoogleMaps(apiKey: string): void {
   // Already loaded with the same key — fire callbacks immediately
   if (scriptStatus === "loaded" && loadedApiKey === apiKey) {
     readyCallbacks.forEach(cb => cb());
@@ -56,7 +56,7 @@ function loadGoogleMaps(apiKey: string): void {
   document.head.appendChild(script);
 }
 
-function onGoogleMapsReady(cb: () => void) {
+export function onGoogleMapsReady(cb: () => void) {
   if (scriptStatus === "loaded") {
     cb();
   } else {

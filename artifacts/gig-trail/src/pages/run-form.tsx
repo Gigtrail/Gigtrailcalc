@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useSearchVenues, useCreateOrUpdateVenue } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
@@ -73,6 +74,9 @@ const runSchema = z.object({
   foodCost: z.coerce.number().optional().nullable(),
   extraCosts: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
 });
 
 type RunFormValues = z.infer<typeof runSchema>;
@@ -166,6 +170,9 @@ export default function RunForm() {
       foodCost: 0,
       extraCosts: 0,
       notes: "",
+      city: "",
+      state: "",
+      country: "",
     },
   });
 
@@ -179,14 +186,6 @@ export default function RunForm() {
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
   const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
-  const [venueQuery, setVenueQuery] = useState("");
-  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false);
-  const venueSuggestionsRef = useRef<HTMLDivElement>(null);
-
-  const { data: venueSuggestions } = useSearchVenues(
-    { q: venueQuery },
-    { query: { enabled: (venueQuery?.length ?? 0) >= 2 } }
-  );
   const createOrUpdateVenue = useCreateOrUpdateVenue();
 
   const trackCalculation = useTrackCalculation();
@@ -418,7 +417,7 @@ export default function RunForm() {
       try {
         const vName = vals.venueName?.trim();
         if (vName) {
-          await createOrUpdateVenue.mutateAsync({ data: { venueName: vName, city: vals.destination || "" } });
+          await createOrUpdateVenue.mutateAsync({ data: { venueName: vName, city: vals.city || vals.destination || "" } });
         }
 
         const actType = profile?.actType ?? null;
@@ -580,6 +579,9 @@ export default function RunForm() {
         foodCost: run.foodCost,
         extraCosts: run.extraCosts,
         notes: run.notes,
+        city: run.city ?? "",
+        state: run.state ?? "",
+        country: run.country ?? "",
       });
     }
   }, [run, profiles, form]);
@@ -783,63 +785,22 @@ export default function RunForm() {
                   })()}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="venueName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex items-center gap-1.5">
-                            <History className="w-3.5 h-3.5 text-muted-foreground" />
-                            Venue Name
-                          </FormLabel>
-                          <div className="relative" ref={venueSuggestionsRef}>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value || ""}
-                                placeholder="e.g. The Bottleneck"
-                                autoComplete="off"
-                                onChange={(e) => {
-                                  field.onChange(e.target.value);
-                                  setVenueQuery(e.target.value);
-                                  setShowVenueSuggestions(true);
-                                }}
-                                onBlur={() => {
-                                  setTimeout(() => setShowVenueSuggestions(false), 150);
-                                }}
-                                onFocus={() => {
-                                  if ((field.value?.length ?? 0) >= 2) setShowVenueSuggestions(true);
-                                }}
-                              />
-                            </FormControl>
-                            {showVenueSuggestions && venueSuggestions && venueSuggestions.length > 0 && (
-                              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-md overflow-hidden">
-                                {venueSuggestions.slice(0, 5).map((v) => (
-                                  <button
-                                    key={v.id}
-                                    type="button"
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                    onMouseDown={() => {
-                                      field.onChange(v.name);
-                                      setVenueQuery(v.name);
-                                      setShowVenueSuggestions(false);
-                                      if (v.city && !form.getValues("destination")) {
-                                        form.setValue("destination", v.city);
-                                      }
-                                    }}
-                                  >
-                                    <Search className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                                    <span className="font-medium">{v.name}</span>
-                                    {v.city && <span className="text-muted-foreground text-xs ml-auto">{v.city}</span>}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium leading-none">Venue / Destination</label>
+                      <VenueSearch
+                        venueName={formValues.venueName || ""}
+                        destination={formValues.destination || ""}
+                        onSelect={(venue: VenueSelection) => {
+                          form.setValue("venueName", venue.venueName || null);
+                          form.setValue("destination", venue.destination);
+                          form.setValue("destinationLat", venue.lat ?? null);
+                          form.setValue("destinationLng", venue.lng ?? null);
+                          form.setValue("city", venue.suburb || null);
+                          form.setValue("state", venue.state || null);
+                          form.setValue("country", venue.country || null);
+                        }}
+                      />
+                    </div>
                     <FormField
                       control={form.control}
                       name="showDate"
@@ -855,7 +816,7 @@ export default function RunForm() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     {!isPro ? (
                       <FormField
                         control={form.control}
@@ -905,27 +866,6 @@ export default function RunForm() {
                         )}
                       />
                     )}
-                    <FormField
-                      control={form.control}
-                      name="destination"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Destination</FormLabel>
-                          <FormControl>
-                            <PlacesAutocomplete
-                              value={field.value || ""}
-                              onChange={(text, place) => {
-                                field.onChange(text);
-                                form.setValue("destinationLat", place?.lat ?? null);
-                                form.setValue("destinationLng", place?.lng ?? null);
-                              }}
-                              placeholder="Gig City"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
