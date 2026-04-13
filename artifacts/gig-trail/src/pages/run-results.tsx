@@ -81,6 +81,7 @@ export default function RunResults() {
   const [result, setResult] = useState<GigTrailResultData | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
+  const [accomOn, setAccomOn] = useState(true);
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
@@ -125,9 +126,6 @@ export default function RunResults() {
     return accomNights * (singleRooms * SINGLE_ROOM_RATE + doubleRooms * DOUBLE_ROOM_RATE);
   })();
   const hasAccomInForm = formData.accommodationRequired && accomCostFromForm > 0;
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [accomOn, setAccomOn] = useState(hasAccomInForm ? true : false);
 
   // Derived display values based on accommodation toggle
   const displayAccomCost = accomOn ? accomCostFromForm : 0;
