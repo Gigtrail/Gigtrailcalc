@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
 import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Crown, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,7 +70,6 @@ const STATIC_PLANS: StaticPlan[] = [
 ];
 
 export default function Billing() {
-  const [, setLocation] = useLocation();
   const [period, setPeriod] = useState<Period>("yearly");
   const { plan, me, isLoading, refetch } = usePlan();
   const { data: plansData } = useStripePlans();
