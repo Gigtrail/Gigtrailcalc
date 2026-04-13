@@ -12,6 +12,10 @@ const router: IRouter = Router();
 function serializeRun(r: typeof runsTable.$inferSelect) {
   return {
     ...r,
+    originLat: r.originLat != null ? Number(r.originLat) : null,
+    originLng: r.originLng != null ? Number(r.originLng) : null,
+    destinationLat: r.destinationLat != null ? Number(r.destinationLat) : null,
+    destinationLng: r.destinationLng != null ? Number(r.destinationLng) : null,
     distanceKm: Number(r.distanceKm),
     fuelPrice: Number(r.fuelPrice),
     fee: r.fee != null ? Number(r.fee) : null,
@@ -21,12 +25,17 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
     guarantee: r.guarantee != null ? Number(r.guarantee) : null,
     merchEstimate: r.merchEstimate != null ? Number(r.merchEstimate) : null,
     marketingCost: r.marketingCost != null ? Number(r.marketingCost) : null,
+    accommodationNights: r.accommodationNights != null ? Number(r.accommodationNights) : null,
     accommodationCost: r.accommodationCost != null ? Number(r.accommodationCost) : null,
     foodCost: r.foodCost != null ? Number(r.foodCost) : null,
     extraCosts: r.extraCosts != null ? Number(r.extraCosts) : null,
     totalCost: r.totalCost != null ? Number(r.totalCost) : null,
     totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
     totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
+    actualTicketIncome: r.actualTicketIncome != null ? Number(r.actualTicketIncome) : null,
+    actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
+    actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,
+    actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
