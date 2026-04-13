@@ -533,6 +533,7 @@ export default function RunForm() {
       });
 
       if (autoProfileId) {
+        localStorage.setItem(LAST_PROFILE_KEY, autoProfileId.toString());
         const profile = profiles.find(p => p.id === autoProfileId);
         if (profile) applyProfileValues(profile);
       }
