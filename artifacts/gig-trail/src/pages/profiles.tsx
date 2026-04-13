@@ -4,7 +4,7 @@ import {
   getGetProfilesQueryKey,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -79,6 +79,22 @@ export default function Profiles() {
             </Link>
           </Button>
         )}
+      </div>
+
+      {/* Section tabs */}
+      <div className="flex items-center gap-1 border-b border-border/50 pb-0">
+        <Link href="/profiles">
+          <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-foreground border-b-2 border-primary -mb-px transition-colors">
+            <Users className="w-3.5 h-3.5" />
+            Act Profiles
+          </button>
+        </Link>
+        <Link href="/garage">
+          <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted-foreground border-b-2 border-transparent -mb-px hover:text-foreground transition-colors">
+            <Truck className="w-3.5 h-3.5" />
+            Manage Garage
+          </button>
+        </Link>
       </div>
 
       {isLoading ? (

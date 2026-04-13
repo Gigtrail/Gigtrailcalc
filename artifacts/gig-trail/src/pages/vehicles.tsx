@@ -1,6 +1,6 @@
 import { useGetVehicles, useDeleteVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
-import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, ArrowLeft } from "lucide-react";
+import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -74,16 +74,11 @@ export default function Garage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/profiles")} className="h-8 w-8">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Garage</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your custom touring vehicles and fuel settings.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Garage</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your custom touring vehicles and fuel settings.
+          </p>
         </div>
         {isPro && (
           <Button onClick={handleAddVehicle}>
@@ -91,6 +86,22 @@ export default function Garage() {
             Add Vehicle
           </Button>
         )}
+      </div>
+
+      {/* Section tabs */}
+      <div className="flex items-center gap-1 border-b border-border/50 pb-0">
+        <Link href="/profiles">
+          <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted-foreground border-b-2 border-transparent -mb-px hover:text-foreground transition-colors">
+            <Users className="w-3.5 h-3.5" />
+            Act Profiles
+          </button>
+        </Link>
+        <Link href="/garage">
+          <button className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-foreground border-b-2 border-primary -mb-px transition-colors">
+            <Truck className="w-3.5 h-3.5" />
+            Manage Garage
+          </button>
+        </Link>
       </div>
 
       {!isPro && (
