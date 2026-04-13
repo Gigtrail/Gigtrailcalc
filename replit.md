@@ -73,7 +73,10 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - Flat Fee, Ticketed Show (with deal types), and Hybrid show types
 - Two-step flow: input form → dedicated results screen (`/runs/results`)
 - `handleCalculate` computes route (Google Maps), then navigates to `/runs/results` with result stored in `sessionStorage` as `gigtrail_result`
+- On save, a `calculationSnapshot` (all computed result data minus session-specific fields) is stored as JSONB on the run record
 - `run-results.tsx` shows: verdict banner, per-person take-home, route summary, accommodation recommendation, cost breakdown, smart insights, Save/Edit/New actions
+- **Historical snapshot mode**: `/runs/results?runId=X` loads the stored `calculationSnapshot` from the DB and renders the exact same result page with a "Saved result" badge; back button goes to `/runs`; shows "Run again with current settings" button instead of "Calculate Another Run"
+- Old runs without a snapshot redirect to `/runs/:id` (run-detail.tsx) for the legacy detail view
 - **Accommodation comes from profile** — no manual accommodation controls on form; nights estimated from drive time ÷ max daily driving hours
 - **Constants centralized** in `artifacts/gig-trail/src/lib/gig-constants.ts`: `ACCOM_RATES` (Single=$120, Queen=$180, Twin=$200, Double Room=$180, Multiple Rooms=$300), `DEFAULT_MAX_DRIVE_HOURS_PER_DAY=8`
 - Status: "Worth the Drive", "Tight Margins", "Probably Not Worth It"
@@ -105,7 +108,7 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `users` — user accounts linked to Clerk (id = Clerk userId, email, stripeCustomerId, stripeSubscriptionId, plan)
 - `profiles` — artist/band profiles (has userId)
 - `vehicles` — vehicles with fuel consumption (has userId)
-- `runs` — single show calculations (has userId)
+- `runs` — single show calculations (has userId); includes `calculation_snapshot jsonb` storing the full result at time of calculation
 - `tours` — multi-stop tour headers (has userId)
 - `tour_stops` — individual stops within a tour
 

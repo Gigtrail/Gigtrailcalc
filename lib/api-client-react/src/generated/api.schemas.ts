@@ -263,6 +263,8 @@ export interface Run {
   wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  calculationSnapshot?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -356,6 +358,8 @@ export interface CreateRunBody {
   wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  calculationSnapshot?: Record<string, unknown> | null;
 }
 
 export interface Tour {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useCreateRun, useGetProfiles } from "@workspace/api-client-react";
+import { useCreateRun, useGetProfiles, useGetRun } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +20,9 @@ import {
   Edit,
   Users,
   CheckCircle2,
+  History,
 } from "lucide-react";
+import { format } from "date-fns";
 import { usePlan } from "@/hooks/use-plan";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 import { cn } from "@/lib/utils";
@@ -74,6 +76,8 @@ export interface GigTrailResultData {
   calcCount?: number;
   calcLimit?: number | null;
   isPro?: boolean;
+  snapshotMode?: boolean;
+  snapshotDate?: string;
 }
 
 export default function RunResults() {
@@ -82,13 +86,29 @@ export default function RunResults() {
   const [isSaving, setIsSaving] = useState(false);
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const [accomOn, setAccomOn] = useState(true);
+  const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
   const createRun = useCreateRun();
   const { data: profiles } = useGetProfiles();
 
+  // For snapshot mode: fetch run by ID
+  const { data: snapshotRun, isLoading: isLoadingSnapshot } = useGetRun(snapshotRunId || 0, {
+    query: { enabled: !!snapshotRunId, queryKey: ['snapshot-run', snapshotRunId] }
+  });
+
+  // On mount: check for ?runId= param (snapshot mode) vs sessionStorage (fresh calc)
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const runIdParam = params.get('runId');
+    if (runIdParam) {
+      const numId = parseInt(runIdParam, 10);
+      if (!isNaN(numId)) {
+        setSnapshotRunId(numId);
+        return;
+      }
+    }
     const raw = sessionStorage.getItem("gigtrail_result");
     if (!raw) {
       setLocation("/runs/new");
@@ -100,6 +120,33 @@ export default function RunResults() {
       setLocation("/runs/new");
     }
   }, []);
+
+  // When snapshot run data loads, populate result from its calculationSnapshot
+  useEffect(() => {
+    if (!snapshotRunId) return;
+    if (isLoadingSnapshot) return;
+    if (!snapshotRun) {
+      setLocation('/runs');
+      return;
+    }
+    const snap = snapshotRun.calculationSnapshot as GigTrailResultData | null | undefined;
+    if (snap && snap.formData) {
+      setResult({
+        ...snap,
+        snapshotMode: true,
+        savedRunId: snapshotRun.id,
+        runId: snapshotRun.id,
+        snapshotDate: snapshotRun.createdAt,
+      });
+    } else {
+      // Old run without snapshot — fall back to run-detail view
+      setLocation(`/runs/${snapshotRunId}`);
+    }
+  }, [snapshotRunId, snapshotRun, isLoadingSnapshot]);
+
+  if (snapshotRunId && !result) {
+    return <div className="p-8 text-center text-muted-foreground">Loading saved result…</div>;
+  }
 
   if (!result) return null;
 
@@ -113,6 +160,7 @@ export default function RunResults() {
     vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice, isEditing, runId, savedRunId,
     saveFailed,
     calcCount, calcLimit,
+    snapshotMode, snapshotDate,
   } = result;
 
   const effectiveRunId = savedRunId ?? runId;
@@ -252,6 +300,14 @@ export default function RunResults() {
     }
   };
 
+  const handleBack = () => {
+    if (snapshotMode) {
+      setLocation("/runs");
+    } else {
+      handleEdit();
+    }
+  };
+
   const handleAnother = () => {
     sessionStorage.removeItem("gigtrail_result");
     setLocation("/runs/new");
@@ -262,7 +318,7 @@ export default function RunResults() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={handleEdit} className="h-8 w-8 flex-shrink-0">
+        <Button variant="ghost" size="icon" onClick={handleBack} className="h-8 w-8 flex-shrink-0">
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div className="min-w-0">
@@ -275,8 +331,18 @@ export default function RunResults() {
         </div>
       </div>
 
-      {/* Save status banner */}
-      {effectiveRunId ? (
+      {/* Save status / snapshot banner */}
+      {snapshotMode ? (
+        <div className="flex items-center gap-2.5 rounded-lg border border-amber-200/80 bg-amber-50/70 px-4 py-2.5 text-sm text-amber-900">
+          <History className="w-4 h-4 flex-shrink-0 text-amber-600" />
+          <span className="font-medium">Saved result</span>
+          {snapshotDate && (
+            <span className="text-amber-700/70">· {format(new Date(snapshotDate), 'MMM d, yyyy')}</span>
+          )}
+          <span className="text-amber-600/50 mx-0.5">·</span>
+          <span className="text-xs text-amber-700/80">Based on your settings at the time</span>
+        </div>
+      ) : effectiveRunId ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 flex-shrink-0 text-green-600" />
@@ -653,8 +719,8 @@ export default function RunResults() {
         </Card>
       )}
 
-      {/* Calculation usage */}
-      {!isPro && calcLimit !== undefined && calcLimit !== null && (
+      {/* Calculation usage — hidden in snapshot mode */}
+      {!snapshotMode && !isPro && calcLimit !== undefined && calcLimit !== null && (
         <p className="text-xs text-center text-muted-foreground">
           {calcCount} of {calcLimit} free calculations used this week ·{" "}
           <a href="/billing" className="text-primary underline underline-offset-2">Upgrade for unlimited</a>
@@ -668,49 +734,68 @@ export default function RunResults() {
 
       {/* Action Buttons */}
       <div className="space-y-3 pt-1">
-        {effectiveRunId ? (
-          <div className="grid grid-cols-2 gap-3">
-            <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Show
-            </Button>
-            <Button size="lg" variant="outline" className="w-full font-bold"
-              onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              My Shows
-            </Button>
-          </div>
-        ) : (
-          <Button
-            size="lg"
-            className="w-full text-base font-bold"
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            <Save className="w-4 h-4 mr-2" />
-            {isSaving ? "Saving..." : "Save This Show"}
-          </Button>
-        )}
-        {!effectiveRunId && (
-          <div className="grid grid-cols-2 gap-3">
+        {snapshotMode ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Show
+              </Button>
+              <Button size="lg" variant="outline" className="w-full font-bold"
+                onClick={() => setLocation("/runs")}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                My Shows
+              </Button>
+            </div>
             <Button variant="outline" onClick={handleEdit} className="w-full">
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Run
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Run again with current settings
             </Button>
+          </>
+        ) : effectiveRunId ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Show
+              </Button>
+              <Button size="lg" variant="outline" className="w-full font-bold"
+                onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                My Shows
+              </Button>
+            </div>
             <Button variant="outline" onClick={handleAnother} className="w-full">
               <RotateCcw className="w-4 h-4 mr-2" />
-              New Run
+              Calculate Another Run
             </Button>
-          </div>
+          </>
+        ) : (
+          <>
+            <Button
+              size="lg"
+              className="w-full text-base font-bold"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isSaving ? "Saving..." : "Save This Show"}
+            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={handleEdit} className="w-full">
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Run
+              </Button>
+              <Button variant="outline" onClick={handleAnother} className="w-full">
+                <RotateCcw className="w-4 h-4 mr-2" />
+                New Run
+              </Button>
+            </div>
+          </>
         )}
-        {effectiveRunId && (
-          <Button variant="outline" onClick={handleAnother} className="w-full">
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Calculate Another Run
-          </Button>
-        )}
-        {!isPro && (
+        {!snapshotMode && !isPro && (
           <Button variant="ghost" className="w-full text-muted-foreground text-xs" asChild>
             <a href="/billing">Upgrade to Pro for unlimited calculations & smarter recommendations</a>
           </Button>

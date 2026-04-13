@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -52,6 +52,7 @@ export const runsTable = pgTable("runs", {
   actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
   wouldDoAgain: text("would_do_again"),
   notes: text("notes"),
+  calculationSnapshot: jsonb("calculation_snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

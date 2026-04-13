@@ -1,0 +1,205 @@
+Implement historical result snapshots for Past Shows so each saved show displays the calculator result exactly as it was at the time it was calculated.
+
+## Goal
+When a user opens a Past Show, they should see the same result screen they originally calculated, even if:
+- profile settings have changed later
+- Garage / vehicle settings have changed
+- fuel price has changed
+- member setup has changed
+- accommodation defaults have changed
+- calculator logic improves later
+
+Past Shows should behave like a saved snapshot, not a live recalculation from current settings.
+
+---
+
+## Core product intent
+
+Past Shows are not just a list of inputs.
+They should feel like saved decision records.
+
+A user should be able to look back and see:
+- what the numbers were at the time
+- what assumptions were used
+- what result they saw then
+
+This is especially important if they later change:
+- act setup
+- default vehicle
+- fuel price
+- accommodation rules
+- member fees
+- profile defaults
+
+---
+
+## 1. Save a result snapshot at calculation time
+
+When a user runs a calculation and the result screen is generated, save a full snapshot of the calculator state.
+
+This snapshot should be attached to the saved show / history record.
+
+### Save both:
+1. raw inputs used
+2. rendered calculation result data
+
+Do not rely only on current profile data when reopening Past Shows.
+
+---
+
+## 2. Snapshot should include all important data used in the result
+
+At minimum, save:
+
+### Show inputs
+- show_name
+- venue_name
+- entered_distance_km
+- total_distance_km
+- is_one_way_only
+- fee / gross income
+- food cost
+- notes if relevant
+- date created
+- any manual overrides
+
+### Profile-derived values used at the time
+- act_name
+- act_type
+- band members included
+- member fees used
+- selected vehicle / Garage vehicle used
+- fuel price per litre used
+- fuel consumption used
+- accommodation settings used
+- accommodation nights used
+- accommodation cost used
+
+### Calculated outputs
+- fuel_used_litres
+- fuel_cost
+- accommodation_cost
+- food_cost
+- total_expenses
+- net_profit
+- member payout breakdown
+- warnings / insights shown
+- result status color or tier if supported
+  - profitable
+  - borderline
+  - loss
+
+### UI-facing summary data
+Anything needed to rebuild the result screen exactly as the user saw it.
+
+---
+
+## 3. Past Shows should open snapshot view first
+
+When a user opens a Past Show:
+- load the saved calculation snapshot
+- render the result screen from snapshot data
+- do NOT automatically recalculate from live profile defaults
+
+The Past Show should look and feel like:
+“Here is the result you got then”
+
+not:
+“Here is a new result based on your current setup”
+
+---
+
+## 4. Add a separate recalculate action if needed
+
+If useful, add a button such as:
+
+- Recalculate with current settings
+or
+- Run again with current profile
+
+This should be optional and clearly separate from the saved snapshot.
+
+### Important:
+Default action = show historical snapshot
+Optional action = generate new result from current settings
+
+Do not overwrite the old snapshot unless the user explicitly saves a new version.
+
+---
+
+## 5. Preserve historical accuracy
+
+A Past Show snapshot should still display correctly even if later:
+- the default Garage vehicle changes
+- the user adds or removes members
+- the fuel price changes
+- the app updates accommodation logic
+- the user changes act type
+- the app introduces depreciation later
+
+That means the snapshot data needs to be self-contained enough to stand on its own.
+
+---
+
+## 6. UI labeling
+
+In Past Shows, make it clear the user is seeing a saved result.
+
+Suggested helper text:
+- Saved result
+- Snapshot from when this was calculated
+- Based on your settings at the time
+
+Keep this subtle but clear.
+
+If user chooses recalculation, label that result separately.
+
+---
+
+## 7. Data model update
+
+Refactor saved show history records to include a calculation snapshot object.
+
+### Suggested shape:
+```json
+{
+  "id": "show_123",
+  "created_at": "2026-04-13T10:30:00Z",
+  "show_input": {
+    "show_name": "Star Hotel",
+    "venue_name": "Star Hotel Yackandandah",
+    "entered_distance_km": 586,
+    "total_distance_km": 1173,
+    "is_one_way_only": false,
+    "fee": 2100,
+    "food_cost": 150
+  },
+  "calculation_snapshot": {
+    "act_name": "Julian James & Beci Kate",
+    "act_type": "duo",
+    "vehicle_name": "Van",
+    "vehicle_type": "van",
+    "fuel_price_per_litre": 1.99,
+    "fuel_consumption_l_per_100km": 11.5,
+    "fuel_used_litres": 134.9,
+    "fuel_cost": 268.45,
+    "accommodation_enabled": true,
+    "accommodation_nights": 1,
+    "accommodation_cost": 300,
+    "food_cost": 150,
+    "member_fees": [
+      { "member_id": "m1", "name": "Julian", "fee": 75 },
+      { "member_id": "m2", "name": "Beci", "fee": 150 }
+    ],
+    "member_payouts": [
+      { "member_id": "m1", "name": "Julian", "amount": 75 },
+      { "member_id": "m2", "name": "Beci", "amount": 150 }
+    ],
+    "total_expenses": 718.45,
+    "net_profit": 1381.55,
+    "result_status": "profitable",
+    "insights": [
+      "Long drive — consider arriving the day before."
+    ]
+  }
+}

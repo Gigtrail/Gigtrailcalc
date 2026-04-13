@@ -398,6 +398,7 @@ export const CreateRunBody = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
+  calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 /**
@@ -454,6 +455,7 @@ export const GetRunResponse = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
+  calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
   createdAt: zod.string(),
 });
 
@@ -512,6 +514,7 @@ export const UpdateRunBody = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
+  calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 export const UpdateRunResponse = zod.object({

@@ -2,7 +2,7 @@ import { useLocation, useParams } from "wouter";
 import { useGetRun, useGetProfile, useGetVehicle } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, Map, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users, Receipt, Calendar } from "lucide-react";
+import { ChevronLeft, Map, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users, Receipt, Calendar, History } from "lucide-react";
 import { format } from "date-fns";
 
 export default function RunDetail() {
@@ -63,10 +63,18 @@ export default function RunDetail() {
             </p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => setLocation(`/runs/${runId}/edit`)}>
-          <Edit className="w-4 h-4 mr-2" />
-          Edit
-        </Button>
+        <div className="flex items-center gap-2">
+          {run.calculationSnapshot && (
+            <Button variant="default" onClick={() => setLocation(`/runs/results?runId=${runId}`)}>
+              <History className="w-4 h-4 mr-2" />
+              View Result
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setLocation(`/runs/${runId}/edit`)}>
+            <Edit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -425,6 +425,10 @@ export default function RunForm() {
 
         const toNum = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
         const toNumOrNull = (v: unknown) => { const n = Number(v); return isNaN(n) || v === "" || v === null || v === undefined ? null : n; };
+        // Build a self-contained calculation snapshot (strip session-only fields)
+        const { calcCount: _cc, calcLimit: _cl, isPro: _ip, isEditing: _ie, runId: _rid, ...snapshotFields } = resultData;
+        const calculationSnapshot = snapshotFields;
+
         const payload = {
           ...vals,
           originLat: toNumOrNull(vals.originLat),
@@ -454,6 +458,7 @@ export default function RunForm() {
           totalIncome: computed.totalIncome,
           totalProfit: computed.netProfit,
           status: "draft" as const,
+          calculationSnapshot,
         };
 
         if (isEditing) {

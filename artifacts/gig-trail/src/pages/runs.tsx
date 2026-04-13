@@ -166,7 +166,7 @@ export default function Runs() {
                       <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{getStatusText(run.totalProfit || 0, run.totalIncome || 0)}</p>
                     </div>
                     <Button variant="secondary" size="sm" asChild>
-                      <Link href={`/runs/${run.id}`}>View Details</Link>
+                      <Link href={`/runs/results?runId=${run.id}`}>View Result</Link>
                     </Button>
                   </CardContent>
                 </div>
