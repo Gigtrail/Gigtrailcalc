@@ -578,36 +578,8 @@ export default function ProfileForm() {
                 </div>
               )}
 
-              {/* Default Fuel Price — both plans */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="defaultFuelPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Default Fuel Price ($/L)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="e.g. 1.85"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(e.target.value === "" ? null : e.target.value)
-                          }
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Fallback when no price is entered on the calculator.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {isPro && canUseAdvancedDriving(plan as Plan) && (
+              {isPro && canUseAdvancedDriving(plan as Plan) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="maxDriveHoursPerDay"
@@ -631,8 +603,8 @@ export default function ProfileForm() {
                       </FormItem>
                     )}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
