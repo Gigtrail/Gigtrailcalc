@@ -15,6 +15,7 @@ export interface MeResponse {
   userId: string;
   email: string | null;
   plan: "free" | "pro" | "unlimited";
+  role: "user" | "admin";
   limits: PlanLimits;
   hasStripeCustomer: boolean;
 }
@@ -33,6 +34,7 @@ export function usePlan() {
   });
 
   const plan = data?.plan ?? "free";
+  const role = data?.role ?? "user";
   const limits = data?.limits ?? {
     maxProfiles: 1,
     maxVehicles: 1,
@@ -43,7 +45,7 @@ export function usePlan() {
     routingEnabled: false,
   };
 
-  return { plan, limits, me: data, isLoading, refetch };
+  return { plan, role, limits, me: data, isLoading, refetch };
 }
 
 export interface StripePlan {
@@ -97,6 +99,44 @@ export function useCustomerPortal() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Portal failed");
       return data as { url: string };
+    },
+  });
+}
+
+export interface AdminUser {
+  id: string;
+  email: string | null;
+  plan: string;
+  role: string;
+}
+
+export function useAdminUsers(q: string) {
+  const { isSignedIn } = useUser();
+  return useQuery<{ users: AdminUser[] }>({
+    queryKey: ["/api/admin/users", q],
+    queryFn: async () => {
+      const params = q.length >= 2 ? `?q=${encodeURIComponent(q)}` : "";
+      const res = await fetch(`/api/admin/users${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useUpdateUserPlan() {
+  return useMutation({
+    mutationFn: async ({ userId, plan }: { userId: string; plan: string }) => {
+      const res = await fetch(`/api/admin/users/${userId}/plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Update failed");
+      return data as { user: AdminUser };
     },
   });
 }

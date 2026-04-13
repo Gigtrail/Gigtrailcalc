@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Crown, Star } from "lucide-react";
+import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Crown, Star, ShieldCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal } from "@/hooks/use-plan";
+import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal, useAdminUsers, useUpdateUserPlan, type AdminUser } from "@/hooks/use-plan";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -69,9 +71,116 @@ const STATIC_PLANS: StaticPlan[] = [
   },
 ];
 
+function AdminPanel() {
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading, error } = useAdminUsers(query);
+  const updatePlan = useUpdateUserPlan();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuery(search.trim());
+  };
+
+  const handlePlanChange = async (user: AdminUser, newPlan: string) => {
+    if (newPlan === user.plan) return;
+    try {
+      await updatePlan.mutateAsync({ userId: user.id, plan: newPlan });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Plan updated", description: `${user.email ?? user.id} → ${newPlan}` });
+    } catch (e: any) {
+      toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className="border-amber-300/60 bg-amber-50/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="w-4 h-4 text-amber-600" />
+          Admin Panel
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-8"
+              placeholder="Search by email…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <Button type="submit" variant="outline" size="sm">Search</Button>
+        </form>
+
+        {isLoading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
+          </div>
+        )}
+        {error && (
+          <p className="text-sm text-destructive">Failed to load users.</p>
+        )}
+
+        {data && data.users.length === 0 && (
+          <p className="text-sm text-muted-foreground">No users found.</p>
+        )}
+
+        {data && data.users.length > 0 && (
+          <div className="rounded-md border border-border/50 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Email</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Role</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground w-36">Plan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {data.users.map(user => (
+                  <tr key={user.id} className="bg-card hover:bg-muted/20 transition-colors">
+                    <td className="px-3 py-2 text-foreground truncate max-w-[200px]">
+                      {user.email ?? <span className="text-muted-foreground italic">no email</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {user.role === "admin"
+                        ? <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">admin</Badge>
+                        : <span className="text-muted-foreground text-xs">user</span>
+                      }
+                    </td>
+                    <td className="px-3 py-2">
+                      <Select
+                        value={user.plan}
+                        onValueChange={val => handlePlanChange(user, val)}
+                        disabled={updatePlan.isPending}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="free">Free</SelectItem>
+                          <SelectItem value="pro">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Billing() {
   const [period, setPeriod] = useState<Period>("yearly");
-  const { plan, me, isLoading, refetch } = usePlan();
+  const { plan, role, me, isLoading, refetch } = usePlan();
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
@@ -346,6 +455,8 @@ export default function Billing() {
           </ul>
         </CardContent>
       </Card>
+
+      {role === "admin" && <AdminPanel />}
     </div>
   );
 }

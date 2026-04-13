@@ -7,13 +7,14 @@ import { eq, sql } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.get("/me", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
+  const { userId, userPlan, userRole } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
   const limits = getPlanLimits(userPlan);
   res.json({
     userId,
     email: user?.email ?? null,
     plan: userPlan,
+    role: userRole ?? "user",
     limits,
     hasStripeCustomer: !!user?.stripeCustomerId,
   });
