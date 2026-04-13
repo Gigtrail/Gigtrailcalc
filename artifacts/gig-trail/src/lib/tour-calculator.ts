@@ -56,7 +56,14 @@ export interface TourCalcResult {
   totalShowIncome: number;
   totalMerchIncome: number;
   grossIncome: number;
+  /** Per-stop manual accommodation costs (stop-level entries) */
+  totalStopAccommodation: number;
+  /** Days-on-tour based accommodation estimate (from profile room settings) */
+  tourAccommodationCost: number;
+  /** Total accommodation = stopLevel + tourLevel */
   totalAccommodation: number;
+  /** Number of nights implied by daysOnTour (daysOnTour - 1) */
+  accommodationNights: number;
   totalMarketing: number;
   totalExtraCosts: number;
   totalExpenses: number;
@@ -101,6 +108,8 @@ export function calculateTour(
   endLocation: string | null | undefined,
   returnHome: boolean,
   vehicleConsumptionLPer100: number | null | undefined,
+  daysOnTour?: number | null,
+  nightlyAccomRate?: number | null,
 ): TourCalcResult {
   const sortedStops = [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
   const consumption = n(vehicleConsumptionLPer100);
@@ -167,9 +176,19 @@ export function calculateTour(
   const totalMerchIncome = stopCalcs.reduce((s, c) => s + c.merch, 0);
   const grossIncome = totalShowIncome + totalMerchIncome;
 
-  const totalAccommodation = stopCalcs.reduce((s, c) => s + c.accommodation, 0);
+  const totalStopAccommodation = stopCalcs.reduce((s, c) => s + c.accommodation, 0);
   const totalMarketing = stopCalcs.reduce((s, c) => s + c.marketing, 0);
   const totalExtraCosts = stopCalcs.reduce((s, c) => s + c.extraCosts, 0);
+
+  // Days-on-tour driven accommodation
+  const days = n(daysOnTour);
+  const accommodationNights = days > 0 ? Math.max(0, days - 1) : 0;
+  const rate = n(nightlyAccomRate);
+  const tourAccommodationCost = accommodationNights > 0 && rate > 0
+    ? accommodationNights * rate
+    : 0;
+
+  const totalAccommodation = totalStopAccommodation + tourAccommodationCost;
   const totalExpenses = totalFuelCost + totalAccommodation + totalMarketing + totalExtraCosts;
   const netProfit = grossIncome - totalExpenses;
   const avgPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
@@ -184,7 +203,10 @@ export function calculateTour(
     totalShowIncome,
     totalMerchIncome,
     grossIncome,
+    totalStopAccommodation,
+    tourAccommodationCost,
     totalAccommodation,
+    accommodationNights,
     totalMarketing,
     totalExtraCosts,
     totalExpenses,

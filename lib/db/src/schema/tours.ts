@@ -15,6 +15,7 @@ export const toursTable = pgTable("tours", {
   endDate: text("end_date"),
   defaultFoodCost: numeric("default_food_cost", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  daysOnTour: integer("days_on_tour"),
   totalDistance: numeric("total_distance", { precision: 10, scale: 2 }),
   totalCost: numeric("total_cost", { precision: 10, scale: 2 }),
   totalIncome: numeric("total_income", { precision: 10, scale: 2 }),

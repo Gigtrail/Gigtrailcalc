@@ -1,10 +1,15 @@
 import { useLocation, useParams } from "wouter";
-import { useGetTour, useGetTourStops, useGetProfile, useGetVehicle, useDeleteTourStop } from "@workspace/api-client-react";
+import {
+  useGetTour, useGetTourStops, useGetProfile, useGetVehicle,
+  useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
-  Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation,
+  Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
+  Clock, History, Search,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,9 +26,25 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { calculateTour, fmt } from "@/lib/tour-calculator";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -31,6 +52,10 @@ export default function TourDetail() {
   const tourId = parseInt(id || "0");
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const [showPastShowModal, setShowPastShowModal] = useState(false);
+  const [pastShowSearch, setPastShowSearch] = useState("");
+  const [importingRunId, setImportingRunId] = useState<number | null>(null);
 
   const { data: tour, isLoading: isLoadingTour } = useGetTour(tourId, {
     query: { enabled: !!tourId, queryKey: ["tour", tourId] },
@@ -44,8 +69,12 @@ export default function TourDetail() {
   const { data: vehicle } = useGetVehicle(tour?.vehicleId || 0, {
     query: { enabled: !!tour?.vehicleId, queryKey: ["vehicle", tour?.vehicleId] },
   });
+  const { data: allVehicles } = useGetVehicles();
+  const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal } });
 
   const deleteStop = useDeleteTourStop();
+  const createStop = useCreateTourStop();
+  const updateTour = useUpdateTour();
 
   const handleDeleteStop = (stopId: number) => {
     deleteStop.mutate(
@@ -63,6 +92,65 @@ export default function TourDetail() {
     );
   };
 
+  const handleSwitchVehicle = (vehicleId: number, vehicleName: string) => {
+    updateTour.mutate(
+      { id: tourId, data: { name: tour!.name, vehicleId, returnHome: tour!.returnHome } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+          toast({ title: `Vehicle switched to "${vehicleName}"` });
+        },
+        onError: () => {
+          toast({ title: "Failed to switch vehicle", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const handleImportPastShow = (run: typeof pastRuns extends (infer U)[] | undefined ? U : never) => {
+    setImportingRunId(run.id);
+    const nextOrder = (stops?.length ?? 0) + 1;
+    createStop.mutate(
+      {
+        tourId,
+        data: {
+          city: run.destination || run.city || "Unknown",
+          venueName: run.venueName ?? null,
+          date: run.showDate ?? null,
+          showType: run.showType ?? "Flat Fee",
+          fee: run.fee ?? null,
+          capacity: run.capacity ?? null,
+          ticketPrice: run.ticketPrice ?? null,
+          expectedAttendancePct: run.expectedAttendancePct ?? null,
+          dealType: run.dealType ?? null,
+          splitPct: run.splitPct ?? null,
+          guarantee: run.guarantee ?? null,
+          merchEstimate: run.merchEstimate ?? null,
+          marketingCost: run.marketingCost ?? null,
+          stopOrder: nextOrder,
+        },
+      },
+      {
+        onSuccess: (newStop) => {
+          queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+          setShowPastShowModal(false);
+          setPastShowSearch("");
+          setImportingRunId(null);
+          toast({ title: `"${run.venueName || run.destination || run.city}" added to trail` });
+          setLocation(`/tours/${tourId}/stops/${newStop.id}/edit`);
+        },
+        onError: () => {
+          setImportingRunId(null);
+          toast({ title: "Failed to import show", variant: "destructive" });
+        },
+      }
+    );
+  };
+
+  const nightlyAccomRate = profile
+    ? (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE
+    : 0;
+
   const calc = useMemo(() => {
     if (!stops) return null;
     const consumption = vehicle?.avgConsumption != null ? Number(vehicle.avgConsumption) : null;
@@ -72,8 +160,10 @@ export default function TourDetail() {
       tour?.endLocation,
       tour?.returnHome ?? false,
       consumption,
+      tour?.daysOnTour ?? null,
+      nightlyAccomRate,
     );
-  }, [stops, tour, vehicle]);
+  }, [stops, tour, vehicle, nightlyAccomRate]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
@@ -83,6 +173,9 @@ export default function TourDetail() {
   }
 
   const sortedStops = stops ? [...stops].sort((a, b) => a.stopOrder - b.stopOrder) : [];
+  const daysOnTour = tour.daysOnTour ?? null;
+  const accommodationNights = daysOnTour != null ? Math.max(0, daysOnTour - 1) : null;
+  const daysWarning = daysOnTour != null && sortedStops.length > 0 && daysOnTour < sortedStops.length;
 
   const netProfit = calc?.netProfit ?? 0;
   const grossIncome = calc?.grossIncome ?? 0;
@@ -99,6 +192,17 @@ export default function TourDetail() {
   };
   const status = getStatus();
 
+  const filteredRuns = (pastRuns ?? []).filter(r => {
+    if (!pastShowSearch) return true;
+    const q = pastShowSearch.toLowerCase();
+    return (
+      (r.venueName?.toLowerCase().includes(q)) ||
+      (r.destination?.toLowerCase().includes(q)) ||
+      (r.city?.toLowerCase().includes(q)) ||
+      (r.showDate?.includes(q))
+    );
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
@@ -112,6 +216,11 @@ export default function TourDetail() {
               <Calendar className="w-3 h-3" />
               {tour.startDate ? format(new Date(tour.startDate), "MMMM d") : "TBD"} –{" "}
               {tour.endDate ? format(new Date(tour.endDate), "MMMM d, yyyy") : "TBD"}
+              {daysOnTour != null && (
+                <span className="text-xs bg-muted/50 px-1.5 py-0.5 rounded border border-border/40">
+                  {daysOnTour} day{daysOnTour !== 1 ? "s" : ""}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -119,6 +228,10 @@ export default function TourDetail() {
           <Button variant="outline" onClick={() => setLocation(`/tours/${tourId}/edit`)}>
             <Edit className="w-4 h-4 mr-2" />
             Edit Details
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowPastShowModal(true)}>
+            <History className="w-4 h-4 mr-2" />
+            Past Show
           </Button>
           <Button variant="secondary" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -130,6 +243,7 @@ export default function TourDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
 
+          {/* Trail stops */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -138,12 +252,19 @@ export default function TourDetail() {
             </CardHeader>
             <CardContent className="p-0">
               {sortedStops.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <div className="text-center py-10 text-muted-foreground space-y-3">
+                  <MapPin className="w-8 h-8 mx-auto opacity-50" />
                   <p>No stops added yet.</p>
-                  <Button variant="link" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
-                    Add your first stop
-                  </Button>
+                  <div className="flex items-center justify-center gap-3">
+                    <Button variant="default" size="sm" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
+                      <Plus className="w-4 h-4 mr-1.5" />
+                      Add your first stop
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setShowPastShowModal(true)}>
+                      <History className="w-4 h-4 mr-1.5" />
+                      Add Past Show
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="divide-y divide-border/40">
@@ -301,7 +422,8 @@ export default function TourDetail() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Act Profile + Vehicle + Days on Tour cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
@@ -313,6 +435,8 @@ export default function TourDetail() {
                 {profile && <div className="text-sm text-muted-foreground mt-1">{profile.peopleCount} members</div>}
               </CardContent>
             </Card>
+
+            {/* Vehicle card with switcher */}
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
@@ -323,7 +447,95 @@ export default function TourDetail() {
                 <div className="text-xl font-bold">{vehicle?.name || "None"}</div>
                 {vehicle && (
                   <div className="text-sm text-muted-foreground mt-1">
-                    {vehicle.avgConsumption} L/100km
+                    {vehicle.fuelType} · {vehicle.avgConsumption} L/100km
+                  </div>
+                )}
+                {(allVehicles?.length ?? 0) > 1 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-xs mt-2 w-full gap-1">
+                        Switch vehicle
+                        <ChevronDown className="w-3 h-3 ml-auto" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuLabel className="text-xs">Choose vehicle</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {allVehicles?.map(v => (
+                        <DropdownMenuItem
+                          key={v.id}
+                          disabled={v.id === tour.vehicleId}
+                          className="text-xs"
+                          onClick={() => handleSwitchVehicle(v.id, v.name)}
+                        >
+                          {v.id === tour.vehicleId && <span className="w-2 h-2 rounded-full bg-primary mr-2 shrink-0 inline-block" />}
+                          {v.id !== tour.vehicleId && <span className="w-2 h-2 mr-2 shrink-0 inline-block" />}
+                          <span className="flex-1 truncate">{v.name}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {!vehicle && (allVehicles?.length ?? 0) > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-7 text-xs mt-2 w-full gap-1">
+                        Select vehicle
+                        <ChevronDown className="w-3 h-3 ml-auto" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuLabel className="text-xs">Choose vehicle</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {allVehicles?.map(v => (
+                        <DropdownMenuItem
+                          key={v.id}
+                          className="text-xs"
+                          onClick={() => handleSwitchVehicle(v.id, v.name)}
+                        >
+                          {v.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Days on Tour card */}
+            <Card className={`border-border/50 bg-card/50 ${daysWarning ? "border-amber-400/50" : ""}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Days on Tour
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {daysOnTour != null ? (
+                  <>
+                    <div className="text-xl font-bold">{daysOnTour} day{daysOnTour !== 1 ? "s" : ""}</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {accommodationNights} night{accommodationNights !== 1 ? "s" : ""} accommodation
+                      {nightlyAccomRate > 0 && ` · ${fmt(nightlyAccomRate)}/night`}
+                    </div>
+                    {daysWarning && (
+                      <p className="text-xs text-amber-500 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        Less than {sortedStops.length} stops
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    <span className="italic">Not set</span>
+                    <div className="mt-1">
+                      <Button
+                        variant="link"
+                        className="h-auto p-0 text-xs text-primary"
+                        onClick={() => setLocation(`/tours/${tourId}/edit`)}
+                      >
+                        Set in Edit Details →
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -369,10 +581,18 @@ export default function TourDetail() {
                       <span className="font-medium">{fmt(calc.totalFuelCost)}</span>
                     </div>
                   )}
-                  {calc.totalAccommodation > 0 && (
+                  {calc.tourAccommodationCost > 0 && (
                     <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">Accommodation</span>
-                      <span className="font-medium">{fmt(calc.totalAccommodation)}</span>
+                      <span className="text-muted-foreground">
+                        Accommodation ({calc.accommodationNights} night{calc.accommodationNights !== 1 ? "s" : ""})
+                      </span>
+                      <span className="font-medium">{fmt(calc.tourAccommodationCost)}</span>
+                    </div>
+                  )}
+                  {calc.totalStopAccommodation > 0 && (
+                    <div className="flex justify-between border-b border-border/40 pb-2">
+                      <span className="text-muted-foreground">Stop-level accommodation</span>
+                      <span className="font-medium">{fmt(calc.totalStopAccommodation)}</span>
                     </div>
                   )}
                   {calc.totalMarketing > 0 && (
@@ -408,6 +628,7 @@ export default function TourDetail() {
           )}
         </div>
 
+        {/* Sticky summary panel */}
         <div className="lg:col-span-1">
           <Card className={`border-2 sticky top-20 shadow-lg ${netProfit >= 0 ? "border-secondary/50" : "border-destructive/50"}`}>
             <CardHeader className={`pb-4 border-b border-border/40 ${status.color} rounded-t-lg`}>
@@ -453,6 +674,12 @@ export default function TourDetail() {
                       <span className="font-medium text-foreground">{sortedStops.length}</span>
                     </div>
                   )}
+                  {daysOnTour != null && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Days on tour</span>
+                      <span className="font-medium text-foreground">{daysOnTour}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -465,6 +692,71 @@ export default function TourDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Add Past Show Modal */}
+      <Dialog open={showPastShowModal} onOpenChange={open => { setShowPastShowModal(open); if (!open) setPastShowSearch(""); }}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Add Past Show
+            </DialogTitle>
+            <DialogDescription>
+              Import a saved show into this tour trail. The stop will be pre-filled and editable.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by venue, city or date…"
+              className="pl-9"
+              value={pastShowSearch}
+              onChange={e => setPastShowSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+            {!pastRuns ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Loading past shows…</p>
+            ) : filteredRuns.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                {pastShowSearch ? "No shows match your search." : "No past shows yet."}
+              </p>
+            ) : (
+              filteredRuns.map(run => (
+                <button
+                  key={run.id}
+                  disabled={importingRunId === run.id}
+                  onClick={() => handleImportPastShow(run)}
+                  className="w-full text-left flex items-start justify-between p-3 rounded-lg border border-border/50 bg-background/60 hover:bg-card hover:border-primary/40 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {run.venueName || run.destination || run.city || "Unknown venue"}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex gap-2 mt-0.5 flex-wrap">
+                      {run.destination && <span>{run.destination}</span>}
+                      {run.showDate && <span>· {format(new Date(run.showDate), "MMM d, yyyy")}</span>}
+                      <span>· {run.showType}</span>
+                    </div>
+                  </div>
+                  <div className="text-right ml-3 shrink-0">
+                    {run.totalProfit != null && (
+                      <div className={`text-sm font-bold ${(run.totalProfit ?? 0) >= 0 ? "text-secondary" : "text-destructive"}`}>
+                        {fmt(run.totalProfit ?? 0)}
+                      </div>
+                    )}
+                    <div className="text-xs text-primary group-hover:underline mt-0.5">
+                      {importingRunId === run.id ? "Adding…" : "Add to trail →"}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

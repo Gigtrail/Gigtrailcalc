@@ -668,6 +668,7 @@ export const GetToursResponseItem = zod.object({
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
+  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
   totalDistance: zod.number().nullable(),
   totalCost: zod.number().nullable(),
@@ -690,6 +691,7 @@ export const CreateTourBody = zod.object({
   startDate: zod.string().nullish(),
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
+  daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -711,6 +713,7 @@ export const GetTourResponse = zod.object({
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
+  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
   totalDistance: zod.number().nullable(),
   totalCost: zod.number().nullable(),
@@ -763,6 +766,7 @@ export const UpdateTourBody = zod.object({
   startDate: zod.string().nullish(),
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
+  daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -777,6 +781,7 @@ export const UpdateTourResponse = zod.object({
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
+  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
   totalDistance: zod.number().nullable(),
   totalCost: zod.number().nullable(),

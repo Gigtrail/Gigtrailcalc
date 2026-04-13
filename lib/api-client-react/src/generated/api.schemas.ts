@@ -389,6 +389,8 @@ export interface Tour {
   /** @nullable */
   defaultFoodCost: number | null;
   /** @nullable */
+  daysOnTour?: number | null;
+  /** @nullable */
   notes: string | null;
   /** @nullable */
   totalDistance: number | null;
@@ -418,6 +420,8 @@ export interface CreateTourBody {
   endDate?: string | null;
   /** @nullable */
   defaultFoodCost?: number | null;
+  /** @nullable */
+  daysOnTour?: number | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -526,6 +530,8 @@ export interface TourWithStops {
   endDate: string | null;
   /** @nullable */
   defaultFoodCost: number | null;
+  /** @nullable */
+  daysOnTour?: number | null;
   /** @nullable */
   notes: string | null;
   /** @nullable */

@@ -42,6 +42,7 @@ const tourSchema = z.object({
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
   defaultFoodCost: z.coerce.number().optional().nullable(),
+  daysOnTour: z.coerce.number().min(1).optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -81,6 +82,7 @@ export default function TourForm() {
       startDate: "",
       endDate: "",
       defaultFoodCost: 0,
+      daysOnTour: null,
       notes: "",
     },
   });
@@ -97,6 +99,7 @@ export default function TourForm() {
         startDate: tour.startDate ? tour.startDate.split('T')[0] : "",
         endDate: tour.endDate ? tour.endDate.split('T')[0] : "",
         defaultFoodCost: tour.defaultFoodCost,
+        daysOnTour: tour.daysOnTour ?? null,
         notes: tour.notes || "",
       });
     }
@@ -323,6 +326,28 @@ export default function TourForm() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="daysOnTour"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Days on Tour</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          placeholder="e.g. 5"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Used to estimate accommodation nights across the run</p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                  <FormField
                   control={form.control}
                   name="defaultFoodCost"

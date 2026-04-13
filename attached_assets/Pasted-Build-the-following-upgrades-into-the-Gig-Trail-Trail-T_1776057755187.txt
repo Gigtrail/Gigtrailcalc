@@ -1,0 +1,163 @@
+Build the following upgrades into the Gig Trail Trail/Tour section.
+
+GOAL:
+Make the Trail section more useful for building a real touring run by adding:
+1. an “Add Past Show” option
+2. support for selecting from multiple saved custom vehicles
+3. a “Days on Tour” field that affects accommodation nights in the final calculation
+
+==================================================
+1. ADD PAST SHOW BUTTON IN THE TRAIL SECTION
+==================================================
+
+In the “The Trail” card / empty state, add a second action button:
+
+- Primary: Add your first stop
+- Secondary: Add Past Show
+
+Behaviour:
+- Clicking “Add Past Show” opens a modal or selector
+- Show the user’s saved past shows
+- Allow search/filter by:
+  - venue
+  - date
+  - location
+- When a past show is selected, create a new trail stop using that saved data
+- Imported stop should remain editable after being added to the trail
+
+Empty state behaviour:
+- If the user has no past shows, show:
+  “No past shows yet to import”
+
+==================================================
+2. SUPPORT MULTIPLE SAVED CUSTOM VEHICLES
+==================================================
+
+Update the Trail section so it uses the user’s real saved custom vehicles.
+
+Requirements:
+- Pull saved custom vehicles from the database for the logged-in user
+- Show the currently selected vehicle in the Vehicle card
+- If the user has multiple saved vehicles, allow switching vehicle with a dropdown or selector
+- If the user has only one vehicle, show it automatically
+- If the user has no vehicles, show:
+  - “No custom vehicles yet”
+  - button: “+ Add Vehicle”
+
+IMPORTANT:
+- In Pro mode, do NOT show prefab vehicle cards like Small Car / SUV / Van / Bus
+- Only show real saved custom vehicles
+- For now, use ONE selected vehicle for the whole trail
+- Do not build per-stop vehicle logic yet
+
+Vehicle card should show:
+- vehicle name
+- fuel consumption
+- optionally fuel type
+
+==================================================
+3. ADD “DAYS ON TOUR” INPUT
+==================================================
+
+Add a new field in the Trail / Tour setup:
+
+Label:
+- Days on Tour
+
+Type:
+- numeric input
+
+Rules:
+- minimum value = 1
+- default can be blank or auto-fill based on stop count if easy
+
+Helper text:
+- “Used to estimate accommodation nights across the run”
+
+Display this value clearly in the Trail summary/cards.
+
+==================================================
+4. UPDATE ACCOMMODATION CALCULATION LOGIC
+==================================================
+
+Update the final calculation so accommodation nights are affected by Days on Tour.
+
+New baseline logic:
+- accommodation_nights = days_on_tour - 1
+
+Then:
+- apply the selected act/profile accommodation settings
+- calculate room requirements based on the act/profile
+- multiply by nightly accommodation cost
+
+IMPORTANT:
+- Avoid double counting with any existing stopover logic
+- Days on Tour should now be the main trip-length driver for accommodation
+- If current logic already estimates stopover nights from drive hours, refactor so it combines cleanly or prioritises Days on Tour
+
+Example:
+- 5 day tour = 4 accommodation nights by default
+
+==================================================
+5. TRAIL UI UPDATES
+==================================================
+
+Keep the existing card layout clean, but update it to support:
+
+Trail empty state:
+- Add your first stop
+- Add Past Show
+
+Summary cards:
+- Act Profile
+- Vehicle
+- Days on Tour
+- Income
+- Expenses
+
+Vehicle card:
+- show selected saved custom vehicle
+- allow switching if multiple vehicles exist
+
+Days on Tour:
+- show in its own card or clearly within the summary area
+
+==================================================
+6. DATA / STATE REQUIREMENTS
+==================================================
+
+Make sure trail data stores:
+- selected_profile_id
+- selected_vehicle_id
+- days_on_tour
+- trail stops
+- imported past show reference if relevant
+
+Imported past shows should become editable trail stops after import.
+
+==================================================
+7. VALIDATION / NICE UX
+==================================================
+
+If easy, add:
+- default Days on Tour = number of stops
+- warning if Days on Tour is less than number of stops
+- clean empty states
+- fast loading modal for selecting past shows
+
+==================================================
+8. IMPORTANT IMPLEMENTATION NOTES
+==================================================
+
+- This is a Replit web app
+- Keep the implementation simple and practical
+- Do not overbuild
+- Reuse existing Past Shows, Vehicles, and Trail data structures where possible
+- Focus on working UI + correct calculations first
+- Keep code clean and easy to extend later
+
+EXPECTED RESULT:
+- Users can add stops manually or import them from Past Shows
+- Users can select from their saved custom vehicles
+- Users can enter Days on Tour
+- Final accommodation cost becomes more realistic based on total days away
