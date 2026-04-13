@@ -411,7 +411,8 @@ export default function TourDetail() {
 
                     const { stop, stopIndex: i } = item;
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
-                    const leg = calc?.legs[tour.startLocation ? i : i];
+                    const legIndex = tour.startLocation ? i : i - 1;
+                    const leg = legIndex >= 0 ? calc?.legs[legIndex] : undefined;
                     const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
                     const isOutOfRange = (() => {
                       if (!stop.date) return false;
