@@ -110,7 +110,7 @@ export function getPlanLimits(plan: string): PlanLimits {
       };
     case "pro":
       return {
-        maxProfiles: 1,
+        maxProfiles: 10,
         maxVehicles: Infinity,
         maxRuns: Infinity,
         toursEnabled: true,

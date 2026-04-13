@@ -1,0 +1,93 @@
+Enable proper multi-profile support in Gig Trail for Pro users.
+
+Goal:
+Allow Pro users to create and manage multiple act profiles from the Profiles screen.
+
+Current issue:
+The app is in Pro mode, but users still cannot properly add multiple profiles. Right now it appears to only show the existing profile card and an Upgrade to Pro style flow / limited behaviour.
+
+What needs to happen:
+
+1. Pro users can add multiple profiles
+- If user plan = pro, show a clear "+ Add Profile" button on the Profiles screen
+- Remove any blocking behaviour that prevents adding more than one profile
+- Do not show upgrade gating for multi-profile creation when the user is already Pro
+
+2. Free vs Pro rules
+- Free users:
+  - can create only 1 profile
+  - if they try to add another, show upgrade prompt
+- Pro users:
+  - can create multiple profiles
+  - no upgrade prompt for additional profiles
+
+3. Profiles screen behaviour
+On the Profiles page:
+- show all saved act profiles as cards
+- add a clear "+ Add Profile" button near the top
+- keep "Act Profiles" as the main tab
+- keep "Manage Garage" as separate tab
+
+4. Add Profile flow
+When Pro user clicks "+ Add Profile":
+- open the existing profile creation form or modal
+- allow saving a completely new act profile
+- after save, show the new profile card immediately in the list
+
+5. Profile card list
+Display multiple profile cards in a grid/list layout
+Each card should show:
+- profile / act name
+- act type
+- home base
+- member fees or summary
+- accommodation summary
+- edit button
+
+6. Default / selected profile
+Add support for one selected or default profile
+- user can choose which profile is the active default profile for calculations
+- show a badge like "Default" or "Active"
+- only one profile can be default at a time
+
+7. Data logic
+Ensure profiles are stored separately and tied to the logged-in user
+Each profile should have its own:
+- act name
+- act type
+- members
+- fee settings
+- food/day
+- accommodation defaults
+- home base
+- any other act-specific settings
+
+8. Fix Pro gating logic
+Audit all logic controlling profile limits and upgrade prompts
+Make sure the app checks the actual user plan correctly
+If user plan = pro:
+- no multi-profile lock
+- no misleading "Upgrade to Pro" restriction for profile count
+If user plan = free:
+- apply 1-profile limit correctly
+
+9. UI clean-up
+On the Profiles header area:
+- if user is Pro, do not show "Multiple profiles require Pro" messaging
+- instead show something helpful like:
+  "Manage your acts and bands"
+- only show upgrade messaging to Free users
+
+10. Nice to have
+If easy, add:
+- duplicate profile button
+- delete profile button
+- set as default button
+- profile count display for Pro users
+
+Expected result:
+- Pro user can create multiple act profiles
+- All profiles appear on the Profiles screen
+- One profile can be marked as default/active
+- Free users remain limited to one profile
+- Upgrade prompt only appears for Free users, not Pro users

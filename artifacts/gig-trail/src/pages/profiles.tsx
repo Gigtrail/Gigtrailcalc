@@ -4,10 +4,11 @@ import {
   getGetProfilesQueryKey,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign, Truck } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign, Truck, Star, StarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,15 +28,53 @@ import {
   resolveActiveMembers,
   derivePeopleCount,
 } from "@/lib/member-utils";
+import { useState, useEffect } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+const DEFAULT_PROFILE_KEY = "gigtrail_lastUsedProfileId";
 
 export default function Profiles() {
   const { data: profiles, isLoading } = useGetProfiles();
   const deleteProfile = useDeleteProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { limits } = usePlan();
+  const { plan, limits } = usePlan();
+
+  const isPro = plan === "pro" || plan === "unlimited";
+
+  const [defaultProfileId, setDefaultProfileId] = useState<number | null>(() => {
+    const stored = localStorage.getItem(DEFAULT_PROFILE_KEY);
+    return stored ? parseInt(stored, 10) : null;
+  });
+
+  useEffect(() => {
+    if (profiles && profiles.length > 0 && defaultProfileId === null) {
+      setDefaultProfileId(profiles[0].id);
+      localStorage.setItem(DEFAULT_PROFILE_KEY, String(profiles[0].id));
+    }
+    if (profiles && profiles.length > 0 && defaultProfileId !== null) {
+      const stillExists = profiles.some((p) => p.id === defaultProfileId);
+      if (!stillExists) {
+        setDefaultProfileId(profiles[0].id);
+        localStorage.setItem(DEFAULT_PROFILE_KEY, String(profiles[0].id));
+      }
+    }
+  }, [profiles, defaultProfileId]);
+
+  const handleSetDefault = (id: number) => {
+    setDefaultProfileId(id);
+    localStorage.setItem(DEFAULT_PROFILE_KEY, String(id));
+    const profile = profiles?.find((p) => p.id === id);
+    toast({ title: `"${profile?.name}" set as default act` });
+  };
 
   const atProfileLimit = (profiles?.length ?? 0) >= limits.maxProfiles;
+  const profileCount = profiles?.length ?? 0;
 
   const handleDelete = (id: number) => {
     deleteProfile.mutate(
@@ -57,9 +96,36 @@ export default function Profiles() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profiles</h1>
-          <p className="text-muted-foreground mt-1">Your acts and bands.</p>
+          <p className="text-muted-foreground mt-1">
+            {isPro
+              ? profileCount > 0
+                ? `${profileCount} act${profileCount !== 1 ? "s" : ""} · Manage your acts and bands`
+                : "Manage your acts and bands"
+              : "Your acts and bands."}
+          </p>
         </div>
-        {atProfileLimit ? (
+
+        {/* Add Profile button area */}
+        {isPro ? (
+          atProfileLimit ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:block">
+                {profileCount} / {limits.maxProfiles} profiles
+              </span>
+              <Button variant="outline" size="sm" disabled>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Profile
+              </Button>
+            </div>
+          ) : (
+            <Button asChild>
+              <Link href="/profiles/new">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Profile
+              </Link>
+            </Button>
+          )
+        ) : atProfileLimit ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground hidden sm:block">
               Multiple profiles require Pro
@@ -75,7 +141,7 @@ export default function Profiles() {
           <Button asChild>
             <Link href="/profiles/new">
               <Plus className="w-4 h-4 mr-2" />
-              New Profile
+              Add Profile
             </Link>
           </Button>
         )}
@@ -130,9 +196,8 @@ export default function Profiles() {
             );
             const activeMembers = resolveActiveMembers(library, activeMemberIds);
             const peopleCount = derivePeopleCount(profile.actType, activeMemberIds);
+            const isDefault = profile.id === defaultProfileId;
 
-            // Act Cost / Show: sum of active members' expected gig fees
-            // Falls back to profile-level expectedGigFee if no member fee data
             const actCostPerShow = activeMembers.length > 0
               ? activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0)
               : (profile.expectedGigFee ?? 0);
@@ -142,16 +207,45 @@ export default function Profiles() {
             return (
               <Card
                 key={profile.id}
-                className="group hover-elevate transition-all border-border/50 bg-card/50 flex flex-col"
+                className={`group hover-elevate transition-all border-border/50 bg-card/50 flex flex-col ${
+                  isDefault ? "ring-2 ring-primary/40" : ""
+                }`}
               >
                 <CardHeader className="pb-2 flex flex-row items-start justify-between">
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-xl truncate">{profile.name}</CardTitle>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-xl truncate">{profile.name}</CardTitle>
+                      {isDefault && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-primary/15 text-primary border-primary/30 shrink-0">
+                          Default
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-sm text-primary font-medium mt-0.5">
                       {profile.actType}
                     </div>
                   </div>
                   <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    {/* Set as default */}
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-8 w-8 ${isDefault ? "text-primary" : "text-muted-foreground hover:text-primary"}`}
+                            onClick={() => handleSetDefault(profile.id)}
+                            disabled={isDefault}
+                          >
+                            {isDefault ? <Star className="h-4 w-4 fill-primary" /> : <StarOff className="h-4 w-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isDefault ? "Default act" : "Set as default"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
                     <Button
                       variant="ghost"
                       size="icon"
@@ -266,19 +360,64 @@ export default function Profiles() {
                     </div>
                   </div>
 
-                  {/* Footer edit link */}
-                  <div className="pt-2">
-                    <Button variant="ghost" size="sm" asChild className="w-full text-xs text-muted-foreground h-7 hover:text-foreground">
+                  {/* Footer actions */}
+                  <div className="pt-2 flex gap-1">
+                    <Button variant="ghost" size="sm" asChild className="flex-1 text-xs text-muted-foreground h-7 hover:text-foreground">
                       <Link href={`/profiles/${profile.id}/edit`}>
                         <Edit className="w-3 h-3 mr-1.5" />
                         Edit Profile
                       </Link>
                     </Button>
+                    {!isDefault && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-muted-foreground h-7 hover:text-primary px-2"
+                        onClick={() => handleSetDefault(profile.id)}
+                      >
+                        <Star className="w-3 h-3 mr-1" />
+                        Set Default
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             );
           })}
+
+          {/* Add another profile card — Pro only, not at limit */}
+          {isPro && !atProfileLimit && profiles && profiles.length > 0 && (
+            <Link href="/profiles/new">
+              <div className="group h-full min-h-[200px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer p-8 text-center">
+                <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center mb-3 transition-colors">
+                  <Plus className="w-5 h-5 text-primary" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                  Add Another Act
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 opacity-70">
+                  {profileCount} of {limits.maxProfiles} profiles used
+                </p>
+              </div>
+            </Link>
+          )}
+
+          {/* Upgrade card — Free at limit */}
+          {!isPro && atProfileLimit && (
+            <Link href="/billing">
+              <div className="group h-full min-h-[200px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer p-8 text-center">
+                <div className="w-10 h-10 rounded-full bg-muted/50 group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
+                  <Lock className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                  Multiple Acts — Pro
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 opacity-70">
+                  Upgrade to manage multiple acts
+                </p>
+              </div>
+            </Link>
+          )}
         </div>
       )}
     </div>
