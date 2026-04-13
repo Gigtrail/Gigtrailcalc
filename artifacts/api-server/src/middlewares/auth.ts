@@ -1,4 +1,4 @@
-import { getAuth } from "@clerk/express";
+import { getAuth, clerkClient } from "@clerk/express";
 import { db, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
@@ -11,6 +11,16 @@ export interface AuthenticatedRequest extends Request {
   userRole: "user" | "admin";
 }
 
+async function resolveEmail(userId: string, claimEmail?: string): Promise<string | undefined> {
+  if (claimEmail) return claimEmail;
+  try {
+    const clerkUser = await clerkClient.users.getUser(userId);
+    return clerkUser.primaryEmailAddress?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const auth = getAuth(req);
   const userId = auth?.userId;
@@ -20,7 +30,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   (req as AuthenticatedRequest).userId = userId;
 
-  const user = await ensureUser(userId, auth?.sessionClaims?.email as string | undefined);
+  const email = await resolveEmail(userId, auth?.sessionClaims?.email as string | undefined);
+  const user = await ensureUser(userId, email);
   (req as AuthenticatedRequest).userPlan = (user.plan as "free" | "pro" | "unlimited") ?? "free";
   (req as AuthenticatedRequest).userRole = (user.role as "user" | "admin") ?? "user";
   next();
