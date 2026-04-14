@@ -1,6 +1,6 @@
 import { useGetTours, useDeleteTour, getGetToursQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Navigation, Trash2, Crown, Lock, Zap } from "lucide-react";
+import { Plus, Navigation, Trash2, Crown, Lock, MapPin, Mic2, Clock } from "lucide-react";
 import { Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 
 export default function Tours() {
   const { data: tours, isLoading } = useGetTours();
@@ -131,21 +130,19 @@ export default function Tours() {
           {tours?.map((tour) => (
             <Card key={tour.id} className="group hover-elevate transition-all border-border/50 bg-card/50 overflow-hidden">
               <div className="flex h-full">
-                <div className={`w-2 ${getStatusColor(tour.totalProfit || 0, tour.totalIncome || 0)}`} />
-                <div className="flex-1 flex flex-col">
-                  <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl">{tour.name}</CardTitle>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {tour.startDate ? format(new Date(tour.startDate), 'MMM d') : 'TBD'} - {tour.endDate ? format(new Date(tour.endDate), 'MMM d, yyyy') : 'TBD'}
-                        </span>
+                <div className={`w-2 shrink-0 ${getStatusColor(tour.totalProfit || 0, tour.totalIncome || 0)}`} />
+                <div className="flex-1 flex flex-col min-w-0">
+                  <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="text-xl truncate">{tour.name}</CardTitle>
+                      <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        <span>{tour.startDate ? format(new Date(tour.startDate), 'MMM d') : 'TBD'} – {tour.endDate ? format(new Date(tour.endDate), 'MMM d, yyyy') : 'TBD'}</span>
                       </div>
                     </div>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -165,10 +162,58 @@ export default function Tours() {
                       </AlertDialogContent>
                     </AlertDialog>
                   </CardHeader>
-                  <CardContent className="mt-auto pt-4 flex items-end justify-between">
+
+                  <CardContent className="pb-3 pt-0 space-y-2">
+                    {tour.startLocation && (
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground truncate">
+                        <MapPin className="w-3 h-3 shrink-0 text-primary/60" />
+                        <span className="truncate">
+                          {tour.startLocation}
+                          {tour.returnHome ? ' → return home' : tour.endLocation ? ` → ${tour.endLocation}` : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      {tour.stopCount > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Mic2 className="w-3 h-3" />
+                          {tour.stopCount} {tour.stopCount === 1 ? 'show' : 'shows'}
+                        </span>
+                      )}
+                      {(tour.daysOnTour ?? 0) > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {tour.daysOnTour} days
+                        </span>
+                      )}
+                      {(tour.totalDistance ?? 0) > 0 && (
+                        <span>{Math.round(tour.totalDistance!).toLocaleString()} km</span>
+                      )}
+                    </div>
+
+                    {(tour.totalIncome ?? 0) > 0 && (
+                      <div className="flex items-center gap-4 text-xs pt-1 border-t border-border/30">
+                        <span className="text-muted-foreground">
+                          Gross <span className="text-foreground font-medium">${(tour.totalIncome ?? 0).toLocaleString()}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          Costs <span className="text-destructive font-medium">${(tour.totalCost ?? 0).toLocaleString()}</span>
+                        </span>
+                      </div>
+                    )}
+                  </CardContent>
+
+                  <CardContent className="mt-auto pt-3 pb-4 flex items-end justify-between border-t border-border/30">
                     <div>
-                      <div className="text-2xl font-bold text-foreground">${tour.totalProfit?.toLocaleString() || 0}</div>
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{getStatusText(tour.totalProfit || 0, tour.totalIncome || 0)}</p>
+                      <div className={`text-2xl font-bold ${(tour.totalProfit ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                        {(tour.totalProfit ?? 0) < 0 ? '-' : ''}${Math.abs(tour.totalProfit || 0).toLocaleString()}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                        {(tour.totalIncome ?? 0) === 0 && tour.stopCount === 0
+                          ? 'No shows yet'
+                          : getStatusText(tour.totalProfit || 0, tour.totalIncome || 0)}
+                      </p>
                     </div>
                     <Button variant="secondary" size="sm" asChild>
                       <Link href={`/tours/${tour.id}`}>View Details</Link>

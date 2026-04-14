@@ -1,0 +1,233 @@
+Build a cached fuel price system for Gig Trail so the tour builder can use location-based fuel prices without calling an external API on every user action.
+
+GOAL:
+Create a backend cache that stores fuel prices by state and fuel type, refreshes them once per day, and serves them quickly to the tour builder.
+
+The frontend should never call the external fuel API directly.
+The frontend should call our backend, and our backend should serve cached data.
+
+==================================================
+1. CREATE A FUEL PRICE CACHE TABLE
+==================================================
+
+Create a database table for cached fuel prices.
+
+Suggested fields:
+- id
+- country_code
+- state_code
+- state_name
+- fuel_type
+- price_per_litre
+- source_name
+- fetched_at
+- expires_at
+- raw_response_json (optional)
+- created_at
+- updated_at
+
+Rules:
+- cache should support one current row per:
+  country_code + state_code + fuel_type
+- update existing rows instead of endlessly inserting duplicates
+
+==================================================
+2. SUPPORT AUSTRALIAN STATE-LEVEL CACHE
+==================================================
+
+For now, focus on Australia.
+
+Support at minimum:
+- VIC
+- NSW
+- QLD
+- WA
+- SA
+- TAS
+- ACT
+- NT
+
+Fuel types:
+- petrol
+- diesel
+
+==================================================
+3. CREATE A BACKEND CACHE SERVICE
+==================================================
+
+Create a backend service/module such as:
+
+- getCachedFuelPrice(stateCode, fuelType)
+- refreshFuelPriceCache()
+- fetchExternalFuelPrice(stateCode, fuelType)
+
+Logic for getCachedFuelPrice:
+- check local database first
+- if cached row exists and is not expired:
+  return cached row
+- if missing or expired:
+  fetch fresh value from external source
+  store/update cache
+  return fresh value
+- if external fetch fails:
+  return last known cached value if available
+- if nothing exists:
+  return null
+
+==================================================
+4. DAILY CACHE REFRESH JOB
+==================================================
+
+Create a scheduled backend job to refresh state fuel prices once per day.
+
+Requirements:
+- run once daily
+- refresh all supported states
+- refresh both petrol and diesel
+- update fetched_at and expires_at
+- log failures without crashing the app
+
+The refresh should be backend-only, not triggered by frontend use.
+
+If Replit scheduled jobs are available, use them.
+If not, implement a fallback strategy that refreshes on first request after expiry.
+
+==================================================
+5. CREATE A BACKEND API ENDPOINT
+==================================================
+
+Create a backend endpoint like:
+
+GET /api/fuel-price?country=AU&state=VIC&fuelType=diesel
+
+Response example:
+{
+  "country": "AU",
+  "state": "VIC",
+  "fuelType": "diesel",
+  "pricePerLitre": 1.93,
+  "cached": true,
+  "source": "state_cache",
+  "fetchedAt": "2026-04-13T06:00:00Z",
+  "expiresAt": "2026-04-14T06:00:00Z"
+}
+
+Requirements:
+- endpoint must use the local cache service
+- endpoint must not hit external provider every time
+- endpoint should be fast and safe
+
+==================================================
+6. ADD TOUR BUILDER INTEGRATION
+==================================================
+
+In the tour builder, add logic for a button:
+- "Use Local Fuel Price"
+
+When clicked:
+- read the tour start location
+- determine state_code from the selected location
+- read fuel types from active tour vehicles if available
+- call backend endpoint for matching state + fuel type
+- populate the tour fuel price fields
+
+Preferred setup:
+- separate fields for:
+  - petrol_price_per_litre
+  - diesel_price_per_litre
+
+If the tour has only petrol vehicles:
+- fill petrol price
+If the tour has only diesel vehicles:
+- fill diesel price
+If mixed:
+- fill both
+
+==================================================
+7. LOCATION TO STATE MAPPING
+==================================================
+
+Use the existing structured location data if available.
+
+Priority:
+1. state/region already stored on the tour start location
+2. derive from Google place data if already integrated
+3. fallback manual state selector if needed
+
+Do not overcomplicate this.
+State-level lookup is enough.
+
+==================================================
+8. SAVE FUEL PRICE TO THE TOUR
+==================================================
+
+After lookup, save the returned fuel prices to the tour record.
+
+Suggested fields on the tour:
+- country_code
+- state_code
+- petrol_price_per_litre
+- diesel_price_per_litre
+- fuel_price_last_updated
+
+Important:
+- final calculations should use the saved tour fuel prices
+- do not re-fetch prices during every calculation
+- keep the tour result stable unless the user refreshes fuel prices manually
+
+==================================================
+9. ADD FALLBACK LOGIC
+==================================================
+
+If cache lookup fails and external source fails:
+- use a hardcoded fallback average by state if available
+- otherwise use a general Australian fallback average
+- clearly mark the response as fallback
+
+Response should include:
+- source: "fallback_average"
+
+Frontend should display:
+- "Using average fuel price"
+
+Do not block the user from calculating.
+
+==================================================
+10. DEBUG / ADMIN VISIBILITY
+==================================================
+
+If easy, add simple debug/admin visibility:
+- last cache refresh time
+- how many cache rows exist
+- whether current value is cached or fallback
+
+This can be minimal and backend-focused.
+
+==================================================
+11. KEEP IT SIMPLE
+==================================================
+
+Do NOT build:
+- station-level prices
+- suburb-level live polling
+- frontend direct API calls
+- continuous background refresh
+- per-user API usage tracking
+
+Focus on:
+- state-level cache
+- daily refresh
+- petrol/diesel support
+- stable backend endpoint
+- tour builder integration
+
+==================================================
+12. EXPECTED RESULT
+==================================================
+
+- Replit builds a backend fuel price cache
+- fuel prices are stored by state and fuel type
+- cache refreshes once per day
+- tour builder can fetch local fuel prices quickly
+- the app uses saved tour fuel prices in final calculations
+- external API usage stays low and controlled

@@ -674,6 +674,7 @@ export const GetToursResponseItem = zod.object({
   totalCost: zod.number().nullable(),
   totalIncome: zod.number().nullable(),
   totalProfit: zod.number().nullable(),
+  stopCount: zod.number(),
   createdAt: zod.string(),
 });
 export const GetToursResponse = zod.array(GetToursResponseItem);

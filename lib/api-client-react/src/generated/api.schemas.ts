@@ -400,6 +400,7 @@ export interface Tour {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  stopCount: number;
   createdAt: string;
 }
 

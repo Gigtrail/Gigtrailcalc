@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count, inArray } from "drizzle-orm";
 import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -83,7 +83,12 @@ router.get("/tours", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const tours = await db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt));
-  res.json(GetToursResponse.parse(tours.map(serializeTour)));
+  const tourIds = tours.map(t => t.id);
+  const stopCounts = tourIds.length > 0
+    ? await db.select({ tourId: tourStopsTable.tourId, cnt: count() }).from(tourStopsTable).where(inArray(tourStopsTable.tourId, tourIds)).groupBy(tourStopsTable.tourId)
+    : [];
+  const stopCountMap = new Map(stopCounts.map(sc => [sc.tourId, sc.cnt]));
+  res.json(GetToursResponse.parse(tours.map(t => ({ ...serializeTour(t), stopCount: stopCountMap.get(t.id) ?? 0 }))));
 });
 
 router.post("/tours", requireAuth, async (req, res): Promise<void> => {
