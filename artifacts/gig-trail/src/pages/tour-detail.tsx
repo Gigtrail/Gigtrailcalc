@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
-  Clock, History, Search, Home, Building2, Pencil, BarChart2, Lightbulb,
+  Clock, History, Search, Home, Building2, Pencil, BarChart2, Lightbulb, Ticket,
 } from "lucide-react";
 import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -50,6 +50,7 @@ import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } f
 import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
 } from "@/lib/member-utils";
+import { calculateTicketRecovery } from "@/lib/ticket-recovery";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -337,6 +338,8 @@ export default function TourDetail() {
     if (costs.length === 0) return null;
     return costs.reduce((max, c) => c.amount > max.amount ? c : max);
   })();
+
+  const ticketRecovery = calculateTicketRecovery(sortedStops, profitAfterMemberFees);
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
 
@@ -1172,8 +1175,8 @@ export default function TourDetail() {
           )}
         </div>
 
-        {/* Sticky summary panel */}
-        <div className="lg:col-span-1">
+        {/* Sticky summary panel + ticket recovery */}
+        <div className="lg:col-span-1 space-y-6">
           <Card className={`border-2 sticky top-20 shadow-lg ${profitAfterMemberFees >= 0 ? "border-secondary/50" : "border-destructive/50"}`}>
             <CardHeader className={`pb-4 border-b border-border/40 ${status.color} rounded-t-lg`}>
               <div className="flex items-center gap-2">
@@ -1273,6 +1276,80 @@ export default function TourDetail() {
               })()}
             </CardContent>
           </Card>
+
+          {/* Ticket Recovery */}
+          {calc && (ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible" || ticketRecovery.state === "no_ticketed_shows") && (
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Ticket className="w-4 h-4 text-secondary" /> Ticket Recovery
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+
+                {ticketRecovery.state === "no_ticketed_shows" && (
+                  <p className="text-xs text-muted-foreground italic">
+                    No ticketed shows available to recover this loss.
+                  </p>
+                )}
+
+                {(ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible") && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground text-xs">Tour deficit</span>
+                      <span className="font-bold text-destructive">{fmt(ticketRecovery.deficit)}</span>
+                    </div>
+
+                    {ticketRecovery.state === "impossible" && (
+                      <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2.5 py-2">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                        <span>Even at full capacity, current ticketed shows cannot fully recover this loss.</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5 pt-1 border-t border-border/40">
+                      {ticketRecovery.rows.map(row => (
+                        <div key={row.stopId} className="space-y-0.5">
+                          <div className="font-medium text-foreground truncate">{row.showName}</div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground pl-0.5">
+                            <span>
+                              <span className="font-semibold text-foreground">{row.ticketsNeeded}</span> ticket{row.ticketsNeeded !== 1 ? "s" : ""} needed
+                            </span>
+                            {row.capacity != null ? (
+                              <span>
+                                <span className={`font-semibold ${row.capacityPercentNeeded != null && row.capacityPercentNeeded > 1 ? "text-destructive" : "text-foreground"}`}>
+                                  {row.capacityPercentNeeded != null ? `${Math.round(row.capacityPercentNeeded * 100)}%` : "—"}
+                                </span>{" "}
+                                of capacity
+                              </span>
+                            ) : (
+                              <span className="italic">Capacity unknown</span>
+                            )}
+                            <span>${row.netPerTicket.toFixed(2)}/ticket</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-2 border-t border-border/40 space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Total tickets needed</span>
+                        <span className="font-bold text-foreground">{ticketRecovery.totalTicketsNeeded}</span>
+                      </div>
+                      {ticketRecovery.strongestRecoveryShowName && (
+                        <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
+                          <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
+                          <span>Best recovery show: <strong className="text-foreground">{ticketRecovery.strongestRecoveryShowName}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+              </CardContent>
+            </Card>
+          )}
+
         </div>
       </div>
 

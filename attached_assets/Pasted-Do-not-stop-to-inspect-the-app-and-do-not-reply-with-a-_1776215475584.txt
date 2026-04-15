@@ -1,0 +1,313 @@
+Do not stop to inspect the app and do not reply with a status update like “let me read the form first”.
+
+Make a best-effort implementation based on the existing Tour Calc and show model, and infer the current data structure from the codebase directly.
+
+If field names differ from this spec, map them to the closest existing fields and continue.
+
+If some fields do not exist yet, add them in the cleanest reusable way with minimal disruption to the current calculator flow.
+
+---
+
+# Feature: Ticket Recovery (Break-Even Engine)
+
+## Goal
+
+Add a **Ticket Recovery** feature to the Tour Calc for mixed tours where some shows are:
+
+* guaranteed fee
+* ticketed
+* door split
+* blank travel days
+
+The purpose is:
+
+👉 If the full tour is currently losing money, show how many tickets need to be sold across the ticketed shows to recover the loss.
+
+This must work even when ticket prices vary between shows.
+
+❗ Do NOT use one averaged ticket price across the whole tour.
+👉 Calculate recovery per show.
+
+---
+
+## First step: Use existing data model
+
+Inspect and reuse:
+
+* stop / show form
+* tour calculator logic
+* results summary
+
+Identify:
+
+* how revenue per show is stored
+* how show type is represented (if at all)
+* where expenses are calculated
+* where final net result is calculated
+* whether ticket price / capacity already exist
+
+Adapt this feature to the current structure — do not rebuild the system unnecessarily.
+
+---
+
+## When to show Ticket Recovery
+
+### Show only if:
+
+* `tourNetResult < 0`
+* AND at least one ticketed show exists
+
+### If profitable:
+
+Show:
+
+* `Tour is already profitable`
+* `Ticketed shows will increase profit further`
+
+### If no ticketed shows:
+
+Show:
+
+* `No ticketed shows available to recover this loss`
+
+---
+
+## Core calculation
+
+Use existing final result:
+
+```ts
+tourNetResult = grossIncome - totalExpenses
+```
+
+If negative:
+
+```ts
+deficit = Math.abs(tourNetResult)
+```
+
+---
+
+## Ticketed show requirements
+
+Each ticketed show should have (map to existing or add):
+
+* ticketPrice
+* capacity (optional but preferred)
+* perTicketFees (optional)
+* perTicketCosts (optional)
+* showName
+
+If fields don’t exist, add minimal required fields.
+
+---
+
+## Per-show net ticket value
+
+For each ticketed show:
+
+```ts
+netPerTicket = ticketPrice - perTicketFees - perTicketCosts
+```
+
+Defaults:
+
+* perTicketFees = 0
+* perTicketCosts = 0
+
+If `netPerTicket <= 0`, exclude the show from recovery calculations.
+
+---
+
+## Weighted recovery model (IMPORTANT)
+
+Do NOT split deficit evenly.
+
+Use weighted distribution:
+
+```ts
+totalRecoveryWeight = sum(netPerTicket across valid shows)
+
+showWeight = netPerTicket / totalRecoveryWeight
+
+showDeficitShare = deficit * showWeight
+
+ticketsNeeded = Math.ceil(showDeficitShare / netPerTicket)
+```
+
+---
+
+## Capacity %
+
+If capacity exists:
+
+```ts
+capacityPercentNeeded = ticketsNeeded / capacity
+```
+
+Display as:
+
+* 32%
+* 41%
+
+If no capacity:
+
+* show tickets needed
+* display `Capacity unknown`
+
+---
+
+## Maximum recovery check
+
+If capacity exists:
+
+```ts
+maxRecovery = netPerTicket * capacity
+```
+
+If total max recovery across all shows < deficit:
+
+Show:
+
+* `Even at full capacity, current ticketed shows cannot fully recover this loss`
+
+---
+
+## Strongest recovery show
+
+Find show with highest `netPerTicket`.
+
+Display:
+
+* `Best recovery show: {showName}`
+
+---
+
+## UI Placement
+
+Add a new section in the **right-side decision panel** or directly under it.
+
+### Section title:
+
+## Ticket Recovery
+
+---
+
+## UI Output Example
+
+```text
+Ticket Recovery
+
+You're currently down $1,800
+
+To break even:
+
+Melbourne Show
+• 32 tickets needed
+• 32% capacity
+• Net per ticket: $32
+
+Regional Show
+• 33 tickets needed
+• 41% capacity
+• Net per ticket: $23
+
+Total tickets needed: 65
+Best recovery show: Melbourne Show
+```
+
+---
+
+## Edge cases
+
+### No ticketed shows
+
+```text
+No ticketed shows available to recover this loss
+```
+
+### Already profitable
+
+```text
+Tour is already profitable
+Ticketed shows will increase profit further
+```
+
+### Only one ticketed show
+
+Assign full deficit to that show.
+
+### netPerTicket <= 0
+
+Exclude show from recovery logic.
+
+---
+
+## Suggested types
+
+```ts
+type TicketRecoveryRow = {
+  showId: string;
+  showName: string;
+  netPerTicket: number;
+  ticketsNeeded: number;
+  capacity?: number;
+  capacityPercentNeeded?: number | null;
+};
+
+type TicketRecoverySummary = {
+  state: "profitable" | "no_ticketed_shows" | "recovery" | "impossible";
+  deficit: number;
+  totalTicketsNeeded: number;
+  strongestRecoveryShowName?: string;
+  rows: TicketRecoveryRow[];
+};
+```
+
+---
+
+## Helper function
+
+Create:
+
+```ts
+function calculateTicketRecovery(shows, tourNetResult): TicketRecoverySummary {
+  // 1. check profitability
+  // 2. collect ticketed shows
+  // 3. calculate netPerTicket
+  // 4. filter invalid shows
+  // 5. weighted recovery calc
+  // 6. capacity %
+  // 7. return summary
+}
+```
+
+---
+
+## Implementation rules
+
+* Do NOT rewrite existing calculator logic
+* Reuse current data where possible
+* Add only minimal new fields if needed
+* Keep logic modular and reusable
+* Keep UI clean and easy to scan
+* No unnecessary complexity
+
+---
+
+## Acceptance criteria
+
+1. Appears only when tour is losing money
+2. Works with multiple ticket prices
+3. Uses per-show net ticket values (not averages)
+4. Shows tickets needed per show
+5. Shows capacity % when available
+6. Shows total tickets needed
+7. Identifies best recovery show
+8. Handles all edge cases
+9. Does not break existing calculations
+10. Clean, readable UI
+
+---
+
+Build this as a clean extension to the existing Tour Calc — not a separate system.
