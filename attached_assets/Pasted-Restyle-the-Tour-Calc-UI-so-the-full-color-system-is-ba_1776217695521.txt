@@ -1,0 +1,375 @@
+Restyle the Tour Calc UI so the full color system is based on the attached **Gig Trail** logo, not the current washed beige palette.
+
+## Goal
+
+The current UI feels too flat, too samey, and too beige.
+
+I want the app to feel more like the **Gig Trail** brand:
+- road-worn
+- warm
+- practical
+- gritty
+- Americana
+- strong contrast
+- easier to scan
+
+This should feel like a touring tool with personality, not a generic beige spreadsheet.
+
+Do a styling refactor of the Tour Calc using the brand colors below.
+
+---
+
+## Brand direction from logo
+
+Base the UI around these tones:
+
+### Primary brand color
+Burnt orange:
+- `#B56A2A`
+
+### Dark burnt orange / hover
+- `#8C4E1E`
+
+### Light accent orange
+- `#D8893A`
+
+### Main charcoal text / strong contrast
+- `#1E1E1E`
+
+### Secondary dark surface / headings / strong borders
+- `#2A2A2A`
+
+### Warm page background
+- `#F4EFE6`
+
+### White cards
+- `#FFFFFF`
+
+### Muted dusty text
+- `#8A8176`
+
+### Soft borders / dividers
+- `#CFC6B8`
+
+---
+
+## Functional semantic colors
+
+These should sit on top of the brand palette and be used for outcomes:
+
+### Profit / good
+- `#2E7D32`
+
+### Loss / bad
+- `#C62828`
+
+### Warning / long drive / attention
+- `#E07A1F`
+
+Do not force everything into the burnt orange palette.
+Good/bad states must still be instantly readable.
+
+---
+
+## Main styling changes
+
+## 1. Page and cards
+
+### Page background
+Use:
+- `#F4EFE6`
+
+### Cards / panels
+Use:
+- `#FFFFFF`
+
+This is important.
+
+The current beige-on-beige look is making everything blend together.
+Cards need to stand off the background clearly.
+
+### Card borders
+Use:
+- `#CFC6B8`
+
+### Shadows
+Use subtle warm shadows only.
+Nothing too modern/glassy.
+Keep it grounded and practical.
+
+---
+
+## 2. Text hierarchy
+
+### Main headings
+Use:
+- `#1E1E1E`
+
+### Secondary labels / helper text
+Use:
+- `#8A8176`
+
+### Key totals / important numbers
+Use strong contrast and bigger weight.
+Do not let major numbers disappear into the background.
+
+---
+
+## 3. Brand accents
+
+Use burnt orange `#B56A2A` for:
+- section icons
+- active controls
+- highlighted labels
+- expand/collapse indicators
+- primary accents
+- selected state borders
+- key interactive elements
+
+Hover / active states can use:
+- `#8C4E1E`
+
+Use `#D8893A` sparingly for lighter accents or hover backgrounds.
+
+---
+
+## 4. Financial outcome colors
+
+### If profitable
+Main result number should be:
+- `#2E7D32`
+
+### If losing money
+Main result number should be:
+- `#C62828`
+
+### If margins are tight / borderline
+Use:
+- `#B56A2A` or `#E07A1F`
+
+Do not keep these big financial numbers in pale beige tones.
+They need to stand out immediately.
+
+---
+
+## 5. Right-side decision panel
+
+Refactor the decision panel so it has stronger hierarchy.
+
+### Header state examples
+- Worth It
+- Tight Margins
+- Probably Not Worth It
+
+Use subtle tinted backgrounds for these states:
+
+### Worth It
+very light green tint + green text
+
+### Tight Margins
+very light orange tint + orange/burnt orange text
+
+### Not Worth It
+very light red tint + red text
+
+### Main “What’s it worth?” number
+Make this the visual hero:
+- larger
+- bolder
+- clearly colored based on state
+- easy to read at a glance
+
+### Supporting numbers
+Keep them darker and cleaner than now.
+Use muted labels and strong values.
+
+### Biggest cost insight
+Make it feel like a small highlighted insight box:
+- soft tinted background
+- subtle border
+- icon in burnt orange or warning orange
+
+---
+
+## 6. Trail / route list styling
+
+The Trail section needs more visual variety and clearer row types.
+
+Right now too many rows blend together.
+
+### Ticketed shows
+Use:
+- very light warm orange tint background, for example close to `#FFF4E8`
+- subtle left border or accent using `#B56A2A`
+
+### Flat fee shows
+Use:
+- mostly white or very light neutral background
+- subtle left border using charcoal or muted dark tone
+
+### Blank “No show booked” days
+Keep them visually quieter:
+- lighter text
+- less emphasis
+- avoid drawing attention away from real shows
+
+### Travel rows / route legs
+Use muted styling:
+- text `#8A8176`
+- warning text in `#E07A1F`
+- keep them readable but clearly secondary to actual show rows
+
+### Selected / active row
+When a row is selected or expanded, make it noticeably clearer:
+- subtle tinted background
+- stronger border using burnt orange
+- slightly elevated visual treatment
+
+---
+
+## 7. Warnings and alerts
+
+Long drive warnings and similar notices need to stand out more.
+
+Use:
+- `#E07A1F`
+- stronger icon contrast
+- optional very soft tinted warning background
+
+Warnings should not feel invisible.
+
+---
+
+## 8. Buttons and controls
+
+### Primary buttons
+Use:
+- background `#B56A2A`
+- text white
+- hover `#8C4E1E`
+
+### Secondary buttons
+Use:
+- white or transparent background
+- border `#CFC6B8`
+- text `#1E1E1E`
+- hover with subtle warm tint
+
+### Active tabs / toggles
+Use burnt orange accents to clearly show selection.
+
+---
+
+## 9. Collapsibles and toggles
+
+For chevrons, expanders, nested totals, and interactive breakdown rows:
+
+- use burnt orange accents
+- make hover states clearer
+- keep structure obvious
+- use indentation and divider lines cleanly
+
+This should help the UI feel easier to scan.
+
+---
+
+## 10. Visual hierarchy improvements
+
+Refine the Tour Calc so the eye naturally flows through:
+
+1. Trail / route
+2. Income / expenses / totals
+3. Final decision
+
+Use color and contrast to support that flow.
+
+### Specifically:
+- important financial totals should pop
+- secondary information should recede
+- muted travel metadata should stay readable but not compete
+- all cards should feel separated from the page background
+
+---
+
+## 11. Keep the brand feel
+
+The final feel should be:
+- earthy
+- warm
+- gritty
+- practical
+- road-touring inspired
+- strong but not over-designed
+
+It should feel like:
+- old tyres
+- petrol
+- vintage touring posters
+- Americana road culture
+
+But still remain clean and usable.
+
+Do not make it overly glossy, neon, or tech-startup looking.
+
+---
+
+## 12. Optional subtle texture
+If easy and tasteful, you can add:
+- very subtle paper/grain texture
+or
+- very subtle warm noise effect
+
+But only if it improves the vibe without hurting readability.
+This is optional.
+Do not overdo it.
+
+---
+
+## 13. Implementation suggestion
+
+If the app already uses a theme system or Tailwind tokens, refactor the current Tour Calc styles into reusable theme variables or design tokens.
+
+For example, create variables/tokens for:
+
+- background
+- card
+- border
+- text primary
+- text muted
+- accent brand
+- success
+- danger
+- warning
+
+Then apply them consistently across the Tour Calc.
+
+Avoid one-off color hacks.
+
+---
+
+## 14. Priority fixes
+If you need to stage the work, prioritize these first:
+
+1. Make cards white and page background warm off-white
+2. Replace pale beige totals with strong readable colors
+3. Use green/red/orange for financial outcomes
+4. Apply burnt orange as the main brand accent
+5. Improve trail row differentiation
+6. Improve warning visibility
+
+---
+
+## Acceptance criteria
+
+1. Tour Calc color palette clearly matches the Gig Trail logo
+2. Beige-on-beige contrast problem is removed
+3. Cards stand apart cleanly from the background
+4. Major financial numbers are easy to read
+5. Profit/loss states are visually obvious
+6. Trail rows are easier to distinguish by type
+7. Warnings stand out clearly
+8. Buttons and active states feel on-brand
+9. UI keeps a warm gritty Americana feel
+10. Styling is consistent and reusable, not patched together
+
+Please implement the styling directly in the current Tour Calc UI and reuse the theme cleanly across related cards/components.

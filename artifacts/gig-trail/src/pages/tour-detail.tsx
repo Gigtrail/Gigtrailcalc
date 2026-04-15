@@ -426,7 +426,7 @@ export default function TourDetail() {
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-secondary" />
+                  <Navigation className="w-4 h-4 text-primary" />
                   <span className="font-semibold text-base">The Trail</span>
                   {!trailOpen && hasDaySlots && (
                     <span className="text-xs text-muted-foreground bg-muted/40 border border-border/50 rounded-full px-2 py-0.5">
@@ -455,7 +455,7 @@ export default function TourDetail() {
                     </div>
                   )}
                   <div className="w-7 h-7 rounded-md border border-border/60 bg-background flex items-center justify-center shrink-0">
-                    <ChevronDown className={`w-4 h-4 text-secondary transition-transform ${trailOpen ? "rotate-180" : ""}`} />
+                    <ChevronDown className={`w-4 h-4 text-primary transition-transform ${trailOpen ? "rotate-180" : ""}`} />
                   </div>
                 </div>
               </div>
@@ -532,15 +532,15 @@ export default function TourDetail() {
                       return (
                         <div key={day.date}>
                           <div
-                            className="px-4 py-3 flex items-center gap-3 hover:bg-muted/10 transition-colors cursor-pointer"
+                            className="px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer trail-row-blank"
                             onClick={() => toggleDay(day.date)}
                           >
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${isFriSat ? "bg-secondary/10 border-secondary/30 text-secondary" : isSun ? "bg-secondary/5 border-secondary/20 text-secondary/70" : "bg-muted/30 border-border/30 text-muted-foreground"}`}>
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${isFriSat ? "bg-primary/10 border-primary/25 text-primary" : isSun ? "bg-primary/5 border-primary/15 text-primary/60" : "bg-muted/50 border-border/30 text-muted-foreground"}`}>
                             {day.dayNumber}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`text-sm ${isFriSat ? "font-semibold text-secondary" : isSun ? "font-medium text-secondary/80" : "font-medium"}`}>{dayDateLabel}</span>
+                              <span className={`text-sm ${isFriSat ? "font-semibold text-primary" : isSun ? "font-medium text-primary/70" : "font-medium"}`}>{dayDateLabel}</span>
                               <span className="text-muted-foreground/50 text-xs">·</span>
                               <span className="text-sm text-muted-foreground italic">No show booked</span>
                             </div>
@@ -577,11 +577,15 @@ export default function TourDetail() {
                     const leg = day.incomingLeg;
                     const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
 
+                    const isTicketed = stop.showType === "Ticketed Show" || stop.showType === "Hybrid";
+                    const rowClass = isTicketed ? "trail-row-ticketed" : "trail-row-flat";
+                    const expandedClass = isTicketed ? "trail-row-expanded-ticketed" : "trail-row-expanded-flat";
+
                     return (
                       <div key={day.date}>
                         {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
-                          <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
-                            <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                          <div className={`px-4 py-2 flex items-start gap-2 text-xs border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
+                            <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
                             <div>
                               <span>
                                 {leg.from} → {leg.to}: {leg.distanceKm} km
@@ -590,7 +594,7 @@ export default function TourDetail() {
                                 {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
                               </span>
                               {driveWarning && (
-                                <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                                <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
                                   <AlertTriangle className="w-3 h-3 shrink-0" />
                                   Long drive — may exceed comfortable daily limit
                                 </div>
@@ -600,15 +604,15 @@ export default function TourDetail() {
                         )}
 
                         <div
-                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer"
+                          className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${rowClass}`}
                           onClick={() => toggleStop(stop.id)}
                         >
-                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
+                          <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0 text-xs font-bold border border-primary/25">
                             {day.dayNumber}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-muted-foreground">
-                              <span className={isFriSat ? "text-secondary font-semibold" : isSun ? "text-secondary/70 font-medium" : ""}>{dayDateLabel}</span>
+                              <span className={isFriSat ? "text-primary font-semibold" : isSun ? "text-primary/70 font-medium" : ""}>{dayDateLabel}</span>
                               {stop.showType && <span className="ml-1.5 text-muted-foreground/60">· {stop.showType}</span>}
                             </div>
                             <div className="font-semibold truncate">{stop.venueName || stop.city}</div>
@@ -625,12 +629,12 @@ export default function TourDetail() {
                             </span>
                           )}
                           <ChevronDown
-                            className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${expandedStops.has(stop.id) ? "rotate-180" : ""}`}
+                            className={`w-4 h-4 text-primary/50 shrink-0 transition-transform ${expandedStops.has(stop.id) ? "rotate-180" : ""}`}
                           />
                         </div>
 
                         {expandedStops.has(stop.id) && (
-                          <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 space-y-2">
+                          <div className={`px-4 pb-3 pt-1 border-t border-border/30 space-y-2 ${expandedClass}`}>
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-2">
                               <Badge variant="outline" className="font-normal text-[10px] py-0">{stop.showType}</Badge>
                               {stopCalc && (
@@ -697,8 +701,8 @@ export default function TourDetail() {
                     return (
                       <div key={stop.id}>
                         {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
-                          <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
-                            <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                          <div className={`px-4 py-2 flex items-start gap-2 text-xs border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
+                            <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
                             <div>
                               <span>
                                 {leg.from} → {leg.to}: {leg.distanceKm} km
@@ -707,7 +711,7 @@ export default function TourDetail() {
                                 {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
                               </span>
                               {driveWarning && (
-                                <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                                <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
                                   <AlertTriangle className="w-3 h-3 shrink-0" />
                                   Long drive — may exceed comfortable daily limit
                                 </div>
@@ -716,10 +720,10 @@ export default function TourDetail() {
                           </div>
                         )}
                         <div
-                          className="px-4 py-3 flex items-center gap-3 hover:bg-card/60 transition-colors cursor-pointer"
+                          className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${stop.showType === "Ticketed Show" || stop.showType === "Hybrid" ? "trail-row-ticketed" : "trail-row-flat"}`}
                           onClick={() => toggleStop(stop.id)}
                         >
-                          <div className="w-7 h-7 rounded-full bg-secondary/20 text-secondary flex items-center justify-center shrink-0 text-xs font-bold border border-secondary/30">
+                          <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0 text-xs font-bold border border-primary/25">
                             {i + 1}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -741,7 +745,7 @@ export default function TourDetail() {
                           />
                         </div>
                         {expandedStops.has(stop.id) && (
-                          <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 space-y-2">
+                          <div className={`px-4 pb-3 pt-1 border-t border-border/30 space-y-2 ${stop.showType === "Ticketed Show" || stop.showType === "Hybrid" ? "trail-row-expanded-ticketed" : "trail-row-expanded-flat"}`}>
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-2">
                               <Badge variant="outline" className="font-normal text-[10px] py-0">{stop.showType}</Badge>
                               {stopCalc && (
@@ -805,8 +809,8 @@ export default function TourDetail() {
                       returnLeg.to !== sortedStops[sortedStops.length - 1]?.city;
                     const returnDriveWarn = isReturnLeg && returnLeg && returnLeg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
                     return isReturnLeg ? (
-                      <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground ${returnDriveWarn ? "bg-amber-500/5" : "bg-muted/10"}`}>
-                        <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
+                      <div className={`px-4 py-2 flex items-start gap-2 text-xs ${returnDriveWarn ? "trail-leg-warning" : "trail-leg-row"}`}>
+                        <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
                         <div>
                           <span>
                             {returnLeg.from} → {returnLeg.to}: {returnLeg.distanceKm} km
@@ -815,7 +819,7 @@ export default function TourDetail() {
                             {returnLeg.fuelCost > 0 && ` · fuel ~${fmt(returnLeg.fuelCost)}`}
                           </span>
                           {returnDriveWarn && (
-                            <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 mt-0.5">
+                            <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
                               <AlertTriangle className="w-3 h-3 shrink-0" />
                               Long drive — may exceed comfortable daily limit
                             </div>
@@ -1014,7 +1018,7 @@ export default function TourDetail() {
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <BarChart2 className="w-4 h-4 text-secondary" /> Tour Breakdown
+                  <BarChart2 className="w-4 h-4 text-primary" /> Tour Breakdown
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
@@ -1026,7 +1030,7 @@ export default function TourDetail() {
                     onClick={() => setShowIncomeBreakdown(v => !v)}
                   >
                     <div className="flex items-center gap-2">
-                      <TrendingUp className="w-3.5 h-3.5 text-secondary shrink-0" />
+                      <TrendingUp className="w-3.5 h-3.5 text-primary shrink-0" />
                       <span className="font-semibold text-sm group-hover:text-secondary transition-colors">Income</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -1208,68 +1212,74 @@ export default function TourDetail() {
 
         {/* Sticky summary panel + ticket recovery */}
         <div className="lg:col-span-1 space-y-6">
-          <Card className={`border-2 sticky top-20 shadow-lg ${profitAfterMemberFees >= 0 ? "border-secondary/50" : "border-destructive/50"}`}>
+          <Card className={`border-2 sticky top-20 shadow-md ${profitAfterMemberFees >= 0 ? "border-secondary/40" : "border-destructive/40"}`}>
             <CardHeader className={`pb-4 border-b border-border/40 ${status.color} rounded-t-lg`}>
               <div className="flex items-center gap-2">
                 <status.Icon className="w-5 h-5" />
-                <CardTitle className="text-lg">{status.text}</CardTitle>
+                <CardTitle className="text-lg font-bold">{status.text}</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="pt-6 space-y-6">
+            <CardContent className="pt-5 space-y-5">
+
+              {/* Hero number */}
               <div>
-                <div className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">
+                <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mb-1.5">
                   What's It Worth?
                 </div>
-                <div className={`text-5xl font-bold ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
+                <div className={`text-5xl font-bold tracking-tight leading-none ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
                   {fmt(profitAfterMemberFees)}
                 </div>
                 {profile && profile.peopleCount > 0 && (
-                  <div className="text-sm text-muted-foreground mt-2 font-medium">
-                    {fmt(profitAfterMemberFees / profile.peopleCount)} per member
+                  <div className="text-sm text-muted-foreground mt-2">
+                    <span className={`font-semibold ${profitAfterMemberFees >= 0 ? "text-secondary/80" : "text-destructive/80"}`}>
+                      {fmt(profitAfterMemberFees / profile.peopleCount)}
+                    </span>
+                    {" "}per member
                   </div>
                 )}
               </div>
 
+              {/* Supporting stats */}
               {calc && (sortedStops.length > 0 || hasDaySlots) && (
                 <div className="space-y-1.5 pt-4 border-t border-border/40 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Gross income</span>
-                    <span className="font-medium text-foreground">{fmt(calc.grossIncome)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Gross income</span>
+                    <span className="font-semibold text-secondary">{fmt(calc.grossIncome)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Total expenses</span>
-                    <span className="font-medium text-destructive">{fmt(totalExpensesWithPayouts)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total expenses</span>
+                    <span className="font-semibold text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
                   {sortedStops.length > 0 && calc.avgPerShow !== 0 && (
-                    <div className="flex justify-between text-muted-foreground border-t border-border/30 pt-1.5">
-                      <span>Net per show</span>
-                      <span className={`font-medium ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
+                    <div className="flex justify-between border-t border-border/30 pt-1.5">
+                      <span className="text-muted-foreground">Net per show</span>
+                      <span className={`font-semibold ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
                         {fmt(calc.avgPerShow)}
                       </span>
                     </div>
                   )}
                   {(hasDaySlots ? daySlots.length : daysOnTour) != null && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Days on tour</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Days on tour</span>
                       <span className="font-medium text-foreground">{hasDaySlots ? daySlots.length : daysOnTour}</span>
                     </div>
                   )}
                   {calc.showDays > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Show days / blank</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Show days / blank</span>
                       <span className="font-medium text-foreground">{calc.showDays} / {calc.blankDayCount}</span>
                     </div>
                   )}
                   {calc.totalDriveTimeMinutes > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Est. drive time</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Est. drive time</span>
                       <span className="font-medium text-foreground">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Smart insight */}
+              {/* Smart insights */}
               {calc && (() => {
                 const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
                 const noRoute = hasVehicles && !calc.totalFuelCost && !(tour?.startLocation?.trim() || sortedStops.length > 1);
@@ -1278,28 +1288,29 @@ export default function TourDetail() {
                   : null;
                 const noVehicle = (!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0;
                 return (
-                  <div className="space-y-2 pt-2">
+                  <div className="space-y-2 pt-1">
                     {noRoute && (
-                      <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5">
-                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span>Fuel not calculated — add a Start Location or second stop</span>
+                      <div className="flex items-start gap-2 text-xs rounded border border-[#E07A1F]/25 bg-[#E07A1F]/07 px-3 py-2">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#C25A00]" />
+                        <span className="text-[#7A4700]">Fuel not calculated — add a Start Location or second stop</span>
                       </div>
                     )}
                     {noVehicle && (
-                      <p className="text-xs text-amber-500 bg-amber-500/10 rounded p-2">
-                        Add a vehicle to include fuel cost estimates.
-                      </p>
+                      <div className="flex items-start gap-2 text-xs rounded border border-[#E07A1F]/25 bg-[#E07A1F]/07 px-3 py-2">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#C25A00]" />
+                        <span className="text-[#7A4700]">Add a vehicle to include fuel cost estimates.</span>
+                      </div>
                     )}
                     {biggestCost && (
-                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
-                        <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
-                        <span>Biggest cost: <strong className="text-foreground">{biggestCost.label}</strong> ({fmt(biggestCost.amount)})</span>
+                      <div className="flex items-start gap-2 text-xs rounded border border-primary/20 bg-primary/07 px-3 py-2.5">
+                        <Lightbulb className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                        <span className="text-foreground/80">Biggest cost: <strong className="text-foreground">{biggestCost.label}</strong> ({fmt(biggestCost.amount)})</span>
                       </div>
                     )}
                     {showsNeeded && (
-                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
-                        <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
-                        <span>Need ~<strong className="text-foreground">{showsNeeded}</strong> more similar show{showsNeeded !== 1 ? "s" : ""} to break even</span>
+                      <div className="flex items-start gap-2 text-xs rounded border border-primary/20 bg-primary/07 px-3 py-2.5">
+                        <Lightbulb className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+                        <span className="text-foreground/80">Need ~<strong className="text-foreground">{showsNeeded}</strong> more similar show{showsNeeded !== 1 ? "s" : ""} to break even</span>
                       </div>
                     )}
                   </div>
@@ -1313,7 +1324,7 @@ export default function TourDetail() {
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Ticket className="w-4 h-4 text-secondary" /> Ticket Recovery
+                  <Ticket className="w-4 h-4 text-primary" /> Ticket Recovery
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
