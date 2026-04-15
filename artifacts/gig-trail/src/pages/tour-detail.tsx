@@ -1035,7 +1035,7 @@ export default function TourDetail() {
                                   },
                                   {
                                     onSuccess: () => {
-                                      queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+                                      queryClient.invalidateQueries({ queryKey: ["tour", tourId] });
                                       setFuelSaving(false);
                                       setFuelRouteTab("route");
                                       toast({ title: "Fuel prices updated" });
