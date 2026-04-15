@@ -322,8 +322,8 @@ export default function TourDetail() {
     : { library: [], activeMemberIds: [] };
   const activeMembers = resolveActiveMembers(memberLibrary, activeMemberIdList);
   const qualifyingShowCount = calc
-    ? calc.stopCalcs.filter((sc) => sc.grossIncome > 0).length
-    : sortedStops.length;
+    ? calc.stopCalcs.filter((sc) => sc.totalIncome > 0).length
+    : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merch ?? 0) > 0).length;
   const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
   const totalMemberPayout = memberEarnings.totalPayout;
   const profitAfterMemberFees = netProfit - totalMemberPayout;
