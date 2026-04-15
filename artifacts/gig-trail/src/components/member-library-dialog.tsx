@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { Member } from "@/types/member";
+import type { Member, FeeType } from "@/types/member";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, Users } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,7 +54,7 @@ export function MemberLibraryDialog({
       setMembers(library);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]); // intentionally only reset on open — props may change due to ID regeneration
+  }, [open]);
 
   function handleUpdate(id: string, updates: Partial<Member>) {
     setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
@@ -67,11 +74,12 @@ export function MemberLibraryDialog({
         <DialogHeader>
           <DialogTitle>Member Library</DialogTitle>
           <DialogDescription>
-            All members ever added to this profile. Edit details or remove members permanently.
+            Edit each member's name, role, and fee arrangement. Fee type controls how the amount
+            applies in Tour Earnings.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2 py-2">
+        <div className="space-y-3 py-2">
           {members.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
@@ -79,17 +87,15 @@ export function MemberLibraryDialog({
               <p className="text-xs mt-1">Add members through Update Act Setup.</p>
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-[2fr_1.5fr_1fr_auto] gap-2 px-1 mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Name</span>
-                <span className="text-xs font-medium text-muted-foreground">Role</span>
-                <span className="text-xs font-medium text-muted-foreground">Fee</span>
-                <span className="w-8" />
-              </div>
-              {members.map((member) => {
-                const isActive = activeMemberIds.includes(member.id);
-                return (
-                  <div key={member.id} className="flex gap-2 items-center">
+            members.map((member) => {
+              const isActive = activeMemberIds.includes(member.id);
+              const feeType: FeeType = member.feeType ?? "per_show";
+              return (
+                <div
+                  key={member.id}
+                  className="rounded-lg border border-border/40 bg-card/30 p-3 space-y-2"
+                >
+                  <div className="flex gap-2 items-center">
                     <Input
                       value={member.name}
                       onChange={(e) => handleUpdate(member.id, { name: e.target.value })}
@@ -101,18 +107,6 @@ export function MemberLibraryDialog({
                       onChange={(e) => handleUpdate(member.id, { role: e.target.value })}
                       placeholder="Role"
                       className="flex-[1.5]"
-                    />
-                    <Input
-                      type="number"
-                      min="0"
-                      value={member.expectedGigFee ?? ""}
-                      onChange={(e) =>
-                        handleUpdate(member.id, {
-                          expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
-                        })
-                      }
-                      placeholder="$"
-                      className="flex-1 min-w-[65px]"
                     />
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -151,9 +145,41 @@ export function MemberLibraryDialog({
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
-                );
-              })}
-            </>
+
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={member.expectedGigFee ?? ""}
+                        onChange={(e) =>
+                          handleUpdate(member.id, {
+                            expectedGigFee: e.target.value === "" ? 0 : Number(e.target.value),
+                          })
+                        }
+                        placeholder="Amount"
+                        className="pl-7"
+                        disabled={feeType === "none"}
+                      />
+                    </div>
+                    <Select
+                      value={feeType}
+                      onValueChange={(v) => handleUpdate(member.id, { feeType: v as FeeType })}
+                    >
+                      <SelectTrigger className="flex-[1.4]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="per_show">Per Show</SelectItem>
+                        <SelectItem value="per_tour">Per Tour</SelectItem>
+                        <SelectItem value="none">No Fee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
 

@@ -1,4 +1,4 @@
-import type { Member } from "@/types/member";
+import type { Member, FeeType } from "@/types/member";
 
 export function generateMemberId(): string {
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -88,4 +88,53 @@ export function adjustActiveForActType(
     return activeMemberIds.slice(0, 2);
   }
   return activeMemberIds;
+}
+
+export interface MemberEarningsRow {
+  memberId: string;
+  memberName: string;
+  role?: string;
+  feeAmount: number;
+  feeType: FeeType;
+  qualifyingShowCount: number;
+  totalEarnings: number;
+}
+
+export interface MemberEarningsSummary {
+  rows: MemberEarningsRow[];
+  totalPayout: number;
+}
+
+export function resolveFeeType(member: Member): FeeType {
+  if (member.feeType) return member.feeType;
+  if ((member.expectedGigFee ?? 0) > 0) return "per_show";
+  return "none";
+}
+
+export function calculateMemberEarnings(
+  activeMembers: Member[],
+  qualifyingShowCount: number
+): MemberEarningsSummary {
+  const rows: MemberEarningsRow[] = activeMembers.map((m) => {
+    const feeType = resolveFeeType(m);
+    const feeAmount = m.expectedGigFee ?? 0;
+    const totalEarnings =
+      feeType === "per_show"
+        ? feeAmount * qualifyingShowCount
+        : feeType === "per_tour"
+        ? feeAmount
+        : 0;
+    return {
+      memberId: m.id,
+      memberName: m.name,
+      role: m.role,
+      feeAmount,
+      feeType,
+      qualifyingShowCount,
+      totalEarnings,
+    };
+  });
+
+  const totalPayout = rows.reduce((s, r) => s + r.totalEarnings, 0);
+  return { rows, totalPayout };
 }

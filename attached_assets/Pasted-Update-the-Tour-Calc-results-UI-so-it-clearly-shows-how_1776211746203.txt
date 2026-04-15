@@ -1,0 +1,237 @@
+Update the Tour Calc results UI so it clearly shows **how much each band member is earning from the gig fees across the tour**, both **per show** and **as a total for the full tour**.
+
+## Goal
+
+I want to be able to quickly see:
+
+* each member in the selected act profile
+* what their agreed fee is
+* whether that fee is **per show** or **per tour**
+* how much they are expected to earn based on the currently entered shows
+* a total payout summary for all members combined
+* remaining profit after member payouts
+
+This needs to work inside the existing **Tour Calc** flow and appear in the results/dashboard area.
+
+---
+
+## Core logic
+
+Use the selected **Act Profile** as the source of truth.
+
+Each member should already have or now support:
+
+* `name`
+* `role`
+* `fee_amount`
+* `fee_type`
+
+Where `fee_type` can be:
+
+* `per_show`
+* `per_tour`
+* `none`
+
+### Earnings calculation rules
+
+For the current tour:
+
+* Count only shows that are marked as actual booked/played income shows
+* Ignore empty days with “No show booked”
+* For each member:
+
+  * if `fee_type === "per_show"`
+    `member_total = fee_amount * qualifying_show_count`
+  * if `fee_type === "per_tour"`
+    `member_total = fee_amount`
+  * if `fee_type === "none"`
+    `member_total = 0`
+
+Also calculate:
+
+* `total_member_payout = sum of all member totals`
+* `tour_profit_after_member_fees = net_profit_before_member_fees - total_member_payout`
+
+If there is already a final income/profit number in the calculator, subtract member payouts from that final figure rather than creating conflicting totals.
+
+---
+
+## What I want shown in the UI
+
+Add a new results card called:
+
+### `Member Earnings`
+
+Inside that card, show one row per member.
+
+Each row should include:
+
+* Member name
+* Role
+* Fee setup label
+  Examples:
+
+  * `$250 / show`
+  * `$800 / tour`
+  * `No fee set`
+* Number of qualifying shows counted
+* Estimated earnings for this tour
+
+### Example row format
+
+* Julian James — Guitar/Vocals — $300/show — 8 shows — **$2,400**
+* Beci Kate — Percussion/Vocals — $250/show — 8 shows — **$2,000**
+* Bass Player — Bass — $800/tour — 8 shows — **$800**
+
+At the bottom of the card show:
+
+* `Total Member Payout`
+* `Profit After Member Fees`
+
+---
+
+## Important UI behaviour
+
+* Keep styling consistent with the current Tour Calc cards
+* Make this easy to scan at a glance
+* Use bold for the final earnings figure on each row
+* If a member has no fee set, show that clearly but do not break calculations
+* If there are no qualifying shows yet, per-show members should display `$0`
+* If there are no members in the act profile, show an empty state:
+  `No members found in this act profile`
+
+---
+
+## Nice extra touches
+
+If easy to add, also include:
+
+### 1. Status indicator
+
+Show whether each member’s payout is covered by the current tour outcome:
+
+* `Covered`
+* `Partially Covered`
+* `Not Covered`
+
+Suggested logic:
+
+* If final remaining profit is enough to cover all payouts, mark all as Covered
+* Or better:
+  calculate running cover against available payout pool and show realistic coverage
+
+A simpler acceptable version:
+
+* if `tour_profit_after_member_fees >= 0` → Covered
+* if `tour_profit_after_member_fees < 0` → show warning state
+
+### 2. Breakdown tooltip or small helper text
+
+Add small text under the member total like:
+
+* `Calculated from 8 paid shows`
+* `Flat tour fee`
+
+---
+
+## Data requirements
+
+If member fee data does not yet exist in the profile model, add it.
+
+Example structure:
+
+```ts
+type BandMember = {
+  id: string;
+  name: string;
+  role?: string;
+  fee_amount?: number;
+  fee_type?: "per_show" | "per_tour" | "none";
+};
+```
+
+Create a reusable helper such as:
+
+```ts
+type MemberEarningsResult = {
+  memberId: string;
+  memberName: string;
+  role?: string;
+  feeAmount: number;
+  feeType: "per_show" | "per_tour" | "none";
+  qualifyingShowCount: number;
+  totalEarnings: number;
+};
+
+function calculateMemberEarnings(members, shows) {
+  // returns member rows + totals
+}
+```
+
+---
+
+## Qualifying show rules
+
+A show should count toward per-show earnings only if it is a real income show.
+
+Use existing tour show data and count only shows that:
+
+* have a booked/past/confirmed status
+* and/or have a fee/income value greater than 0
+* are not blank placeholders
+
+Do not count travel days or empty tour days.
+
+---
+
+## Suggested layout placement
+
+Place the new `Member Earnings` card near:
+
+* Income
+* Expenses
+* Profit
+
+So it becomes part of the final financial summary.
+
+---
+
+## Also update the summary logic
+
+Wherever the final totals are shown, make sure there is a clear distinction between:
+
+* gross show income
+* operating expenses
+* member payouts
+* final remaining profit
+
+I do **not** want member payouts hidden inside general expenses unless they are also separately visible.
+
+---
+
+## Acceptance criteria
+
+Implement this as complete working functionality:
+
+1. Member earnings are calculated from the selected act profile
+2. Per-show fees multiply by qualifying show count
+3. Per-tour fees apply once only
+4. Empty days do not count
+5. The UI shows each member and their total expected earnings
+6. Total member payout is shown
+7. Profit after member fees is shown
+8. No existing tour calculations are broken
+9. Styling matches the current app
+
+---
+
+## If needed, refactor
+
+If the current calculator logic is messy, refactor it so member payout calculation is handled in one shared place and can later be reused in:
+
+* Single Show Calculator
+* Tour Calculator
+* Past Shows
+* Settlement / payout screens
+
+Please implement this cleanly, not as a hack.

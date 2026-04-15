@@ -47,6 +47,9 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { calculateTour, fmt, formatDriveTime } from "@/lib/tour-calculator";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import {
+  migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
+} from "@/lib/member-utils";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -313,6 +316,18 @@ export default function TourDetail() {
     return { text: "Tight Margins", color: "status-tight", Icon: AlertTriangle };
   };
   const status = getStatus();
+
+  const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
+    ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
+    : { library: [], activeMemberIds: [] };
+  const activeMembers = resolveActiveMembers(memberLibrary, activeMemberIdList);
+  const qualifyingShowCount = calc
+    ? calc.stopCalcs.filter((sc) => sc.grossIncome > 0).length
+    : sortedStops.length;
+  const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
+  const totalMemberPayout = memberEarnings.totalPayout;
+  const profitAfterMemberFees = netProfit - totalMemberPayout;
+  const showMemberEarnings = activeMembers.length > 0;
 
   const profileAccomSummary = (() => {
     if (!profile) return null;
@@ -1002,6 +1017,77 @@ export default function TourDetail() {
             </div>
           )}
 
+          {showMemberEarnings && (
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" /> Member Earnings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1 text-sm">
+                <div className="space-y-0">
+                  {memberEarnings.rows.map((row, i) => {
+                    const feeLabel =
+                      row.feeType === "per_show"
+                        ? `$${row.feeAmount.toLocaleString()} / show`
+                        : row.feeType === "per_tour"
+                        ? `$${row.feeAmount.toLocaleString()} / tour`
+                        : "No fee set";
+                    const subLabel =
+                      row.feeType === "per_show"
+                        ? `Calculated from ${qualifyingShowCount} paid show${qualifyingShowCount !== 1 ? "s" : ""}`
+                        : row.feeType === "per_tour"
+                        ? "Flat tour fee"
+                        : "";
+                    return (
+                      <div
+                        key={row.memberId}
+                        className={`flex items-start justify-between py-2.5 gap-4 ${i < memberEarnings.rows.length - 1 ? "border-b border-border/40" : ""}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground leading-tight">{row.memberName}</div>
+                          {row.role && (
+                            <div className="text-xs text-muted-foreground">{row.role}</div>
+                          )}
+                          <div className="text-xs text-muted-foreground mt-0.5">{feeLabel}</div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className={`font-bold text-base ${row.totalEarnings > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                            {fmt(row.totalEarnings)}
+                          </div>
+                          {subLabel && (
+                            <div className="text-xs text-muted-foreground">{subLabel}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {totalMemberPayout > 0 && (
+                  <>
+                    <div className="flex justify-between font-bold pt-2 border-t border-border/40 text-sm">
+                      <span>Total Member Payout</span>
+                      <span className="text-destructive">{fmt(totalMemberPayout)}</span>
+                    </div>
+                    <div className={`flex justify-between text-sm font-semibold pt-1 ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
+                      <span className="text-muted-foreground font-normal">Profit After Member Fees</span>
+                      <span>{fmt(profitAfterMemberFees)}</span>
+                    </div>
+                    {profitAfterMemberFees < 0 && (
+                      <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5 mt-1">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                        <span>
+                          You're <strong>{fmt(Math.abs(profitAfterMemberFees))}</strong> short of covering all member fees at current income.
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {tour.notes && (
             <Card className="border-border/50 bg-card/50">
               <CardHeader>
@@ -1091,6 +1177,20 @@ export default function TourDetail() {
                     <span>Total expenses</span>
                     <span className="font-medium text-destructive">{fmt(calc.totalExpenses)}</span>
                   </div>
+                  {totalMemberPayout > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Member payouts</span>
+                        <span className="font-medium text-destructive">{fmt(totalMemberPayout)}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-border/30">
+                        <span className="font-semibold text-foreground">After member fees</span>
+                        <span className={`font-bold ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
+                          {fmt(profitAfterMemberFees)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   {sortedStops.length > 0 && (
                     <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/30">
                       <span>Average per show</span>
