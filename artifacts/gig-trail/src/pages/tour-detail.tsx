@@ -395,35 +395,44 @@ export default function TourDetail() {
 
           {/* Trail stops */}
           <Card className="border-border/50 bg-card/50">
-            <CardHeader className="pb-3">
+            <CardHeader
+              className="pb-3 cursor-pointer hover:bg-muted/20 rounded-t-xl transition-colors select-none"
+              onClick={() => setTrailOpen(o => !o)}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  className="flex items-center gap-2 text-left group"
-                  onClick={() => setTrailOpen(o => !o)}
-                >
+                <div className="flex items-center gap-2">
                   <Navigation className="w-4 h-4 text-secondary" />
-                  <span className="font-semibold text-base group-hover:text-secondary transition-colors">The Trail</span>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${trailOpen ? "rotate-180" : ""}`} />
-                </button>
-                {hasDaySlots && trailOpen && (
-                  <div className="flex gap-1">
-                    {(["all", "open", "weekend"] as const).map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setTrailFilter(f)}
-                        className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                          trailFilter === f
-                            ? "bg-secondary/20 text-secondary border-secondary/40 font-medium"
-                            : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
-                        }`}
-                      >
-                        {f === "all" && "All Days"}
-                        {f === "open" && `Open Days${openDaysCount > 0 ? ` (${openDaysCount})` : ""}`}
-                        {f === "weekend" && `Weekend Focus${weekendFocusCount > 0 ? ` (${weekendFocusCount})` : ""}`}
-                      </button>
-                    ))}
+                  <span className="font-semibold text-base">The Trail</span>
+                  {!trailOpen && hasDaySlots && (
+                    <span className="text-xs text-muted-foreground bg-muted/40 border border-border/50 rounded-full px-2 py-0.5">
+                      {daySlots.length} days
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {hasDaySlots && trailOpen && (
+                    <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                      {(["all", "open", "weekend"] as const).map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setTrailFilter(f)}
+                          className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                            trailFilter === f
+                              ? "bg-secondary/20 text-secondary border-secondary/40 font-medium"
+                              : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
+                          }`}
+                        >
+                          {f === "all" && "All Days"}
+                          {f === "open" && `Open Days${openDaysCount > 0 ? ` (${openDaysCount})` : ""}`}
+                          {f === "weekend" && `Weekend Focus${weekendFocusCount > 0 ? ` (${weekendFocusCount})` : ""}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="w-7 h-7 rounded-md border border-border/60 bg-background flex items-center justify-center shrink-0">
+                    <ChevronDown className={`w-4 h-4 text-secondary transition-transform ${trailOpen ? "rotate-180" : ""}`} />
                   </div>
-                )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className={trailOpen ? "p-0" : "hidden"}>
