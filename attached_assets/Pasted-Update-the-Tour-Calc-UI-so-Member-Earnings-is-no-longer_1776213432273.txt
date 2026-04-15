@@ -1,0 +1,239 @@
+Update the Tour Calc UI so **Member Earnings is no longer a separate card**.
+
+Instead, move it **inside the Expenses card** as a **collapsible section**.
+
+## Goal
+
+I want the financial summary to feel cleaner.
+
+Right now, **Member Earnings** is taking up too much space as its own card.
+I want member payouts to be treated as part of the overall cost structure, but still be visible when needed.
+
+---
+
+## Required UI change
+
+### Expenses card
+
+Keep the main **Expenses** card, but add a collapsible row/section inside it called:
+
+* `Member Payouts`
+* or `Member Fees`
+
+Use whichever label fits best with the rest of the app, but I’d lean toward:
+
+### `Member Payouts`
+
+---
+
+## Behaviour
+
+Inside the **Expenses card**:
+
+### Always visible
+
+Show these top-level totals:
+
+* Accommodation
+* Fuel
+* Food
+* Other expenses
+* Member Payouts
+* Total Expenses
+
+But for **Member Payouts**, make it expandable/collapsible.
+
+### Collapsed state
+
+When collapsed, show only:
+
+* `Member Payouts` label
+* total member payout amount
+* chevron/down icon
+
+Example:
+
+* Member Payouts .......................... $1,250.00 ▼
+
+### Expanded state
+
+When expanded, reveal the per-member breakdown underneath:
+
+* Julian — $300/show — 8 shows — **$2,400**
+* Beci — $250/show — 8 shows — **$2,000**
+* Bass Player — $800/tour — **$800**
+
+Also show helper text where useful:
+
+* `Calculated from 8 paid shows`
+* `Flat tour fee`
+
+---
+
+## Important calculation logic
+
+Do **not** change the payout logic itself.
+
+Keep the current calculation rules:
+
+* per-show members = fee × qualifying show count
+* per-tour members = flat amount once
+* none = $0
+
+The only change is **presentation/layout**.
+
+---
+
+## Totals logic
+
+Member payouts should now be included visually as part of expenses.
+
+That means:
+
+### Expenses card should include:
+
+* operating expenses
+* member payouts
+* final total expenses including payouts
+
+So update totals like this:
+
+```ts
+baseOperatingExpenses = accommodation + fuel + food + otherExpenses
+memberPayoutTotal = calculatedMemberPayouts
+totalExpenses = baseOperatingExpenses + memberPayoutTotal
+```
+
+If needed, rename the previous displayed expenses total to make things clearer internally:
+
+* `baseExpenses`
+* `operatingExpenses`
+* `totalExpensesIncludingPayouts`
+
+But in the UI keep it simple.
+
+---
+
+## Profit logic
+
+Profit should now be calculated from:
+
+```ts
+profit = grossIncome - totalExpenses
+```
+
+Since member payouts are now part of expenses, do **not** also subtract them again later or you’ll double count them.
+
+So remove any separate:
+
+* `Profit After Member Fees`
+
+if member payouts are already inside total expenses.
+
+Instead just show one clean final profit figure elsewhere in the calculator.
+
+---
+
+## Suggested Expenses card layout
+
+Example structure:
+
+### Expenses
+
+* Accommodation ................ $5,280.00
+* Fuel ................................. $420.00
+* Food ................................. $550.00
+* Member Payouts ............. $1,250.00 ▼
+
+  * Julian James — $300/show — 8 shows — **$2,400**
+  * Beci Kate — $250/show — 8 shows — **$2,000**
+  * Bass Player — $800/tour — **$800**
+* Total Expenses .............. $7,500.00
+
+---
+
+## Interaction details
+
+### Default state
+
+Prefer **collapsed by default** so the Expenses card stays compact.
+
+### Toggle
+
+Use a chevron icon that rotates when open.
+
+### Animation
+
+If easy, add a small smooth expand/collapse animation.
+
+### Empty state
+
+If there are no members or no payouts:
+
+* show `Member Payouts — $0.00`
+* expanding can either show:
+
+  * `No member payouts set`
+  * or stay disabled
+
+---
+
+## Styling
+
+* Keep styling consistent with the current card design
+* Nested member rows should feel slightly secondary to the main expenses rows
+* Indent member rows under the Member Payouts line
+* Make member total values bold enough to scan quickly
+* Do not make this section visually heavier than the main expenses summary
+
+---
+
+## Implementation notes
+
+### 1. Remove separate card
+
+Delete the standalone `Member Earnings` card from the results grid.
+
+### 2. Add collapsible section inside Expenses card
+
+Use an accordion/collapsible component or lightweight local state.
+
+Example idea:
+
+```ts
+const [showMemberPayouts, setShowMemberPayouts] = useState(false);
+```
+
+### 3. Reuse existing earnings calculation
+
+Do not duplicate logic.
+Use the existing member earnings calculation helper and pass its results into the Expenses card.
+
+Example:
+
+```ts
+const memberPayoutSummary = calculateMemberEarnings(members, shows);
+
+const totalMemberPayout = memberPayoutSummary.totalMemberPayout;
+const memberRows = memberPayoutSummary.rows;
+```
+
+### 4. Roll into expenses summary
+
+Where the expense totals are assembled, include member payouts in the final expenses total.
+
+---
+
+## Acceptance criteria
+
+1. Member Earnings is no longer a separate card
+2. Member Payouts appears inside Expenses
+3. Member Payouts can be expanded/collapsed
+4. Collapsed state shows only the total payout amount
+5. Expanded state shows each member breakdown
+6. Total Expenses includes member payouts
+7. Profit is not double-subtracting member fees
+8. Styling matches the rest of Tour Calc
+9. Collapsed by default
+
+Implement this cleanly and update any summary labels needed so the math stays accurate and easy to understand.

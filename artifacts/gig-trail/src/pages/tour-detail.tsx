@@ -61,6 +61,7 @@ export default function TourDetail() {
   const [trailOpen, setTrailOpen] = useState(true);
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [showMemberPayouts, setShowMemberPayouts] = useState(false);
   const toggleDay = (date: string) =>
     setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
@@ -308,18 +309,6 @@ export default function TourDetail() {
 
   const netProfit = calc?.netProfit ?? 0;
   const grossIncome = calc?.grossIncome ?? 0;
-  const margin = grossIncome > 0 ? netProfit / grossIncome : 0;
-
-  const getStatus = () => {
-    if (grossIncome === 0 && netProfit === 0)
-      return { text: "No Data Yet", color: "text-muted-foreground bg-muted/30 border-border/50", Icon: XCircle };
-    if (netProfit < 0)
-      return { text: "Probably Not Worth It", color: "status-not-worth", Icon: XCircle };
-    if (margin > 0.2)
-      return { text: "Worth the Drive", color: "status-worth", Icon: TrendingUp };
-    return { text: "Tight Margins", color: "status-tight", Icon: AlertTriangle };
-  };
-  const status = getStatus();
 
   const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
     ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
@@ -330,8 +319,21 @@ export default function TourDetail() {
     : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merch ?? 0) > 0).length;
   const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
   const totalMemberPayout = memberEarnings.totalPayout;
+  const totalExpensesWithPayouts = (calc?.totalExpenses ?? 0) + totalMemberPayout;
   const profitAfterMemberFees = netProfit - totalMemberPayout;
-  const showMemberEarnings = activeMembers.length > 0;
+
+  const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
+
+  const getStatus = () => {
+    if (grossIncome === 0 && profitAfterMemberFees === 0)
+      return { text: "No Data Yet", color: "text-muted-foreground bg-muted/30 border-border/50", Icon: XCircle };
+    if (profitAfterMemberFees < 0)
+      return { text: "Probably Not Worth It", color: "status-not-worth", Icon: XCircle };
+    if (margin > 0.2)
+      return { text: "Worth the Drive", color: "status-worth", Icon: TrendingUp };
+    return { text: "Tight Margins", color: "status-tight", Icon: AlertTriangle };
+  };
+  const status = getStatus();
 
   const profileAccomSummary = (() => {
     if (!profile) return null;
@@ -1035,85 +1037,63 @@ export default function TourDetail() {
                       <span className="font-medium">{fmt(calc.totalExtraCosts)}</span>
                     </div>
                   )}
+
+                  {/* Member Payouts — collapsible */}
+                  <div className="border-b border-border/40 pb-2">
+                    <button
+                      className="w-full flex items-center justify-between gap-2 group"
+                      onClick={() => setShowMemberPayouts(v => !v)}
+                    >
+                      <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                        Member Payouts
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`font-medium ${totalMemberPayout > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                          {fmt(totalMemberPayout)}
+                        </span>
+                        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showMemberPayouts ? "rotate-180" : ""}`} />
+                      </div>
+                    </button>
+
+                    {showMemberPayouts && (
+                      <div className="mt-2 space-y-1.5 pl-3 border-l-2 border-border/30">
+                        {memberEarnings.rows.length === 0 || totalMemberPayout === 0 ? (
+                          <p className="text-xs text-muted-foreground italic">No member payouts set</p>
+                        ) : (
+                          memberEarnings.rows.map(row => {
+                            const feeLabel =
+                              row.feeType === "per_show"
+                                ? `$${row.feeAmount.toLocaleString()}/show × ${qualifyingShowCount} show${qualifyingShowCount !== 1 ? "s" : ""}`
+                                : row.feeType === "per_tour"
+                                ? "Flat tour fee"
+                                : "No fee";
+                            return (
+                              <div key={row.memberId} className="flex items-start justify-between gap-3 text-xs">
+                                <div className="min-w-0">
+                                  <span className="font-medium text-foreground">{row.memberName}</span>
+                                  {row.role && <span className="text-muted-foreground ml-1">· {row.role}</span>}
+                                  <div className="text-muted-foreground/80">{feeLabel}</div>
+                                </div>
+                                <span className={`font-bold shrink-0 ${row.totalEarnings > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                                  {fmt(row.totalEarnings)}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-between pt-1">
                     <span className="font-bold">Total Expenses</span>
-                    <span className="font-bold text-destructive">{fmt(calc.totalExpenses)}</span>
+                    <span className="font-bold text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {showMemberEarnings && (
-            <Card className="border-border/50 bg-card/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" /> Member Earnings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <div className="space-y-0">
-                  {memberEarnings.rows.map((row, i) => {
-                    const feeLabel =
-                      row.feeType === "per_show"
-                        ? `$${row.feeAmount.toLocaleString()} / show`
-                        : row.feeType === "per_tour"
-                        ? `$${row.feeAmount.toLocaleString()} / tour`
-                        : "No fee set";
-                    const subLabel =
-                      row.feeType === "per_show"
-                        ? `Calculated from ${qualifyingShowCount} paid show${qualifyingShowCount !== 1 ? "s" : ""}`
-                        : row.feeType === "per_tour"
-                        ? "Flat tour fee"
-                        : "";
-                    return (
-                      <div
-                        key={row.memberId}
-                        className={`flex items-start justify-between py-2.5 gap-4 ${i < memberEarnings.rows.length - 1 ? "border-b border-border/40" : ""}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium text-foreground leading-tight">{row.memberName}</div>
-                          {row.role && (
-                            <div className="text-xs text-muted-foreground">{row.role}</div>
-                          )}
-                          <div className="text-xs text-muted-foreground mt-0.5">{feeLabel}</div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className={`font-bold text-base ${row.totalEarnings > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                            {fmt(row.totalEarnings)}
-                          </div>
-                          {subLabel && (
-                            <div className="text-xs text-muted-foreground">{subLabel}</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {totalMemberPayout > 0 && (
-                  <>
-                    <div className="flex justify-between font-bold pt-2 border-t border-border/40 text-sm">
-                      <span>Total Member Payout</span>
-                      <span className="text-destructive">{fmt(totalMemberPayout)}</span>
-                    </div>
-                    <div className={`flex justify-between text-sm font-semibold pt-1 ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
-                      <span className="text-muted-foreground font-normal">Profit After Member Fees</span>
-                      <span>{fmt(profitAfterMemberFees)}</span>
-                    </div>
-                    {profitAfterMemberFees < 0 && (
-                      <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5 mt-1">
-                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span>
-                          You're <strong>{fmt(Math.abs(profitAfterMemberFees))}</strong> short of covering all member fees at current income.
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {tour.notes && (
             <Card className="border-border/50 bg-card/50">
@@ -1129,7 +1109,7 @@ export default function TourDetail() {
 
         {/* Sticky summary panel */}
         <div className="lg:col-span-1">
-          <Card className={`border-2 sticky top-20 shadow-lg ${netProfit >= 0 ? "border-secondary/50" : "border-destructive/50"}`}>
+          <Card className={`border-2 sticky top-20 shadow-lg ${profitAfterMemberFees >= 0 ? "border-secondary/50" : "border-destructive/50"}`}>
             <CardHeader className={`pb-4 border-b border-border/40 ${status.color} rounded-t-lg`}>
               <div className="flex items-center gap-2">
                 <status.Icon className="w-5 h-5" />
@@ -1141,12 +1121,12 @@ export default function TourDetail() {
                 <div className="text-sm text-muted-foreground uppercase tracking-wider font-semibold mb-1">
                   What's It Worth?
                 </div>
-                <div className={`text-5xl font-bold ${netProfit >= 0 ? "text-secondary" : "text-destructive"}`}>
-                  {fmt(netProfit)}
+                <div className={`text-5xl font-bold ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
+                  {fmt(profitAfterMemberFees)}
                 </div>
                 {profile && profile.peopleCount > 0 && (
                   <div className="text-sm text-muted-foreground mt-2 font-medium">
-                    {fmt(netProfit / profile.peopleCount)} per member
+                    {fmt(profitAfterMemberFees / profile.peopleCount)} per member
                   </div>
                 )}
               </div>
@@ -1202,22 +1182,8 @@ export default function TourDetail() {
                   )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Total expenses</span>
-                    <span className="font-medium text-destructive">{fmt(calc.totalExpenses)}</span>
+                    <span className="font-medium text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
-                  {totalMemberPayout > 0 && (
-                    <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Member payouts</span>
-                        <span className="font-medium text-destructive">{fmt(totalMemberPayout)}</span>
-                      </div>
-                      <div className="flex justify-between pt-1 border-t border-border/30">
-                        <span className="font-semibold text-foreground">After member fees</span>
-                        <span className={`font-bold ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
-                          {fmt(profitAfterMemberFees)}
-                        </span>
-                      </div>
-                    </>
-                  )}
                   {sortedStops.length > 0 && (
                     <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/30">
                       <span>Average per show</span>
