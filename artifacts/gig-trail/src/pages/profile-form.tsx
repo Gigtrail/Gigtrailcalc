@@ -199,6 +199,7 @@ export default function ProfileForm() {
   }, [profile, form]);
 
   function handleActSetupSave(data: ActSetupData) {
+    const count = derivePeopleCount(data.actType, data.activeMemberIds);
     form.setValue("actType", data.actType, { shouldValidate: true });
     form.setValue("memberLibrary", data.memberLibrary, { shouldValidate: false });
     form.setValue("activeMemberIds", data.activeMemberIds, { shouldValidate: true });
@@ -206,9 +207,31 @@ export default function ProfileForm() {
     form.setValue("singleRoomsDefault", data.singleRoomsDefault, { shouldValidate: false });
     form.setValue("doubleRoomsDefault", data.doubleRoomsDefault, { shouldValidate: false });
     form.setValue("avgFoodPerDay", data.avgFoodPerDay, { shouldValidate: false });
-    const count = derivePeopleCount(data.actType, data.activeMemberIds);
     form.setValue("peopleCount", count, { shouldValidate: false });
     setActSetupOpen(false);
+
+    if (isEditing) {
+      const current = form.getValues();
+      const payload = {
+        ...current,
+        actType: data.actType,
+        accommodationRequired: data.accommodationRequired,
+        singleRoomsDefault: data.singleRoomsDefault,
+        doubleRoomsDefault: data.doubleRoomsDefault,
+        avgFoodPerDay: data.avgFoodPerDay,
+        peopleCount: count,
+        bandMembers: data.memberLibrary.length > 0 ? JSON.stringify(data.memberLibrary) : null,
+        activeMemberIds: data.activeMemberIds.length > 0 ? JSON.stringify(data.activeMemberIds) : null,
+        memberLibrary: undefined,
+      };
+      updateProfile.mutate(
+        { id: profileId, data: payload as Parameters<typeof updateProfile.mutate>[0]["data"] },
+        {
+          onSuccess: () => toast({ title: "Act setup saved" }),
+          onError: () => toast({ title: "Failed to save act setup", variant: "destructive" }),
+        }
+      );
+    }
   }
 
   function handleLibrarySave(updatedLibrary: Member[]) {
