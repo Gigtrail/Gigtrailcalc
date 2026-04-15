@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
-import { calculateTour, fmt, formatDriveTime } from "@/lib/tour-calculator";
+import { calculateTour, fmt, formatDriveTime, type TourLeg } from "@/lib/tour-calculator";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
@@ -62,6 +62,9 @@ export default function TourDetail() {
   const [trailOpen, setTrailOpen] = useState(true);
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [expandedLegs, setExpandedLegs] = useState<Set<string>>(new Set());
+  const toggleLeg = (key: string) =>
+    setExpandedLegs(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const [showMemberPayouts, setShowMemberPayouts] = useState(false);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
@@ -347,6 +350,87 @@ export default function TourDetail() {
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
 
+  const renderLegRow = (leg: TourLeg, driveWarning: boolean, legKey: string) => {
+    const legOpen = expandedLegs.has(legKey);
+    const hasVehicleBreakdown =
+      (calc?.vehicleFuelBreakdown?.length ?? 0) > 1 &&
+      (calc?.totalDistance ?? 0) > 0 &&
+      leg.distanceKm > 0;
+    return (
+      <>
+        <div
+          className={`px-4 py-2 flex items-center gap-2.5 text-xs cursor-pointer transition-colors border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}
+          onClick={e => { e.stopPropagation(); toggleLeg(legKey); }}
+        >
+          {driveWarning
+            ? <AlertTriangle className="w-3 h-3 shrink-0 text-[#C25A00]" />
+            : <Fuel className="w-3 h-3 shrink-0 opacity-50" />
+          }
+          <span className="flex-1 min-w-0">
+            {leg.driveTimeMinutes > 0
+              ? formatDriveTime(leg.driveTimeMinutes)
+              : leg.distanceKm > 0 ? `${leg.distanceKm} km` : "Distance unknown"
+            }
+            {leg.fuelCost > 0 && (
+              <span className="text-muted-foreground"> · Fuel {fmt(leg.fuelCost)}</span>
+            )}
+            {driveWarning && (
+              <span className="text-[#C25A00] font-semibold"> · Long drive</span>
+            )}
+          </span>
+          <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground/50 transition-transform ${legOpen ? "rotate-180" : ""}`} />
+        </div>
+        {legOpen && (
+          <div className={`px-4 pb-3 pt-2 text-xs border-b border-border/20 space-y-2 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
+            <div>
+              <span className="font-semibold text-foreground">{leg.from}</span>
+              <span className="text-muted-foreground"> → </span>
+              <span className="font-semibold text-foreground">{leg.to}</span>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-muted-foreground">
+              {leg.distanceKm > 0 && (
+                <span>
+                  {leg.distanceKm} km
+                  {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? "" : " (est.)"}
+                </span>
+              )}
+              {leg.fuelUsedLitres > 0 && (
+                <span>
+                  {leg.fuelUsedLitres.toFixed(1)} L
+                  {leg.fuelPrice?.pricePerLitre ? ` @ $${leg.fuelPrice.pricePerLitre.toFixed(3)}/L` : ""}
+                </span>
+              )}
+              {leg.source === "unknown" && (
+                <span className="italic text-[#C25A00]/80">
+                  Distance unknown — add an override in tour settings
+                </span>
+              )}
+            </div>
+            {hasVehicleBreakdown && (
+              <div className="border-t border-border/20 pt-1.5 space-y-1">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                  Vehicle fuel (est.)
+                </div>
+                {calc!.vehicleFuelBreakdown.map(v => (
+                  <div key={v.vehicleId} className="flex justify-between text-muted-foreground">
+                    <span>{v.vehicleName} <span className="opacity-60">({v.fuelType})</span></span>
+                    <span className="font-medium">{fmt(v.totalCost * (leg.distanceKm / calc!.totalDistance))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {driveWarning && (
+              <div className="flex items-center gap-1 text-[#C25A00] font-medium pt-0.5">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                Long drive — may exceed comfortable daily limit
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
   const getStatus = () => {
     if (grossIncome === 0 && profitAfterMemberFees === 0)
       return { text: "No Data Yet", color: "text-muted-foreground bg-muted/30 border-border/50", Icon: XCircle };
@@ -583,25 +667,7 @@ export default function TourDetail() {
 
                     return (
                       <div key={day.date}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
-                          <div className={`px-4 py-2 flex items-start gap-2 text-xs border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
-                            <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
-                            <div>
-                              <span>
-                                {leg.from} → {leg.to}: {leg.distanceKm} km
-                                {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? " (enter distance override)" : " (est.)"}
-                                {leg.driveTimeMinutes > 0 && ` · ${formatDriveTime(leg.driveTimeMinutes)}`}
-                                {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
-                              </span>
-                              {driveWarning && (
-                                <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
-                                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                                  Long drive — may exceed comfortable daily limit
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, day.date)}
 
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${rowClass}`}
@@ -700,25 +766,7 @@ export default function TourDetail() {
                     const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
                     return (
                       <div key={stop.id}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
-                          <div className={`px-4 py-2 flex items-start gap-2 text-xs border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
-                            <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
-                            <div>
-                              <span>
-                                {leg.from} → {leg.to}: {leg.distanceKm} km
-                                {leg.source === "manual" ? " (manual)" : leg.source === "unknown" ? " (enter distance override)" : " (est.)"}
-                                {leg.driveTimeMinutes > 0 && ` · ${formatDriveTime(leg.driveTimeMinutes)}`}
-                                {leg.fuelCost > 0 && ` · fuel ~${fmt(leg.fuelCost)}`}
-                              </span>
-                              {driveWarning && (
-                                <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
-                                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                                  Long drive — may exceed comfortable daily limit
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, `stop-${stop.id}`)}
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${stop.showType === "Ticketed Show" || stop.showType === "Hybrid" ? "trail-row-ticketed" : "trail-row-flat"}`}
                           onClick={() => toggleStop(stop.id)}
@@ -808,25 +856,7 @@ export default function TourDetail() {
                     const isReturnLeg = tour.returnHome && returnLeg && sortedStops.length > 0 &&
                       returnLeg.to !== sortedStops[sortedStops.length - 1]?.city;
                     const returnDriveWarn = isReturnLeg && returnLeg && returnLeg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
-                    return isReturnLeg ? (
-                      <div className={`px-4 py-2 flex items-start gap-2 text-xs ${returnDriveWarn ? "trail-leg-warning" : "trail-leg-row"}`}>
-                        <Fuel className="w-3 h-3 shrink-0 mt-0.5 opacity-60" />
-                        <div>
-                          <span>
-                            {returnLeg.from} → {returnLeg.to}: {returnLeg.distanceKm} km
-                            {returnLeg.source === "unknown" ? " (enter distance override)" : returnLeg.source === "manual" ? " (manual)" : " (est.)"}
-                            {returnLeg.driveTimeMinutes > 0 && ` · ${formatDriveTime(returnLeg.driveTimeMinutes)}`}
-                            {returnLeg.fuelCost > 0 && ` · fuel ~${fmt(returnLeg.fuelCost)}`}
-                          </span>
-                          {returnDriveWarn && (
-                            <div className="flex items-center gap-1 text-[#C25A00] font-medium mt-0.5">
-                              <AlertTriangle className="w-3 h-3 shrink-0" />
-                              Long drive — may exceed comfortable daily limit
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : null;
+                    return isReturnLeg ? renderLegRow(returnLeg!, !!returnDriveWarn, "return-leg") : null;
                   })()}
 
                   {tour.returnHome && (tour.endLocation || tour.startLocation) && (
