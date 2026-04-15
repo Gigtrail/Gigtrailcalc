@@ -1026,6 +1026,7 @@ export default function TourDetail() {
                                   {
                                     id: tourId,
                                     data: {
+                                      name: tour.name,
                                       fuelType: localFuelType,
                                       fuelPricePetrol: parseFloat(localFuelPricePetrol) || 1.90,
                                       fuelPriceDiesel: parseFloat(localFuelPriceDiesel) || 1.95,
