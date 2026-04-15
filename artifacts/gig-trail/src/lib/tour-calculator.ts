@@ -381,7 +381,8 @@ export function calculateTour(
   const totalDistance = legs.reduce((s, l) => s + l.distanceKm, 0);
   const totalDriveTimeMinutes = legs.reduce((s, l) => s + l.driveTimeMinutes, 0);
   const totalFuelUsedLitres = legs.reduce((s, l) => s + l.fuelUsedLitres, 0);
-  const totalFuelCost = legs.reduce((s, l) => s + l.fuelCost, 0);
+  // Will be overridden below if a multi-vehicle fleet is present
+  let totalFuelCost = legs.reduce((s, l) => s + l.fuelCost, 0);
 
   const totalShowIncome = stopCalcs.reduce((s, c) => s + c.showIncome, 0);
   const totalMerchIncome = stopCalcs.reduce((s, c) => s + c.merch, 0);
@@ -440,7 +441,10 @@ export function calculateTour(
     ? fleetVehicles.map(v => {
         const vConsumption = n(v.avgConsumption);
         const vTotalLitres = vConsumption > 0 ? (totalDistance * vConsumption) / 100 : 0;
-        const vTotalCost = vTotalLitres * avgFuelPrice;
+        // Use the price matching this vehicle's own fuel type, falling back to avgFuelPrice
+        const vFuelTypeKey = (v.fuelType ?? 'petrol').toLowerCase() as keyof TourFuelPrices;
+        const vFuelPrice = fuelPrices ? (fuelPrices[vFuelTypeKey] ?? avgFuelPrice) : avgFuelPrice;
+        const vTotalCost = vTotalLitres * vFuelPrice;
         return {
           vehicleId: v.id,
           vehicleName: v.name,
@@ -451,6 +455,12 @@ export function calculateTour(
         };
       })
     : [];
+
+  // When a fleet is present, recalculate totalFuelCost from per-vehicle costs
+  // so that each vehicle's own fuel type price is used correctly.
+  if (vehicleFuelBreakdown.length > 0) {
+    totalFuelCost = vehicleFuelBreakdown.reduce((s, v) => s + v.totalCost, 0);
+  }
 
   return {
     legs,
