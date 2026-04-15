@@ -58,7 +58,11 @@ export default function TourDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const [trailOpen, setTrailOpen] = useState(true);
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleDay = (date: string) =>
+    setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
     setExpandedStops(prev => {
       const next = new Set(prev);
@@ -393,10 +397,15 @@ export default function TourDetail() {
           <Card className="border-border/50 bg-card/50">
             <CardHeader className="pb-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle className="flex items-center gap-2">
-                  <Navigation className="w-4 h-4 text-secondary" /> The Trail
-                </CardTitle>
-                {hasDaySlots && (
+                <button
+                  className="flex items-center gap-2 text-left group"
+                  onClick={() => setTrailOpen(o => !o)}
+                >
+                  <Navigation className="w-4 h-4 text-secondary" />
+                  <span className="font-semibold text-base group-hover:text-secondary transition-colors">The Trail</span>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${trailOpen ? "rotate-180" : ""}`} />
+                </button>
+                {hasDaySlots && trailOpen && (
                   <div className="flex gap-1">
                     {(["all", "open", "weekend"] as const).map(f => (
                       <button
@@ -417,7 +426,7 @@ export default function TourDetail() {
                 )}
               </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className={trailOpen ? "p-0" : "hidden"}>
               {!hasDaySlots && sortedStops.length === 0 ? (
                 <div className="text-center py-10 text-muted-foreground space-y-3">
                   <MapPin className="w-8 h-8 mx-auto opacity-50" />
@@ -485,9 +494,14 @@ export default function TourDetail() {
                     const dayDateLabel = format(parseISO(day.date), "EEE MMM d");
 
                     if (!day.stop) {
+                      const dayExpanded = expandedDays.has(day.date);
                       return (
-                        <div key={day.date} className="px-4 py-3 flex items-start gap-3 hover:bg-muted/10 transition-colors">
-                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5 border ${isFriSat ? "bg-secondary/10 border-secondary/30 text-secondary" : isSun ? "bg-secondary/5 border-secondary/20 text-secondary/70" : "bg-muted/30 border-border/30 text-muted-foreground"}`}>
+                        <div key={day.date}>
+                          <div
+                            className="px-4 py-3 flex items-center gap-3 hover:bg-muted/10 transition-colors cursor-pointer"
+                            onClick={() => toggleDay(day.date)}
+                          >
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${isFriSat ? "bg-secondary/10 border-secondary/30 text-secondary" : isSun ? "bg-secondary/5 border-secondary/20 text-secondary/70" : "bg-muted/30 border-border/30 text-muted-foreground"}`}>
                             {day.dayNumber}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -496,26 +510,30 @@ export default function TourDetail() {
                               <span className="text-muted-foreground/50 text-xs">·</span>
                               <span className="text-sm text-muted-foreground italic">No show booked</span>
                             </div>
-                            {dailyCostLine && (
+                            {dayExpanded && dailyCostLine && (
                               <div className="text-xs text-muted-foreground mt-0.5">Daily cost: {dailyCostLine}</div>
                             )}
                           </div>
-                          <div className="flex gap-1 shrink-0">
-                            <Button
-                              variant="ghost" size="sm"
-                              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => setLocation(`/tours/${tourId}/stops/new?date=${day.date}`)}
-                            >
-                              <Plus className="w-3 h-3 mr-1" /> Add Show
-                            </Button>
-                            <Button
-                              variant="ghost" size="sm"
-                              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
-                              onClick={() => { setPendingDate(day.date); setShowPastShowModal(true); }}
-                            >
-                              <History className="w-3 h-3 mr-1" /> Past Show
-                            </Button>
+                          <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${dayExpanded ? "rotate-180" : ""}`} />
                           </div>
+                          {dayExpanded && (
+                            <div className="px-4 pb-3 pt-1 bg-muted/20 border-t border-border/30 flex gap-1">
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                                onClick={() => setLocation(`/tours/${tourId}/stops/new?date=${day.date}`)}
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> Add Show
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                                onClick={() => { setPendingDate(day.date); setShowPastShowModal(true); }}
+                              >
+                                <History className="w-3 h-3 mr-1" /> Past Show
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       );
                     }
