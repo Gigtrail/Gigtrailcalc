@@ -1024,8 +1024,8 @@ export default function TourDetail() {
                                 setFuelSaving(true);
                                 updateTour.mutate(
                                   {
-                                    pathParams: { id: tourId },
-                                    body: {
+                                    id: tourId,
+                                    data: {
                                       fuelType: localFuelType,
                                       fuelPricePetrol: parseFloat(localFuelPricePetrol) || 1.90,
                                       fuelPriceDiesel: parseFloat(localFuelPriceDiesel) || 1.95,
