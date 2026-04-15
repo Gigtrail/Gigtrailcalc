@@ -27,7 +27,7 @@ import { ChevronLeft, Save, Home, Building2, Pencil } from "lucide-react";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch } from "@/components/venue-search";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -69,11 +69,11 @@ export default function TourStopForm() {
   const parsedStopId = isEditing ? parseInt(stopId) : 0;
   
   const { data: tour, isLoading: isLoadingTour } = useGetTour(tourId, {
-    query: { enabled: !!tourId, queryKey: ['tour', tourId] }
+    query: { enabled: !!tourId, queryKey: getGetTourQueryKey(tourId) }
   });
 
   const { data: stops, isLoading: isLoadingStops } = useGetTourStops(tourId, {
-    query: { enabled: !!tourId, queryKey: ['tourStops', tourId] }
+    query: { enabled: !!tourId, queryKey: getGetTourStopsQueryKey(tourId) }
   });
   
   const { data: profile } = useGetProfile(tour?.profileId || 0, {
@@ -98,6 +98,7 @@ export default function TourStopForm() {
   const updateStop = useUpdateTourStop();
 
   const stop = stops?.find(s => s.id === parsedStopId);
+  const hasReset = useRef(false);
   
   const form = useForm<StopFormValues>({
     resolver: zodResolver(stopSchema),
@@ -180,7 +181,8 @@ export default function TourStopForm() {
   }, [formValues]);
 
   useEffect(() => {
-    if (isEditing && stop) {
+    if (isEditing && stop && !hasReset.current) {
+      hasReset.current = true;
       form.reset({
         date: stop.date ? stop.date.split('T')[0] : "",
         city: stop.city,
@@ -205,7 +207,8 @@ export default function TourStopForm() {
         notes: stop.notes || "",
         stopOrder: stop.stopOrder,
       });
-    } else if (!isEditing && stops) {
+    } else if (!isEditing && stops && !hasReset.current) {
+      hasReset.current = true;
       form.setValue("stopOrder", stops.length);
     }
   }, [stop, stops, isEditing, form]);
