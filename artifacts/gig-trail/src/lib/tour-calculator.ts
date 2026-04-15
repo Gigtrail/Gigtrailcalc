@@ -166,11 +166,13 @@ function buildDaySlots(
   foodPerDay: number,
   accomRequired: boolean,
   nightlyAccomRate: number,
+  routeIndexByStopId: Map<number, number>,
 ): DaySlot[] {
-  const stopByDate = new Map<string, { stop: TourStopInput; stopIndex: number }>();
-  for (let i = 0; i < sortedStops.length; i++) {
-    const d = getISODate(sortedStops[i].date);
-    if (d) stopByDate.set(d, { stop: sortedStops[i], stopIndex: i });
+  const stopByDate = new Map<string, { stop: TourStopInput; routeIndex: number }>();
+  for (const stop of sortedStops) {
+    const d = getISODate(stop.date);
+    const ri = routeIndexByStopId.get(stop.id);
+    if (d && ri !== undefined) stopByDate.set(d, { stop, routeIndex: ri });
   }
 
   const slots: DaySlot[] = [];
@@ -184,7 +186,7 @@ function buildDaySlots(
 
     let incomingLeg: TourLeg | undefined;
     if (entry) {
-      const legIndex = hasStartLocation ? entry.stopIndex : entry.stopIndex - 1;
+      const legIndex = hasStartLocation ? entry.routeIndex : entry.routeIndex - 1;
       if (legIndex >= 0 && legIndex < legs.length) {
         incomingLeg = legs[legIndex];
       }
@@ -271,6 +273,10 @@ export function calculateTour(
   profileFoodPerDay?: number | null,
   profileAccomRequired?: boolean | null,
   vehicles?: VehicleInput[] | null,
+  startLocationLat?: number | null,
+  startLocationLng?: number | null,
+  endLocationLat?: number | null,
+  endLocationLng?: number | null,
 ): TourCalcResult {
   const sortedStops = [...stops].sort((a, b) => {
     const da = getISODate(a.date);
@@ -286,11 +292,16 @@ export function calculateTour(
 
   type LocationNode = { name: string; lat?: number | null; lng?: number | null; stop?: TourStopInput };
   const locations: LocationNode[] = [];
-  if (startLocation?.trim()) locations.push({ name: startLocation.trim() });
-  for (const stop of sortedStops) locations.push({ name: stop.city, lat: stop.cityLat, lng: stop.cityLng, stop });
+  if (startLocation?.trim()) locations.push({ name: startLocation.trim(), lat: startLocationLat, lng: startLocationLng });
+  const validStops = sortedStops.filter(s => s.city?.trim());
+  for (const stop of validStops) locations.push({ name: stop.city, lat: stop.cityLat, lng: stop.cityLng, stop });
   if (returnHome) {
     const dest = endLocation?.trim() || startLocation?.trim();
-    if (dest) locations.push({ name: dest });
+    if (dest) {
+      const destLat = endLocation?.trim() ? endLocationLat : startLocationLat;
+      const destLng = endLocation?.trim() ? endLocationLng : startLocationLng;
+      locations.push({ name: dest, lat: destLat, lng: destLng });
+    }
   }
 
   const legs: TourLeg[] = [];
@@ -373,9 +384,14 @@ export function calculateTour(
   const accomRequired = profileAccomRequired ?? false;
   const rate = n(nightlyAccomRate);
 
+  const routeIndexByStopId = new Map<number, number>();
+  for (let i = 0; i < validStops.length; i++) {
+    routeIndexByStopId.set(validStops[i].id, i);
+  }
+
   const daySlots =
     rangeStart && rangeEnd && rangeStart <= rangeEnd
-      ? buildDaySlots(sortedStops, legs, rangeStart, rangeEnd, hasStartLocation, foodPerDay, accomRequired, rate)
+      ? buildDaySlots(sortedStops, legs, rangeStart, rangeEnd, hasStartLocation, foodPerDay, accomRequired, rate, routeIndexByStopId)
       : [];
 
   const totalFoodCost = daySlots.reduce((s, d) => s + d.dailyFoodCost, 0);

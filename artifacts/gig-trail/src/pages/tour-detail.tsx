@@ -262,6 +262,10 @@ export default function TourDetail() {
       profile?.avgFoodPerDay ?? null,
       profile?.accommodationRequired ?? null,
       vehicles,
+      tour?.startLocationLat ?? null,
+      tour?.startLocationLng ?? null,
+      tour?.endLocationLat ?? null,
+      tour?.endLocationLng ?? null,
     );
   }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile]);
 
@@ -575,7 +579,7 @@ export default function TourDetail() {
 
                     return (
                       <div key={day.date}>
-                        {leg && leg.distanceKm > 0 && (
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
                           <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
                             <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
                             <div>
@@ -692,7 +696,7 @@ export default function TourDetail() {
                     const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
                     return (
                       <div key={stop.id}>
-                        {leg && leg.distanceKm > 0 && (
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && (
                           <div className={`px-4 py-2 flex items-start gap-2 text-xs text-muted-foreground border-b border-border/30 ${driveWarning ? "bg-amber-500/5" : "bg-muted/10"}`}>
                             <Fuel className="w-3 h-3 shrink-0 mt-0.5" />
                             <div>

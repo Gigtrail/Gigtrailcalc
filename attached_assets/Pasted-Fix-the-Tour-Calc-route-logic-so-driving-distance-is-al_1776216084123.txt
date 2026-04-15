@@ -1,0 +1,234 @@
+Fix the Tour Calc route logic so **driving distance is always calculated correctly between the Start location and the first actual stop/show**.
+
+## Current bug
+
+The calculator is **not calculating the drive from the Start location to the first show**, especially in cases like:
+
+* Start: `Yackandandah VIC 3749, Australia`
+* First show: `Oodies Cafe, 7 Kolan St, Bundaberg North QLD 4670, Australia`
+
+That first leg should absolutely be included in:
+
+* driving distance
+* drive time
+* fuel cost
+* daily driving warnings
+
+Right now it looks like the route logic is skipping or failing that first segment.
+
+---
+
+## What needs fixing
+
+### Route calculation rule
+
+Treat the tour as a continuous sequence of route points:
+
+1. Start location
+2. first stop/show
+3. second stop/show
+4. third stop/show
+5. etc
+6. return location if enabled
+
+The Start location must be treated as the **origin for the first leg**.
+
+So if the first actual stop is Oodies Cafe, calculate:
+
+```text
+Yackandandah VIC 3749 → Oodies Cafe
+```
+
+This should happen automatically even if there are blank days after the start or around the tour.
+
+---
+
+## Likely cause
+
+The current logic is probably only calculating legs:
+
+* between stop N and stop N+1
+* or only after certain stop rows are populated
+* or only when a previous stop exists in the trail list
+
+This means the app may be failing to inject the Start location as a route node.
+
+That needs to be fixed.
+
+---
+
+## Required logic
+
+Create or fix a route-building step before distance calculation.
+
+### Build route nodes in this order:
+
+* start location, if set
+* each valid show/stop with a usable address, in chronological order
+* return location, if enabled
+
+### Important
+
+Blank days with “No show booked” should **not** become route nodes.
+
+Only actual entered stops/shows with addresses should count.
+
+---
+
+## Example
+
+Given:
+
+* Start = Yackandandah
+* Apr 19 = Oodies Cafe
+* Apr 24 = Flow Bar
+* Apr 26 = The Junk Bar
+* Return = Yackandandah
+
+Route legs should be:
+
+1. Yackandandah → Oodies Cafe
+2. Oodies Cafe → Flow Bar
+3. Flow Bar → The Junk Bar
+4. The Junk Bar → Yackandandah
+
+Even if there are blank days between those shows, the legs still connect between actual route points.
+
+---
+
+## Calculation requirements
+
+For every leg, calculate and store:
+
+* origin
+* destination
+* distance
+* drive time
+* estimated fuel cost
+* warning flags if driving exceeds preferred daily limit
+
+That includes the first leg from Start to first show.
+
+---
+
+## UI requirements
+
+### In the trail view
+
+Show the first travel leg under the first relevant stop/show when applicable.
+
+For example under Oodies Cafe:
+
+```text
+Yackandandah VIC 3749, Australia → Oodies Cafe, Bundaberg North QLD ...
+xxx km · x hr xx min · fuel ~$xxx
+```
+
+Right now that appears to be missing. It should be visible just like the later route segments.
+
+---
+
+## Recalculation triggers
+
+Make sure route legs recompute when any of these change:
+
+* Start location
+* a stop/show address
+* stop order / date order
+* return location
+* selected vehicle / fuel rate
+* days on tour or driving preference settings if warnings depend on them
+
+---
+
+## Edge cases
+
+### 1. Only one show on the tour
+
+If there is:
+
+* a Start location
+* one show
+* optional Return
+
+Then calculate:
+
+* Start → Show
+* Show → Return (if return is enabled)
+
+### 2. No Start location
+
+If Start is not set, first leg should begin from the first actual stop and no fake leg should be created.
+
+### 3. First stop has invalid or missing address
+
+Skip calculation for that leg and show a graceful warning or fallback state rather than silently failing.
+
+### 4. Blank days before the first show
+
+Do not let blank days interfere with route building. The first route leg should still be:
+
+* Start → first valid stop/show
+
+---
+
+## Suggested implementation approach
+
+### Step 1
+
+Refactor route generation into a helper like:
+
+```ts
+type RouteNode = {
+  id: string;
+  type: "start" | "stop" | "return";
+  label: string;
+  address: string;
+  date?: string;
+};
+
+function buildRouteNodes(tour): RouteNode[] {
+  // include start, valid stops in chronological order, optional return
+}
+```
+
+### Step 2
+
+Generate route legs from consecutive nodes:
+
+```ts
+function buildRouteLegs(nodes: RouteNode[]) {
+  // nodes[0] -> nodes[1]
+  // nodes[1] -> nodes[2]
+  // etc
+}
+```
+
+### Step 3
+
+Run distance matrix / geocoding / routing logic across every leg, including the first one.
+
+---
+
+## Debug expectation
+
+Specifically verify this exact case works:
+
+* Start: `Yackandandah VIC 3749, Australia`
+* First show: `Oodies Cafe, 7 Kolan St, Bundaberg North QLD 4670, Australia`
+
+The first leg should no longer be skipped.
+
+---
+
+## Acceptance criteria
+
+1. Start location is always included as the first route origin when set
+2. First leg from Start to first show is calculated
+3. Distance, drive time, and fuel are shown for that leg
+4. Blank days do not break the first-leg calculation
+5. Return leg still works normally
+6. Existing later-leg calculations continue to work
+7. Route logic is centralized and clean, not patched ad hoc
+
+Implement this as a proper fix to the route-building logic, not a one-off workaround.

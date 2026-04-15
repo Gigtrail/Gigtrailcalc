@@ -121,7 +121,9 @@ function normalizeCity(city: string): string {
   return city
     .toLowerCase()
     .replace(/,.*$/, '')
-    .replace(/\s+(vic|nsw|qld|sa|wa|tas|nt|act|vic\.|nsw\.|etc)\.?$/i, '')
+    .replace(/\s+\d{4,5}\s*$/, '')
+    .replace(/\s+(vic|nsw|qld|sa|wa|tas|nt|act)\.?\s*$/i, '')
+    .replace(/\s+\d{4,5}\s*$/, '')
     .trim();
 }
 

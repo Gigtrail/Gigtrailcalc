@@ -380,7 +380,15 @@ export interface Tour {
   /** @nullable */
   startLocation: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome: boolean;
   /** @nullable */
   startDate: string | null;
@@ -413,7 +421,15 @@ export interface CreateTourBody {
   /** @nullable */
   startLocation?: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation?: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome?: boolean;
   /** @nullable */
   startDate?: string | null;
@@ -527,7 +543,15 @@ export interface TourWithStops {
   /** @nullable */
   startLocation: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome: boolean;
   /** @nullable */
   startDate: string | null;

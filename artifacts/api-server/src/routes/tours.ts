@@ -32,6 +32,10 @@ const router: IRouter = Router();
 function serializeTour(t: typeof toursTable.$inferSelect) {
   return {
     ...t,
+    startLocationLat: t.startLocationLat != null ? Number(t.startLocationLat) : null,
+    startLocationLng: t.startLocationLng != null ? Number(t.startLocationLng) : null,
+    endLocationLat: t.endLocationLat != null ? Number(t.endLocationLat) : null,
+    endLocationLng: t.endLocationLng != null ? Number(t.endLocationLng) : null,
     totalDistance: t.totalDistance != null ? Number(t.totalDistance) : null,
     totalCost: t.totalCost != null ? Number(t.totalCost) : null,
     totalIncome: t.totalIncome != null ? Number(t.totalIncome) : null,
@@ -72,7 +76,7 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
   return result;
 }
 
-const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit'];
+const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {
