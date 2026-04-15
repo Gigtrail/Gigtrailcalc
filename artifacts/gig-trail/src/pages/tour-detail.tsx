@@ -837,34 +837,49 @@ export default function TourDetail() {
                   )}
 
                   {calc && calc.totalDistance > 0 && (
-                    <div className="p-4 bg-muted/10 flex flex-wrap gap-6 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Total Distance </span>
-                        <span className="font-semibold">{calc.totalDistance} km</span>
+                    <div className="bg-muted/10">
+                      {/* Route summary row */}
+                      <div className="p-4 flex flex-wrap gap-6 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Total Distance </span>
+                          <span className="font-semibold">{calc.totalDistance} km</span>
+                        </div>
+                        {calc.totalDriveTimeMinutes > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Est. Drive Time </span>
+                            <span className="font-semibold">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
+                          </div>
+                        )}
+                        {calc.avgFuelPrice > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Avg Fuel Price </span>
+                            <span className="font-semibold">${calc.avgFuelPrice.toFixed(3)}/L</span>
+                            <span className="text-muted-foreground text-xs ml-1">(auto est.)</span>
+                          </div>
+                        )}
+                        {calc.totalFuelCost > 0 && (
+                          <div>
+                            <span className="text-muted-foreground">Total Fuel Cost </span>
+                            <span className="font-semibold text-destructive">{fmt(calc.totalFuelCost)}</span>
+                          </div>
+                        )}
                       </div>
-                      {calc.totalDriveTimeMinutes > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Est. Drive Time </span>
-                          <span className="font-semibold">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
-                        </div>
-                      )}
-                      {calc.totalFuelUsedLitres > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Fuel Used </span>
-                          <span className="font-semibold">{calc.totalFuelUsedLitres.toFixed(1)} L</span>
-                        </div>
-                      )}
-                      {calc.avgFuelPrice > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Avg Fuel Price </span>
-                          <span className="font-semibold">${calc.avgFuelPrice.toFixed(3)}/L</span>
-                          <span className="text-muted-foreground text-xs ml-1">(auto est.)</span>
-                        </div>
-                      )}
-                      {calc.totalFuelCost > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Est. Fuel Cost </span>
-                          <span className="font-semibold text-destructive">{fmt(calc.totalFuelCost)}</span>
+
+                      {/* Per-vehicle breakdown */}
+                      {calc.vehicleFuelBreakdown.length > 0 && (
+                        <div className="px-4 pb-4 border-t border-border/30">
+                          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-3 mb-2">Vehicle Fuel Breakdown</div>
+                          <div className="space-y-2">
+                            {calc.vehicleFuelBreakdown.map(v => (
+                              <div key={v.vehicleId} className="flex items-center justify-between gap-4 text-xs">
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-semibold text-foreground truncate">{v.vehicleName}</span>
+                                  <span className="text-muted-foreground">{v.fuelType} · {v.consumptionLPer100} L/100km · {v.totalLitres.toFixed(1)} L used</span>
+                                </div>
+                                <span className="font-bold text-destructive shrink-0">{fmt(v.totalCost)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1068,14 +1083,26 @@ export default function TourDetail() {
                         </div>
                       )}
                       {calc.totalFuelCost > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Fuel ({calc.totalDistance} km · {calc.totalFuelUsedLitres.toFixed(1)} L)
-                            {biggestCost?.label === "Fuel" && (
-                              <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
-                            )}
-                          </span>
-                          <span className="font-medium">{fmt(calc.totalFuelCost)}</span>
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Fuel ({calc.totalDistance} km · {calc.totalFuelUsedLitres.toFixed(1)} L)
+                              {biggestCost?.label === "Fuel" && (
+                                <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
+                              )}
+                            </span>
+                            <span className="font-medium">{fmt(calc.totalFuelCost)}</span>
+                          </div>
+                          {calc.vehicleFuelBreakdown.length > 0 && (
+                            <div className="pl-3 border-l-2 border-border/30 space-y-1">
+                              {calc.vehicleFuelBreakdown.map(v => (
+                                <div key={v.vehicleId} className="flex justify-between text-xs text-muted-foreground">
+                                  <span className="truncate mr-2">{v.vehicleName} <span className="text-muted-foreground/60">({v.fuelType} · {v.consumptionLPer100} L/100km · {v.totalLitres.toFixed(1)} L)</span></span>
+                                  <span className="font-medium text-foreground shrink-0">{fmt(v.totalCost)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                       {calc.totalFoodCost > 0 && (
