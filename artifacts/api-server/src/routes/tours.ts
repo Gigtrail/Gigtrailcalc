@@ -41,6 +41,9 @@ function serializeTour(t: typeof toursTable.$inferSelect) {
     totalIncome: t.totalIncome != null ? Number(t.totalIncome) : null,
     totalProfit: t.totalProfit != null ? Number(t.totalProfit) : null,
     defaultFoodCost: t.defaultFoodCost != null ? Number(t.defaultFoodCost) : null,
+    fuelPricePetrol: t.fuelPricePetrol != null ? Number(t.fuelPricePetrol) : null,
+    fuelPriceDiesel: t.fuelPriceDiesel != null ? Number(t.fuelPriceDiesel) : null,
+    fuelPriceLpg: t.fuelPriceLpg != null ? Number(t.fuelPriceLpg) : null,
     createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
   };
 }
@@ -76,7 +79,7 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
   return result;
 }
 
-const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng'];
+const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {

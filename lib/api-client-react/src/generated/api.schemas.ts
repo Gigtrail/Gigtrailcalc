@@ -408,6 +408,14 @@ export interface Tour {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  /** @nullable */
+  fuelType?: string | null;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
   stopCount: number;
   createdAt: string;
 }
@@ -571,6 +579,14 @@ export interface TourWithStops {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  /** @nullable */
+  fuelType?: string | null;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
   createdAt: string;
   stops: TourStop[];
 }

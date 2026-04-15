@@ -24,6 +24,10 @@ export const toursTable = pgTable("tours", {
   totalCost: numeric("total_cost", { precision: 10, scale: 2 }),
   totalIncome: numeric("total_income", { precision: 10, scale: 2 }),
   totalProfit: numeric("total_profit", { precision: 10, scale: 2 }),
+  fuelType: text("fuel_type").notNull().default("petrol"),
+  fuelPricePetrol: numeric("fuel_price_petrol", { precision: 6, scale: 3 }).default("1.90"),
+  fuelPriceDiesel: numeric("fuel_price_diesel", { precision: 6, scale: 3 }).default("1.95"),
+  fuelPriceLpg: numeric("fuel_price_lpg", { precision: 6, scale: 3 }).default("0.95"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

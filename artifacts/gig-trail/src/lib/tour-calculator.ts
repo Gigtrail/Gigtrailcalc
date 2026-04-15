@@ -115,6 +115,10 @@ export interface TourCalcResult {
   netProfit: number;
   avgPerShow: number;
   avgFuelPrice: number;
+  /** The resolved tour-level fuel type (e.g. "petrol", "diesel", "lpg") */
+  activeFuelType: string;
+  /** The resolved price used for fuel calculations ($/L) */
+  activeFuelPrice: number;
   showDays: number;
   blankDayCount: number;
   /** Per-vehicle fuel usage breakdown (populated when vehicles array is passed) */
@@ -260,6 +264,12 @@ export function formatDriveTime(minutes: number): string {
   return `${h} hr ${m} min`;
 }
 
+export interface TourFuelPrices {
+  petrol: number;
+  diesel: number;
+  lpg: number;
+}
+
 export function calculateTour(
   stops: TourStopInput[],
   startLocation: string | null | undefined,
@@ -277,6 +287,8 @@ export function calculateTour(
   startLocationLng?: number | null,
   endLocationLat?: number | null,
   endLocationLng?: number | null,
+  fuelType?: string | null,
+  fuelPrices?: TourFuelPrices | null,
 ): TourCalcResult {
   const sortedStops = [...stops].sort((a, b) => {
     const da = getISODate(a.date);
@@ -327,7 +339,9 @@ export function calculateTour(
       source = est.source;
     }
 
-    const fuelPrice = getFuelPrice(to, destStop?.fuelPriceOverride);
+    const activeFt = (fuelType ?? 'petrol').toLowerCase() as keyof TourFuelPrices;
+    const tourFuelPrice = fuelPrices ? (fuelPrices[activeFt] ?? null) : null;
+    const fuelPrice = getFuelPrice(to, destStop?.fuelPriceOverride, tourFuelPrice);
     const fuelUsedLitres = consumption > 0 ? (distanceKm * consumption) / 100 : 0;
     const fuelCost = fuelUsedLitres * fuelPrice.pricePerLitre;
 
@@ -415,6 +429,12 @@ export function calculateTour(
   const netProfit = grossIncome - totalExpenses;
   const avgPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
   const avgFuelPrice = totalFuelUsedLitres > 0 ? totalFuelCost / totalFuelUsedLitres : 0;
+  const resolvedFuelType = (fuelType ?? 'petrol').toLowerCase();
+  const resolvedFuelPriceKey = resolvedFuelType as keyof TourFuelPrices;
+  const activeFuelPrice = fuelPrices
+    ? (fuelPrices[resolvedFuelPriceKey] ?? avgFuelPrice)
+    : avgFuelPrice;
+  const activeFuelType = resolvedFuelType;
 
   const vehicleFuelBreakdown: VehicleFuelBreakdown[] = fleetVehicles
     ? fleetVehicles.map(v => {
@@ -456,6 +476,8 @@ export function calculateTour(
     netProfit,
     avgPerShow,
     avgFuelPrice,
+    activeFuelType,
+    activeFuelPrice,
     showDays,
     blankDayCount,
     vehicleFuelBreakdown,

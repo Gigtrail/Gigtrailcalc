@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronLeft, Save, Navigation } from "lucide-react";
+import { ChevronLeft, Save, Fuel } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useEffect } from "react";
 import { differenceInDays, parseISO } from "date-fns";
@@ -45,6 +45,10 @@ const tourSchema = z.object({
   defaultFoodCost: z.coerce.number().optional().nullable(),
   daysOnTour: z.coerce.number().min(1).optional().nullable(),
   notes: z.string().optional().nullable(),
+  fuelType: z.string().optional().nullable(),
+  fuelPricePetrol: z.coerce.number().optional().nullable(),
+  fuelPriceDiesel: z.coerce.number().optional().nullable(),
+  fuelPriceLpg: z.coerce.number().optional().nullable(),
 });
 
 type TourFormValues = z.infer<typeof tourSchema>;
@@ -85,6 +89,10 @@ export default function TourForm() {
       defaultFoodCost: 0,
       daysOnTour: null,
       notes: "",
+      fuelType: "petrol",
+      fuelPricePetrol: 1.90,
+      fuelPriceDiesel: 1.95,
+      fuelPriceLpg: 0.95,
     },
   });
 
@@ -106,6 +114,10 @@ export default function TourForm() {
         defaultFoodCost: tour.defaultFoodCost,
         daysOnTour: tour.daysOnTour ?? null,
         notes: tour.notes || "",
+        fuelType: tour.fuelType ?? "petrol",
+        fuelPricePetrol: tour.fuelPricePetrol ?? 1.90,
+        fuelPriceDiesel: tour.fuelPriceDiesel ?? 1.95,
+        fuelPriceLpg: tour.fuelPriceLpg ?? 0.95,
       });
     }
   }, [tour, profiles, vehicles, form]);
@@ -416,6 +428,79 @@ export default function TourForm() {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              <div className="border-t border-border/40 pt-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Fuel className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">Fuel Assumptions</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Set average fuel prices for your tour. The selected fuel type will be used for all fuel cost calculations.
+                </p>
+                <FormField
+                  control={form.control}
+                  name="fuelType"
+                  render={({ field }) => (
+                    <FormItem className="mb-4">
+                      <FormLabel>Fuel Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? "petrol"}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select fuel type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="petrol">Petrol</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="lpg">LPG</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="fuelPricePetrol"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Petrol ($/L)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.90} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fuelPriceDiesel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Diesel ($/L)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.95} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fuelPriceLpg"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LPG ($/L)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" {...field} value={field.value ?? 0.95} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
 
               <FormField

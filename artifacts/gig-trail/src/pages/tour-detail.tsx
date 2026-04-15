@@ -252,6 +252,11 @@ export default function TourDetail() {
         avgConsumption: Number(legacyVehicle.avgConsumption),
       }];
     }
+    const fuelPrices = {
+      petrol: tour?.fuelPricePetrol ?? 1.90,
+      diesel: tour?.fuelPriceDiesel ?? 1.95,
+      lpg: tour?.fuelPriceLpg ?? 0.95,
+    };
     return calculateTour(
       stops,
       tour?.startLocation,
@@ -269,6 +274,8 @@ export default function TourDetail() {
       tour?.startLocationLng ?? null,
       tour?.endLocationLat ?? null,
       tour?.endLocationLng ?? null,
+      tour?.fuelType ?? "petrol",
+      fuelPrices,
     );
   }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile]);
 
@@ -884,11 +891,16 @@ export default function TourDetail() {
                             <span className="font-semibold">{formatDriveTime(calc.totalDriveTimeMinutes)}</span>
                           </div>
                         )}
-                        {calc.avgFuelPrice > 0 && (
+                        {calc.activeFuelPrice > 0 && (
                           <div>
-                            <span className="text-muted-foreground">Avg Fuel Price </span>
-                            <span className="font-semibold">${calc.avgFuelPrice.toFixed(3)}/L</span>
-                            <span className="text-muted-foreground text-xs ml-1">(auto est.)</span>
+                            <div>
+                              <span className="text-muted-foreground">Avg Fuel Price </span>
+                              <span className="font-semibold">${calc.activeFuelPrice.toFixed(2)}/L</span>
+                              <span className="text-muted-foreground text-xs ml-1 capitalize">{calc.activeFuelType}</span>
+                            </div>
+                            <div className="text-[11px] text-muted-foreground/60 mt-0.5">
+                              Manual average — automatic fuel pricing coming soon
+                            </div>
                           </div>
                         )}
                         {calc.totalFuelCost > 0 && (

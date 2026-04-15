@@ -49,10 +49,15 @@ const CITY_TO_STATE: Record<string, string> = {
   darwin: 'nt',
 };
 
-export function getFuelPrice(city: string, manualOverride?: number | null): FuelPriceResult {
+export function getFuelPrice(city: string, manualOverride?: number | null, tourFuelPrice?: number | null): FuelPriceResult {
   const n = parseFloat(String(manualOverride ?? ''));
   if (!Number.isNaN(n) && n > 0) {
     return { pricePerLitre: n, source: 'manual', label: 'Manual fuel price' };
+  }
+
+  const tp = parseFloat(String(tourFuelPrice ?? ''));
+  if (!Number.isNaN(tp) && tp > 0) {
+    return { pricePerLitre: tp, source: 'manual', label: 'Tour fuel price' };
   }
 
   for (const [pattern, stateKey] of STATE_PATTERNS) {

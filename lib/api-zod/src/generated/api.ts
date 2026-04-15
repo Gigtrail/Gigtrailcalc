@@ -698,6 +698,10 @@ export const CreateTourBody = zod.object({
   defaultFoodCost: zod.number().nullish(),
   daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fuelType: zod.string().optional(),
+  fuelPricePetrol: zod.number().nullish(),
+  fuelPriceDiesel: zod.number().nullish(),
+  fuelPriceLpg: zod.number().nullish(),
 });
 
 /**
@@ -728,6 +732,10 @@ export const GetTourResponse = zod.object({
   totalCost: zod.number().nullable(),
   totalIncome: zod.number().nullable(),
   totalProfit: zod.number().nullable(),
+  fuelType: zod.string().nullable(),
+  fuelPricePetrol: zod.number().nullable(),
+  fuelPriceDiesel: zod.number().nullable(),
+  fuelPriceLpg: zod.number().nullable(),
   createdAt: zod.string(),
   stops: zod.array(
     zod.object({
@@ -782,6 +790,10 @@ export const UpdateTourBody = zod.object({
   defaultFoodCost: zod.number().nullish(),
   daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
+  fuelType: zod.string().optional(),
+  fuelPricePetrol: zod.number().nullish(),
+  fuelPriceDiesel: zod.number().nullish(),
+  fuelPriceLpg: zod.number().nullish(),
 });
 
 export const UpdateTourResponse = zod.object({
@@ -805,6 +817,10 @@ export const UpdateTourResponse = zod.object({
   totalCost: zod.number().nullable(),
   totalIncome: zod.number().nullable(),
   totalProfit: zod.number().nullable(),
+  fuelType: zod.string().nullable(),
+  fuelPricePetrol: zod.number().nullable(),
+  fuelPriceDiesel: zod.number().nullable(),
+  fuelPriceLpg: zod.number().nullable(),
   createdAt: zod.string(),
 });
 
