@@ -1,0 +1,372 @@
+Refactor the **Tour Calc results UI** to make it feel cleaner, faster to scan, and more decision-focused.
+
+## Main goal
+
+The current layout works, but it feels too fragmented.
+
+Right now the user has to visually jump between:
+
+* Income
+* Expenses
+* Member Payouts
+* Final outcome panel
+
+I want the screen to flow more naturally and tell a simple story:
+
+### Earn → Spend → Result
+
+The UI should feel more like a **decision engine** and less like a collection of separate cards.
+
+---
+
+## New layout direction
+
+Keep the general two-column layout:
+
+* **Left side:** financial breakdown and tour setup
+* **Right side:** final decision / worth-it summary
+
+But improve the structure so the left side becomes much cleaner.
+
+---
+
+## 1. Replace separate Income + Expenses feel with one unified financial section
+
+Create a larger summary card called:
+
+### `Tour Breakdown`
+
+This card should contain the full financial logic in a clean collapsible structure.
+
+Inside it, show:
+
+* Income
+* Expenses
+* Net Result
+
+### Important:
+
+`Net Result` should always be visible and should not be collapsible.
+
+---
+
+## 2. Use collapsible sections for progressive disclosure
+
+The idea is:
+
+### Default state
+
+Keep the UI compact and easy to scan.
+
+Only show the major totals first:
+
+* Income total
+* Expenses total
+* Net Result
+
+### Expanded state
+
+When the user opens a section, reveal the detailed breakdown.
+
+---
+
+## 3. Tour Breakdown card structure
+
+### A. Income section (collapsible)
+
+Collapsed example:
+
+```text
+Income ................................ $4,150.00
+```
+
+Expanded example:
+
+```text
+Income ................................ $4,150.00
+  Show Income ......................... $3,800.00
+  Merch Estimate ...................... $350.00
+```
+
+Use existing calculation values.
+
+---
+
+### B. Expenses section (collapsible)
+
+Collapsed example:
+
+```text
+Expenses .............................. $5,942.00
+```
+
+Expanded example:
+
+```text
+Expenses .............................. $5,942.00
+  Accommodation (11 nights) ........... $5,280.00
+  Food ................................ $650.00
+  Fuel ................................ $0.00
+  Other Expenses ...................... $0.00
+  Member Payouts ...................... $12.00
+```
+
+This should include **member payouts inside expenses**, not as a separate card.
+
+---
+
+### C. Member Payouts nested collapsible
+
+Inside the expanded Expenses section, make `Member Payouts` itself expandable/collapsible.
+
+Collapsed:
+
+```text
+Member Payouts ........................ $12.00
+```
+
+Expanded:
+
+```text
+Member Payouts ........................ $12.00
+  Julian James — $1/show × 2 shows .... $2.00
+  Beci Kate — $2/show × 2 shows ....... $4.00
+  Third Member — $3/show × 2 shows .... $6.00
+```
+
+Also allow helper text under each row when useful, such as:
+
+* `Calculated from 2 paid shows`
+* `Flat tour fee`
+
+Keep nested rows visually lighter and slightly indented.
+
+---
+
+### D. Net Result row (always visible)
+
+At the bottom of the Tour Breakdown card, always show:
+
+```text
+Net Result ............................ -$1,792.00
+```
+
+This should be bold and visually prominent.
+
+This should use:
+
+```ts
+netResult = grossIncome - totalExpenses
+```
+
+Where `totalExpenses` already includes member payouts.
+
+Do not subtract member payouts again elsewhere.
+
+---
+
+## 4. Remove duplicate financial summary where possible
+
+The current right-side panel repeats:
+
+* gross income
+* expenses
+* other values already visible on the left
+
+Reduce duplication.
+
+The right panel should become more focused on the **decision**, not repeating the whole financial breakdown.
+
+---
+
+## 5. Redesign right panel into a “Decision Panel”
+
+Keep the existing idea of:
+
+* “Probably Not Worth It”
+* total gain/loss
+* per-member outcome
+
+But make it more actionable and easier to interpret.
+
+### Suggested structure
+
+#### Header
+
+* status label:
+
+  * `Worth It`
+  * `Probably Worth It`
+  * `Probably Not Worth It`
+  * `Not Worth It`
+
+#### Main figure
+
+* large net result value
+
+#### Secondary figure
+
+* per member result if relevant
+
+#### Summary insights
+
+Show only the most useful supporting points, for example:
+
+* Gross income
+* Total expenses
+* Average per show
+* Days on tour
+* Show days / blank days
+
+#### Smart insight line
+
+Add one short insight such as:
+
+* `Biggest cost: Accommodation ($5,280.00)`
+* `You need 3 more similar shows to break even`
+* `Accommodation is driving most of the loss`
+
+This panel should help the user make a decision fast.
+
+---
+
+## 6. Improve visual flow
+
+### Keep this order on the page:
+
+1. Trail / route area
+2. Setup cards
+
+   * Act Profile
+   * Tour Fleet
+   * Days on Tour
+3. Tour Breakdown card
+4. Decision Panel
+
+The setup cards should remain separate, but the finance area should feel more unified.
+
+---
+
+## 7. Add intelligent collapsible behavior
+
+### Default state
+
+Use compact defaults:
+
+* Income: collapsed
+* Expenses: collapsed
+* Member Payouts: collapsed
+
+### Optional smart behavior
+
+If easy to implement:
+
+* auto-expand Expenses when expenses are greater than income
+* auto-expand Member Payouts if payout total is significant
+* highlight the largest expense row
+
+But keep this lightweight and not visually noisy.
+
+---
+
+## 8. Improve scanability
+
+Use visual hierarchy carefully:
+
+* bold for totals
+* lighter text for breakdown lines
+* indentation for nested rows
+* chevrons for collapsibles
+* subtle divider lines between sections
+
+The user should be able to understand the result in 3 seconds.
+
+---
+
+## 9. Keep calculations clean
+
+### Existing logic to preserve
+
+* gross income = show income + merch estimate
+* member payouts are calculated from member fee rules
+* total expenses = operating expenses + member payouts
+* net result = gross income - total expenses
+
+### Important
+
+Do not change the underlying math unless required for consistency.
+
+This task is mostly about:
+
+* structure
+* UI flow
+* readability
+* reducing duplication
+
+---
+
+## 10. Suggested component structure
+
+Use something like:
+
+```ts
+<TourBreakdownCard>
+  <CollapsibleSection title="Income" total={grossIncome}>
+    ...
+  </CollapsibleSection>
+
+  <CollapsibleSection title="Expenses" total={totalExpenses}>
+    ...
+    <NestedCollapsibleSection title="Member Payouts" total={memberPayoutTotal}>
+      ...
+    </NestedCollapsibleSection>
+  </CollapsibleSection>
+
+  <ResultRow label="Net Result" value={netResult} />
+</TourBreakdownCard>
+```
+
+If helpful, create reusable collapsible row components instead of custom one-off logic.
+
+---
+
+## 11. Nice extra improvements if easy
+
+If easy to add, include one or two of these:
+
+### A. Largest cost indicator
+
+Example:
+
+* `Accommodation` gets a subtle “largest” badge when it is the biggest expense
+
+### B. Per-show quick stat
+
+In either the Breakdown or Decision Panel show:
+
+* income per show
+* expenses per show
+* net per show
+
+### C. Small animation
+
+Add a subtle smooth expand/collapse transition
+
+---
+
+## 12. Acceptance criteria
+
+Implement the following:
+
+1. Create a unified `Tour Breakdown` card
+2. Income is collapsible
+3. Expenses is collapsible
+4. Member Payouts is nested inside Expenses and collapsible
+5. Net Result is always visible
+6. Member payouts are included in total expenses
+7. Profit / net result is not double-counting member payouts
+8. Right-side panel becomes more decision-focused and less repetitive
+9. Layout feels easier to scan and flows naturally
+10. Styling remains consistent with the current app
+
+Please implement this cleanly and keep the UI feeling simple, practical, and musician-friendly.

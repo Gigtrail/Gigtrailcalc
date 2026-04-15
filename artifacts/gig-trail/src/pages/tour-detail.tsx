@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
-  Clock, History, Search, Home, Building2, Pencil,
+  Clock, History, Search, Home, Building2, Pencil, BarChart2, Lightbulb,
 } from "lucide-react";
 import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -62,6 +62,8 @@ export default function TourDetail() {
   const [expandedStops, setExpandedStops] = useState<Set<number>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [showMemberPayouts, setShowMemberPayouts] = useState(false);
+  const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
+  const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
   const toggleDay = (date: string) =>
     setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
@@ -321,6 +323,20 @@ export default function TourDetail() {
   const totalMemberPayout = memberEarnings.totalPayout;
   const totalExpensesWithPayouts = (calc?.totalExpenses ?? 0) + totalMemberPayout;
   const profitAfterMemberFees = netProfit - totalMemberPayout;
+
+  const biggestCost = (() => {
+    if (!calc) return null;
+    const costs = [
+      { label: "Accommodation", amount: (calc.tourAccommodationCost ?? 0) + (calc.totalStopAccommodation ?? 0) },
+      { label: "Fuel", amount: calc.totalFuelCost ?? 0 },
+      { label: "Food", amount: calc.totalFoodCost ?? 0 },
+      { label: "Marketing", amount: calc.totalMarketing ?? 0 },
+      { label: "Other Expenses", amount: calc.totalExtraCosts ?? 0 },
+      ...(totalMemberPayout > 0 ? [{ label: "Member Payouts", amount: totalMemberPayout }] : []),
+    ].filter(c => c.amount > 0);
+    if (costs.length === 0) return null;
+    return costs.reduce((max, c) => c.amount > max.amount ? c : max);
+  })();
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
 
@@ -973,125 +989,174 @@ export default function TourDetail() {
           </div>
 
           {calc && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-secondary" /> Income
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between border-b border-border/40 pb-2">
-                    <span className="text-muted-foreground">Show Income</span>
-                    <span className="font-medium">{fmt(calc.totalShowIncome)}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-border/40 pb-2">
-                    <span className="text-muted-foreground">Merch Estimate</span>
-                    <span className="font-medium">{fmt(calc.totalMerchIncome)}</span>
-                  </div>
-                  <div className="flex justify-between pt-1">
-                    <span className="font-bold">Gross Income</span>
-                    <span className="font-bold text-secondary">{fmt(calc.grossIncome)}</span>
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <BarChart2 className="w-4 h-4 text-secondary" /> Tour Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
 
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-destructive" /> Expenses
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  {calc.totalFuelCost > 0 && (
-                    <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">
-                        Fuel ({calc.totalDistance} km · {calc.totalFuelUsedLitres.toFixed(1)} L)
-                      </span>
-                      <span className="font-medium">{fmt(calc.totalFuelCost)}</span>
+                {/* Income — collapsible */}
+                <div className="px-6 py-3 border-b border-border/40">
+                  <button
+                    className="w-full flex items-center justify-between gap-3 group"
+                    onClick={() => setShowIncomeBreakdown(v => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-3.5 h-3.5 text-secondary shrink-0" />
+                      <span className="font-semibold text-sm group-hover:text-secondary transition-colors">Income</span>
                     </div>
-                  )}
-                  {calc.tourAccommodationCost > 0 && (
-                    <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">
-                        Accommodation ({calc.accommodationNights} night{calc.accommodationNights !== 1 ? "s" : ""})
-                      </span>
-                      <span className="font-medium">{fmt(calc.tourAccommodationCost)}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-bold text-sm text-secondary">{fmt(calc.grossIncome)}</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showIncomeBreakdown ? "rotate-180" : ""}`} />
                     </div>
-                  )}
-                  {calc.totalStopAccommodation > 0 && (
-                    <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">Stop-level accommodation</span>
-                      <span className="font-medium">{fmt(calc.totalStopAccommodation)}</span>
-                    </div>
-                  )}
-                  {calc.totalMarketing > 0 && (
-                    <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">Marketing</span>
-                      <span className="font-medium">{fmt(calc.totalMarketing)}</span>
-                    </div>
-                  )}
-                  {calc.totalExtraCosts > 0 && (
-                    <div className="flex justify-between border-b border-border/40 pb-2">
-                      <span className="text-muted-foreground">Extra Costs</span>
-                      <span className="font-medium">{fmt(calc.totalExtraCosts)}</span>
-                    </div>
-                  )}
-
-                  {/* Member Payouts — collapsible */}
-                  <div className="border-b border-border/40 pb-2">
-                    <button
-                      className="w-full flex items-center justify-between gap-2 group"
-                      onClick={() => setShowMemberPayouts(v => !v)}
-                    >
-                      <span className="text-muted-foreground group-hover:text-foreground transition-colors">
-                        Member Payouts
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className={`font-medium ${totalMemberPayout > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                          {fmt(totalMemberPayout)}
-                        </span>
-                        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showMemberPayouts ? "rotate-180" : ""}`} />
+                  </button>
+                  {showIncomeBreakdown && (
+                    <div className="mt-2.5 space-y-1.5 pl-5 border-l-2 border-secondary/25">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Show Income</span>
+                        <span className="font-medium">{fmt(calc.totalShowIncome)}</span>
                       </div>
-                    </button>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Merch Estimate</span>
+                        <span className="font-medium">{fmt(calc.totalMerchIncome)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-                    {showMemberPayouts && (
-                      <div className="mt-2 space-y-1.5 pl-3 border-l-2 border-border/30">
-                        {memberEarnings.rows.length === 0 || totalMemberPayout === 0 ? (
-                          <p className="text-xs text-muted-foreground italic">No member payouts set</p>
-                        ) : (
-                          memberEarnings.rows.map(row => {
-                            const feeLabel =
-                              row.feeType === "per_show"
-                                ? `$${row.feeAmount.toLocaleString()}/show × ${qualifyingShowCount} show${qualifyingShowCount !== 1 ? "s" : ""}`
-                                : row.feeType === "per_tour"
-                                ? "Flat tour fee"
-                                : "No fee";
-                            return (
-                              <div key={row.memberId} className="flex items-start justify-between gap-3 text-xs">
-                                <div className="min-w-0">
-                                  <span className="font-medium text-foreground">{row.memberName}</span>
-                                  {row.role && <span className="text-muted-foreground ml-1">· {row.role}</span>}
-                                  <div className="text-muted-foreground/80">{feeLabel}</div>
-                                </div>
-                                <span className={`font-bold shrink-0 ${row.totalEarnings > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                                  {fmt(row.totalEarnings)}
-                                </span>
-                              </div>
-                            );
-                          })
+                {/* Expenses — collapsible */}
+                <div className="px-6 py-3 border-b border-border/40">
+                  <button
+                    className="w-full flex items-center justify-between gap-3 group"
+                    onClick={() => setShowExpensesBreakdown(v => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Receipt className="w-3.5 h-3.5 text-destructive shrink-0" />
+                      <span className="font-semibold text-sm group-hover:text-destructive transition-colors">Expenses</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="font-bold text-sm text-destructive">{fmt(totalExpensesWithPayouts)}</span>
+                      <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showExpensesBreakdown ? "rotate-180" : ""}`} />
+                    </div>
+                  </button>
+                  {showExpensesBreakdown && (
+                    <div className="mt-2.5 space-y-1.5 pl-5 border-l-2 border-destructive/25">
+                      {calc.tourAccommodationCost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Accommodation ({calc.accommodationNights} night{calc.accommodationNights !== 1 ? "s" : ""})
+                            {biggestCost?.label === "Accommodation" && (
+                              <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
+                            )}
+                          </span>
+                          <span className="font-medium">{fmt(calc.tourAccommodationCost)}</span>
+                        </div>
+                      )}
+                      {calc.totalStopAccommodation > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Stop-level accommodation</span>
+                          <span className="font-medium">{fmt(calc.totalStopAccommodation)}</span>
+                        </div>
+                      )}
+                      {calc.totalFuelCost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Fuel ({calc.totalDistance} km · {calc.totalFuelUsedLitres.toFixed(1)} L)
+                            {biggestCost?.label === "Fuel" && (
+                              <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
+                            )}
+                          </span>
+                          <span className="font-medium">{fmt(calc.totalFuelCost)}</span>
+                        </div>
+                      )}
+                      {calc.totalFoodCost > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            Food
+                            {biggestCost?.label === "Food" && (
+                              <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
+                            )}
+                          </span>
+                          <span className="font-medium">{fmt(calc.totalFoodCost)}</span>
+                        </div>
+                      )}
+                      {calc.totalMarketing > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Marketing</span>
+                          <span className="font-medium">{fmt(calc.totalMarketing)}</span>
+                        </div>
+                      )}
+                      {calc.totalExtraCosts > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Other Expenses</span>
+                          <span className="font-medium">{fmt(calc.totalExtraCosts)}</span>
+                        </div>
+                      )}
+
+                      {/* Member Payouts — nested collapsible */}
+                      <div>
+                        <button
+                          className="w-full flex items-center justify-between gap-2 group text-sm"
+                          onClick={() => setShowMemberPayouts(v => !v)}
+                        >
+                          <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                            Member Payouts
+                            {biggestCost?.label === "Member Payouts" && (
+                              <span className="ml-1.5 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-400 rounded px-1 py-0.5">largest</span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`font-medium ${totalMemberPayout > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                              {fmt(totalMemberPayout)}
+                            </span>
+                            <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform ${showMemberPayouts ? "rotate-180" : ""}`} />
+                          </div>
+                        </button>
+                        {showMemberPayouts && (
+                          <div className="mt-2 space-y-1.5 pl-4 border-l-2 border-border/30">
+                            {memberEarnings.rows.length === 0 || totalMemberPayout === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">No member payouts set</p>
+                            ) : (
+                              memberEarnings.rows.map(row => {
+                                const feeLabel =
+                                  row.feeType === "per_show"
+                                    ? `$${row.feeAmount.toLocaleString()}/show × ${qualifyingShowCount} show${qualifyingShowCount !== 1 ? "s" : ""}`
+                                    : row.feeType === "per_tour"
+                                    ? "Flat tour fee"
+                                    : "No fee";
+                                return (
+                                  <div key={row.memberId} className="flex items-start justify-between gap-3 text-xs">
+                                    <div className="min-w-0">
+                                      <span className="font-medium text-foreground">{row.memberName}</span>
+                                      {row.role && <span className="text-muted-foreground ml-1">· {row.role}</span>}
+                                      <div className="text-muted-foreground/70">{feeLabel}</div>
+                                    </div>
+                                    <span className={`font-bold shrink-0 ${row.totalEarnings > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                                      {fmt(row.totalEarnings)}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                </div>
 
-                  <div className="flex justify-between pt-1">
-                    <span className="font-bold">Total Expenses</span>
-                    <span className="font-bold text-destructive">{fmt(totalExpensesWithPayouts)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                {/* Net Result — always visible */}
+                <div className="px-6 py-4 flex items-center justify-between">
+                  <span className="font-bold text-sm">Net Result</span>
+                  <span className={`font-bold text-lg ${profitAfterMemberFees >= 0 ? "text-secondary" : "text-destructive"}`}>
+                    {fmt(profitAfterMemberFees)}
+                  </span>
+                </div>
+
+              </CardContent>
+            </Card>
           )}
 
 
@@ -1132,61 +1197,18 @@ export default function TourDetail() {
               </div>
 
               {calc && (sortedStops.length > 0 || hasDaySlots) && (
-                <div className="space-y-2 pt-4 border-t border-border/40 text-sm">
+                <div className="space-y-1.5 pt-4 border-t border-border/40 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Gross income</span>
                     <span className="font-medium text-foreground">{fmt(calc.grossIncome)}</span>
                   </div>
-                  {calc.totalFoodCost > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Food cost</span>
-                      <span className="font-medium text-destructive">{fmt(calc.totalFoodCost)}</span>
-                    </div>
-                  )}
-                  {calc.totalAccommodation > 0 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Accommodation</span>
-                      <span className="font-medium text-destructive">{fmt(calc.totalAccommodation)}</span>
-                    </div>
-                  )}
-                  {calc.totalFuelCost > 0 ? (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Fuel</span>
-                        <span className="font-medium text-destructive">{fmt(calc.totalFuelCost)}</span>
-                      </div>
-                      {calc.vehicleFuelBreakdown.length > 1 && (
-                        <div className="pl-3 space-y-0.5 border-l-2 border-amber-800/30">
-                          {calc.vehicleFuelBreakdown.map(vfb => (
-                            <div key={vfb.vehicleId} className="flex justify-between text-xs text-muted-foreground/70">
-                              <span>{vfb.vehicleName} <span className="opacity-60">({vfb.consumptionLPer100}L/100km)</span></span>
-                              <span>{fmt(vfb.totalCost)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    (() => {
-                      const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
-                      if (!hasVehicles) return null;
-                      const hasRoute = (tour?.startLocation?.trim() || sortedStops.length > 1);
-                      if (!hasRoute) return (
-                        <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5">
-                          <span className="mt-0.5 shrink-0">⚠</span>
-                          <span>Fuel not calculated — add a <strong>Start Location</strong> or a second stop so a route distance can be worked out</span>
-                        </div>
-                      );
-                      return null;
-                    })()
-                  )}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Total expenses</span>
                     <span className="font-medium text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
-                  {sortedStops.length > 0 && (
-                    <div className="flex justify-between text-muted-foreground pt-1 border-t border-border/30">
-                      <span>Average per show</span>
+                  {sortedStops.length > 0 && calc.avgPerShow !== 0 && (
+                    <div className="flex justify-between text-muted-foreground border-t border-border/30 pt-1.5">
+                      <span>Net per show</span>
                       <span className={`font-medium ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
                         {fmt(calc.avgPerShow)}
                       </span>
@@ -1213,11 +1235,42 @@ export default function TourDetail() {
                 </div>
               )}
 
-              {(!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0 && (
-                <p className="text-xs text-amber-500 bg-amber-500/10 rounded p-2">
-                  Add a vehicle to this tour to include fuel cost estimates.
-                </p>
-              )}
+              {/* Smart insight */}
+              {calc && (() => {
+                const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
+                const noRoute = hasVehicles && !calc.totalFuelCost && !(tour?.startLocation?.trim() || sortedStops.length > 1);
+                const showsNeeded = profitAfterMemberFees < 0 && calc.avgPerShow > 0
+                  ? Math.ceil(Math.abs(profitAfterMemberFees) / calc.avgPerShow)
+                  : null;
+                const noVehicle = (!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0;
+                return (
+                  <div className="space-y-2 pt-2">
+                    {noRoute && (
+                      <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2 py-1.5">
+                        <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                        <span>Fuel not calculated — add a Start Location or second stop</span>
+                      </div>
+                    )}
+                    {noVehicle && (
+                      <p className="text-xs text-amber-500 bg-amber-500/10 rounded p-2">
+                        Add a vehicle to include fuel cost estimates.
+                      </p>
+                    )}
+                    {biggestCost && (
+                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
+                        <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
+                        <span>Biggest cost: <strong className="text-foreground">{biggestCost.label}</strong> ({fmt(biggestCost.amount)})</span>
+                      </div>
+                    )}
+                    {showsNeeded && (
+                      <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
+                        <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
+                        <span>Need ~<strong className="text-foreground">{showsNeeded}</strong> more similar show{showsNeeded !== 1 ? "s" : ""} to break even</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
