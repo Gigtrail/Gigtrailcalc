@@ -233,6 +233,14 @@ export interface VenueShow {
   /** @nullable */
   guarantee?: number | null;
   /** @nullable */
+  dealType?: string | null;
+  /** @nullable */
+  splitPct?: number | null;
+  /** @nullable */
+  ticketPrice?: number | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
   totalIncome?: number | null;

@@ -1,0 +1,118 @@
+Fix the Tour Builder bug where Deal Structure is not saving correctly on tour stops.
+
+GOAL
+
+Ensure that when a user selects a deal structure for a stop, it persists correctly across save, reload, edit, and calculation.
+
+-----------------------------------
+CORE ISSUE
+-----------------------------------
+
+Right now, Deal Structure changes in Tour Builder are not being saved or reloaded properly.
+
+This breaks trust because the stop appears to revert or calculate from the wrong deal type.
+
+-----------------------------------
+REQUIRED FIX
+-----------------------------------
+
+Audit the full save/load flow for tour stop deal data.
+
+Make sure Deal Structure persists through:
+
+- UI state
+- stop draft state
+- save payload
+- backend storage
+- reload / rehydration
+- tour calculation snapshot
+
+-----------------------------------
+CHECK THESE SPECIFIC FAILURE POINTS
+-----------------------------------
+
+1. FORM STATE
+- confirm the Deal Structure dropdown updates the stop’s actual state object
+- ensure it is not just changing temporary local UI state
+
+2. SAVE PAYLOAD
+- confirm the stop save request includes the deal structure field
+- verify correct field name is used consistently
+
+3. BACKEND STORAGE
+- confirm the backend accepts and stores the field
+- verify it is not dropped, ignored, or overwritten
+
+4. RELOAD / EDIT
+- when reopening Edit Stop, the saved deal structure should be selected correctly
+- dependent fields should match the saved type
+
+5. DEFAULT OVERRIDES
+- make sure profile defaults or fallback logic do NOT overwrite a previously saved stop-level deal structure
+
+6. SNAPSHOT / CALC
+- the saved deal structure must be used by calculations and snapshots
+- not replaced by a generic default on tour recalc
+
+-----------------------------------
+FIELD CONSISTENCY
+-----------------------------------
+
+Use one consistent field name everywhere, for example:
+dealStructure
+
+Do not mix:
+- dealType
+- structure
+- bookingType
+- incomeType
+
+unless intentionally mapped in one place.
+
+-----------------------------------
+DEPENDENT FIELD LOGIC
+-----------------------------------
+
+When Deal Structure is saved, related fields should also persist correctly, such as:
+
+Flat Fee:
+- flatFee
+
+Ticketed Show:
+- venueCapacity
+- ticketPrice
+- expectedAttendance
+- doorDeal
+- splitPercent
+- platformFee
+- supportActCost
+- marketingCost
+
+Hybrid / Guarantee + Door:
+- guarantee
+- ticket fields
+- split fields
+
+Make sure changing one deal structure does not silently wipe valid saved values unless intended.
+
+-----------------------------------
+DEBUGGING
+-----------------------------------
+
+Temporarily add logs for:
+- selected deal structure in UI state
+- outgoing save payload
+- backend stored result
+- loaded stop data when reopening
+
+These values must match.
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- changing Deal Structure saves correctly
+- reopening the stop shows the correct saved value
+- calculations use the saved deal structure
+- saved stops do not revert to defaults
+- dependent fields remain aligned with the saved deal type

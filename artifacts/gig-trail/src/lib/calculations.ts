@@ -113,12 +113,13 @@ export function calculateShowIncome(input: ShowIncomeInput): ShowIncomeResult {
     const bookingFeeTotal = expectedTicketsSold * feePerTicket;
     const netTicketRevenue = Math.max(0, grossRevenue - bookingFeeTotal);
 
+    const effectiveDealType = dealType ?? "100% door";
     let doorIncome = 0;
-    if (dealType === "100% door") {
+    if (effectiveDealType === "100% door") {
       doorIncome = netTicketRevenue;
-    } else if (dealType === "percentage split") {
+    } else if (effectiveDealType === "percentage split") {
       doorIncome = netTicketRevenue * (split / 100);
-    } else if (dealType === "guarantee vs door") {
+    } else if (effectiveDealType === "guarantee vs door") {
       doorIncome = Math.max(guar, netTicketRevenue * (split / 100));
     }
 

@@ -714,8 +714,8 @@ export default function RunForm() {
         capacity: run.capacity,
         ticketPrice: run.ticketPrice,
         expectedAttendancePct: run.expectedAttendancePct,
-        dealType: run.dealType,
-        splitPct: run.splitPct,
+        dealType: run.dealType ?? "100% door",
+        splitPct: run.splitPct ?? 70,
         guarantee: run.guarantee,
         bookingFeePerTicket: run.bookingFeePerTicket ?? 0,
         supportActCost: run.supportActCost ?? 0,
@@ -1048,6 +1048,10 @@ export default function RunForm() {
                             if (show.showType) form.setValue("showType", show.showType);
                             if (show.fee != null) form.setValue("fee", show.fee);
                             if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+                            if (show.dealType) form.setValue("dealType", show.dealType);
+                            if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
+                            if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
+                            if (show.capacity != null) form.setValue("capacity", show.capacity);
                             if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
                           }}
                         />

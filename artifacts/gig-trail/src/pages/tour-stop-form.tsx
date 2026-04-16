@@ -164,8 +164,8 @@ export default function TourStopForm() {
         capacity: stop.capacity,
         ticketPrice: stop.ticketPrice,
         expectedAttendancePct: stop.expectedAttendancePct,
-        dealType: stop.dealType,
-        splitPct: stop.splitPct,
+        dealType: stop.dealType ?? "100% door",
+        splitPct: stop.splitPct ?? 70,
         guarantee: stop.guarantee,
         merchEstimate: stop.merchEstimate,
         marketingCost: stop.marketingCost,
@@ -278,6 +278,10 @@ export default function TourStopForm() {
     if (show.showType) form.setValue("showType", show.showType);
     if (show.fee != null) form.setValue("fee", show.fee);
     if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+    if (show.dealType) form.setValue("dealType", show.dealType);
+    if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
+    if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
+    if (show.capacity != null) form.setValue("capacity", show.capacity);
     if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
   };
 
