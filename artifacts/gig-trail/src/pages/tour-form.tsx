@@ -41,6 +41,7 @@ import {
   CloudOff,
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { SYSTEM_FUEL_DEFAULTS, normalizeFuelType } from "@/lib/fuel-price-provider";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, parseISO, format } from "date-fns";
 
@@ -138,9 +139,9 @@ const FORM_DEFAULTS: TourFormValues = {
   daysOnTour: null,
   notes: "",
   fuelType: "petrol",
-  fuelPricePetrol: 1.90,
-  fuelPriceDiesel: 1.95,
-  fuelPriceLpg: 0.95,
+  fuelPricePetrol: SYSTEM_FUEL_DEFAULTS.petrol,
+  fuelPriceDiesel: SYSTEM_FUEL_DEFAULTS.diesel,
+  fuelPriceLpg: SYSTEM_FUEL_DEFAULTS.lpg,
 };
 
 const TOTAL_STEPS = 7;
@@ -364,6 +365,24 @@ export default function TourForm() {
     fuelPriceDiesel, fuelPriceLpg,
   } = watchedValues;
 
+  // ── Auto-sync fuel type when vehicle is selected in Step 3 ──────────────
+  const prevVehicleIdRef = useRef<number | null | undefined>(undefined);
+  useEffect(() => {
+    // Skip on first render (draft restore sets both vehicleId and fuelType together)
+    if (prevVehicleIdRef.current === undefined) {
+      prevVehicleIdRef.current = vehicleId;
+      return;
+    }
+    if (vehicleId === prevVehicleIdRef.current) return;
+    prevVehicleIdRef.current = vehicleId;
+    if (vehicleId && vehicles) {
+      const v = vehicles.find(v => v.id === vehicleId);
+      if (v?.fuelType) {
+        form.setValue("fuelType", normalizeFuelType(v.fuelType));
+      }
+    }
+  }, [vehicleId, vehicles, form]);
+
   // ── Auto-calculate days on tour ──────────────────────────────────────────
   useEffect(() => {
     if (startDate && endDate) {
@@ -457,12 +476,25 @@ export default function TourForm() {
     if (pId) {
       const profile = profiles?.find(p => p.id === pId);
       if (profile) {
-        if (profile.defaultVehicleId) form.setValue("vehicleId", profile.defaultVehicleId);
+        // Vehicle — auto-select profile's default and sync fuel type
+        if (profile.defaultVehicleId) {
+          form.setValue("vehicleId", profile.defaultVehicleId);
+          const linkedVehicle = vehicles?.find(v => v.id === profile.defaultVehicleId);
+          if (linkedVehicle?.fuelType) {
+            form.setValue("fuelType", normalizeFuelType(linkedVehicle.fuelType));
+          }
+        }
+        // Location — only pre-fill if not already set
         if (profile.homeBase && !form.getValues("startLocation")) {
           form.setValue("startLocation", profile.homeBase);
           if (form.getValues("returnHome")) form.setValue("endLocation", profile.homeBase);
         }
+        // Food
         form.setValue("defaultFoodCost", profile.avgFoodPerDay * profile.peopleCount);
+        // Fuel prices — use profile's saved prices, fall back to system defaults
+        form.setValue("fuelPricePetrol", profile.defaultPetrolPrice ?? SYSTEM_FUEL_DEFAULTS.petrol);
+        form.setValue("fuelPriceDiesel", profile.defaultDieselPrice ?? SYSTEM_FUEL_DEFAULTS.diesel);
+        form.setValue("fuelPriceLpg", profile.defaultLpgPrice ?? SYSTEM_FUEL_DEFAULTS.lpg);
       }
     }
   };
@@ -641,7 +673,7 @@ export default function TourForm() {
             </section>
 
             <section className="space-y-4 p-5 rounded-xl border border-border/50 bg-card/50">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assumptions</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Fuel & defaults</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="defaultFoodCost" render={({ field }) => (
                   <FormItem>
@@ -653,10 +685,11 @@ export default function TourForm() {
                 )} />
               </div>
               <div className="border-t border-border/40 pt-4">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-1">
                   <Fuel className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold">Fuel</span>
+                  <span className="text-sm font-semibold">Fuel costs</span>
                 </div>
+                <p className="text-xs text-muted-foreground mb-3">Pre-filled from your profile. Change these for this tour only.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <FormField control={form.control} name="fuelType" render={({ field }) => (
                     <FormItem>
@@ -673,24 +706,20 @@ export default function TourForm() {
                   )} />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
-                  <FormField control={form.control} name="fuelPricePetrol" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Petrol $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.90} /></FormControl>
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="fuelPriceDiesel" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Diesel $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.95} /></FormControl>
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="fuelPriceLpg" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">LPG $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 0.95} /></FormControl>
-                    </FormItem>
-                  )} />
+                  {[
+                    { name: "fuelPricePetrol" as const, label: "Petrol $/L", fallback: SYSTEM_FUEL_DEFAULTS.petrol },
+                    { name: "fuelPriceDiesel" as const, label: "Diesel $/L", fallback: SYSTEM_FUEL_DEFAULTS.diesel },
+                    { name: "fuelPriceLpg"    as const, label: "LPG $/L",    fallback: SYSTEM_FUEL_DEFAULTS.lpg   },
+                  ].map(f => (
+                    <FormField key={f.name} control={form.control} name={f.name} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">{f.label}</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" placeholder={f.fallback.toFixed(2)} {...field} value={field.value ?? f.fallback} />
+                        </FormControl>
+                      </FormItem>
+                    )} />
+                  ))}
                 </div>
               </div>
             </section>
@@ -984,7 +1013,7 @@ export default function TourForm() {
 
               {selectedVehicle && (
                 <div className="bg-muted/40 rounded-lg px-4 py-2.5 text-xs text-muted-foreground border border-border/30">
-                  Tour fuel costs will use the <span className="font-medium text-foreground">{selectedVehicle.fuelType}</span> rate set in Step 6.
+                  Fuel type auto-set to <span className="font-medium text-foreground capitalize">{selectedVehicle.fuelType}</span> — you can adjust this in the next step.
                 </div>
               )}
             </StepShell>
@@ -1090,12 +1119,12 @@ export default function TourForm() {
             </StepShell>
           )}
 
-          {/* ── Step 6: Income & fuel ──────────────────────────────────── */}
+          {/* ── Step 6: Fuel & defaults ────────────────────────────────── */}
           {step === 6 && (
             <StepShell
               step={6}
-              title="Income assumptions"
-              subtitle="We'll use your profile's expected fee and merch estimates for the trail calculations."
+              title="Fuel & defaults"
+              subtitle="These are pulled from your profile. Change anything for this tour only — your profile won't be affected."
               chips={
                 <>
                   <SummaryChip label="Tour" value={name || "—"} />
@@ -1105,36 +1134,65 @@ export default function TourForm() {
               onBack={() => goToStep(5)}
               onNext={() => goToStep(7)}
             >
+              {/* Income defaults from profile */}
               {selectedProfile ? (
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3 rounded-xl border-2 border-secondary/30 bg-secondary/5 px-4 py-3">
-                    <DollarSign className="w-5 h-5 mt-0.5 text-secondary shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">Expected fee: ${selectedProfile.expectedGigFee ?? 0}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Merch: ${selectedProfile.avgMerchPerGig ?? 0} per show
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Income defaults</span>
+                    <span className="text-xs text-muted-foreground/70 bg-muted/50 rounded-full px-2 py-0.5">from {selectedProfile.name}</span>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-xl border border-secondary/25 bg-secondary/5 px-4 py-3">
+                    <DollarSign className="w-4 h-4 mt-0.5 text-secondary shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-0.5">
+                      <p className="text-sm">
+                        <span className="font-medium">${selectedProfile.expectedGigFee ?? 0}</span>
+                        <span className="text-muted-foreground"> expected fee per show</span>
                       </p>
+                      {(selectedProfile.avgMerchPerGig ?? 0) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          + ${selectedProfile.avgMerchPerGig} merch per show
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground px-1">
-                    You can override income deal-by-deal when adding each stop — flat fee, ticketed, or hybrid.
+                  <p className="text-xs text-muted-foreground px-0.5">
+                    Override income deal-by-deal when adding each stop — flat fee, ticketed, or hybrid.
                   </p>
                 </div>
               ) : (
-                <div className="text-center py-6 text-muted-foreground space-y-2">
-                  <DollarSign className="w-10 h-10 mx-auto opacity-30" />
-                  <p className="text-sm">No profile selected — income will be entered per stop.</p>
+                <div className="flex items-center gap-3 bg-muted/30 border border-border/40 rounded-xl px-4 py-3">
+                  <DollarSign className="w-4 h-4 text-muted-foreground/50 shrink-0" />
+                  <p className="text-sm text-muted-foreground">No profile selected — income will be entered per stop.</p>
                 </div>
               )}
 
-              <div className="border-t border-border/40 pt-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Fuel className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold">Tour-wide fuel setting</span>
+              {/* Fuel section */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Fuel className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-semibold">Fuel costs</span>
+                  </div>
+                  {selectedVehicle && (
+                    <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium capitalize">
+                      {selectedVehicle.fuelType} · {selectedVehicle.name}
+                    </span>
+                  )}
                 </div>
+
+                {selectedProfile ? (
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Pre-filled from your profile — adjust for this tour if prices have changed at the servo.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    What was the last price you saw at the servo? Leave blank to use regional averages.
+                  </p>
+                )}
+
                 <FormField control={form.control} name="fuelType" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Fuel Type</FormLabel>
+                    <FormLabel className="text-xs text-muted-foreground">Fuel type used on this tour</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value ?? "petrol"}>
                       <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                       <SelectContent>
@@ -1143,29 +1201,38 @@ export default function TourForm() {
                         <SelectItem value="lpg">LPG</SelectItem>
                       </SelectContent>
                     </Select>
+                    {selectedVehicle && (
+                      <p className="text-xs text-muted-foreground">Auto-set from your vehicle — change if needed.</p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )} />
+
                 <div className="grid grid-cols-3 gap-3">
-                  <FormField control={form.control} name="fuelPricePetrol" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Petrol $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.90} /></FormControl>
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="fuelPriceDiesel" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Diesel $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 1.95} /></FormControl>
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="fuelPriceLpg" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">LPG $/L</FormLabel>
-                      <FormControl><Input type="number" min="0" step="0.01" {...field} value={field.value ?? 0.95} /></FormControl>
-                    </FormItem>
-                  )} />
+                  {[
+                    { name: "fuelPricePetrol" as const, label: "Petrol $/L", fallback: SYSTEM_FUEL_DEFAULTS.petrol },
+                    { name: "fuelPriceDiesel" as const, label: "Diesel $/L", fallback: SYSTEM_FUEL_DEFAULTS.diesel },
+                    { name: "fuelPriceLpg"    as const, label: "LPG $/L",    fallback: SYSTEM_FUEL_DEFAULTS.lpg   },
+                  ].map(f => (
+                    <FormField key={f.name} control={form.control} name={f.name} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">{f.label}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number" min="0" step="0.01"
+                            placeholder={f.fallback.toFixed(2)}
+                            {...field}
+                            value={field.value ?? f.fallback}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )} />
+                  ))}
                 </div>
+
+                <p className="text-xs text-muted-foreground/60">
+                  Leave blank to fall back to Australian averages (Petrol ${SYSTEM_FUEL_DEFAULTS.petrol} / Diesel ${SYSTEM_FUEL_DEFAULTS.diesel} / LPG ${SYSTEM_FUEL_DEFAULTS.lpg}).
+                </p>
               </div>
 
               <FormField control={form.control} name="notes" render={({ field }) => (

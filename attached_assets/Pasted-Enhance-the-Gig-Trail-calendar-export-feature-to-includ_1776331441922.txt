@@ -1,0 +1,87 @@
+Enhance the Gig Trail calendar export feature to include optional export toggles for additional tour details.
+
+GOAL
+
+Allow users to customise what gets exported to their calendar without cluttering the core experience.
+
+-----------------------------------
+EXPORT OPTIONS UI
+-----------------------------------
+
+When the user clicks "Export to Calendar", show a simple options panel with toggles:
+
+- Include travel events (default: OFF)
+- Include detailed show info (default: ON)
+- Include load-in / soundcheck times (default: OFF)
+- Include internal notes (default: OFF)
+
+Keep UI simple and not overwhelming.
+
+-----------------------------------
+BEHAVIOUR RULES
+-----------------------------------
+
+1. Only include data if it exists
+- Do not show empty placeholders
+- Do not create blank sections in descriptions
+
+2. Do not require additional input
+- Export should work with existing tour data
+- Do not force users to enter set times or load-in times
+
+3. Keep default export clean
+- If all toggles are off, export should still produce useful show events
+
+-----------------------------------
+SHOW EVENT DESCRIPTION LOGIC
+-----------------------------------
+
+Always include:
+- venue
+- address
+- date/time
+
+If "Include detailed show info" is ON:
+- include set time if available
+
+If "Include load-in / soundcheck" is ON:
+- include load-in time if available
+- include soundcheck time if available
+
+If "Include internal notes" is ON:
+- include any user notes
+
+-----------------------------------
+TRAVEL EVENTS
+-----------------------------------
+
+If "Include travel events" is ON:
+- export each route leg as a separate calendar event
+
+If OFF:
+- include travel summary only inside show descriptions
+
+-----------------------------------
+IMPLEMENTATION
+-----------------------------------
+
+Update:
+generateTourICS(tour, options)
+
+Where options includes:
+- includeTravelEvents
+- includeShowDetails
+- includeProductionTimes
+- includeNotes
+
+Ensure all logic is conditional and cleanly handled.
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Export works with no toggles enabled
+- Toggling options changes output correctly
+- No empty fields appear in descriptions
+- Calendar events remain clean and readable
+- UX remains simple and fast

@@ -1,0 +1,134 @@
+Refactor the Tour Builder “Income assumptions” step so it automatically pulls defaults from the selected Profile and its linked/default vehicle settings, while still allowing per-tour overrides.
+
+GOAL
+
+Make this step feel like a smart default review screen, not a duplicate setup form.
+
+The user should not have to re-enter profile-level defaults during tour creation unless they want to change them for this specific tour.
+
+-----------------------------------
+DEFAULT DATA SOURCE RULES
+-----------------------------------
+
+When a user creates a tour and selects a Profile, prefill this step from that Profile.
+
+Use the selected Profile as the primary source of defaults for:
+
+Income defaults:
+- expected fee per show
+- merch estimate per show
+- minimum take-home per person if relevant
+
+Fuel defaults:
+- saved petrol price estimate
+- saved diesel price estimate
+- saved LPG price estimate
+
+Vehicle defaults:
+- default touring vehicle / linked vehicle if available
+- fuel type from that vehicle
+- any fuel-consumption-related defaults already used by calculations
+
+If the Profile has a linked/default vehicle, use that vehicle’s fuel type automatically.
+
+If multiple vehicles exist, use:
+1. profile-linked default vehicle if available
+2. otherwise the primary/default active vehicle
+3. otherwise fall back gracefully to manual selection
+
+-----------------------------------
+STEP PURPOSE
+-----------------------------------
+
+This step should act as:
+
+- a review of profile defaults
+- an opportunity to override values for this tour only
+
+It should NOT feel like a second profile setup screen.
+
+-----------------------------------
+UI COPY CHANGES
+-----------------------------------
+
+Update wording to make the source of values obvious.
+
+Examples:
+- “Using your profile defaults”
+- “Change these for this tour only”
+- “Pulled from your default vehicle and fuel settings”
+
+Replace generic wording where needed so the user understands:
+- these values came from Profile/Garage
+- edits here apply only to this tour draft
+
+-----------------------------------
+FIELD BEHAVIOUR
+-----------------------------------
+
+Prefill these fields automatically:
+- Expected fee
+- Merch estimate
+- Fuel type
+- Petrol $/L
+- Diesel $/L
+- LPG $/L
+
+Allow the user to edit any of them for this tour only.
+
+Do not overwrite the saved Profile defaults unless the user is explicitly editing the Profile.
+
+-----------------------------------
+OVERRIDE LOGIC
+-----------------------------------
+
+Tour step values should behave like draft overrides:
+
+Profile defaults -> Tour draft prefill -> Tour-specific edits
+
+If the user changes the selected profile during setup:
+- rehydrate defaults from the new profile
+- but do not silently wipe unrelated tour fields
+- if needed, warn before replacing already edited tour-level values
+
+-----------------------------------
+DATA MODEL REQUIREMENTS
+-----------------------------------
+
+Make the distinction clear in state:
+
+- profile defaults
+- resolved defaults used for this draft
+- tour-only override values
+
+Suggested model:
+resolvedTourDefaults = derived from selected profile + linked/default vehicle
+tourDraftOverrides = explicit edits made during the tour setup
+finalTourSettings = resolved defaults merged with overrides
+
+-----------------------------------
+FUEL / VEHICLE REQUIREMENTS
+-----------------------------------
+
+If a profile has a default vehicle:
+- auto-select its fuel type
+- use its consumption assumptions in downstream calculations
+
+If no vehicle is linked:
+- still prefill fuel prices from profile defaults
+- allow manual fuel type selection
+
+If no profile fuel prices exist:
+- fall back to app defaults / regional averages
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Tour Builder step auto-fills from selected Profile
+- Fuel type comes from linked/default vehicle where available
+- Fuel prices come from saved Profile fuel estimates
+- User can modify values for this tour only
+- Editing this step does not overwrite profile data
+- Step feels like reviewing defaults, not entering everything again
+- Copy clearly explains the source of the values
