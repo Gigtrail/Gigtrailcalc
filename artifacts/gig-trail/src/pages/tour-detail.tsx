@@ -374,15 +374,19 @@ export default function TourDetail() {
   }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
 
   // ── Persist computed financial totals so the tours list stays accurate ─────
+  // Always save the latest calc result (including on first load) so the tours
+  // list never shows stale data. There is no loop risk: the save only
+  // invalidates the tours LIST query key, not the individual tour / stops keys
+  // that drive calc, so calc will not re-run after the write.
   const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const calcPersistReady = useRef(false);
   useEffect(() => {
-    if (!calcPersistReady.current) {
-      if (calc) calcPersistReady.current = true;
-      return;
-    }
     if (!calc || !tour) return;
     if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
+    const netProfit  = Math.round((calc.netProfit    ?? 0) * 100) / 100;
+    const grossIncome = Math.round((calc.grossIncome  ?? 0) * 100) / 100;
+    console.debug(
+      `[GigTrail] Tour ${tourId} calc → grossIncome=${grossIncome} netProfit=${netProfit}`,
+    );
     calcSaveTimerRef.current = setTimeout(() => {
       updateTour.mutate(
         {
@@ -390,13 +394,18 @@ export default function TourDetail() {
           data: {
             name: tour.name,
             totalDistance: Math.round(calc.totalDistance ?? 0),
-            totalIncome: Math.round((calc.grossIncome ?? 0) * 100) / 100,
+            totalIncome: grossIncome,
             totalCost: Math.round((calc.totalExpenses ?? 0) * 100) / 100,
-            totalProfit: Math.round((calc.netProfit ?? 0) * 100) / 100,
+            totalProfit: netProfit,
           },
         },
         {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() }),
+          onSuccess: () => {
+            console.debug(
+              `[GigTrail] Tour ${tourId} saved → totalProfit=${netProfit} totalIncome=${grossIncome}`,
+            );
+            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+          },
         }
       );
     }, 1500);

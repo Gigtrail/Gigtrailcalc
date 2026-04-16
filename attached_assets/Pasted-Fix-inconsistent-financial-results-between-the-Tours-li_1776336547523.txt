@@ -1,0 +1,97 @@
+Fix inconsistent financial results between the Tours list card and the Tour Details page by enforcing a single source of truth for tour calculations.
+
+GOAL
+
+Ensure that every place in the app displays the exact same financial result for a tour.
+
+-----------------------------------
+CORE PROBLEM
+-----------------------------------
+
+The Tours list card is showing a different financial result than the Tour Details page.
+
+Example:
+- Tour Details: -$677.89 (loss)
+- Tours Card: $322 (profit)
+
+This indicates multiple calculation paths or stale data.
+
+-----------------------------------
+REQUIRED FIX
+-----------------------------------
+
+1. SINGLE SOURCE OF TRUTH
+
+All tour financial displays must use:
+
+finalTourCalculationResult
+
+This should include:
+- total income
+- total expenses
+- net profit/loss
+- per-member breakdown
+
+-----------------------------------
+2. REMOVE DUPLICATE CALCULATIONS
+
+Audit the codebase and remove any:
+- partial calculations
+- inline math in components
+- re-calculated summaries in the UI layer
+
+The UI must not compute financial values.
+
+-----------------------------------
+3. USE SHARED CALC OUTPUT
+
+Ensure both:
+- Tour Details page
+- Tours list cards
+
+read from the same data source:
+
+- stored calculation snapshot
+OR
+- shared calculation engine result
+
+-----------------------------------
+4. HANDLE STALE DATA
+
+If a tour is edited:
+- recalculate immediately
+- update stored result
+- ensure list view reflects latest value
+
+-----------------------------------
+5. DISPLAY RULES
+
+Always display:
+- net result (profit or loss)
+
+Format:
+- "$X profit"
+- "-$X loss"
+
+Do NOT display:
+- gross income
+- partial results
+- estimates in one place and final in another
+
+-----------------------------------
+6. DEBUG LOGGING (TEMPORARY)
+
+Add logs to confirm:
+- value used in Tour Details
+- value used in Tours Card
+
+They must match.
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Tour card and Tour details show identical financial results
+- No conflicting values anywhere in the app
+- UI never performs its own financial calculations
+- All values come from a single calculation output
