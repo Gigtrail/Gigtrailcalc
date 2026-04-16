@@ -141,7 +141,7 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/dashboard` — Main dashboard
 - `/billing` — Billing & plan management
 - `/runs/*` — Single Show Calculator
-- `/tours/*` — Tour Builder
+- `/tours/*` — Tour Builder (7-step guided wizard on create; sectioned form on edit)
 - `/profiles/*` — Profile management
 - `/garage` — Garage (custom vehicle management, Pro)
 - `/garage/new` — Add custom vehicle
