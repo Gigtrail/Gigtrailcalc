@@ -64,6 +64,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   let totalKmDriven = 0;
   let totalIncome = 0;
   let totalProfit = 0;
+  let totalExpenses = 0;
+  let runProfitSum = 0;
+  let bestRunProfit = 0;
   let worthTheDrive = 0;
   let tightMargins = 0;
   let notWorthIt = 0;
@@ -73,8 +76,12 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalKmDriven += km;
     const income = run.totalIncome != null ? Number(run.totalIncome) : 0;
     const profit = run.totalProfit != null ? Number(run.totalProfit) : 0;
+    const cost = run.totalCost != null ? Number(run.totalCost) : 0;
     totalIncome += income;
     totalProfit += profit;
+    totalExpenses += cost;
+    runProfitSum += profit;
+    if (profit > bestRunProfit) bestRunProfit = profit;
 
     if (income > 0) {
       const margin = profit / income;
@@ -90,7 +97,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalKmDriven += tour.totalDistance != null ? Number(tour.totalDistance) : 0;
     totalIncome += tour.totalIncome != null ? Number(tour.totalIncome) : 0;
     totalProfit += tour.totalProfit != null ? Number(tour.totalProfit) : 0;
+    totalExpenses += tour.totalCost != null ? Number(tour.totalCost) : 0;
   }
+
+  const avgRunProfit = runs.length > 0 ? runProfitSum / runs.length : 0;
 
   res.json(GetDashboardSummaryResponse.parse({
     totalRuns: runs.length,
@@ -100,6 +110,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalKmDriven,
     totalIncome,
     totalProfit,
+    totalExpenses,
+    avgRunProfit,
+    bestRunProfit,
     worthTheDrive,
     tightMargins,
     notWorthIt,

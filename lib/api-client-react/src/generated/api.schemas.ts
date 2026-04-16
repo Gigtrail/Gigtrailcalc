@@ -809,6 +809,9 @@ export interface DashboardSummary {
   totalKmDriven: number;
   totalIncome: number;
   totalProfit: number;
+  totalExpenses: number;
+  avgRunProfit: number;
+  bestRunProfit: number;
   worthTheDrive: number;
   tightMargins: number;
   notWorthIt: number;
