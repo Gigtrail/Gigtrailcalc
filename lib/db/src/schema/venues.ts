@@ -22,6 +22,7 @@ export const venuesTable = pgTable("venues", {
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
   roomNotes: text("room_notes"),
+  postcode: text("postcode"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

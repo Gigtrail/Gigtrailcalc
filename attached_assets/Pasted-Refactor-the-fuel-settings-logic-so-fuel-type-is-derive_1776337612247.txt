@@ -1,0 +1,85 @@
+Refactor the fuel settings logic so fuel type is derived from the selected vehicle, not manually chosen by the user.
+
+GOAL
+
+Remove confusion by making the vehicle the source of truth for fuel type and consumption.
+
+-----------------------------------
+CORE RULE
+-----------------------------------
+
+If a vehicle is selected:
+- fuel type comes from the vehicle
+- consumption comes from the vehicle
+
+User should NOT manually select fuel type in this case.
+
+-----------------------------------
+UI CHANGES
+-----------------------------------
+
+1. REMOVE manual Fuel Type dropdown when a vehicle exists
+
+2. Replace with display text:
+"Using: {Vehicle Name} — {Fuel Type}"
+
+Example:
+"Using: Ford Transit — Diesel"
+
+3. Show consumption from vehicle:
+"10L / 100km"
+
+-----------------------------------
+FUEL PRICE INPUTS
+-----------------------------------
+
+Keep:
+- Petrol price
+- Diesel price
+- LPG price
+
+Allow editing of all three
+
+BUT:
+- only use the price that matches the vehicle’s fuel type in calculations
+
+-----------------------------------
+NO VEHICLE FALLBACK
+-----------------------------------
+
+If no vehicle is selected:
+
+Show:
+- Fuel Type dropdown
+- Consumption input
+
+This becomes a fallback mode.
+
+-----------------------------------
+CALCULATION LOGIC
+-----------------------------------
+
+Fuel cost should use:
+- selected vehicle fuel type
+- selected vehicle consumption
+- matching fuel price
+
+Do not mix sources.
+
+-----------------------------------
+STATE RULES
+-----------------------------------
+
+- vehicle fuel type overrides manual fuel type
+- switching vehicles updates fuel type automatically
+- no conflicting values should exist
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Users do not need to select fuel type when a vehicle exists
+- Fuel type always matches the selected vehicle
+- Fuel cost calculations are consistent
+- UI clearly shows where fuel data comes from
+- No duplicate or conflicting fuel inputs

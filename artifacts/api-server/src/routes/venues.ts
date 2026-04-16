@@ -197,6 +197,7 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     address?: string | null;
     suburb?: string | null;
     fullAddress?: string | null;
+    postcode?: string | null;
     capacity?: number | null;
     website?: string | null;
     contactEmail?: string | null;
@@ -215,6 +216,7 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   if ('address' in body) updateData.address = body.address;
   if ('suburb' in body) updateData.suburb = body.suburb;
   if ('fullAddress' in body) updateData.fullAddress = body.fullAddress;
+  if ('postcode' in body) updateData.postcode = body.postcode;
   if ('capacity' in body) updateData.capacity = body.capacity;
   if ('website' in body) updateData.website = body.website;
   if ('contactEmail' in body) updateData.contactEmail = body.contactEmail;
@@ -236,7 +238,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const {
     venueName, profileId, city, state, country, lastTotalProfit, lastStatus,
-    address, suburb, fullAddress, capacity, website, contactEmail, contactPhone, roomNotes,
+    address, suburb, fullAddress, postcode, capacity, website, contactEmail, contactPhone, roomNotes,
   } = req.body as {
     venueName: string;
     profileId?: number | null;
@@ -248,6 +250,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     address?: string | null;
     suburb?: string | null;
     fullAddress?: string | null;
+    postcode?: string | null;
     capacity?: number | null;
     website?: string | null;
     contactEmail?: string | null;
@@ -276,6 +279,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
         address: address ?? existing.address,
         suburb: suburb ?? existing.suburb,
         fullAddress: fullAddress ?? existing.fullAddress,
+        postcode: postcode ?? existing.postcode,
         capacity: capacity ?? existing.capacity,
         website: website ?? existing.website,
         contactEmail: contactEmail ?? existing.contactEmail,
@@ -302,6 +306,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     address: address ?? null,
     suburb: suburb ?? null,
     fullAddress: fullAddress ?? null,
+    postcode: postcode ?? null,
     capacity: capacity ?? null,
     website: website ?? null,
     contactEmail: contactEmail ?? null,

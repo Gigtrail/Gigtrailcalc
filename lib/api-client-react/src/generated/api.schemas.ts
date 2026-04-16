@@ -189,6 +189,8 @@ export interface Venue {
   contactPhone?: string | null;
   /** @nullable */
   roomNotes?: string | null;
+  /** @nullable */
+  postcode?: string | null;
   showCount?: number;
   /** @nullable */
   lastPlayed?: string | null;
@@ -307,6 +309,8 @@ export interface CreateVenueBody {
   /** @nullable */
   fullAddress?: string | null;
   /** @nullable */
+  postcode?: string | null;
+  /** @nullable */
   capacity?: number | null;
   /** @nullable */
   website?: string | null;
@@ -333,6 +337,8 @@ export interface PatchVenueBody {
   suburb?: string | null;
   /** @nullable */
   fullAddress?: string | null;
+  /** @nullable */
+  postcode?: string | null;
   /** @nullable */
   capacity?: number | null;
   /** @nullable */

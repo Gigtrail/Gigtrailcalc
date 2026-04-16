@@ -1,0 +1,165 @@
+Refactor the Saved Venue detail page so address parsing is reliable, editable fields are clearer, and incomplete venue data can be filled in and saved later.
+
+GOAL
+
+Make the Venue page behave like a clean venue record page:
+- correctly display parsed location data
+- allow missing details to be filled in inline
+- save edits cleanly at the bottom
+- avoid awkward half-broken address autofill behaviour
+
+-----------------------------------
+CURRENT PROBLEM
+-----------------------------------
+
+The address/location parsing is producing incorrect values.
+
+Example:
+- Full address is correct
+- But “Suburb / City” is being filled with a broken version of the full address instead of a clean locality value
+
+The page also feels awkward because it mixes read-only display and scattered inline editing.
+
+-----------------------------------
+PART 1 — CLEAN ADDRESS MODEL
+-----------------------------------
+
+Separate venue address data into distinct fields:
+
+- fullAddress
+- suburb
+- city
+- state
+- postcode
+- country
+- latitude
+- longitude
+
+Rules:
+- fullAddress should always remain the raw display address
+- parsed fields should be stored separately
+- do NOT reuse fullAddress as suburb/city
+- do NOT guess by naive string slicing if structured address components are available
+
+If geocoding / place parsing is available:
+- map address components properly
+- use locality / suburb / administrative area / postal code fields correctly
+
+If parsing is incomplete:
+- leave the field blank rather than filling it with garbage
+
+-----------------------------------
+PART 2 — VENUE DETAIL PAGE LAYOUT
+-----------------------------------
+
+Redesign the page so it has two clear modes:
+
+1. Venue Overview
+- venue name
+- full address
+- upcoming confirmed dates
+- show history
+- quick stats
+
+2. Venue Details Form
+Editable fields for incomplete or missing venue info:
+- suburb
+- city
+- state
+- postcode
+- country
+- capacity
+- website
+- contact email
+- contact phone
+- notes
+
+Do not scatter Save buttons through the middle of the page.
+
+-----------------------------------
+PART 3 — EDITABLE PLACEHOLDER BOXES
+-----------------------------------
+
+For fields that are missing, show editable input boxes directly in the details section.
+
+Examples:
+- Capacity [input]
+- Website [input]
+- Contact email [input]
+- Contact phone [input]
+- Notes [textarea]
+
+For fields that already have values:
+- either display them cleanly
+- or allow them to switch into edit mode consistently
+
+If address-derived fields are blank or low-confidence:
+- show editable inputs instead of incorrect autofill
+
+-----------------------------------
+PART 4 — SAVE FLOW
+-----------------------------------
+
+Add one clear save action at the bottom of the editable details section.
+
+Behaviour:
+- user can fill in multiple missing fields
+- click Save once
+- all valid edits are saved together
+
+Optional:
+- Cancel button resets unsaved edits
+
+Do not require users to save field-by-field.
+
+-----------------------------------
+PART 5 — ADDRESS CONFIDENCE / FALLBACK
+-----------------------------------
+
+If the address parser cannot confidently determine suburb/city:
+- leave the field blank
+- let the user fill it in manually
+
+Do NOT display malformed values like:
+"710 Brunswick St, New Farm QLD 40"
+
+Prefer blank over wrong.
+
+-----------------------------------
+PART 6 — HISTORY / ACTIVITY SECTION
+-----------------------------------
+
+Keep:
+- upcoming confirmed dates
+- show history
+
+But make sure the Venue Details form is visually separate from activity/history.
+
+The page should feel like:
+- top = venue overview and activity
+- side/bottom = editable venue record details
+
+-----------------------------------
+PART 7 — DATA QUALITY
+-----------------------------------
+
+Preserve structured venue data for later use in:
+- venue search
+- venue database filtering
+- deal history
+- future monetisable venue intelligence
+
+This means:
+- suburb/city/state/postcode must be stored cleanly
+- avoid stuffing everything into a single text field
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Full address remains correct and untouched
+- Suburb/city no longer shows broken address fragments
+- Missing venue details appear as editable boxes
+- User can fill multiple fields and save at the bottom
+- Incorrect parsed values are not shown as if they are valid
+- Venue page feels clean and intentional, not half-edit / half-read-only

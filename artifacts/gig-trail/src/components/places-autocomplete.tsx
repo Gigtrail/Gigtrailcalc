@@ -2,10 +2,19 @@ import { useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { MapPin } from "lucide-react";
 
+export interface ParsedAddress {
+  suburb?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+  country?: string;
+}
+
 export interface PlaceResult {
   name: string;
   lat?: number;
   lng?: number;
+  parsed?: ParsedAddress;
 }
 
 interface PlacesAutocompleteProps {
@@ -24,13 +33,11 @@ let loadedApiKey: string | null = null;
 const readyCallbacks: Array<() => void> = [];
 
 export function loadGoogleMaps(apiKey: string): void {
-  // Already loaded with the same key — fire callbacks immediately
   if (scriptStatus === "loaded" && loadedApiKey === apiKey) {
     readyCallbacks.forEach(cb => cb());
     readyCallbacks.length = 0;
     return;
   }
-  // Key changed — remove old script and reset
   if (loadedApiKey && loadedApiKey !== apiKey) {
     const old = document.querySelector(`script[src*="maps.googleapis.com"]`);
     if (old) old.remove();
@@ -50,9 +57,7 @@ export function loadGoogleMaps(apiKey: string): void {
     readyCallbacks.forEach(cb => cb());
     readyCallbacks.length = 0;
   };
-  script.onerror = () => {
-    scriptStatus = "error";
-  };
+  script.onerror = () => { scriptStatus = "error"; };
   document.head.appendChild(script);
 }
 
@@ -62,6 +67,44 @@ export function onGoogleMapsReady(cb: () => void) {
   } else {
     readyCallbacks.push(cb);
   }
+}
+
+/** Extract the first matching address component value by type. */
+function getComponent(
+  components: google.maps.GeocoderAddressComponent[],
+  types: string[],
+  key: "long_name" | "short_name" = "long_name",
+): string {
+  return components.find(c => c.types.some(t => types.includes(t)))?.[key] ?? "";
+}
+
+/** Parse Google address_components into structured venue fields.
+ *  Prefer blank over wrong — only set a field when we have clear data. */
+export function parseAddressComponents(
+  components: google.maps.GeocoderAddressComponent[],
+): ParsedAddress {
+  // suburb: use strict sublocality first, fall back to locality (AU-style: locality = suburb)
+  const sublocality = getComponent(components, ["sublocality_level_1", "sublocality"]);
+  const locality    = getComponent(components, ["locality"]);
+  const admin2      = getComponent(components, ["administrative_area_level_2"]);
+  const admin1Short = getComponent(components, ["administrative_area_level_1"], "short_name");
+  const postalCode  = getComponent(components, ["postal_code"]);
+  const countryLong = getComponent(components, ["country"]);
+
+  // suburb: prefer explicit sublocality; if only locality exists use it (many AU addresses)
+  const suburb = sublocality || locality || "";
+  // city: prefer locality; if same as suburb, try admin2 (LGA); else leave blank
+  const city = locality && locality !== suburb
+    ? locality
+    : (admin2 || "");
+
+  return {
+    suburb:   suburb   || undefined,
+    city:     city     || undefined,
+    state:    admin1Short || undefined,
+    postcode: postalCode  || undefined,
+    country:  countryLong || undefined,
+  };
 }
 
 export function PlacesAutocomplete({
@@ -83,7 +126,7 @@ export function PlacesAutocomplete({
     if (!inputRef.current || autocompleteRef.current) return;
 
     const ac = new google.maps.places.Autocomplete(inputRef.current, {
-      fields: ["formatted_address", "name", "geometry"],
+      fields: ["formatted_address", "name", "geometry", "address_components"],
     });
 
     ac.addListener("place_changed", () => {
@@ -91,7 +134,10 @@ export function PlacesAutocomplete({
       const name = place.formatted_address || place.name || "";
       const lat = place.geometry?.location?.lat();
       const lng = place.geometry?.location?.lng();
-      onChangeRef.current(name, { name, lat, lng });
+      const parsed = place.address_components
+        ? parseAddressComponents(place.address_components)
+        : undefined;
+      onChangeRef.current(name, { name, lat, lng, parsed });
     });
 
     autocompleteRef.current = ac;
