@@ -1,0 +1,85 @@
+Fix the Ticket Recovery logic so it is based on break-even calculations, not expected attendance.
+
+GOAL
+
+Ensure ticket recovery shows how many tickets are required to break even, independent of forecasted turnout.
+
+-----------------------------------
+CORE ISSUE
+-----------------------------------
+
+Current logic incorrectly uses expected attendance to calculate ticket recovery.
+
+This creates circular and misleading results.
+
+-----------------------------------
+CORRECT LOGIC
+-----------------------------------
+
+Ticket Recovery must be calculated as:
+
+deficit = total expenses - guaranteed income
+
+tickets_needed = deficit / (ticket price × split percentage)
+
+-----------------------------------
+IMPORTANT RULE
+-----------------------------------
+
+- Do NOT use expected attendance in ticket recovery calculations
+- Expected attendance is only for forecasting, not recovery
+
+-----------------------------------
+PER-SHOW CALCULATION
+-----------------------------------
+
+For each ticketed show:
+
+- calculate contribution per ticket:
+  ticket_price × split %
+
+- calculate tickets needed to cover deficit
+
+-----------------------------------
+DISPLAY CHANGES
+-----------------------------------
+
+Replace:
+
+"X tickets needed"
+
+With:
+
+"Break-even: X tickets"
+
+Add helper text:
+
+"Based on your costs — not expected turnout"
+
+-----------------------------------
+OPTIONAL IMPROVEMENT
+-----------------------------------
+
+Show both:
+
+Forecast:
+"Expected: 25 people → $625"
+
+Break-even:
+"Need: 178 people to break even"
+
+-----------------------------------
+EDGE CASES
+-----------------------------------
+
+- if no deficit → hide ticket recovery
+- if multiple shows → distribute recovery logically or show per-show requirement clearly
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- ticket recovery ignores expected attendance
+- calculations are consistent and accurate
+- users clearly understand difference between forecast and break-even
+- no circular logic remains

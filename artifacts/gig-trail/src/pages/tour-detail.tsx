@@ -469,7 +469,7 @@ export default function TourDetail() {
   const activeMembers = resolveActiveMembers(memberLibrary, activeMemberIdList);
   const qualifyingShowCount = calc
     ? calc.stopCalcs.filter((sc) => sc.totalIncome > 0).length
-    : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merch ?? 0) > 0).length;
+    : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merchEstimate ?? 0) > 0).length;
   const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
   const totalMemberPayout = memberEarnings.totalPayout;
   const totalExpensesWithPayouts = (calc?.totalExpenses ?? 0) + totalMemberPayout;
@@ -489,7 +489,23 @@ export default function TourDetail() {
     return costs.reduce((max, c) => c.amount > max.amount ? c : max);
   })();
 
-  const ticketRecovery = calculateTicketRecovery(sortedStops, profitAfterMemberFees);
+  const ticketRecovery = calculateTicketRecovery(
+    sortedStops.map(s => ({
+      id: s.id,
+      city: s.city,
+      venueName: s.venueName,
+      showType: s.showType,
+      ticketPrice: s.ticketPrice,
+      capacity: s.capacity,
+      dealType: s.dealType,
+      splitPct: s.splitPct,
+      fee: s.fee,
+      guarantee: s.guarantee,
+      merch: s.merchEstimate,
+      expectedAttendancePct: s.expectedAttendancePct,
+    })),
+    (calc?.totalExpenses ?? 0) + totalMemberPayout,
+  );
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
 
@@ -1658,28 +1674,37 @@ export default function TourDetail() {
             <Card className="border-border/50 bg-card/50">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <Ticket className="w-4 h-4 text-primary" /> Ticket Recovery
+                  <Ticket className="w-4 h-4 text-primary" /> Break-Even Tracker
                 </CardTitle>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Tickets needed to cover your costs — ignores expected turnout.
+                </p>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
 
                 {ticketRecovery.state === "no_ticketed_shows" && (
                   <p className="text-xs text-muted-foreground italic">
-                    No ticketed shows available to recover this loss.
+                    No ticketed shows on this tour — add a ticketed or hybrid show to see break-even numbers.
                   </p>
                 )}
 
                 {(ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible") && (
                   <>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground text-xs">Tour deficit</span>
+                      <span className="text-muted-foreground text-xs">Costs to cover via tickets</span>
                       <span className="font-bold text-destructive">{fmt(ticketRecovery.deficit)}</span>
                     </div>
+                    {ticketRecovery.guaranteedIncome > 0 && (
+                      <div className="flex items-center justify-between -mt-1">
+                        <span className="text-muted-foreground text-xs">Guaranteed income (fees + merch)</span>
+                        <span className="font-semibold text-secondary text-xs">{fmt(ticketRecovery.guaranteedIncome)}</span>
+                      </div>
+                    )}
 
                     {ticketRecovery.state === "impossible" && (
                       <div className="flex items-start gap-1.5 text-xs text-amber-700/80 bg-amber-900/10 rounded px-2.5 py-2">
                         <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                        <span>Even at full capacity, current ticketed shows cannot fully recover this loss.</span>
+                        <span>Even at full capacity, ticketed shows can&apos;t cover this gap. Consider adding shows or reducing costs.</span>
                       </div>
                     )}
 
@@ -1689,33 +1714,52 @@ export default function TourDetail() {
                           <div className="font-medium text-foreground truncate">{row.showName}</div>
                           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground pl-0.5">
                             <span>
-                              <span className="font-semibold text-foreground">{row.ticketsNeeded}</span> ticket{row.ticketsNeeded !== 1 ? "s" : ""} needed
+                              Break-even:{" "}
+                              <span className="font-semibold text-foreground">{row.ticketsNeeded}</span>{" "}
+                              ticket{row.ticketsNeeded !== 1 ? "s" : ""}
                             </span>
                             {row.capacity != null ? (
                               <span>
                                 <span className={`font-semibold ${row.capacityPercentNeeded != null && row.capacityPercentNeeded > 1 ? "text-destructive" : "text-foreground"}`}>
                                   {row.capacityPercentNeeded != null ? `${Math.round(row.capacityPercentNeeded * 100)}%` : "—"}
                                 </span>{" "}
-                                of capacity
+                                of cap
                               </span>
                             ) : (
-                              <span className="italic">Capacity unknown</span>
+                              <span className="italic">No capacity set</span>
                             )}
                             <span>${row.netPerTicket.toFixed(2)}/ticket</span>
                           </div>
+                          {row.expectedTickets != null && (
+                            <div className="text-[11px] text-muted-foreground/70 pl-0.5">
+                              Forecast:{" "}
+                              <span className={`font-medium ${row.expectedTickets >= row.ticketsNeeded ? "text-secondary" : "text-amber-600"}`}>
+                                {row.expectedTickets} people
+                              </span>
+                              {row.expectedRevenue != null && (
+                                <> → {fmt(row.expectedRevenue)}</>
+                              )}
+                              {row.expectedTickets < row.ticketsNeeded && (
+                                <span className="text-amber-600"> (short by {row.ticketsNeeded - row.expectedTickets})</span>
+                              )}
+                              {row.expectedTickets >= row.ticketsNeeded && (
+                                <span className="text-secondary"> ✓</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
 
                     <div className="pt-2 border-t border-border/40 space-y-1.5">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total tickets needed</span>
+                        <span className="text-muted-foreground">Total break-even tickets</span>
                         <span className="font-bold text-foreground">{ticketRecovery.totalTicketsNeeded}</span>
                       </div>
                       {ticketRecovery.strongestRecoveryShowName && (
                         <div className="flex items-start gap-1.5 text-xs text-muted-foreground bg-muted/30 rounded px-2.5 py-2">
                           <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-secondary/70" />
-                          <span>Best recovery show: <strong className="text-foreground">{ticketRecovery.strongestRecoveryShowName}</strong></span>
+                          <span>Best earning show: <strong className="text-foreground">{ticketRecovery.strongestRecoveryShowName}</strong></span>
                         </div>
                       )}
                     </div>
