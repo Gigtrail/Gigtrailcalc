@@ -35,6 +35,7 @@ import { usePlan } from "@/hooks/use-plan";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
+import type { SnapMember } from "@/lib/snapshot-types";
 import { getStandardVehicle } from "@/lib/garage-constants";
 
 function fmt(n: number) {
@@ -165,6 +166,12 @@ export interface GigTrailResultData {
   isPro?: boolean;
   snapshotMode?: boolean;
   snapshotDate?: string;
+  /** Engine version that produced this result (e.g. "1.0.0"). Present on snapshots saved after this feature was added. */
+  calculationVersion?: string;
+  /** ISO timestamp of when this calculation completed. */
+  calculatedAt?: string;
+  /** Frozen member list at calculation time. Used for the Member Payouts section in snapshot mode so payouts don't drift if the profile changes. */
+  snapshotMembers?: SnapMember[];
 }
 
 export default function RunResults() {
@@ -226,6 +233,7 @@ export default function RunResults() {
     runId, savedRunId, saveFailed,
     calcCount, calcLimit,
     snapshotMode, snapshotDate,
+    calculationVersion, calculatedAt, snapshotMembers,
   } = result;
 
   const effectiveRunId = savedRunId ?? runId;
@@ -262,11 +270,17 @@ export default function RunResults() {
   const hasRoute = distanceKm > 0 || totalDriveMinutes !== null || vehicleType;
 
   // Profile + members
-  const profile = profiles?.find(p => p.id === formData.profileId);
-  const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
+  // In snapshot mode, prefer the frozen member list stored at calculation time
+  // so payouts don't drift if the profile is edited after the show was saved.
+  const shouldUseSnapshotMembers = snapshotMode && snapshotMembers != null && snapshotMembers.length > 0;
+  const profile = !shouldUseSnapshotMembers ? profiles?.find(p => p.id === formData.profileId) : undefined;
+  const { library: memberLibrary, activeMemberIds: activeMemberIdList } = (!shouldUseSnapshotMembers && profile)
     ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
     : { library: [], activeMemberIds: [] };
-  const activeMembers = resolveActiveMembers(memberLibrary, activeMemberIdList);
+  const liveMembersList = resolveActiveMembers(memberLibrary, activeMemberIdList);
+  const activeMembers: { id: string; name: string; role?: string; expectedGigFee?: number }[] = shouldUseSnapshotMembers
+    ? (snapshotMembers ?? []).map(m => ({ id: m.id, name: m.name, role: m.role, expectedGigFee: m.expectedGigFee }))
+    : liveMembersList;
   const membersWithFees = activeMembers.filter(m => (m.expectedGigFee ?? 0) > 0);
   const showPayoutSection = activeMembers.length > 1;
   const totalMemberFees = activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0);
@@ -360,12 +374,20 @@ export default function RunResults() {
 
       {/* Status banners */}
       {snapshotMode ? (
-        <div className="flex items-center gap-2.5 rounded-lg border border-amber-200/80 bg-amber-50/70 px-4 py-2.5 text-sm text-amber-900">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200/80 bg-amber-50/70 px-4 py-2.5 text-sm text-amber-900">
           <History className="w-4 h-4 flex-shrink-0 text-amber-600" />
           <span className="font-medium">Saved result</span>
-          {snapshotDate && <span className="text-amber-700/70">· {format(new Date(snapshotDate), "MMM d, yyyy")}</span>}
-          <span className="text-amber-600/50 mx-0.5">·</span>
-          <span className="text-xs text-amber-700/80">Based on your settings at the time</span>
+          {(calculatedAt || snapshotDate) && (
+            <span className="text-amber-700/70">
+              · {format(new Date((calculatedAt || snapshotDate)!), "MMM d, yyyy 'at' h:mm a")}
+            </span>
+          )}
+          {calculationVersion && (
+            <span className="text-[11px] font-mono bg-amber-100 border border-amber-300/60 text-amber-700 px-1.5 py-0.5 rounded">
+              engine v{calculationVersion}
+            </span>
+          )}
+          <span className="text-xs text-amber-700/60 ml-auto">Numbers reflect your settings at the time of calculation</span>
         </div>
       ) : effectiveRunId ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
@@ -733,14 +755,21 @@ export default function RunResults() {
         <Section
           title="Member Payouts"
           badge={
-            totalMemberFees > 0
-              ? <span className={cn(
+            <div className="flex items-center gap-1.5">
+              {shouldUseSnapshotMembers && (
+                <span className="text-[10px] font-medium text-muted-foreground/70 bg-muted/60 px-1.5 py-0.5 rounded border border-border/40" title="Member fees frozen at calculation time">
+                  snapshot
+                </span>
+              )}
+              {totalMemberFees > 0 && (
+                <span className={cn(
                   "text-xs font-semibold rounded-full px-2 py-0.5",
                   fullFeesCovered ? "text-green-700 bg-green-100" : "text-amber-700 bg-amber-100"
                 )}>
                   ${fmt(totalMemberFees)} total
                 </span>
-              : undefined
+              )}
+            </div>
           }
           defaultOpen
         >

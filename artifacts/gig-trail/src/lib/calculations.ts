@@ -18,6 +18,19 @@
  * calculateStopPreview()     — inline stop preview (used by tour-stop-form)
  */
 
+/**
+ * Calculation engine version — bump this whenever the financial logic changes
+ * in a way that would produce different outputs for the same inputs.
+ * Snapshots record this at save-time so future engineers can identify which
+ * engine version produced a given result.
+ *
+ * Versioning convention:
+ *   MAJOR — break in outputs for identical inputs (e.g. algorithm change)
+ *   MINOR — new derived outputs added; existing outputs unchanged
+ *   PATCH — bug fix that corrects previously wrong outputs
+ */
+export const CALC_ENGINE_VERSION = "1.0.0";
+
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, SYSTEM_FALLBACK_FUEL_PRICE } from "./gig-constants";
 import { calculateMemberEarnings, type MemberEarningsSummary } from "./member-utils";
 import type { Member } from "@/types/member";

@@ -32,11 +32,12 @@ import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
-import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
+import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
-import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
+import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
+import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import {
   Dialog,
   DialogContent,
@@ -406,9 +407,143 @@ export default function RunForm() {
 
         const toNum = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
         const toNumOrNull = (v: unknown) => { const n = Number(v); return isNaN(n) || v === "" || v === null || v === undefined ? null : n; };
-        // Build a self-contained calculation snapshot (strip session-only fields)
+
+        // Resolve the member list as it existed at calculation time so the
+        // snapshot is self-contained and won't drift if the profile changes later.
+        const { library: snapMemberLib, activeMemberIds: snapActiveMemberIds } =
+          profile
+            ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
+            : { library: [], activeMemberIds: [] };
+        const snapActiveMembers = resolveActiveMembers(snapMemberLib, snapActiveMemberIds);
+        const snapshotMembers: SnapMember[] = snapActiveMembers.map(m => ({
+          id: m.id,
+          name: m.name,
+          role: m.role,
+          expectedGigFee: m.expectedGigFee ?? 0,
+          feeType: resolveFeeType(m),
+        }));
+
+        // Build a fully-typed, self-contained calculation snapshot.
+        // All values needed to reconstruct the results page live here.
         const { calcCount: _cc, calcLimit: _cl, isPro: _ip, isEditing: _ie, runId: _rid, ...snapshotFields } = resultData;
-        const calculationSnapshot = snapshotFields;
+        const calculationSnapshot: CalcSnapshot = {
+          // ── Provenance ───────────────────────────────────────────────────
+          calculationVersion: CALC_ENGINE_VERSION,
+          calculatedAt: new Date().toISOString(),
+
+          // ── Frozen context ───────────────────────────────────────────────
+          snapshotProfile: profile
+            ? {
+                id: profile.id,
+                name: profile.name,
+                peopleCount: profile.peopleCount,
+                actType: profile.actType ?? null,
+                minTakeHomePerPerson: Number(profile.minTakeHomePerPerson) || 0,
+                maxDriveHoursPerDay: Number(profile.maxDriveHoursPerDay) || DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
+                fuelConsumption: Number(profile.fuelConsumption) || 0,
+                defaultFuelPrice: profile.defaultFuelPrice != null ? Number(profile.defaultFuelPrice) : null,
+                vehicleType: profile.vehicleType ?? null,
+                vehicleName: profile.vehicleName ?? null,
+                accommodationRequired: profile.accommodationRequired ?? false,
+                singleRoomsDefault: profile.singleRoomsDefault ?? 0,
+                doubleRoomsDefault: profile.doubleRoomsDefault ?? 0,
+              }
+            : null,
+          snapshotVehicle: selectedVehicle
+            ? {
+                id: selectedVehicle.id,
+                name: selectedVehicle.name,
+                vehicleType: selectedVehicle.vehicleType ?? "van",
+                avgConsumption: Number(selectedVehicle.avgConsumption) || 0,
+                fuelType: selectedVehicle.fuelType ?? "petrol",
+              }
+            : null,
+          snapshotMembers,
+
+          // ── Fuel resolution ──────────────────────────────────────────────
+          fuelPriceSource: snapshotFields.fuelPriceSource ?? "manual",
+          resolvedFuelPrice: snapshotFields.resolvedFuelPrice ?? (Number(vals.fuelPrice) || 0),
+
+          // ── All inputs ───────────────────────────────────────────────────
+          formInputs: {
+            showType: vals.showType ?? "Flat Fee",
+            dealType: vals.dealType ?? null,
+            venueName: vals.venueName ?? null,
+            showDate: vals.showDate ?? null,
+            origin: vals.origin ?? null,
+            destination: vals.destination ?? null,
+            city: vals.city ?? null,
+            state: vals.state ?? null,
+            country: vals.country ?? null,
+            distanceKm: toNum(vals.distanceKm),
+            returnTrip: vals.returnTrip ?? false,
+            fuelPrice: toNum(vals.fuelPrice),
+            fuelEfficiency: toNum(vals.fuelEfficiency),
+            fee: toNumOrNull(vals.fee),
+            capacity: toNumOrNull(vals.capacity),
+            ticketPrice: toNumOrNull(vals.ticketPrice),
+            expectedAttendancePct: toNumOrNull(vals.expectedAttendancePct),
+            splitPct: toNumOrNull(vals.splitPct),
+            guarantee: toNumOrNull(vals.guarantee),
+            merchEstimate: toNumOrNull(vals.merchEstimate),
+            accommodationRequired: accomRequired,
+            singleRooms: accomSingleRooms,
+            doubleRooms: accomDoubleRooms,
+            accommodationNights: toNum(vals.accommodationNights),
+            foodCost: toNumOrNull(vals.foodCost),
+            marketingCost: toNumOrNull(vals.marketingCost),
+            extraCosts: toNumOrNull(vals.extraCosts),
+            notes: vals.notes ?? null,
+            actType: profile?.actType ?? null,
+          },
+
+          // ── All outputs ──────────────────────────────────────────────────
+          outputs: {
+            fuelCost: computed.fuelCost,
+            fuelUsedLitres: computed.fuelUsedLitres,
+            accommodationCost: computed.accommodationCost,
+            totalCost: computed.totalCost,
+            totalIncome: computed.totalIncome,
+            netProfit: computed.netProfit,
+            status: computed.status,
+            profitPerMember: computed.profitPerMember,
+            takeHomePerPerson: computed.takeHomePerPerson,
+            minTakeHomePerPerson: snapshotFields.minTakeHomePerPerson,
+            breakEvenTickets: computed.breakEvenTickets,
+            breakEvenCapacity: computed.breakEvenCapacity,
+            expectedTicketsSold: computed.expectedTicketsSold,
+            grossRevenue: computed.grossRevenue,
+          },
+
+          // ── Derived display values ───────────────────────────────────────
+          distanceKm: routeOverride.distanceKm ?? toNum(vals.distanceKm),
+          driveTimeMinutes: routeOverride.driveTimeMinutes ?? null,
+          recommendedNights,
+          maxDriveHoursPerDay,
+          accomSingleRooms,
+          accomDoubleRooms,
+          estimatedAccomCostFromDrive,
+          profileName: profile?.name ?? null,
+          profilePeopleCount: profile?.peopleCount ?? 1,
+          vehicleType: profile?.vehicleType ?? null,
+          vehicleName: profile?.vehicleName ?? null,
+
+          // ── Legacy top-level fields (keep for backward compat) ───────────
+          fuelCost: computed.fuelCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          netProfit: computed.netProfit,
+          status: computed.status,
+          profitPerMember: computed.profitPerMember,
+          takeHomePerPerson: computed.takeHomePerPerson,
+          minTakeHomePerPerson: snapshotFields.minTakeHomePerPerson,
+          expectedTicketsSold: computed.expectedTicketsSold,
+          grossRevenue: computed.grossRevenue,
+          breakEvenTickets: computed.breakEvenTickets,
+          breakEvenCapacity: computed.breakEvenCapacity,
+          fuelUsedLitres: computed.fuelUsedLitres,
+          formData: snapshotFields.formData as Record<string, unknown>,
+        };
 
         const payload = {
           ...vals,
