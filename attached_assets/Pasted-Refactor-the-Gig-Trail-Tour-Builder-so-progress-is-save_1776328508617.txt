@@ -1,0 +1,195 @@
+Refactor the Gig Trail Tour Builder so progress is saved continuously while the user moves through the multi-step flow.
+
+GOAL
+
+Users should never lose their partially completed tour if they:
+- move between steps
+- go back to edit settings
+- refresh the page
+- accidentally navigate away and return
+- change profile/accommodation/vehicle assumptions mid-build
+
+The Tour Builder should behave like a draft that saves as you go.
+
+-----------------------------------
+CORE REQUIREMENT
+-----------------------------------
+
+Implement draft persistence for the Tour Builder.
+
+Save the current tour state:
+- on every step change
+- on important field edits (debounced)
+- before route/navigation changes where practical
+
+Do NOT require final submission to preserve data.
+
+-----------------------------------
+WHAT TO SAVE
+-----------------------------------
+
+Persist the entire in-progress tour draft, including:
+- tour name / basics
+- selected profile
+- selected members
+- selected vehicles
+- start location
+- return location
+- return enabled toggle
+- stop/show list
+- stop dates
+- stop addresses
+- income assumptions
+- accommodation assumptions
+- merch assumptions
+- expenses
+- driving preferences
+- current step index
+- any other inputs already entered
+
+Also preserve any resolved defaults already chosen for this draft.
+
+-----------------------------------
+PERSISTENCE MODEL
+-----------------------------------
+
+Create a dedicated Tour Draft state model.
+
+Suggested shape:
+type TourDraft = {
+  id: string;
+  currentStep: number;
+  lastSavedAt: string;
+  data: {
+    ...all in-progress tour fields
+  };
+};
+
+Implement:
+- saveTourDraft(draft)
+- loadTourDraft(draftId or latest draft)
+- clearTourDraft(draftId)
+- optional createNewTourDraft()
+
+-----------------------------------
+SAVE BEHAVIOUR
+-----------------------------------
+
+1. Save on step transition
+When user clicks Next or Back, save current draft first.
+
+2. Save on field edits
+Autosave after user changes important fields, using debounce to avoid excessive writes.
+Suggested debounce: 400–1000ms
+
+3. Save before leaving flow
+If practical, persist current state before route change/unmount.
+
+-----------------------------------
+RESTORE BEHAVIOUR
+-----------------------------------
+
+When the Tour Builder opens:
+- if an unfinished draft exists, restore it automatically
+OR
+- show “Resume draft?” if that fits better with current UX
+
+When restored:
+- reopen on the last active step
+- repopulate all entered fields
+- preserve stop order and entered addresses
+- preserve accommodation edits and other assumptions
+
+-----------------------------------
+IMPORTANT UX RULES
+-----------------------------------
+
+- Changing accommodation settings must NOT reset the whole draft
+- Changing one section should only update the relevant part of state
+- Avoid full-form reinitialization when profile/defaults change
+- Do not overwrite manual draft edits unless explicitly confirmed
+
+If profile defaults are reapplied:
+- merge carefully
+- preserve user-entered overrides in the current draft
+
+-----------------------------------
+STATE MANAGEMENT REQUIREMENTS
+-----------------------------------
+
+Refactor the Tour Builder so it has one stable parent draft state.
+
+Avoid a pattern where each step owns isolated temporary state that gets lost when unmounted.
+
+Use a single source of truth for the active draft, such as:
+- parent component state
+- context
+- reducer
+- store
+
+Recommended:
+- useReducer or a central draft store for predictable updates
+
+-----------------------------------
+DATA STORAGE
+-----------------------------------
+
+Implement whichever is fastest and cleanest in the current app structure:
+
+Preferred order:
+1. local persistent draft storage for immediate resilience
+2. optional backend draft save if already easy to support
+
+At minimum:
+- store draft locally so refresh/navigation does not wipe progress
+
+If backend drafts already make sense:
+- persist server-side as well
+- keep local state responsive and sync in background
+
+-----------------------------------
+GUARD AGAINST DATA LOSS
+-----------------------------------
+
+Add protection so users are warned before discarding an in-progress draft when relevant.
+
+Examples:
+- starting a new tour while another unsaved draft exists
+- deliberate reset/clear action
+
+But do NOT annoy users with warnings on normal step navigation.
+
+-----------------------------------
+VISUAL FEEDBACK
+-----------------------------------
+
+Show subtle draft status:
+- Saving...
+- Saved
+- Last saved 2 min ago
+
+Keep it calm and lightweight.
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- User can move between steps without losing entered data
+- User can change accommodation settings and keep all previous tour entries
+- Refreshing the page restores the unfinished tour draft
+- Current step is restored
+- Stops, dates, and addresses remain intact
+- Manual overrides are preserved
+- Draft state is centralized and not duplicated across step components
+- No full reset occurs unless user explicitly chooses to reset
+
+-----------------------------------
+BONUS
+-----------------------------------
+
+If straightforward, add:
+- “Save draft and exit”
+- “Resume last draft”
+- “Start new tour” with confirmation if draft exists
+
+Implement this as a proper draft-state refactor, not a patch.

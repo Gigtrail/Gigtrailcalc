@@ -37,10 +37,65 @@ import {
   Calendar,
   Music2,
   Pencil,
+  RotateCcw,
+  CloudOff,
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, parseISO, format } from "date-fns";
+
+// ─── Tour draft persistence ──────────────────────────────────────────────────
+
+const DRAFT_KEY = "gig-trail:tour-draft-v1";
+
+type TourDraft = {
+  currentStep: number;
+  lastSavedAt: string;
+  data: TourFormValues;
+};
+
+function saveTourDraft(step: number, data: TourFormValues): void {
+  try {
+    const draft: TourDraft = {
+      currentStep: step,
+      lastSavedAt: new Date().toISOString(),
+      data,
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // ignore quota / SSR errors
+  }
+}
+
+function loadTourDraft(): TourDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TourDraft;
+    // Basic shape validation
+    if (typeof parsed.currentStep !== "number" || !parsed.data) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearTourDraft(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {}
+}
+
+function formatTimeAgo(isoString: string): string {
+  const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins} min ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+}
+
+// ─── Zod schema ─────────────────────────────────────────────────────────────
 
 const tourSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -66,7 +121,31 @@ const tourSchema = z.object({
 
 type TourFormValues = z.infer<typeof tourSchema>;
 
+const FORM_DEFAULTS: TourFormValues = {
+  name: "",
+  profileId: null,
+  vehicleId: null,
+  startLocation: "",
+  startLocationLat: null,
+  startLocationLng: null,
+  endLocation: "",
+  endLocationLat: null,
+  endLocationLng: null,
+  returnHome: true,
+  startDate: "",
+  endDate: "",
+  defaultFoodCost: 0,
+  daysOnTour: null,
+  notes: "",
+  fuelType: "petrol",
+  fuelPricePetrol: 1.90,
+  fuelPriceDiesel: 1.95,
+  fuelPriceLpg: 0.95,
+};
+
 const TOTAL_STEPS = 7;
+
+// ─── Step progress bar ───────────────────────────────────────────────────────
 
 const STEP_META = [
   { label: "Basics",       icon: Music2 },
@@ -109,6 +188,8 @@ function StepBar({ current }: { current: number }) {
   );
 }
 
+// ─── Summary chip ────────────────────────────────────────────────────────────
+
 function SummaryChip({ label, value }: { label: string; value: string }) {
   return (
     <div className="inline-flex items-center gap-1.5 bg-muted/60 border border-border/40 rounded-full px-3 py-1 text-xs text-muted-foreground">
@@ -117,6 +198,8 @@ function SummaryChip({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// ─── Step shell ──────────────────────────────────────────────────────────────
 
 function StepShell({
   step,
@@ -184,11 +267,38 @@ function StepShell({
   );
 }
 
+// ─── Review row ──────────────────────────────────────────────────────────────
+
+function ReviewRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-border/30 last:border-0">
+      <div className="mt-0.5 shrink-0">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <span className="text-muted-foreground">{label}</span>
+      </div>
+      <span className="font-medium text-right max-w-[55%] text-foreground truncate">{value}</span>
+    </div>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
+
+type SaveStatus = "idle" | "saving" | "saved";
+
 export default function TourForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
+
+  // Draft state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [hasDraftRestored, setHasDraftRestored] = useState(false);
+  const [, forceUpdate] = useState(0); // for time-ago re-renders
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextAutoSaveRef = useRef(false); // skip save immediately after draft restore
 
   const isEditing = !!id;
   const tourId = isEditing ? parseInt(id) : 0;
@@ -204,30 +314,24 @@ export default function TourForm() {
 
   const form = useForm<TourFormValues>({
     resolver: zodResolver(tourSchema),
-    defaultValues: {
-      name: "",
-      profileId: null,
-      vehicleId: null,
-      startLocation: "",
-      startLocationLat: null,
-      startLocationLng: null,
-      endLocation: "",
-      endLocationLat: null,
-      endLocationLng: null,
-      returnHome: true,
-      startDate: "",
-      endDate: "",
-      defaultFoodCost: 0,
-      daysOnTour: null,
-      notes: "",
-      fuelType: "petrol",
-      fuelPricePetrol: 1.90,
-      fuelPriceDiesel: 1.95,
-      fuelPriceLpg: 0.95,
-    },
+    defaultValues: FORM_DEFAULTS,
   });
 
+  // ── Draft restore (create mode, mount only) ──────────────────────────────
   useEffect(() => {
+    if (isEditing) return;
+    const draft = loadTourDraft();
+    if (!draft) return;
+    skipNextAutoSaveRef.current = true;
+    form.reset(draft.data);
+    setStep(Math.min(Math.max(draft.currentStep, 1), TOTAL_STEPS));
+    setLastSavedAt(draft.lastSavedAt);
+    setHasDraftRestored(true);
+  }, []); // mount only — intentional empty deps
+
+  // ── Edit mode: populate from API ─────────────────────────────────────────
+  useEffect(() => {
+    if (!isEditing) return;
     if (tour && profiles && vehicles) {
       form.reset({
         name: tour.name,
@@ -251,7 +355,7 @@ export default function TourForm() {
         fuelPriceLpg: tour.fuelPriceLpg ?? 0.95,
       });
     }
-  }, [tour, profiles, vehicles, form]);
+  }, [tour, profiles, vehicles, form, isEditing]);
 
   const watchedValues = useWatch({ control: form.control });
   const {
@@ -260,6 +364,7 @@ export default function TourForm() {
     fuelPriceDiesel, fuelPriceLpg,
   } = watchedValues;
 
+  // ── Auto-calculate days on tour ──────────────────────────────────────────
   useEffect(() => {
     if (startDate && endDate) {
       try {
@@ -270,6 +375,76 @@ export default function TourForm() {
       } catch { /* ignore */ }
     }
   }, [startDate, endDate, form]);
+
+  // ── Debounced autosave (create mode only) ────────────────────────────────
+  useEffect(() => {
+    if (isEditing) return;
+
+    // After restoring a draft, skip the first save trigger so we don't
+    // immediately overwrite a draft with itself and flash "Saving..."
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+
+    setSaveStatus("saving");
+
+    saveTimerRef.current = setTimeout(() => {
+      const values = form.getValues();
+      saveTourDraft(step, values);
+      const now = new Date().toISOString();
+      setLastSavedAt(now);
+      setSaveStatus("saved");
+      saveStatusTimerRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 2500);
+    }, 600);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedValues, step, isEditing]);
+
+  // ── Periodically refresh time-ago display ────────────────────────────────
+  useEffect(() => {
+    if (!lastSavedAt) return;
+    const interval = setInterval(() => forceUpdate(n => n + 1), 30_000);
+    return () => clearInterval(interval);
+  }, [lastSavedAt]);
+
+  // ── Sync save: called immediately on step transitions ───────────────────
+  const syncSave = useCallback((nextStep: number) => {
+    if (isEditing) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+    const values = form.getValues();
+    saveTourDraft(nextStep, values);
+    const now = new Date().toISOString();
+    setLastSavedAt(now);
+    setSaveStatus("saved");
+    saveStatusTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2500);
+    // Skip the useEffect auto-save that fires after step state update
+    skipNextAutoSaveRef.current = true;
+  }, [isEditing, form]);
+
+  const goToStep = useCallback((nextStep: number) => {
+    syncSave(nextStep);
+    setStep(nextStep);
+  }, [syncSave]);
+
+  // ── Start fresh (discard draft) ──────────────────────────────────────────
+  const handleStartFresh = useCallback(() => {
+    clearTourDraft();
+    form.reset(FORM_DEFAULTS);
+    setStep(1);
+    setLastSavedAt(null);
+    setSaveStatus("idle");
+    setHasDraftRestored(false);
+  }, [form]);
 
   const datesProvided = !!(startDate && endDate);
 
@@ -309,6 +484,7 @@ export default function TourForm() {
         { data },
         {
           onSuccess: (newTour) => {
+            clearTourDraft();
             toast({ title: "Tour created! Now add your stops." });
             setLocation(`/tours/${newTour.id}`);
           },
@@ -346,6 +522,7 @@ export default function TourForm() {
     return `${parts.join(" + ")} room${s + d > 1 ? "s" : ""} per night`;
   })();
 
+  // ── Edit mode layout ─────────────────────────────────────────────────────
   if (isEditing) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl mx-auto">
@@ -539,29 +716,72 @@ export default function TourForm() {
     );
   }
 
+  // ── Wizard (create mode) ─────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto py-6 px-4 animate-in fade-in duration-300">
-      <div className="flex items-center gap-3 mb-8">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/tours")} className="h-8 w-8 shrink-0">
           <ChevronLeft className="w-4 h-4" />
         </Button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold tracking-tight">Tour Builder</h1>
           <p className="text-xs text-muted-foreground">Build your tour one step at a time.</p>
         </div>
+        {/* Save status indicator */}
+        <div className="text-xs text-muted-foreground shrink-0 text-right">
+          {saveStatus === "saving" && (
+            <span className="flex items-center gap-1 text-muted-foreground/70">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
+              Saving…
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="flex items-center gap-1 text-secondary/80">
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary inline-block" />
+              Saved
+            </span>
+          )}
+          {saveStatus === "idle" && lastSavedAt && (
+            <span className="text-muted-foreground/60">
+              {formatTimeAgo(lastSavedAt)}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Draft restored banner */}
+      {hasDraftRestored && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200/60 rounded-lg px-3 py-2 mb-4 text-xs">
+          <CloudOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span className="text-amber-800 flex-1">
+            Draft restored
+            {lastSavedAt && <span className="text-amber-600/80"> · {formatTimeAgo(lastSavedAt)}</span>}
+          </span>
+          <button
+            type="button"
+            onClick={handleStartFresh}
+            className="flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Start fresh
+          </button>
+        </div>
+      )}
 
       <StepBar current={step} />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
+
+          {/* ── Step 1: Basics ─────────────────────────────────────────── */}
           {step === 1 && (
             <StepShell
               step={1}
               title="What are we calling this one?"
               subtitle="Give your tour a name and pick your profile — we'll fill in the rest automatically."
               onNext={() => {
-                form.trigger("name").then(ok => { if (ok) setStep(2); });
+                form.trigger("name").then(ok => { if (ok) goToStep(2); });
               }}
               nextDisabled={!name || name.trim() === ""}
             >
@@ -605,14 +825,15 @@ export default function TourForm() {
             </StepShell>
           )}
 
+          {/* ── Step 2: Dates & Route ──────────────────────────────────── */}
           {step === 2 && (
             <StepShell
               step={2}
               title="When & where?"
               subtitle="Set your tour dates and route. We'll calculate driving days automatically."
               chips={<SummaryChip label="Tour" value={name || "—"} />}
-              onBack={() => setStep(1)}
-              onNext={() => setStep(3)}
+              onBack={() => goToStep(1)}
+              onNext={() => goToStep(3)}
             >
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="startDate" render={({ field }) => (
@@ -678,7 +899,11 @@ export default function TourForm() {
                           const sl = form.getValues("startLocation");
                           const slLat = form.getValues("startLocationLat");
                           const slLng = form.getValues("startLocationLng");
-                          if (sl) { form.setValue("endLocation", sl); form.setValue("endLocationLat", slLat); form.setValue("endLocationLng", slLng); }
+                          if (sl) {
+                            form.setValue("endLocation", sl);
+                            form.setValue("endLocationLat", slLat);
+                            form.setValue("endLocationLng", slLng);
+                          }
                         }
                       }}
                     />
@@ -704,6 +929,7 @@ export default function TourForm() {
             </StepShell>
           )}
 
+          {/* ── Step 3: Vehicles ───────────────────────────────────────── */}
           {step === 3 && (
             <StepShell
               step={3}
@@ -715,8 +941,8 @@ export default function TourForm() {
                   {daysOnTour ? <SummaryChip label="Days" value={`${daysOnTour}`} /> : null}
                 </>
               }
-              onBack={() => setStep(2)}
-              onNext={() => setStep(4)}
+              onBack={() => goToStep(2)}
+              onNext={() => goToStep(4)}
               nextLabel={vehicleId ? "Next" : "Skip — no vehicle"}
             >
               {!vehicles?.length ? (
@@ -724,7 +950,7 @@ export default function TourForm() {
                   <Car className="w-10 h-10 mx-auto opacity-30" />
                   <div>
                     <p className="text-sm font-medium">No vehicles in your garage</p>
-                    <p className="text-xs mt-1">You can add vehicles in Settings → Vehicles, or skip this step.</p>
+                    <p className="text-xs mt-1">Add vehicles in Settings → Vehicles, or skip this step.</p>
                   </div>
                 </div>
               ) : (
@@ -756,12 +982,13 @@ export default function TourForm() {
 
               {selectedVehicle && (
                 <div className="bg-muted/40 rounded-lg px-4 py-2.5 text-xs text-muted-foreground border border-border/30">
-                  Tour fuel prices will use the <span className="font-medium text-foreground">{selectedVehicle.fuelType}</span> rate you set in Step 5, or your profile assumption.
+                  Tour fuel costs will use the <span className="font-medium text-foreground">{selectedVehicle.fuelType}</span> rate set in Step 6.
                 </div>
               )}
             </StepShell>
           )}
 
+          {/* ── Step 4: Crew & food ────────────────────────────────────── */}
           {step === 4 && (
             <StepShell
               step={4}
@@ -773,8 +1000,8 @@ export default function TourForm() {
                   {selectedVehicle ? <SummaryChip label="Vehicle" value={selectedVehicle.name} /> : null}
                 </>
               }
-              onBack={() => setStep(3)}
-              onNext={() => setStep(5)}
+              onBack={() => goToStep(3)}
+              onNext={() => goToStep(5)}
             >
               {selectedProfile && (
                 <div className="flex items-center gap-3 bg-muted/40 border border-border/30 rounded-lg px-4 py-3">
@@ -810,6 +1037,7 @@ export default function TourForm() {
             </StepShell>
           )}
 
+          {/* ── Step 5: Accommodation ──────────────────────────────────── */}
           {step === 5 && (
             <StepShell
               step={5}
@@ -821,8 +1049,8 @@ export default function TourForm() {
                   {daysOnTour ? <SummaryChip label="Days" value={`${daysOnTour}`} /> : null}
                 </>
               }
-              onBack={() => setStep(4)}
-              onNext={() => setStep(6)}
+              onBack={() => goToStep(4)}
+              onNext={() => goToStep(6)}
             >
               {selectedProfile ? (
                 <div className="space-y-3">
@@ -853,13 +1081,14 @@ export default function TourForm() {
                 </div>
               )}
 
-              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Pencil className="w-3.5 h-3.5 shrink-0" />
                 <span>Want to change the default rooms? <button type="button" onClick={() => setLocation("/profiles")} className="underline text-foreground">Edit your profile</button>.</span>
               </div>
             </StepShell>
           )}
 
+          {/* ── Step 6: Income & fuel ──────────────────────────────────── */}
           {step === 6 && (
             <StepShell
               step={6}
@@ -871,8 +1100,8 @@ export default function TourForm() {
                   {daysOnTour ? <SummaryChip label="Days" value={`${daysOnTour}`} /> : null}
                 </>
               }
-              onBack={() => setStep(5)}
-              onNext={() => setStep(7)}
+              onBack={() => goToStep(5)}
+              onNext={() => goToStep(7)}
             >
               {selectedProfile ? (
                 <div className="space-y-3">
@@ -886,11 +1115,11 @@ export default function TourForm() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground px-1">
-                    You can override income deal-by-deal when adding each stop to the trail — flat fee, ticketed, or hybrid.
+                    You can override income deal-by-deal when adding each stop — flat fee, ticketed, or hybrid.
                   </p>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground space-y-2">
+                <div className="text-center py-6 text-muted-foreground space-y-2">
                   <DollarSign className="w-10 h-10 mx-auto opacity-30" />
                   <p className="text-sm">No profile selected — income will be entered per stop.</p>
                 </div>
@@ -947,12 +1176,13 @@ export default function TourForm() {
             </StepShell>
           )}
 
+          {/* ── Step 7: Review & create ────────────────────────────────── */}
           {step === 7 && (
             <StepShell
               step={7}
               title="Ready to hit the road?"
               subtitle="Here's what we've set up. You can add your shows after creating the tour."
-              onBack={() => setStep(6)}
+              onBack={() => goToStep(6)}
               onNext={() => form.handleSubmit(onSubmit)()}
               nextLabel="Create Tour"
               isPending={isPending}
@@ -971,7 +1201,11 @@ export default function TourForm() {
                   />
                 )}
                 {startLocation && (
-                  <ReviewRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Route" value={`${startLocation} → ${returnHome ? startLocation : (endLocation || "?")} ${returnHome ? "(return)" : ""}`} />
+                  <ReviewRow
+                    icon={<MapPin className="w-4 h-4 text-muted-foreground" />}
+                    label="Route"
+                    value={`${startLocation} → ${returnHome ? startLocation : (endLocation || "?")} ${returnHome ? "(return)" : ""}`}
+                  />
                 )}
                 {selectedVehicle && (
                   <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle" value={`${selectedVehicle.name} (${selectedVehicle.fuelType})`} />
@@ -996,22 +1230,17 @@ export default function TourForm() {
               <div className="bg-muted/40 border border-border/30 rounded-lg px-4 py-3 text-xs text-muted-foreground">
                 After creating the tour, you'll add individual show stops — each with its own deal structure, venue, and dates.
               </div>
+
+              {lastSavedAt && (
+                <p className="text-center text-xs text-muted-foreground/60">
+                  Draft saved {formatTimeAgo(lastSavedAt)}
+                </p>
+              )}
             </StepShell>
           )}
+
         </form>
       </Form>
-    </div>
-  );
-}
-
-function ReviewRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-border/30 last:border-0">
-      <div className="mt-0.5 shrink-0">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <span className="text-muted-foreground">{label}</span>
-      </div>
-      <span className="font-medium text-right max-w-[55%] text-foreground truncate">{value}</span>
     </div>
   );
 }
