@@ -130,7 +130,6 @@ const profileSchema = z.object({
   memberLibrary: z.array(memberWithIdSchema).optional(),
   activeMemberIds: z.array(z.string()).optional(),
   expectedGigFee: z.coerce.number().min(0),
-  minTakeHomePerPerson: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
   accommodationRequired: z.boolean(),
   singleRoomsDefault: z.coerce.number().min(0).int(),
@@ -159,7 +158,6 @@ const FORM_DEFAULTS: ProfileFormValues = {
   memberLibrary: [],
   activeMemberIds: [],
   expectedGigFee: 0,
-  minTakeHomePerPerson: 0,
   avgFoodPerDay: 0,
   accommodationRequired: false,
   singleRoomsDefault: 0,
@@ -528,7 +526,6 @@ export default function ProfileForm() {
       memberLibrary: library,
       activeMemberIds,
       expectedGigFee: profile.expectedGigFee ?? 0,
-      minTakeHomePerPerson: profile.minTakeHomePerPerson ?? 0,
       avgFoodPerDay: profile.avgFoodPerDay,
       accommodationRequired: profile.accommodationRequired ?? false,
       singleRoomsDefault: profile.singleRoomsDefault ?? 0,
@@ -554,7 +551,7 @@ export default function ProfileForm() {
     doubleRoomsDefault: doubleRoomsDefaultWatch,
     memberLibrary: memberLibraryWatch,
     activeMemberIds: activeMemberIdsWatch,
-    expectedGigFee, minTakeHomePerPerson, avgFoodPerDay,
+    expectedGigFee, avgFoodPerDay,
     defaultPetrolPrice, defaultDieselPrice, defaultLpgPrice,
     homeBase,
   } = watchedValues;
@@ -942,24 +939,14 @@ export default function ProfileForm() {
                 <CardDescription>These fill in your calculations automatically. You can change any of them per show.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="minTakeHomePerPerson" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Min Take-Home Per Person ($)</FormLabel>
-                      <FormControl><Input type="number" min="0" step="1" placeholder="e.g. 150" {...field} value={field.value ?? 0} /></FormControl>
-                      <p className="text-xs text-muted-foreground">Your profit floor per person. The verdict turns red when this isn't met.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="expectedGigFee" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Expected Fee Per Show ($)</FormLabel>
-                      <FormControl><Input type="number" min="0" step="1" placeholder="e.g. 800" {...field} value={field.value ?? 0} /></FormControl>
-                      <p className="text-xs text-muted-foreground">Your typical guaranteed fee or expected income per gig.</p>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </div>
+                <FormField control={form.control} name="expectedGigFee" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Expected Fee Per Show ($)</FormLabel>
+                    <FormControl><Input type="number" min="0" step="1" placeholder="e.g. 800" {...field} value={field.value ?? 0} /></FormControl>
+                    <p className="text-xs text-muted-foreground">Your typical guaranteed fee or expected income per gig.</p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
                 <div className="pt-2">
                   <div className="flex items-center gap-2 mb-1">
@@ -1377,20 +1364,6 @@ export default function ProfileForm() {
                 </FormItem>
               )} />
 
-              <FormField control={form.control} name="minTakeHomePerPerson" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Minimum take-home per person ($)</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                      <Input type="number" min="0" className="pl-7 h-11" placeholder="e.g. 150" {...field} value={field.value ?? 0} />
-                    </div>
-                  </FormControl>
-                  <p className="text-xs text-muted-foreground">The minimum profit per person before a show is considered worthwhile. The verdict turns red when this isn't met.</p>
-                  <FormMessage />
-                </FormItem>
-              )} />
-
               <div className="space-y-3 pt-1">
                 <div className="flex items-center gap-2">
                   <Fuel className="w-4 h-4 text-primary" />
@@ -1461,7 +1434,6 @@ export default function ProfileForm() {
                 } />
                 {Number(avgFoodPerDay) > 0 && <ReviewRow icon={<DollarSign className="w-4 h-4 text-muted-foreground" />} label="Food / person / day" value={`$${avgFoodPerDay}`} />}
                 {Number(expectedGigFee) > 0 && <ReviewRow icon={<DollarSign className="w-4 h-4 text-muted-foreground" />} label="Expected fee / show" value={`$${expectedGigFee}`} />}
-                {Number(minTakeHomePerPerson) > 0 && <ReviewRow icon={<DollarSign className="w-4 h-4 text-muted-foreground opacity-0" />} label="Min take-home / person" value={`$${minTakeHomePerPerson}`} />}
                 {(defaultPetrolPrice || defaultDieselPrice || defaultLpgPrice) && (
                   <ReviewRow icon={<Fuel className="w-4 h-4 text-muted-foreground" />} label="Fuel prices" value={[defaultPetrolPrice && `P $${defaultPetrolPrice}`, defaultDieselPrice && `D $${defaultDieselPrice}`, defaultLpgPrice && `LPG $${defaultLpgPrice}`].filter(Boolean).join(" · ")} />
                 )}

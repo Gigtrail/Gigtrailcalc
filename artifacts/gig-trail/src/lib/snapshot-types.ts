@@ -37,7 +37,8 @@ export interface SnapProfile {
   name: string;
   peopleCount: number;
   actType: string | null;
-  minTakeHomePerPerson: number;
+  /** @deprecated — no longer written; kept optional for backward compat with old snapshots */
+  minTakeHomePerPerson?: number;
   maxDriveHoursPerDay: number;
   fuelConsumption: number;
   defaultFuelPrice: number | null;
@@ -108,8 +109,10 @@ export interface SnapOutputs {
   netProfit: number;
   status: "Worth the Drive" | "Tight Margins" | "Probably Not Worth It";
   profitPerMember: number;
-  takeHomePerPerson: number;
-  minTakeHomePerPerson: number;
+  /** @deprecated — kept optional for backward compat with old snapshots */
+  takeHomePerPerson?: number;
+  /** @deprecated — no longer written; kept optional for backward compat with old snapshots */
+  minTakeHomePerPerson?: number;
   breakEvenTickets: number;
   /** 0–100 (percentage, not decimal) */
   breakEvenCapacity: number;
@@ -191,8 +194,10 @@ export interface CalcSnapshot {
   netProfit: number;
   status: "Worth the Drive" | "Tight Margins" | "Probably Not Worth It";
   profitPerMember: number;
-  takeHomePerPerson: number;
-  minTakeHomePerPerson: number;
+  /** @deprecated — kept optional for backward compat with old snapshots */
+  takeHomePerPerson?: number;
+  /** @deprecated — no longer written; kept optional for backward compat with old snapshots */
+  minTakeHomePerPerson?: number;
   expectedTicketsSold: number;
   grossRevenue: number;
   breakEvenTickets: number;

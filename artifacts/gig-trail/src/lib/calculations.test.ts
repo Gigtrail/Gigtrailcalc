@@ -355,55 +355,29 @@ describe("calculateTicketBreakEven", () => {
 
 describe("calculateShowViability", () => {
   it("losing show: flagged as Probably Not Worth It", () => {
-    const result = calculateShowViability({
-      netProfit: -50,
-      totalIncome: 200,
-      takeHomePerPerson: -25,
-      minTakeHomePerPerson: 0,
-    });
+    const result = calculateShowViability({ netProfit: -50, totalIncome: 200 });
     expect(result.status).toBe("Probably Not Worth It");
   });
 
-  it("good margin + meets minimum take-home: Worth the Drive", () => {
-    // $300 profit on $800 income = 37.5% margin, well over 20%
-    const result = calculateShowViability({
-      netProfit: 300,
-      totalIncome: 800,
-      takeHomePerPerson: 150,
-      minTakeHomePerPerson: 100,
-    });
+  it("good margin (>20%): Worth the Drive", () => {
+    // $300 profit on $800 income = 37.5% margin
+    const result = calculateShowViability({ netProfit: 300, totalIncome: 800 });
     expect(result.status).toBe("Worth the Drive");
   });
 
-  it("barely profitable but under minimum take-home per person: Tight Margins", () => {
-    // Profitable but each person walks away with less than their minimum
-    const result = calculateShowViability({
-      netProfit: 50,
-      totalIncome: 400,
-      takeHomePerPerson: 25,
-      minTakeHomePerPerson: 75,
-    });
+  it("profitable but slim margin (<20%): Tight Margins", () => {
+    // 12.5% margin
+    const result = calculateShowViability({ netProfit: 50, totalIncome: 400 });
     expect(result.status).toBe("Tight Margins");
   });
 
-  it("profitable but slim margin (under 20%): Tight Margins", () => {
-    // 10% margin
-    const result = calculateShowViability({
-      netProfit: 80,
-      totalIncome: 800,
-      takeHomePerPerson: 40,
-      minTakeHomePerPerson: 0,
-    });
+  it("profitable but 10% margin: Tight Margins", () => {
+    const result = calculateShowViability({ netProfit: 80, totalIncome: 800 });
     expect(result.status).toBe("Tight Margins");
   });
 
-  it("zero minimum take-home: only margin matters for Worth the Drive", () => {
-    const result = calculateShowViability({
-      netProfit: 250,
-      totalIncome: 500,
-      takeHomePerPerson: 125,
-      minTakeHomePerPerson: 0,
-    });
+  it("50% margin: Worth the Drive", () => {
+    const result = calculateShowViability({ netProfit: 250, totalIncome: 500 });
     expect(result.status).toBe("Worth the Drive");
   });
 });
@@ -473,7 +447,7 @@ describe("calculateMemberPayouts / calculateMemberEarnings", () => {
 describe("calculateSingleShow", () => {
   it("flat fee guarantee with return trip and overnight stay: profit and viability are correct", () => {
     // $500 fee, 120km return, 10 L/100km, $1.90/L
-    // 1 single + 1 double room, 1 night, $50 food, 3 people, min take-home $30
+    // 1 single + 1 double room, 1 night, $50 food, 3 people
     const result = calculateSingleShow({
       showType: "Flat Fee",
       fee: 500,
@@ -487,7 +461,6 @@ describe("calculateSingleShow", () => {
       accommodationNights: 1,
       foodCost: 50,
       peopleCount: 3,
-      minTakeHomePerPerson: 30,
     });
 
     // fuelCost = 240km × 10/100 × $1.90 = $45.60
@@ -498,7 +471,7 @@ describe("calculateSingleShow", () => {
     expect(result.totalCost).toBeCloseTo(395.6);
     // netProfit = $500 - $395.60 = $104.40
     expect(result.netProfit).toBeCloseTo(104.4);
-    // takeHomePerPerson = $104.40 / 3 = $34.80 (> $30 min) and margin = 20.88% > 20%
+    // takeHomePerPerson = $104.40 / 3 = $34.80; margin = 20.88% > 20%
     expect(result.takeHomePerPerson).toBeCloseTo(34.8);
     expect(result.status).toBe("Worth the Drive");
   });

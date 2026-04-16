@@ -136,8 +136,9 @@ export interface GigTrailResultData {
   netProfit: number;
   status: "Worth the Drive" | "Tight Margins" | "Probably Not Worth It";
   profitPerMember: number;
-  takeHomePerPerson: number;
-  minTakeHomePerPerson: number;
+  takeHomePerPerson?: number;
+  /** @deprecated — no longer used; kept for backward compat with old snapshots */
+  minTakeHomePerPerson?: number;
   expectedTicketsSold: number;
   grossRevenue: number;
   /** Total booking platform fees deducted from gross (optional — absent on old snapshots) */
@@ -230,7 +231,6 @@ export default function RunResults() {
 
   const {
     netProfit, totalIncome, totalCost, fuelCost,
-    takeHomePerPerson, minTakeHomePerPerson,
     distanceKm, driveTimeMinutes, fuelUsedLitres,
     breakEvenTickets, breakEvenCapacity, showCostBreakEvenTickets,
     bookingFeeTotal, netTicketRevenue,
@@ -337,10 +337,10 @@ export default function RunResults() {
   if (totalDriveHours > 8) allInsights.push({ icon: Lightbulb, text: "Long drive — consider arriving the day before.", color: "text-amber-600" });
   if (fuelCost > 0 && totalIncome > 0 && fuelCost / totalIncome > 0.35)
     allInsights.push({ icon: Fuel, text: `Fuel is ${((fuelCost / totalIncome) * 100).toFixed(0)}% of your income — this run is heavily road-dependent.`, color: "text-amber-600" });
-  if (minTakeHomePerPerson > 0 && displayTakeHome >= minTakeHomePerPerson)
-    allInsights.push({ icon: TrendingUp, text: `Clears your minimum take-home target of $${fmt(minTakeHomePerPerson)}/person.`, color: "text-green-600" });
-  if (minTakeHomePerPerson > 0 && displayTakeHome < minTakeHomePerPerson && displayNetProfit > 0)
-    allInsights.push({ icon: AlertTriangle, text: `$${fmt(Math.abs(displayTakeHome))}/person — below your $${fmt(minTakeHomePerPerson)} minimum.`, color: "text-amber-600" });
+  if (showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
+    allInsights.push({ icon: TrendingUp, text: "All member fees covered.", color: "text-green-600" });
+  if (showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
+    allInsights.push({ icon: AlertTriangle, text: `Short $${fmt(Math.abs(profitAfterMemberFees))} to cover all band fees.`, color: "text-amber-600" });
   if (displayNetProfit < 0)
     allInsights.push({ icon: XCircle, text: "Costs exceed income. Consider negotiating a higher fee, reducing costs, or passing on this one.", color: "text-red-600" });
   const insights = allInsights.slice(0, 3);
@@ -432,21 +432,13 @@ export default function RunResults() {
           <p className={`text-4xl font-bold leading-tight ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
             {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
           </p>
-          {profilePeopleCount > 1 && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1.5">
-              <Users className="w-3.5 h-3.5" />
-              <span>
-                {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayTakeHome))} per person
-                {minTakeHomePerPerson > 0 && (
-                  <span className="text-muted-foreground/70"> · target ${fmt(minTakeHomePerPerson)}</span>
-                )}
-              </span>
+          {showPayoutSection && totalMemberFees > 0 && (
+            <div className={`flex items-center gap-1.5 text-sm mt-1.5 ${fullFeesCovered ? "text-green-700" : "text-amber-700"}`}>
+              {fullFeesCovered
+                ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>All member fees covered</span></>
+                : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(profitAfterMemberFees))} to cover band fees</span></>
+              }
             </div>
-          )}
-          {profilePeopleCount === 1 && minTakeHomePerPerson > 0 && (
-            <p className="text-sm text-muted-foreground mt-1">
-              Minimum target: <span className="font-semibold text-foreground">${fmt(minTakeHomePerPerson)}</span>
-            </p>
           )}
         </div>
       </div>

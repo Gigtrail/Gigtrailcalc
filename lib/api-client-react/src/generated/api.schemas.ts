@@ -35,7 +35,8 @@ export interface Profile {
   vehicleName: string | null;
   fuelConsumption: number;
   expectedGigFee: number;
-  minTakeHomePerPerson: number;
+  /** @deprecated — no longer used in UI; kept for backward compat */
+  minTakeHomePerPerson?: number;
   accommodationRequired: boolean;
   /** @nullable */
   accommodationType: string | null;

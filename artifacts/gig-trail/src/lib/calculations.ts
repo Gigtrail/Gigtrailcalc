@@ -348,8 +348,6 @@ export type ViabilityStatus = "Worth the Drive" | "Tight Margins" | "Probably No
 export interface ShowViabilityInput {
   netProfit: number;
   totalIncome: number;
-  takeHomePerPerson: number;
-  minTakeHomePerPerson: number;
 }
 
 export interface ShowViabilityResult {
@@ -360,16 +358,15 @@ export interface ShowViabilityResult {
 
 /** Classify a show result into a human-readable viability bucket. */
 export function calculateShowViability(input: ShowViabilityInput): ShowViabilityResult {
-  const { netProfit, totalIncome, takeHomePerPerson, minTakeHomePerPerson } = input;
+  const { netProfit, totalIncome } = input;
 
   if (netProfit <= 0) {
     return { status: "Probably Not Worth It", statusColor: "text-red-500 bg-red-500/10" };
   }
 
   const margin = n(totalIncome) > 0 ? netProfit / totalIncome : 0;
-  const meetsMinimum = minTakeHomePerPerson <= 0 || takeHomePerPerson >= minTakeHomePerPerson;
 
-  if (margin > 0.2 && meetsMinimum) {
+  if (margin > 0.2) {
     return { status: "Worth the Drive", statusColor: "text-green-500 bg-green-500/10" };
   }
 
@@ -427,7 +424,6 @@ export interface SingleShowInput {
   supportActCost?: number | null;
   // People
   peopleCount?: number | null;
-  minTakeHomePerPerson?: number | null;
 }
 
 export interface SingleShowResult {
@@ -517,15 +513,9 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
   // Per-person
   const peopleCount = n(input.peopleCount) > 0 ? n(input.peopleCount) : 1;
   const takeHomePerPerson = netProfit / peopleCount;
-  const minTakeHomePerPerson = n(input.minTakeHomePerPerson);
 
   // Viability
-  const { status, statusColor } = calculateShowViability({
-    netProfit,
-    totalIncome,
-    takeHomePerPerson,
-    minTakeHomePerPerson,
-  });
+  const { status, statusColor } = calculateShowViability({ netProfit, totalIncome });
 
   // Full break-even (all costs)
   const be = calculateTicketBreakEven({

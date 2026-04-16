@@ -257,7 +257,6 @@ export default function RunForm() {
     const singleRooms = overrides?.singleRooms ?? Number(vals.singleRooms) ?? 0;
     const doubleRooms = overrides?.doubleRooms ?? Number(vals.doubleRooms) ?? 0;
     const accommodationNights = overrides?.accommodationNights ?? Number(vals.accommodationNights) ?? 0;
-    const minTakeHomePerPerson = profile ? (profile.minTakeHomePerPerson ?? 0) : 0;
     const peopleCount = profile && profile.peopleCount > 0 ? profile.peopleCount : 1;
 
     // ── All financial math delegated to the shared calculation engine ──
@@ -285,7 +284,6 @@ export default function RunForm() {
       marketingCost: vals.marketingCost,
       extraCosts: vals.extraCosts,
       peopleCount,
-      minTakeHomePerPerson,
     });
 
     // Map viability status to its icon (UI concern kept in the UI layer)
@@ -313,8 +311,6 @@ export default function RunForm() {
       distanceKm,
       driveTimeMinutes,
       fuelUsedLitres: result.fuelUsedLitres,
-      takeHomePerPerson: result.takeHomePerPerson,
-      minTakeHomePerPerson,
       fuelPriceSource,
       resolvedFuelPrice: resolvedFuel.price,
     };
@@ -467,7 +463,6 @@ export default function RunForm() {
                 name: profile.name,
                 peopleCount: profile.peopleCount,
                 actType: profile.actType ?? null,
-                minTakeHomePerPerson: Number(profile.minTakeHomePerPerson) || 0,
                 maxDriveHoursPerDay: Number(profile.maxDriveHoursPerDay) || DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
                 fuelConsumption: Number(profile.fuelConsumption) || 0,
                 defaultFuelPrice: profile.defaultFuelPrice != null ? Number(profile.defaultFuelPrice) : null,
@@ -538,8 +533,6 @@ export default function RunForm() {
             netProfit: computed.netProfit,
             status: computed.status,
             profitPerMember: computed.profitPerMember,
-            takeHomePerPerson: computed.takeHomePerPerson,
-            minTakeHomePerPerson: snapshotFields.minTakeHomePerPerson,
             breakEvenTickets: computed.breakEvenTickets,
             breakEvenCapacity: computed.breakEvenCapacity,
             showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
@@ -569,8 +562,6 @@ export default function RunForm() {
           netProfit: computed.netProfit,
           status: computed.status,
           profitPerMember: computed.profitPerMember,
-          takeHomePerPerson: computed.takeHomePerPerson,
-          minTakeHomePerPerson: snapshotFields.minTakeHomePerPerson,
           expectedTicketsSold: computed.expectedTicketsSold,
           grossRevenue: computed.grossRevenue,
           breakEvenTickets: computed.breakEvenTickets,
