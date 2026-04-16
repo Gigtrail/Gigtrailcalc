@@ -1,6 +1,6 @@
 import { estimateLegDistance, type RouteLeg, type DistanceSource } from './routing-service';
 import { getFuelPrice, type FuelPriceResult } from './fuel-service';
-import { calculateShowIncome, calculateVehicleCosts } from './calculations';
+import { calculateShowIncome, calculateFuelCost, calculateVehicleCosts, calculateStopPreview } from './calculations';
 
 export type { DistanceSource, FuelPriceResult };
 
@@ -330,29 +330,41 @@ export function calculateTour(
     const activeFt = (fuelType ?? 'petrol').toLowerCase() as keyof TourFuelPrices;
     const tourFuelPrice = fuelPrices ? (fuelPrices[activeFt] ?? null) : null;
     const fuelPrice = getFuelPrice(to, destStop?.fuelPriceOverride, tourFuelPrice);
-    const fuelUsedLitres = consumption > 0 ? (distanceKm * consumption) / 100 : 0;
-    const fuelCost = fuelUsedLitres * fuelPrice.pricePerLitre;
+    const { fuelUsedLitres, fuelCost } = calculateFuelCost({
+      distanceKm,
+      consumptionLPer100: consumption,
+      pricePerLitre: fuelPrice.pricePerLitre,
+    });
 
     legs.push({ from, to, distanceKm, driveTimeMinutes, source, fuelPrice, fuelUsedLitres, fuelCost });
   }
 
   const stopCalcs: StopCalc[] = sortedStops.map(stop => {
-    const showIncome = calcShowIncome(stop);
-    const merch = n(stop.merchEstimate);
-    const accommodation = n(stop.accommodationCost);
-    const marketing = n(stop.marketingCost);
-    const extraCosts = n(stop.extraCosts);
+    const preview = calculateStopPreview({
+      showType: stop.showType,
+      fee: stop.fee,
+      capacity: stop.capacity,
+      ticketPrice: stop.ticketPrice,
+      expectedAttendancePct: stop.expectedAttendancePct,
+      dealType: stop.dealType,
+      splitPct: stop.splitPct,
+      guarantee: stop.guarantee,
+      merchEstimate: stop.merchEstimate,
+      accommodationCost: stop.accommodationCost,
+      marketingCost: stop.marketingCost,
+      extraCosts: stop.extraCosts,
+    });
     return {
       stopId: stop.id,
       city: stop.city,
-      showIncome,
-      merch,
-      totalIncome: showIncome + merch,
-      accommodation,
-      marketing,
-      extraCosts,
-      totalCosts: accommodation + marketing + extraCosts,
-      net: showIncome + merch - accommodation - marketing - extraCosts,
+      showIncome: preview.showIncome,
+      merch: preview.merch,
+      totalIncome: preview.totalIncome,
+      accommodation: n(stop.accommodationCost),
+      marketing: n(stop.marketingCost),
+      extraCosts: n(stop.extraCosts),
+      totalCosts: preview.totalCost,
+      net: preview.netProfit,
     };
   });
 
