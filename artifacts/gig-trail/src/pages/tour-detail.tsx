@@ -4,6 +4,7 @@ import {
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
   useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
   getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey,
+  syncStopToPastShow as syncStopRaw,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,7 +167,42 @@ export default function TourDetail() {
   const addTourVehicleMutation = useAddTourVehicle();
   const syncStopToPastShow = useSyncStopToPastShow();
   const [syncedStopIds, setSyncedStopIds] = useState<Set<number>>(new Set());
+  const autoSyncRun = useRef(false);
   const deleteTourVehicleMutation = useDeleteTourVehicle();
+
+  // Auto-sync past stops to venue history on page load
+  useEffect(() => {
+    if (autoSyncRun.current) return;
+    if (!stops || stops.length === 0 || !tourId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const eligible = stops.filter(
+      s => s.date && s.date <= today && s.venueName && s.venueName.trim().length > 0
+    );
+    if (eligible.length === 0) return;
+    autoSyncRun.current = true;
+    let newCount = 0;
+    const newIds: number[] = [];
+    Promise.allSettled(
+      eligible.map(stop =>
+        syncStopRaw(tourId, stop.id).then(result => {
+          if (result.createdPastShow) newCount++;
+          newIds.push(stop.id);
+        }).catch(() => {})
+      )
+    ).then(() => {
+      if (newIds.length > 0) {
+        setSyncedStopIds(prev => new Set([...prev, ...newIds]));
+        queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
+      }
+      if (newCount > 0) {
+        toast({
+          title: `${newCount} past show${newCount > 1 ? "s" : ""} added to venue history`,
+          description: "Tour stops with past dates have been recorded automatically.",
+        });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stops, tourId]);
 
   const handleDeleteStop = (stopId: number) => {
     deleteStop.mutate(

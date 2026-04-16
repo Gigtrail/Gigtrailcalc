@@ -190,6 +190,10 @@ export interface Venue {
   /** @nullable */
   roomNotes?: string | null;
   showCount?: number;
+  /** @nullable */
+  lastPlayed?: string | null;
+  /** @nullable */
+  avgProfit?: number | null;
   createdAt: string;
   updatedAt: string;
 }

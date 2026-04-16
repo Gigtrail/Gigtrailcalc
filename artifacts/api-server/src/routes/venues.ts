@@ -53,21 +53,37 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
     .where(eq(venuesTable.userId, userId))
     .orderBy(desc(venuesTable.updatedAt));
 
-  // Enrich each venue with a quick show count
   const venueIds = venues.map(v => v.id);
   let countMap: Record<number, number> = {};
+  let lastPlayedMap: Record<number, string | null> = {};
+  let avgProfitMap: Record<number, number | null> = {};
+
   if (venueIds.length > 0) {
-    const counts = await db
-      .select({ venueId: runsTable.venueId, count: sql<number>`count(*)::int` })
+    const stats = await db
+      .select({
+        venueId: runsTable.venueId,
+        count: sql<number>`count(*)::int`,
+        lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
+        avgProfit: sql<number | null>`avg(${runsTable.totalProfit})::float`,
+      })
       .from(runsTable)
-      .where(and(eq(runsTable.userId, userId), sql`${runsTable.venueId} = ANY(${sql.raw(`ARRAY[${venueIds.join(",")}]`)})` ))
+      .where(and(eq(runsTable.userId, userId), sql`${runsTable.venueId} = ANY(${sql.raw(`ARRAY[${venueIds.join(",")}]`)})`))
       .groupBy(runsTable.venueId);
-    for (const c of counts) {
-      if (c.venueId != null) countMap[c.venueId] = c.count;
+    for (const s of stats) {
+      if (s.venueId != null) {
+        countMap[s.venueId] = s.count;
+        lastPlayedMap[s.venueId] = s.lastPlayed;
+        avgProfitMap[s.venueId] = s.avgProfit != null ? Number(s.avgProfit) : null;
+      }
     }
   }
 
-  res.json(venues.map(v => ({ ...serializeVenue(v), showCount: countMap[v.id] ?? 0 })));
+  res.json(venues.map(v => ({
+    ...serializeVenue(v),
+    showCount: countMap[v.id] ?? 0,
+    lastPlayed: lastPlayedMap[v.id] ?? null,
+    avgProfit: avgProfitMap[v.id] ?? null,
+  })));
 });
 
 // ─── GET /venues/search ───────────────────────────────────────────────────────

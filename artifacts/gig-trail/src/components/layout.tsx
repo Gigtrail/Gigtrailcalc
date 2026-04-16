@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock } from "lucide-react";
+import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2 } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -25,6 +25,7 @@ const navItems = [
   { title: "Calculator", url: "/runs/new", icon: Calculator },
   { title: "Past Shows", url: "/runs", icon: Clock },
   { title: "Tour Builder", url: "/tours", icon: Navigation },
+  { title: "Venues", url: "/venues", icon: Building2 },
   { title: "Profiles", url: "/profiles", icon: Guitar },
 ];
 
