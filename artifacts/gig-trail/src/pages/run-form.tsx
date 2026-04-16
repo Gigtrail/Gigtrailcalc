@@ -33,9 +33,10 @@ import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { usePlan } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount } from "@/lib/member-utils";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPrice } from "@/lib/fuel-price";
+import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
 import {
   Dialog,
   DialogContent,
@@ -226,109 +227,68 @@ export default function RunForm() {
       ?? (profile ? Number(profile.fuelConsumption) : 0);
     const driveTimeMinutes = overrides?.driveTimeMinutes !== undefined ? overrides.driveTimeMinutes : null;
 
-    const resolvedFuel = resolveFuelPrice(
-      vals.fuelPrice,
-      profile?.defaultFuelPrice
-    );
-    const fuelPrice = resolvedFuel.price;
+    const resolvedFuel = resolveFuelPrice(vals.fuelPrice, profile?.defaultFuelPrice);
     const fuelPriceSource = resolvedFuel.source;
-    const fee = Number(vals.fee) || 0;
-    const capacity = Number(vals.capacity) || 0;
-    const ticketPrice = Number(vals.ticketPrice) || 0;
-    const expectedAttendancePct = Number(vals.expectedAttendancePct) || 0;
-    const splitPct = Number(vals.splitPct) || 0;
-    const guarantee = Number(vals.guarantee) || 0;
-    const merchEstimate = Number(vals.merchEstimate) || 0;
 
-    // Accommodation — prefer overrides (computed dynamically), fall back to form values
     const accommodationRequired = overrides?.accommodationRequired ?? vals.accommodationRequired ?? false;
     const singleRooms = overrides?.singleRooms ?? Number(vals.singleRooms) ?? 0;
     const doubleRooms = overrides?.doubleRooms ?? Number(vals.doubleRooms) ?? 0;
     const accommodationNights = overrides?.accommodationNights ?? Number(vals.accommodationNights) ?? 0;
-    // Structured so per-room-type rates can be adjusted independently in future
-    const accommodationCost = accommodationRequired
-      ? accommodationNights * (singleRooms * SINGLE_ROOM_RATE + doubleRooms * DOUBLE_ROOM_RATE)
-      : 0;
-    const foodCost = Number(vals.foodCost) || 0;
-    const extraCosts = Number(vals.extraCosts) || 0;
-    const marketingCost = Number(vals.marketingCost) || 0;
-
-    const distanceMultiplier = vals.returnTrip ? 2 : 1;
-    const totalDistance = distanceKm * distanceMultiplier;
-
-    const fuelUsedLitres = vehicleConsumption > 0 ? (totalDistance * vehicleConsumption) / 100 : 0;
-    const fuelCost = fuelUsedLitres * fuelPrice;
-
-    let showIncome = 0;
-    let expectedTicketsSold = 0;
-    let grossRevenue = 0;
-
-    if (vals.showType === "Flat Fee") {
-      showIncome = fee;
-    } else if (vals.showType === "Ticketed Show" || vals.showType === "Hybrid") {
-      expectedTicketsSold = Math.floor((capacity * expectedAttendancePct) / 100);
-      grossRevenue = expectedTicketsSold * ticketPrice;
-
-      if (vals.dealType === "100% door") {
-        showIncome = grossRevenue;
-      } else if (vals.dealType === "percentage split") {
-        showIncome = grossRevenue * (splitPct / 100);
-      } else if (vals.dealType === "guarantee vs door") {
-        const splitIncome = grossRevenue * (splitPct / 100);
-        showIncome = Math.max(guarantee, splitIncome);
-      }
-
-      if (vals.showType === "Hybrid") {
-        showIncome += guarantee;
-      }
-    }
-
-    const totalIncome = showIncome + merchEstimate;
-    const totalCost = fuelCost + accommodationCost + foodCost + extraCosts + marketingCost;
-    const netProfit = totalIncome - totalCost;
-
-    const peopleCount = profile && profile.peopleCount > 0 ? profile.peopleCount : 1;
-    const takeHomePerPerson = netProfit / peopleCount;
     const minTakeHomePerPerson = profile ? (profile.minTakeHomePerPerson ?? 0) : 0;
+    const peopleCount = profile && profile.peopleCount > 0 ? profile.peopleCount : 1;
 
-    let status = "Probably Not Worth It";
-    let statusColor = "text-red-500 bg-red-500/10";
+    // ── All financial math delegated to the shared calculation engine ──
+    const result = calculateSingleShow({
+      showType: vals.showType ?? "Flat Fee",
+      fee: vals.fee,
+      capacity: vals.capacity,
+      ticketPrice: vals.ticketPrice,
+      expectedAttendancePct: vals.expectedAttendancePct,
+      dealType: vals.dealType,
+      splitPct: vals.splitPct,
+      guarantee: vals.guarantee,
+      merchEstimate: vals.merchEstimate,
+      distanceKm,
+      vehicleConsumptionLPer100: vehicleConsumption,
+      fuelPricePerLitre: resolvedFuel.price,
+      returnTrip: vals.returnTrip ?? false,
+      accommodationRequired,
+      singleRooms,
+      doubleRooms,
+      accommodationNights,
+      foodCost: vals.foodCost,
+      marketingCost: vals.marketingCost,
+      extraCosts: vals.extraCosts,
+      peopleCount,
+      minTakeHomePerPerson,
+    });
+
+    // Map viability status to its icon (UI concern kept in the UI layer)
     let StatusIcon: typeof XCircle = XCircle;
-
-    if (netProfit > 0) {
-      const margin = netProfit / (totalIncome || 1);
-      const meetsMinimum = minTakeHomePerPerson <= 0 || takeHomePerPerson >= minTakeHomePerPerson;
-      if (margin > 0.2 && meetsMinimum) {
-        status = "Worth the Drive";
-        statusColor = "text-green-500 bg-green-500/10";
-        StatusIcon = TrendingUp;
-      } else {
-        status = "Tight Margins";
-        statusColor = "text-amber-500 bg-amber-500/10";
-        StatusIcon = AlertTriangle;
-      }
-    }
-
-    const profitPerMember = takeHomePerPerson;
-
-    let breakEvenTickets = 0;
-    let breakEvenCapacity = 0;
-    if ((vals.showType === "Ticketed Show" || vals.showType === "Hybrid") && ticketPrice > 0) {
-      const remainingCosts = Math.max(0, totalCost - merchEstimate - (vals.showType === "Hybrid" ? guarantee : 0));
-      if (vals.dealType === "100% door") {
-        breakEvenTickets = Math.ceil(remainingCosts / ticketPrice);
-      } else {
-        breakEvenTickets = Math.ceil((remainingCosts / ((splitPct || 100) / 100)) / ticketPrice);
-      }
-      breakEvenCapacity = capacity > 0 ? (breakEvenTickets / capacity) * 100 : 0;
-    }
+    if (result.status === "Worth the Drive") StatusIcon = TrendingUp;
+    else if (result.status === "Tight Margins") StatusIcon = AlertTriangle;
 
     return {
-      fuelCost, totalCost, totalIncome, netProfit, status, statusColor, StatusIcon,
-      profitPerMember, expectedTicketsSold, grossRevenue, breakEvenTickets, breakEvenCapacity,
-      accommodationCost, distanceKm, driveTimeMinutes, fuelUsedLitres,
-      takeHomePerPerson, minTakeHomePerPerson,
-      fuelPriceSource, resolvedFuelPrice: fuelPrice,
+      fuelCost: result.fuelCost,
+      totalCost: result.totalCost,
+      totalIncome: result.totalIncome,
+      netProfit: result.netProfit,
+      status: result.status,
+      statusColor: result.statusColor,
+      StatusIcon,
+      profitPerMember: result.profitPerMember,
+      expectedTicketsSold: result.expectedTicketsSold,
+      grossRevenue: result.grossRevenue,
+      breakEvenTickets: result.breakEvenTickets,
+      breakEvenCapacity: result.breakEvenCapacityPct ?? 0,
+      accommodationCost: result.accommodationCost,
+      distanceKm,
+      driveTimeMinutes,
+      fuelUsedLitres: result.fuelUsedLitres,
+      takeHomePerPerson: result.takeHomePerPerson,
+      minTakeHomePerPerson,
+      fuelPriceSource,
+      resolvedFuelPrice: resolvedFuel.price,
     };
   }, [profiles]);
 

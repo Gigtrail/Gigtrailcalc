@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, Save, Home, Building2, Pencil } from "lucide-react";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/gig-constants";
+import { calculateStopPreview, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch } from "@/components/venue-search";
 import { useEffect, useMemo, useRef } from "react";
@@ -130,55 +130,21 @@ export default function TourStopForm() {
 
   const formValues = useWatch({ control: form.control });
 
-  const calculatedValues = useMemo(() => {
-    const fee = Number(formValues.fee) || 0;
-    const capacity = Number(formValues.capacity) || 0;
-    const expectedAttendancePct = Number(formValues.expectedAttendancePct) || 0;
-    const ticketPrice = Number(formValues.ticketPrice) || 0;
-    const splitPct = Number(formValues.splitPct) || 0;
-    const guarantee = Number(formValues.guarantee) || 0;
-    const merchEstimate = Number(formValues.merchEstimate) || 0;
-    const accommodationCost = Number(formValues.accommodationCost) || 0;
-    const extraCosts = Number(formValues.extraCosts) || 0;
-    const marketingCost = Number(formValues.marketingCost) || 0;
-
-    let showIncome = 0;
-    let expectedTicketsSold = 0;
-    let grossRevenue = 0;
-
-    if (formValues.showType === "Flat Fee") {
-      showIncome = fee;
-    } else if (formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid") {
-      expectedTicketsSold = Math.floor((capacity * expectedAttendancePct) / 100);
-      grossRevenue = expectedTicketsSold * ticketPrice;
-
-      if (formValues.dealType === "100% door") {
-        showIncome = grossRevenue;
-      } else if (formValues.dealType === "percentage split") {
-        showIncome = grossRevenue * (splitPct / 100);
-      } else if (formValues.dealType === "guarantee vs door") {
-        const splitIncome = grossRevenue * (splitPct / 100);
-        showIncome = Math.max(guarantee, splitIncome);
-      }
-
-      if (formValues.showType === "Hybrid") {
-        showIncome += guarantee;
-      }
-    }
-
-    const totalIncome = showIncome + merchEstimate;
-    const totalCost = accommodationCost + extraCosts + marketingCost;
-    const netProfit = totalIncome - totalCost;
-
-    return {
-      expectedTicketsSold,
-      grossRevenue,
-      showIncome,
-      totalIncome,
-      totalCost,
-      netProfit,
-    };
-  }, [formValues]);
+  // ── All financial math delegated to the shared calculation engine ──
+  const calculatedValues = useMemo(() => calculateStopPreview({
+    showType: formValues.showType ?? "Flat Fee",
+    fee: formValues.fee,
+    capacity: formValues.capacity,
+    ticketPrice: formValues.ticketPrice,
+    expectedAttendancePct: formValues.expectedAttendancePct,
+    dealType: formValues.dealType,
+    splitPct: formValues.splitPct,
+    guarantee: formValues.guarantee,
+    merchEstimate: formValues.merchEstimate,
+    accommodationCost: formValues.accommodationCost,
+    marketingCost: formValues.marketingCost,
+    extraCosts: formValues.extraCosts,
+  }), [formValues]);
 
   useEffect(() => {
     if (isEditing && stop && !hasReset.current) {

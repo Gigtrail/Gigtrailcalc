@@ -1,5 +1,6 @@
 import { estimateLegDistance, type RouteLeg, type DistanceSource } from './routing-service';
 import { getFuelPrice, type FuelPriceResult } from './fuel-service';
+import { calculateShowIncome, calculateVehicleCosts } from './calculations';
 
 export type { DistanceSource, FuelPriceResult };
 
@@ -225,34 +226,21 @@ function buildDaySlots(
   return slots;
 }
 
+/**
+ * @deprecated Use calculateShowIncome() from './calculations' directly.
+ * Kept as a thin wrapper for backward compatibility with tour-calculator internals.
+ */
 export function calcShowIncome(stop: TourStopInput): number {
-  if (stop.showType === 'Flat Fee') {
-    return n(stop.fee);
-  }
-
-  const capacity = n(stop.capacity);
-  const attendancePct = n(stop.expectedAttendancePct);
-  const ticketPrice = n(stop.ticketPrice);
-  const splitPct = n(stop.splitPct);
-  const guarantee = n(stop.guarantee);
-
-  const expectedSold = Math.floor((capacity * attendancePct) / 100);
-  const grossRevenue = expectedSold * ticketPrice;
-
-  let doorIncome = 0;
-  if (stop.dealType === '100% door') {
-    doorIncome = grossRevenue;
-  } else if (stop.dealType === 'percentage split') {
-    doorIncome = grossRevenue * (splitPct / 100);
-  } else if (stop.dealType === 'guarantee vs door') {
-    doorIncome = Math.max(guarantee, grossRevenue * (splitPct / 100));
-  }
-
-  if (stop.showType === 'Hybrid') {
-    return n(stop.guarantee) + doorIncome;
-  }
-
-  return doorIncome;
+  return calculateShowIncome({
+    showType: stop.showType,
+    fee: stop.fee,
+    capacity: stop.capacity,
+    ticketPrice: stop.ticketPrice,
+    expectedAttendancePct: stop.expectedAttendancePct,
+    dealType: stop.dealType,
+    splitPct: stop.splitPct,
+    guarantee: stop.guarantee,
+  }).showIncome;
 }
 
 export function formatDriveTime(minutes: number): string {
@@ -438,22 +426,27 @@ export function calculateTour(
   const activeFuelType = resolvedFuelType;
 
   const vehicleFuelBreakdown: VehicleFuelBreakdown[] = fleetVehicles
-    ? fleetVehicles.map(v => {
-        const vConsumption = n(v.avgConsumption);
-        const vTotalLitres = vConsumption > 0 ? (totalDistance * vConsumption) / 100 : 0;
-        // Use the price matching this vehicle's own fuel type, falling back to avgFuelPrice
-        const vFuelTypeKey = (v.fuelType ?? 'petrol').toLowerCase() as keyof TourFuelPrices;
-        const vFuelPrice = fuelPrices ? (fuelPrices[vFuelTypeKey] ?? avgFuelPrice) : avgFuelPrice;
-        const vTotalCost = vTotalLitres * vFuelPrice;
-        return {
-          vehicleId: v.id,
-          vehicleName: v.name,
+    ? calculateVehicleCosts(
+        fleetVehicles.map(v => ({
+          id: v.id,
+          name: v.name,
           fuelType: v.fuelType,
-          consumptionLPer100: vConsumption,
-          totalLitres: vTotalLitres,
-          totalCost: vTotalCost,
-        };
-      })
+          consumptionLPer100: n(v.avgConsumption),
+        })),
+        totalDistance,
+        {
+          petrol: fuelPrices?.petrol ?? avgFuelPrice,
+          diesel: fuelPrices?.diesel ?? avgFuelPrice,
+          lpg: fuelPrices?.lpg ?? avgFuelPrice,
+        },
+      ).map(r => ({
+        vehicleId: r.vehicleId,
+        vehicleName: r.vehicleName,
+        fuelType: r.fuelType,
+        consumptionLPer100: r.consumptionLPer100,
+        totalLitres: r.totalLitres,
+        totalCost: r.totalCost,
+      }))
     : [];
 
   // When a fleet is present, recalculate totalFuelCost from per-vehicle costs
