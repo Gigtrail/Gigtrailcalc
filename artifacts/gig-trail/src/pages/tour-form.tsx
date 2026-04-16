@@ -500,15 +500,17 @@ export default function TourForm() {
     return <div className="p-8 text-center text-muted-foreground">Loading tour...</div>;
   }
 
-  const fuelPriceForType =
+  const fuelPriceForType = Number(
     fuelType === "diesel" ? (fuelPriceDiesel ?? 1.95)
     : fuelType === "lpg" ? (fuelPriceLpg ?? 0.95)
-    : (fuelPricePetrol ?? 1.90);
+    : (fuelPricePetrol ?? 1.90)
+  );
 
-  const estimatedFoodTotal =
-    (daysOnTour ?? 0) > 0 && (defaultFoodCost ?? 0) > 0
-      ? `$${((daysOnTour ?? 0) * (defaultFoodCost ?? 0)).toFixed(0)} est. food`
-      : null;
+  const estimatedFoodTotal = (() => {
+    const days = Number(daysOnTour ?? 0);
+    const food = Number(defaultFoodCost ?? 0);
+    return days > 0 && food > 0 ? `$${(days * food).toFixed(0)} est. food` : null;
+  })();
 
   const accomSummary = (() => {
     if (!selectedProfile) return null;
@@ -1214,7 +1216,7 @@ export default function TourForm() {
                   <ReviewRow
                     icon={<DollarSign className="w-4 h-4 text-muted-foreground" />}
                     label="Food"
-                    value={`$${defaultFoodCost}/day${daysOnTour ? ` = $${((defaultFoodCost ?? 0) * daysOnTour).toFixed(0)} est.` : ""}`}
+                    value={`$${defaultFoodCost}/day${daysOnTour ? ` = $${(Number(defaultFoodCost ?? 0) * Number(daysOnTour)).toFixed(0)} est.` : ""}`}
                   />
                 )}
                 <ReviewRow
