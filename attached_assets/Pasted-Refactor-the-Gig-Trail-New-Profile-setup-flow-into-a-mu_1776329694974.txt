@@ -1,0 +1,178 @@
+Refactor the Gig Trail “New Profile” setup flow into a multi-step guided wizard, similar to the Tour Builder flow.
+
+GOAL
+
+Make profile creation feel simple, guided, and less overwhelming by breaking it into smaller steps/slides instead of one large form.
+
+Users should feel like they are being walked through setting up their act, band, or performance profile.
+
+-----------------------------------
+CORE UX GOAL
+-----------------------------------
+
+Replace the current single-screen profile setup form with a step-by-step flow.
+
+Each step should ask a small group of related questions.
+
+The flow should feel:
+- clear
+- calm
+- beginner-friendly
+- easy to complete
+- easy to go back and edit
+
+-----------------------------------
+SUGGESTED STEP STRUCTURE
+-----------------------------------
+
+Step 1 — Basic Profile Info
+- Profile / act name
+- Solo / duo / band type
+- Optional tagline or short descriptor
+
+Step 2 — Band Members
+- Add members
+- Member roles
+- Member default fees
+- Optional include/exclude members by default
+
+Step 3 — Vehicle / Travel Defaults
+- Default vehicle(s)
+- Fuel type
+- Consumption
+- Travel assumptions if relevant
+
+Step 4 — Accommodation Defaults
+- Accommodation required yes/no
+- Preferred room type
+- Optional max driving hours per day
+- Any standard touring assumptions
+
+Step 5 — Performance / Merch Defaults
+- Merch setup if applicable
+- Default merch expectations if used in calc
+- Optional standard income assumptions
+
+Step 6 — Review
+- Show a clean summary of all profile defaults
+- Allow user to jump back and edit any section
+- Save profile
+
+Do not overload any one step.
+
+-----------------------------------
+IMPORTANT PRODUCT RULES
+-----------------------------------
+
+- The profile should become the source of truth for calculator defaults
+- Users must still be able to override these defaults later per calc
+- The setup should help users get up and running fast
+- Avoid asking unnecessary questions too early
+- Advanced settings should be hidden or collapsed where appropriate
+
+-----------------------------------
+STATE MANAGEMENT
+-----------------------------------
+
+Implement a centralized draft state for profile creation.
+
+Use one stable source of truth for the in-progress profile setup.
+
+Recommended:
+- parent state
+- useReducer
+- context/store if already used elsewhere
+
+Do NOT let each step own isolated state that gets lost when navigating.
+
+-----------------------------------
+DRAFT PERSISTENCE
+-----------------------------------
+
+Profile setup should save progress as the user goes.
+
+Save:
+- on step change
+- on important field edits with debounce
+- before navigation away if practical
+
+If the user refreshes or returns, restore the unfinished profile draft.
+
+At minimum support local persistence.
+If backend draft saving is easy, structure for that later.
+
+-----------------------------------
+RESTORE BEHAVIOUR
+-----------------------------------
+
+When user opens New Profile:
+- restore unfinished draft if it exists
+OR
+- offer Resume Draft
+
+Restore:
+- all entered values
+- current step
+- added members
+- selected defaults
+
+-----------------------------------
+UI REQUIREMENTS
+-----------------------------------
+
+- Step-by-step slide/card layout
+- Progress indicator at top
+- Back / Next controls
+- Save and Exit option if practical
+- Review page before final save
+- Calm helper text on each step
+- Mobile-friendly
+- Keep visual style consistent with the rest of Gig Trail
+
+-----------------------------------
+COPY STYLE
+-----------------------------------
+
+Use plain language, not technical language.
+
+Examples:
+- “Tell us about your act”
+- “Who usually travels with you?”
+- “What accommodation do you normally need?”
+- “What vehicle do you usually use for touring?”
+
+Avoid corporate or enterprise-sounding labels.
+
+-----------------------------------
+DATA MODEL GOAL
+-----------------------------------
+
+The completed profile should save structured defaults for later use in:
+- single show calc
+- tour calc
+- member payout logic
+- accommodation logic
+- vehicle/fuel logic
+
+Make sure the final saved profile object is clean, typed, and easy to use as a defaults source.
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Profile creation is broken into multiple guided steps
+- Users can go back and forward without losing data
+- Draft progress is saved as they go
+- Refreshing restores unfinished setup
+- Final review screen shows all chosen defaults clearly
+- Saved profile becomes usable as calculator defaults
+- UI feels simpler and less overwhelming than a single long form
+
+-----------------------------------
+BONUS
+-----------------------------------
+
+If straightforward, add:
+- “Duplicate existing profile” as a starting option
+- “Skip for now” on non-essential steps
+- quick preset options for Solo / Duo / Band
