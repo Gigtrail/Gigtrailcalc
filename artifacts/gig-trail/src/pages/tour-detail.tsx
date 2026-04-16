@@ -12,6 +12,7 @@ import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
   Clock, History, Search, Home, Building2, Pencil, BarChart2, Lightbulb, Ticket,
+  Download,
 } from "lucide-react";
 import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,6 +47,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { calculateTour, fmt, formatDriveTime, type TourLeg } from "@/lib/tour-calculator";
+import { generateTourICS, downloadICS, type ICSOptions, type ICSStop, type ICSLeg } from "@/lib/tour-ics";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
@@ -103,6 +107,15 @@ export default function TourDetail() {
   const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal } });
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
+
+  // Export to calendar
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportOptions, setExportOptions] = useState<ICSOptions>({
+    includeTravelEvents: false,
+    includeShowDetails: true,
+    includeProductionTimes: false,
+    includeNotes: false,
+  });
 
   const [localFuelType, setLocalFuelType] = useState("petrol");
   const [localFuelPricePetrol, setLocalFuelPricePetrol] = useState("1.90");
@@ -541,6 +554,10 @@ export default function TourDetail() {
           <Button variant="outline" size="sm" onClick={() => setShowPastShowModal(true)}>
             <History className="w-4 h-4 mr-2" />
             Past Show
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowExportDialog(true)}>
+            <Download className="w-4 h-4 mr-2" />
+            Export
           </Button>
           <Button variant="secondary" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -1707,6 +1724,113 @@ export default function TourDetail() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Export to Calendar Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Export to Calendar
+            </DialogTitle>
+            <DialogDescription>
+              Download your tour as a .ics file and import it into any calendar app.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            {([
+              {
+                key: "includeShowDetails" as const,
+                label: "Detailed show info",
+                sub: "Show type in each event description",
+              },
+              {
+                key: "includeTravelEvents" as const,
+                label: "Travel events",
+                sub: "Separate calendar event for each drive leg",
+              },
+              {
+                key: "includeProductionTimes" as const,
+                label: "Load-in & soundcheck times",
+                sub: "Included if times are set on each stop",
+              },
+              {
+                key: "includeNotes" as const,
+                label: "Internal notes",
+                sub: "Per-stop notes (visible in calendar app)",
+              },
+            ] satisfies { key: keyof ICSOptions; label: string; sub: string }[]).map(({ key, label, sub }) => (
+              <div key={key} className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label htmlFor={`export-${key}`} className="text-sm font-medium cursor-pointer">{label}</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+                </div>
+                <Switch
+                  id={`export-${key}`}
+                  checked={exportOptions[key]}
+                  onCheckedChange={checked =>
+                    setExportOptions(prev => ({ ...prev, [key]: checked }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2 mt-1">
+            <Button
+              className="flex-1"
+              onClick={() => {
+                const legs = calc?.legs ?? [];
+
+                const icsStops: ICSStop[] = sortedStops.map((stop, i) => {
+                  const incomingLeg = legs[i]
+                    ? {
+                        from: legs[i].from,
+                        distanceKm: legs[i].distanceKm,
+                        driveTimeMinutes: legs[i].driveTimeMinutes,
+                      }
+                    : null;
+                  return {
+                    id: stop.id,
+                    city: stop.city,
+                    venueName: stop.venueName,
+                    date: stop.date,
+                    showType: stop.showType,
+                    notes: stop.notes,
+                    incomingLeg,
+                  };
+                });
+
+                const icsLegs: ICSLeg[] = legs.map((leg, i) => ({
+                  from: leg.from,
+                  to: leg.to,
+                  distanceKm: leg.distanceKm,
+                  driveTimeMinutes: leg.driveTimeMinutes,
+                  toDate: sortedStops[i]?.date ?? null,
+                }));
+
+                const ics = generateTourICS(
+                  { id: tour.id, name: tour.name, startDate: tour.startDate, endDate: tour.endDate },
+                  icsStops,
+                  icsLegs,
+                  exportOptions,
+                );
+
+                const safeName = tour.name.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+                downloadICS(ics, `${safeName}-tour`);
+                setShowExportDialog(false);
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download .ics
+            </Button>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
