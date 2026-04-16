@@ -711,9 +711,9 @@ export default function RunResults() {
               <Fuel className="w-3 h-3 mt-0.5 shrink-0" />
               <span>
                 {fuelPriceSource === "profile_assumption"
-                  ? `Using your profile's fuel assumption ($${resolvedFuelPrice?.toFixed(2)}/L). Automatic fuel pricing coming soon.`
+                  ? `Using the fuel cost from your profile ($${resolvedFuelPrice?.toFixed(2)}/L). Automatic fuel pricing coming soon.`
                   : fuelPriceSource === "system_default"
-                  ? `Using Australian average fuel price ($${resolvedFuelPrice?.toFixed(2)}/L) — set your own in Profile › Fuel Assumptions. Automatic fuel pricing coming soon.`
+                  ? `Using Australian average fuel price ($${resolvedFuelPrice?.toFixed(2)}/L) — set your own in Profile › Fuel Costs. Automatic fuel pricing coming soon.`
                   : fuelPriceSource === "profile"
                   ? `Fuel price from your profile default ($${resolvedFuelPrice?.toFixed(2)}/L)`
                   : `No fuel price set — used system default of $${resolvedFuelPrice?.toFixed(2)}/L`}

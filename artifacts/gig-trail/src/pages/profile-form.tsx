@@ -911,11 +911,12 @@ export default function ProfileForm() {
                 </div>
 
                 <div className="pt-2">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1">
                     <Fuel className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-semibold">Fuel Assumptions</h3>
+                    <h3 className="text-sm font-semibold">Fuel costs</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-3">Set your assumed $/L price for each fuel type. Leave blank to use Australian averages.</p>
+                  <p className="text-xs text-muted-foreground mb-0.5">What was the last price you saw at the servo?</p>
+                  <p className="text-xs text-muted-foreground/70 mb-3">Enter a rough price — we'll use it to estimate fuel costs across your tour. Leave blank to fall back to regional averages.</p>
                   <div className="grid grid-cols-3 gap-3">
                     {[
                       { name: "defaultPetrolPrice" as const, label: "Petrol ($/L)", ph: "1.85" },
@@ -1295,7 +1296,7 @@ export default function ProfileForm() {
             <StepShell
               step={4}
               title="How does the money work?"
-              subtitle="Set your income expectations and fuel price assumptions. These are defaults — change them per show any time."
+              subtitle="Set your income expectations and fuel costs. These are defaults — change them per show any time."
               chips={<SummaryChip label="Act" value={name || "—"} />}
               onBack={() => goToStep(3)}
               onNext={() => goToStep(5)}
@@ -1331,9 +1332,12 @@ export default function ProfileForm() {
               <div className="space-y-3 pt-1">
                 <div className="flex items-center gap-2">
                   <Fuel className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold">Fuel price assumptions</span>
+                  <span className="text-sm font-semibold">Fuel costs</span>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-1">Leave blank to use Australian averages (Petrol $1.85 / Diesel $1.95 / LPG $0.90).</p>
+                <div className="-mt-1 space-y-0.5">
+                  <p className="text-xs text-muted-foreground">What was the last price you saw at the servo?</p>
+                  <p className="text-xs text-muted-foreground/70">Enter a rough price — we'll use it to estimate fuel costs across your tour. Leave blank to fall back to regional averages.</p>
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { name: "defaultPetrolPrice" as const, label: "Petrol $/L", ph: "1.85" },
