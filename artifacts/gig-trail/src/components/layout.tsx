@@ -22,9 +22,9 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "Tour Builder", url: "/tours", icon: Navigation },
   { title: "Calculator", url: "/runs/new", icon: Calculator },
   { title: "Past Shows", url: "/runs", icon: Clock },
-  { title: "Tour Builder", url: "/tours", icon: Navigation },
   { title: "Venues", url: "/venues", icon: Building2 },
   { title: "Profiles", url: "/profiles", icon: Guitar },
 ];
