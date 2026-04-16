@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, Save, Home, Building2, Pencil } from "lucide-react";
+import { ChevronLeft, Home, Building2, Pencil, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import { calculateStopPreview, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch } from "@/components/venue-search";
@@ -520,6 +520,34 @@ export default function TourStopForm() {
                           />
                         )}
                       </div>
+
+                      {/* ── Guarantee input for "guarantee vs door" ───────────────── */}
+                      {formValues.dealType === "guarantee vs door" && (
+                        <div className="space-y-2">
+                          <FormField
+                            control={form.control}
+                            name="guarantee"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Guarantee ($) <span className="text-destructive">*</span></FormLabel>
+                                <FormControl>
+                                  <Input type="number" min="0" {...field} value={field.value || 0} />
+                                </FormControl>
+                                <p className="text-xs text-muted-foreground">
+                                  You earn whichever is higher — the guarantee or your share of the door.
+                                </p>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          {(formValues.guarantee ?? 0) <= 0 && (
+                            <div className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              Enter the guaranteed minimum — required for this deal type.
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -677,7 +705,8 @@ export default function TourStopForm() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
-          <div className="sticky top-20">
+          <div className="sticky top-20 space-y-4">
+            {/* ── Main net preview ─────────────────────────────────────── */}
             <Card className={`border-2 ${calculatedValues.netProfit >= 0 ? 'border-secondary/40' : 'border-destructive/50'} bg-card shadow-lg`}>
               <CardHeader className="pb-4 border-b border-border/40">
                 <CardTitle className="text-lg">Stop Preview</CardTitle>
@@ -687,7 +716,9 @@ export default function TourStopForm() {
                   <div className={`text-4xl font-bold ${calculatedValues.netProfit >= 0 ? 'text-secondary' : 'text-destructive'}`}>
                     ${calculatedValues.netProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1">Net for this stop</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {isTicketed ? "Expected net" : "Net for this stop"}
+                  </div>
                 </div>
 
                 <div className="space-y-2 pt-2 border-t border-border/40 text-sm">
@@ -714,6 +745,81 @@ export default function TourStopForm() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* ── Earnings Preview (ticketed shows only) ───────────────── */}
+            {isTicketed && calculatedValues.attendanceScenarios.length > 0 && (
+              <Card className="border-border/50 bg-card shadow-sm">
+                <CardHeader className="pb-3 border-b border-border/40">
+                  <CardTitle className="text-base">Earnings Preview</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">How your deal performs at different crowds</p>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+
+                  {/* Worst / Expected / Best summary boxes */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Worst", value: calculatedValues.worstCase, Icon: TrendingDown, color: "text-destructive" },
+                      { label: "Expected", value: calculatedValues.netProfit, Icon: Minus, color: calculatedValues.netProfit >= 0 ? "text-secondary" : "text-destructive" },
+                      { label: "Best", value: calculatedValues.bestCase, Icon: TrendingUp, color: "text-secondary" },
+                    ].map(({ label, value, Icon, color }) => (
+                      <div key={label} className="rounded-lg border border-border/40 bg-muted/30 p-2 text-center">
+                        <Icon className={`w-3.5 h-3.5 mx-auto mb-1 ${color}`} />
+                        <div className={`text-sm font-bold ${color}`}>
+                          {value >= 0 ? "" : "−"}${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Attendance scenario table */}
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Attendance Scenarios</p>
+                    {calculatedValues.attendanceScenarios.map(s => {
+                      const isExpected = Math.round(formValues.expectedAttendancePct ?? 50) === s.pct;
+                      const positive = s.netEarnings >= 0;
+                      return (
+                        <div
+                          key={s.pct}
+                          className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm ${isExpected ? "bg-secondary/10 border border-secondary/20" : "bg-muted/30"}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-xs font-medium shrink-0 ${isExpected ? "text-secondary" : "text-muted-foreground"}`}>{s.pct}%</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{s.tickets} tickets</span>
+                            {s.guaranteeApplied && (
+                              <span className="text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium shrink-0">floor</span>
+                            )}
+                          </div>
+                          <span className={`font-semibold text-sm shrink-0 ${positive ? "text-secondary" : "text-destructive"}`}>
+                            {positive ? "" : "−"}${Math.abs(s.netEarnings).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Guarantee breakpoint */}
+                  {calculatedValues.guaranteeBreakpointTickets !== null && (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 space-y-0.5">
+                      <p className="text-[11px] font-semibold text-amber-600 uppercase tracking-wider">Guarantee Breakpoint</p>
+                      <p className="text-sm font-medium text-foreground">
+                        Door beats guarantee at{" "}
+                        <span className="text-amber-600 font-bold">{calculatedValues.guaranteeBreakpointTickets} tickets</span>
+                        {(formValues.capacity ?? 0) > 0 && (
+                          <span className="text-muted-foreground text-xs ml-1">
+                            ({Math.round((calculatedValues.guaranteeBreakpointTickets / (formValues.capacity ?? 1)) * 100)}% capacity)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Above this number you earn more than the guarantee.
+                      </p>
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

@@ -602,6 +602,20 @@ export interface StopPreviewInput {
   supportActCost?: number | null;
 }
 
+export interface AttendanceScenario {
+  /** Attendance percentage (e.g. 25, 50, 75, 100) */
+  pct: number;
+  tickets: number;
+  grossRevenue: number;
+  netTicketRevenue: number;
+  /** The door/ticketed portion of income (after deal type applied) */
+  doorIncome: number;
+  totalIncome: number;
+  netEarnings: number;
+  /** True when guarantee floor is applied (for guarantee vs door) */
+  guaranteeApplied: boolean;
+}
+
 export interface StopPreviewResult {
   showIncome: number;
   expectedTicketsSold: number;
@@ -612,6 +626,49 @@ export interface StopPreviewResult {
   totalIncome: number;
   totalCost: number;
   netProfit: number;
+  /** Attendance scenarios for 25 / 50 / 75 / 100 % (only populated for ticketed shows) */
+  attendanceScenarios: AttendanceScenario[];
+  /**
+   * "Guarantee vs Door" only — ticket count at which door earnings first exceed the guarantee.
+   * null when not applicable or cannot be computed (e.g. ticketPrice = 0).
+   */
+  guaranteeBreakpointTickets: number | null;
+  /** Net earnings at 25 % attendance */
+  worstCase: number;
+  /** Net earnings at 100 % attendance */
+  bestCase: number;
+}
+
+// ── Private helper ─────────────────────────────────────────────────────────────
+
+/**
+ * Calculate door income for a given number of tickets, applying booking fees and deal type.
+ * Used internally by scenario generation.
+ */
+function calcDoorIncome(
+  tickets: number,
+  ticketPrice: number,
+  feePerTicket: number,
+  dealType: string,
+  splitPct: number,
+  guarantee: number,
+): { doorIncome: number; guaranteeApplied: boolean } {
+  const gross = tickets * ticketPrice;
+  const netRev = Math.max(0, gross - tickets * feePerTicket);
+  let doorIncome: number;
+  let guaranteeApplied = false;
+  if (dealType === "100% door") {
+    doorIncome = netRev;
+  } else if (dealType === "percentage split") {
+    doorIncome = netRev * (splitPct / 100);
+  } else if (dealType === "guarantee vs door") {
+    const doorShare = netRev * (splitPct / 100);
+    guaranteeApplied = guarantee > doorShare;
+    doorIncome = Math.max(guarantee, doorShare);
+  } else {
+    doorIncome = netRev;
+  }
+  return { doorIncome, guaranteeApplied };
 }
 
 /**
@@ -640,6 +697,51 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
   const supportActCost = n(input.supportActCost);
   const totalCost = accommodationCost + marketingCost + extraCosts + supportActCost;
 
+  const isTicketed = input.showType === "Ticketed Show" || input.showType === "Hybrid";
+  const cap = n(input.capacity);
+  const price = n(input.ticketPrice);
+  const feePerTicket = n(input.bookingFeePerTicket);
+  const split = n(input.splitPct);
+  const guar = n(input.guarantee);
+  const dealType = input.dealType ?? "100% door";
+  const hybridGuarantee = input.showType === "Hybrid" ? guar : 0;
+
+  // ── Attendance scenarios ──────────────────────────────────────────────────
+  const scenarios: AttendanceScenario[] = [];
+  if (isTicketed && cap > 0 && price > 0) {
+    for (const pct of [25, 50, 75, 100]) {
+      const tickets = Math.floor((cap * pct) / 100);
+      const grossRev = tickets * price;
+      const netRev = Math.max(0, grossRev - tickets * feePerTicket);
+      const { doorIncome, guaranteeApplied } = calcDoorIncome(tickets, price, feePerTicket, dealType, split, guar);
+      const scenarioIncome = hybridGuarantee + doorIncome + merch;
+      scenarios.push({
+        pct,
+        tickets,
+        grossRevenue: grossRev,
+        netTicketRevenue: netRev,
+        doorIncome,
+        totalIncome: scenarioIncome,
+        netEarnings: scenarioIncome - totalCost,
+        guaranteeApplied,
+      });
+    }
+  }
+
+  // ── Guarantee breakpoint ──────────────────────────────────────────────────
+  // The ticket count where door earnings (after split) first equal the guarantee.
+  let guaranteeBreakpointTickets: number | null = null;
+  if (isTicketed && dealType === "guarantee vs door" && guar > 0 && price > 0) {
+    const netPricePerTicket = Math.max(0, price - feePerTicket);
+    const artistNetPerTicket = netPricePerTicket * (split > 0 ? split / 100 : 1);
+    if (artistNetPerTicket > 0) {
+      guaranteeBreakpointTickets = Math.ceil(guar / artistNetPerTicket);
+    }
+  }
+
+  const worstCase = scenarios.find(s => s.pct === 25)?.netEarnings ?? totalIncome - totalCost;
+  const bestCase = scenarios.find(s => s.pct === 100)?.netEarnings ?? totalIncome - totalCost;
+
   return {
     showIncome,
     expectedTicketsSold,
@@ -650,6 +752,10 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
     totalIncome,
     totalCost,
     netProfit: totalIncome - totalCost,
+    attendanceScenarios: scenarios,
+    guaranteeBreakpointTickets,
+    worstCase,
+    bestCase,
   };
 }
 
