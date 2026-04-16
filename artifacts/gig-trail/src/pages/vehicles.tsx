@@ -8,14 +8,14 @@ import {
   getGetProfilesQueryKey,
 } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
-import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Lock, Users, ChevronDown } from "lucide-react";
+import { Plus, Truck, Fuel, Droplets, Star, Edit, Trash2, Users, ChevronDown } from "lucide-react";
+import { UpgradeCTA } from "@/components/upgrade-cta";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
 import { usePlan } from "@/hooks/use-plan";
 import { getStandardVehicle } from "@/lib/garage-constants";
 import {
@@ -29,14 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +48,6 @@ export default function Garage() {
   const { toast } = useToast();
   const { plan } = usePlan();
   const isPro = plan === "pro" || plan === "unlimited";
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [, setLocation] = useLocation();
 
   // Build a map: profileId -> profile name
@@ -94,16 +85,14 @@ export default function Garage() {
 
   const handleAddVehicle = () => {
     if (!isPro) {
-      setShowUpgradeModal(true);
+      setLocation("/billing");
     } else {
       setLocation("/garage/new");
     }
   };
 
   const handleEditVehicle = (id: number) => {
-    if (!isPro) {
-      setShowUpgradeModal(true);
-    } else {
+    if (isPro) {
       setLocation(`/garage/${id}/edit`);
     }
   };
@@ -142,29 +131,14 @@ export default function Garage() {
       </div>
 
       {!isPro && (
-        <div className="rounded-lg border border-border/50 bg-muted/30 p-4 flex items-start gap-3">
-          <Lock className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Custom garage vehicles are a Pro feature.</span>{" "}
-            Standard vehicle types (Small Car, SUV/Wagon, Van, Bus) are available on all plans in your profile.{" "}
-            <Button variant="link" className="h-auto p-0 text-primary text-sm" onClick={() => setLocation("/billing")}>
-              Upgrade to Pro →
-            </Button>
-          </div>
-        </div>
+        <UpgradeCTA feature="more_vehicles" variant="banner" />
       )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-semibold">
-            {isPro ? "Your custom vehicles" : "Custom vehicles (Pro)"}
+            {isPro ? "Your custom vehicles" : "Custom vehicles"}
           </h2>
-          {!isPro && (
-            <Button size="sm" onClick={() => setShowUpgradeModal(true)}>
-              <Lock className="w-3.5 h-3.5 mr-1.5" />
-              Upgrade
-            </Button>
-          )}
         </div>
 
         {isLoading ? (
@@ -183,23 +157,21 @@ export default function Garage() {
             ))}
           </div>
         ) : vehicles?.length === 0 ? (
-          <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
-            <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
-            <h3 className="text-lg font-medium">No custom vehicles yet</h3>
-            <p className="text-muted-foreground mb-4 text-sm">
-              {isPro
-                ? "Add a vehicle to track fuel specs, tank size, and assign it to your acts."
-                : "Upgrade to Pro to add custom vehicles to your garage."}
-            </p>
-            <Button onClick={handleAddVehicle}>
-              {isPro ? (
-                <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Vehicle
-                </>
-              ) : "Upgrade to Pro"}
-            </Button>
-          </div>
+          isPro ? (
+            <div className="text-center py-12 bg-card rounded-lg border border-border border-dashed">
+              <Truck className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-40" />
+              <h3 className="text-lg font-medium">No custom vehicles yet</h3>
+              <p className="text-muted-foreground mb-4 text-sm">
+                Add a vehicle to track fuel specs, tank size, and assign it to your acts.
+              </p>
+              <Button onClick={handleAddVehicle}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Vehicle
+              </Button>
+            </div>
+          ) : (
+            <UpgradeCTA feature="more_vehicles" variant="card" className="min-h-[200px]" />
+          )
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {vehicles?.map((vehicle) => {
@@ -383,32 +355,6 @@ export default function Garage() {
         </p>
       </div>
 
-      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Truck className="w-5 h-5 text-primary" />
-              </div>
-              <DialogTitle className="text-xl">Custom garage vehicles are a Pro feature</DialogTitle>
-            </div>
-            <DialogDescription className="text-base">
-              Upgrade to Pro to add custom vehicles with your real fuel figures, tank size, and more.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowUpgradeModal(false)} className="w-full sm:w-auto">
-              Keep using standard types
-            </Button>
-            <Button
-              onClick={() => setLocation("/billing")}
-              className="w-full sm:w-auto"
-            >
-              View Plans
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

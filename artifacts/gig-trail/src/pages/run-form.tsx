@@ -31,6 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { usePlan } from "@/hooks/use-plan";
+import { UsageMeter } from "@/components/usage-meter";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
@@ -1547,14 +1548,14 @@ export default function RunForm() {
                   <Calculator className="w-4 h-4 mr-2" />
                   {isCalculating ? "Calculating..." : "Calculate Gig"}
                 </Button>
-                {calcUsage && !isPro && (
-                  <p className="text-xs text-center text-muted-foreground">
-                    {calcUsage.limit !== null
-                      ? `${calcUsage.count} of ${calcUsage.limit} free calculations used this week`
-                      : "Unlimited calculations"}
-                  </p>
+                {!isPro && calcUsage && calcUsage.limit !== null && (
+                  <UsageMeter
+                    used={calcUsage.count}
+                    limit={calcUsage.limit}
+                    label="calculations this week"
+                  />
                 )}
-                {!calcUsage && !isPro && (
+                {!isPro && !calcUsage && (
                   <p className="text-xs text-center text-muted-foreground">5 free calculations per week</p>
                 )}
                 {isEditing && (
@@ -1571,21 +1572,19 @@ export default function RunForm() {
       <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-amber-600" />
-              </div>
-              <DialogTitle className="text-xl">You've used your 5 free calculations this week</DialogTitle>
-            </div>
+            <DialogTitle className="text-xl">Weekly calculation limit reached</DialogTitle>
             <DialogDescription className="text-base leading-relaxed">
-              Upgrade to Gig Trail Pro for unlimited calculations and smarter tour planning — so you never have to guess if a gig is worth the drive.
+              You've used all 5 free calculations for this week. Your limit resets in 7 days, or upgrade for unlimited access.
             </DialogDescription>
           </DialogHeader>
-          <div className="px-1 pb-1 text-sm text-muted-foreground space-y-1">
-            <p>✓ Unlimited calculations</p>
-            <p>✓ Multiple vehicles in Garage</p>
-            <p>✓ Assign vehicles to band members</p>
-            <p>✓ Accommodation automation</p>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground text-sm">Pro unlocks:</p>
+            <ul className="space-y-1 ml-1">
+              <li>— Unlimited calculations, any time</li>
+              <li>— Full multi-vehicle garage</li>
+              <li>— Saved show history without limits</li>
+              <li>— Tour builder for multi-stop runs</li>
+            </ul>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowLimitModal(false)} className="w-full sm:w-auto">

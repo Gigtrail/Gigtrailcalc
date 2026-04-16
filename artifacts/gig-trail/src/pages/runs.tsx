@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { useGetRuns, useDeleteRun, getGetRunsQueryKey } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, SlidersHorizontal, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { usePlan } from "@/hooks/use-plan";
+import { UsageMeter } from "@/components/usage-meter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -102,6 +104,8 @@ export default function Runs() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { plan, limits } = usePlan();
+  const isPro = plan === "pro" || plan === "unlimited";
 
   const [search, setSearch] = useState("");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
@@ -239,6 +243,16 @@ export default function Runs() {
           </Link>
         </Button>
       </div>
+
+      {/* Free plan saved show usage */}
+      {!isPro && limits.maxRuns !== Infinity && (
+        <UsageMeter
+          used={runs?.length ?? 0}
+          limit={limits.maxRuns}
+          label="saved shows"
+          className="max-w-xs"
+        />
+      )}
 
       {/* Summary Stats */}
       {summaryStats && (

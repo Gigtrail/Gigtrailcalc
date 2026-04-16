@@ -4,7 +4,7 @@ import {
   getGetProfilesQueryKey,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { Plus, Users, MapPin, Edit, Trash2, Lock, BedDouble, UtensilsCrossed, DollarSign, Truck, Star, StarOff } from "lucide-react";
+import { Plus, Users, MapPin, Edit, Trash2, BedDouble, UtensilsCrossed, DollarSign, Truck, Star, StarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,7 @@ import {
   resolveActiveMembers,
   derivePeopleCount,
 } from "@/lib/member-utils";
+import { UpgradeCTA } from "@/components/upgrade-cta";
 import { useState, useEffect } from "react";
 import {
   Tooltip,
@@ -106,37 +107,18 @@ export default function Profiles() {
         </div>
 
         {/* Add Profile button area */}
-        {isPro ? (
-          atProfileLimit ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground hidden sm:block">
-                {profileCount} / {limits.maxProfiles} profiles
-              </span>
-              <Button variant="outline" size="sm" disabled>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Profile
-              </Button>
-            </div>
-          ) : (
-            <Button asChild>
-              <Link href="/profiles/new">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Profile
-              </Link>
-            </Button>
-          )
-        ) : atProfileLimit ? (
+        {isPro && atProfileLimit ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground hidden sm:block">
-              Multiple profiles require Pro
+              {profileCount} / {limits.maxProfiles} profiles
             </span>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/billing">
-                <Lock className="w-3.5 h-3.5 mr-1.5" />
-                Upgrade to Pro
-              </Link>
+            <Button variant="outline" size="sm" disabled>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Profile
             </Button>
           </div>
+        ) : !isPro && atProfileLimit ? (
+          <UpgradeCTA feature="more_profiles" variant="inline" />
         ) : (
           <Button asChild>
             <Link href="/profiles/new">
@@ -404,19 +386,7 @@ export default function Profiles() {
 
           {/* Upgrade card — Free at limit */}
           {!isPro && atProfileLimit && (
-            <Link href="/billing">
-              <div className="group h-full min-h-[200px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer p-8 text-center">
-                <div className="w-10 h-10 rounded-full bg-muted/50 group-hover:bg-primary/10 flex items-center justify-center mb-3 transition-colors">
-                  <Lock className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                  Multiple Acts — Pro
-                </p>
-                <p className="text-xs text-muted-foreground mt-1 opacity-70">
-                  Upgrade to manage multiple acts
-                </p>
-              </div>
-            </Link>
+            <UpgradeCTA feature="more_profiles" variant="card" />
           )}
         </div>
       )}
