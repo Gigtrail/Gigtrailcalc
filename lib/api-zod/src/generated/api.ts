@@ -819,6 +819,10 @@ export const UpdateTourBody = zod.object({
   fuelPricePetrol: zod.number().nullish(),
   fuelPriceDiesel: zod.number().nullish(),
   fuelPriceLpg: zod.number().nullish(),
+  totalDistance: zod.number().nullish(),
+  totalCost: zod.number().nullish(),
+  totalIncome: zod.number().nullish(),
+  totalProfit: zod.number().nullish(),
 });
 
 export const UpdateTourResponse = zod.object({

@@ -56,9 +56,10 @@ export default function Tours() {
     );
   };
 
-  const getStatusColor = (profit: number, income: number) => {
-    if (income === 0) return profit > 0 ? "status-bar-worth" : "status-bar-loss";
-    const margin = profit / income;
+  const getStatusColor = (profit: number | null, income: number | null) => {
+    if (profit == null) return "bg-muted/30";
+    if ((income ?? 0) === 0) return profit > 0 ? "status-bar-worth" : "status-bar-loss";
+    const margin = profit / (income ?? 1);
     if (margin > 0.2) return "status-bar-worth";
     if (profit > 0) return "status-bar-tight";
     return "status-bar-loss";
@@ -115,7 +116,7 @@ export default function Tours() {
           {tours?.map((tour) => (
             <Card key={tour.id} className="group hover-elevate transition-all border-border/50 bg-card/50 overflow-hidden">
               <div className="flex h-full">
-                <div className={`w-2 shrink-0 ${getStatusColor(tour.totalProfit || 0, tour.totalIncome || 0)}`} />
+                <div className={`w-2 shrink-0 ${getStatusColor(tour.totalProfit ?? null, tour.totalIncome ?? null)}`} />
                 <div className="flex-1 flex flex-col min-w-0">
                   <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -191,14 +192,26 @@ export default function Tours() {
 
                   <CardContent className="mt-auto pt-3 pb-4 flex items-end justify-between border-t border-border/30">
                     <div>
-                      <div className={`text-2xl font-bold ${(tour.totalProfit ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
-                        {(tour.totalProfit ?? 0) < 0 ? '-' : ''}${Math.abs(tour.totalProfit || 0).toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                        {(tour.totalIncome ?? 0) === 0 && tour.stopCount === 0
-                          ? 'No shows yet'
-                          : getStatusText(tour.totalProfit || 0, tour.totalIncome || 0)}
-                      </p>
+                      {tour.stopCount === 0 ? (
+                        <>
+                          <div className="text-lg font-semibold text-muted-foreground">No shows yet</div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Add stops to calculate</p>
+                        </>
+                      ) : tour.totalProfit == null ? (
+                        <>
+                          <div className="text-lg font-semibold text-muted-foreground">Not calculated</div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Open tour to update</p>
+                        </>
+                      ) : (
+                        <>
+                          <div className={`text-2xl font-bold ${tour.totalProfit < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                            {tour.totalProfit < 0 ? '-' : ''}${Math.abs(tour.totalProfit).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                            {tour.totalProfit < 0 ? 'loss' : tour.totalProfit === 0 ? 'break even' : 'profit'} · {getStatusText(tour.totalProfit, tour.totalIncome ?? 0)}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <Button variant="secondary" size="sm" asChild>
                       <Link href={`/tours/${tour.id}`}>View Details</Link>

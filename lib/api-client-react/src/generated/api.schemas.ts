@@ -469,6 +469,21 @@ export interface CreateTourBody {
   daysOnTour?: number | null;
   /** @nullable */
   notes?: string | null;
+  fuelType?: string;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
+  /** @nullable */
+  totalDistance?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
 }
 
 export interface TourStop {
