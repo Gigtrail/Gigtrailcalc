@@ -17,12 +17,12 @@ import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import type { PlaceResult } from "@/components/places-autocomplete";
 import {
   ArrowLeft, MapPin, Mic2, TrendingUp, Calendar, Globe,
-  Star, StarOff, ExternalLink, Music, Save, RotateCcw,
+  Star, StarOff, ExternalLink, Music, Save, RotateCcw, Edit2, Check, X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -347,6 +347,10 @@ export default function VenueDetail() {
     query: { enabled: !isNaN(venueId) },
   });
 
+  const [nameEditing, setNameEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
   const patchVenue = usePatchVenue({
     mutation: {
       onSuccess: () => {
@@ -357,6 +361,24 @@ export default function VenueDetail() {
       onError: () => toast({ title: "Failed to save", variant: "destructive" }),
     },
   });
+
+  const startNameEdit = (currentName: string) => {
+    setNameDraft(currentName);
+    setNameEditing(true);
+    setTimeout(() => nameInputRef.current?.focus(), 0);
+  };
+
+  const commitNameEdit = () => {
+    const trimmed = nameDraft.trim();
+    if (!trimmed) return; // prevent empty
+    setNameEditing(false);
+    patchVenue.mutate({ id: venueId, data: { venueName: trimmed } });
+  };
+
+  const cancelNameEdit = () => {
+    setNameEditing(false);
+    setNameDraft("");
+  };
 
   if (isLoading) {
     return (
@@ -402,8 +424,49 @@ export default function VenueDetail() {
           <ArrowLeft className="w-4 h-4 mr-1" /> Past Shows
         </Button>
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{venue.venueName}</h1>
+          <div className="min-w-0 flex-1">
+            {/* ── Inline name editing ───────────────────────────────────── */}
+            {nameEditing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={nameInputRef}
+                  value={nameDraft}
+                  onChange={e => setNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") commitNameEdit();
+                    if (e.key === "Escape") cancelNameEdit();
+                  }}
+                  className="text-2xl font-bold h-auto py-1 px-2 w-full max-w-md"
+                  aria-label="Venue name"
+                />
+                <button
+                  onClick={commitNameEdit}
+                  disabled={!nameDraft.trim()}
+                  className="flex items-center justify-center w-8 h-8 rounded-md bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-40 transition-colors shrink-0"
+                  aria-label="Save name"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={cancelNameEdit}
+                  className="flex items-center justify-center w-8 h-8 rounded-md hover:bg-muted text-muted-foreground transition-colors shrink-0"
+                  aria-label="Cancel"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="group/name flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight truncate">{venue.venueName}</h1>
+                <button
+                  onClick={() => startNameEdit(venue.venueName)}
+                  className="opacity-0 group-hover/name:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground shrink-0"
+                  aria-label="Edit venue name"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {(locationLine || venue.fullAddress) && (
               <p className="text-muted-foreground mt-1 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 shrink-0" />
@@ -412,7 +475,7 @@ export default function VenueDetail() {
             )}
           </div>
           {timesPlayed > 0 && (
-            <Badge variant="outline" className="text-sm px-3 py-1 shrink-0">
+            <Badge variant="outline" className="text-sm px-3 py-1 shrink-0 mt-1">
               <Mic2 className="w-3.5 h-3.5 mr-1.5" />
               {timesPlayed} {timesPlayed === 1 ? "show" : "shows"}
             </Badge>

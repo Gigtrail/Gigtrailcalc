@@ -1110,53 +1110,88 @@ export default function TourDetail() {
                       </div>
 
                       {/* Fuel Settings — always visible, no tab switching */}
-                      <div className="px-4 pt-3 pb-3 border-b border-border/30 space-y-2.5">
-                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Fuel Settings</p>
-                        <div className="flex flex-wrap gap-3 items-end">
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Fuel Type</label>
-                            <select
-                              value={localFuelType}
-                              onChange={e => setLocalFuelType(e.target.value)}
-                              className="h-8 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                            >
-                              <option value="petrol">Petrol</option>
-                              <option value="diesel">Diesel</option>
-                              <option value="lpg">LPG</option>
-                            </select>
+                      {(() => {
+                        // Derive active vehicles for fuel display
+                        const activeVehicles = tourVehicles && tourVehicles.length > 0
+                          ? tourVehicles
+                          : legacyVehicle ? [{ vehicle: legacyVehicle }] : [];
+                        const hasVehicles = activeVehicles.length > 0;
+
+                        return (
+                          <div className="px-4 pt-3 pb-3 border-b border-border/30 space-y-2.5">
+                            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Fuel Settings</p>
+
+                            {/* Vehicle fuel source — replaces manual dropdown when vehicle present */}
+                            {hasVehicles ? (
+                              <div className="space-y-1.5">
+                                {activeVehicles.map(tv => (
+                                  <div key={tv.vehicle.id} className="flex items-center gap-2 text-xs">
+                                    <Fuel className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                                    <span className="font-medium">{tv.vehicle.name}</span>
+                                    <span className="text-muted-foreground">—</span>
+                                    <span className="capitalize text-muted-foreground">{tv.vehicle.fuelType}</span>
+                                    <span className="text-muted-foreground/50">·</span>
+                                    <span className="text-muted-foreground">{Number(tv.vehicle.avgConsumption)} L/100km</span>
+                                  </div>
+                                ))}
+                                <p className="text-[11px] text-muted-foreground/60">
+                                  Fuel type and consumption come from the vehicle. Edit in your Garage.
+                                </p>
+                              </div>
+                            ) : (
+                              /* No vehicle — manual fallback */
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">Fuel Type</label>
+                                <select
+                                  value={localFuelType}
+                                  onChange={e => setLocalFuelType(e.target.value)}
+                                  className="h-8 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                >
+                                  <option value="petrol">Petrol</option>
+                                  <option value="diesel">Diesel</option>
+                                  <option value="lpg">LPG</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {/* Fuel price inputs — always shown, only the matching type is used */}
+                            <div className="flex flex-wrap gap-3 items-end">
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">Petrol $/L</label>
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  value={localFuelPricePetrol}
+                                  onChange={e => setLocalFuelPricePetrol(e.target.value)}
+                                  className="h-8 text-sm w-20"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">Diesel $/L</label>
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  value={localFuelPriceDiesel}
+                                  onChange={e => setLocalFuelPriceDiesel(e.target.value)}
+                                  className="h-8 text-sm w-20"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">LPG $/L</label>
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  value={localFuelPriceLpg}
+                                  onChange={e => setLocalFuelPriceLpg(e.target.value)}
+                                  className="h-8 text-sm w-20"
+                                />
+                              </div>
+                            </div>
+                            {hasVehicles && (
+                              <p className="text-[11px] text-muted-foreground/60">
+                                Only the price matching your vehicle's fuel type is used in calculations.
+                              </p>
+                            )}
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Petrol $/L</label>
-                            <Input
-                              type="number" min="0" step="0.01"
-                              value={localFuelPricePetrol}
-                              onChange={e => setLocalFuelPricePetrol(e.target.value)}
-                              className="h-8 text-sm w-20"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Diesel $/L</label>
-                            <Input
-                              type="number" min="0" step="0.01"
-                              value={localFuelPriceDiesel}
-                              onChange={e => setLocalFuelPriceDiesel(e.target.value)}
-                              className="h-8 text-sm w-20"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">LPG $/L</label>
-                            <Input
-                              type="number" min="0" step="0.01"
-                              value={localFuelPriceLpg}
-                              onChange={e => setLocalFuelPriceLpg(e.target.value)}
-                              className="h-8 text-sm w-20"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground/60">
-                          Manual average — automatic fuel pricing coming soon
-                        </p>
-                      </div>
+                        );
+                      })()}
 
                       {/* Collapsible vehicle breakdown */}
                       {calc.vehicleFuelBreakdown.length > 0 && (

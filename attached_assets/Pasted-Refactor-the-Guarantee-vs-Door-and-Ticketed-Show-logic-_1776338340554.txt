@@ -1,0 +1,98 @@
+Refactor the "Guarantee vs Door" and Ticketed Show logic to properly support guarantee inputs and provide clear earnings previews.
+
+GOAL
+
+Turn deal structures into decision-making tools by showing realistic earning scenarios.
+
+-----------------------------------
+ADD GUARANTEE INPUT
+-----------------------------------
+
+When deal type is:
+"Guarantee vs Door"
+
+Add field:
+- Guarantee ($)
+
+This is required for this deal type.
+
+-----------------------------------
+CALCULATION LOGIC
+-----------------------------------
+
+For Guarantee vs Door:
+
+finalEarnings = max(guarantee, doorEarnings)
+
+Door earnings should consider:
+- ticket price
+- attendance
+- platform fees
+- split percentage
+- support costs
+- marketing costs
+
+-----------------------------------
+ADD EARNINGS PREVIEW SECTION
+-----------------------------------
+
+Display:
+
+1. Worst Case
+- low attendance (e.g. 25%)
+
+2. Expected Case
+- based on expected attendance input
+
+3. Best Case
+- full capacity
+
+-----------------------------------
+ATTENDANCE SCENARIOS
+-----------------------------------
+
+Show:
+
+- 25% attendance → $X
+- 50% attendance → $X
+- 75% attendance → $X
+- 100% attendance → $X
+
+-----------------------------------
+GUARANTEE BREAKPOINT
+-----------------------------------
+
+For Guarantee vs Door, calculate:
+
+"Door beats guarantee at X tickets sold"
+
+Display clearly.
+
+-----------------------------------
+UI IMPROVEMENTS
+-----------------------------------
+
+- Group all earnings preview into a box
+- Make it visually separate from inputs
+- Use clear labels:
+  - Worst Case
+  - Expected
+  - Best Case
+
+-----------------------------------
+VALIDATION
+-----------------------------------
+
+- Guarantee must be entered for Guarantee vs Door
+- Split % must be valid
+- Ticket price must be > 0 for ticketed deals
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Guarantee vs Door has a working guarantee input
+- Earnings preview updates live
+- Users can clearly see best/worst outcomes
+- Ticketed deals are easier to understand
+- Feature helps decision-making, not just data entry
