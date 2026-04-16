@@ -140,8 +140,14 @@ export interface GigTrailResultData {
   minTakeHomePerPerson: number;
   expectedTicketsSold: number;
   grossRevenue: number;
+  /** Total booking platform fees deducted from gross (optional — absent on old snapshots) */
+  bookingFeeTotal?: number;
+  /** Net door revenue after booking fees, before split (optional — absent on old snapshots) */
+  netTicketRevenue?: number;
   breakEvenTickets: number;
   breakEvenCapacity: number;
+  /** Tickets needed to cover show-specific costs only (marketing + support act) */
+  showCostBreakEvenTickets?: number;
   distanceKm: number;
   driveTimeMinutes: number | null;
   fuelUsedLitres: number;
@@ -226,7 +232,8 @@ export default function RunResults() {
     netProfit, totalIncome, totalCost, fuelCost,
     takeHomePerPerson, minTakeHomePerPerson,
     distanceKm, driveTimeMinutes, fuelUsedLitres,
-    breakEvenTickets, breakEvenCapacity,
+    breakEvenTickets, breakEvenCapacity, showCostBreakEvenTickets,
+    bookingFeeTotal, netTicketRevenue,
     accomSingleRooms, accomDoubleRooms,
     status, formData, profilePeopleCount,
     vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice,
@@ -248,6 +255,9 @@ export default function RunResults() {
   const foodCost = Number(formData.foodCost) || 0;
   const marketingCost = Number(formData.marketingCost) || 0;
   const extraCosts = Number(formData.extraCosts) || 0;
+  const supportActCostDisplay = Number(formData.supportActCost) || 0;
+  const bookingFeeTotalDisplay = bookingFeeTotal ?? 0;
+  const netTicketRevenueDisplay = netTicketRevenue ?? (result.grossRevenue - bookingFeeTotalDisplay);
   const accomNights = Number(formData.accommodationNights) || 0;
   const accomCostFromForm = (() => {
     if (!formData.accommodationRequired) return 0;
@@ -472,7 +482,6 @@ export default function RunResults() {
             const splitPct = Number(formData.splitPct) || 0;
             const guarantee = Number(formData.guarantee) || 0;
             const grossRevenue = result.grossRevenue;
-            const splitAmount = grossRevenue * (splitPct / 100);
             const ticketSub =
               result.expectedTicketsSold > 0
                 ? `${result.expectedTicketsSold} tickets × $${formData.ticketPrice}`
@@ -494,17 +503,37 @@ export default function RunResults() {
             if (showType === "Ticketed Show") {
               if (dt === "100% door") {
                 return (
-                  <Row
-                    label="100% of door"
-                    value={`$${fmt(showIncome)}`}
-                    icon={Music}
-                    sub={ticketSub}
-                    valueClass="text-green-700"
-                  />
+                  <>
+                    <Row
+                      label="Gross door revenue"
+                      value={`$${fmt(grossRevenue)}`}
+                      icon={Ticket}
+                      sub={ticketSub}
+                      muted
+                    />
+                    {bookingFeeTotalDisplay > 0 && (
+                      <Row
+                        label="Less: platform fees"
+                        value={`−$${fmt(bookingFeeTotalDisplay)}`}
+                        icon={Ticket}
+                        sub={`$${fmt(Number(formData.bookingFeePerTicket) || 0)} × ${result.expectedTicketsSold} tickets`}
+                        muted
+                        valueClass="text-red-600"
+                      />
+                    )}
+                    <Row
+                      label={bookingFeeTotalDisplay > 0 ? "Net door (your 100%)" : "100% of door"}
+                      value={`$${fmt(showIncome)}`}
+                      icon={Music}
+                      valueClass="text-green-700"
+                    />
+                  </>
                 );
               }
 
               if (dt === "percentage split") {
+                const netDoor = bookingFeeTotalDisplay > 0 ? netTicketRevenueDisplay : grossRevenue;
+                const splitAmount = netDoor * (splitPct / 100);
                 return (
                   <>
                     <Row
@@ -514,6 +543,24 @@ export default function RunResults() {
                       sub={ticketSub}
                       muted
                     />
+                    {bookingFeeTotalDisplay > 0 && (
+                      <Row
+                        label="Less: platform fees"
+                        value={`−$${fmt(bookingFeeTotalDisplay)}`}
+                        icon={Ticket}
+                        sub={`$${fmt(Number(formData.bookingFeePerTicket) || 0)} per ticket`}
+                        muted
+                        valueClass="text-red-600"
+                      />
+                    )}
+                    {bookingFeeTotalDisplay > 0 && (
+                      <Row
+                        label="Net door revenue"
+                        value={`$${fmt(netDoor)}`}
+                        icon={Ticket}
+                        muted
+                      />
+                    )}
                     <Row
                       label={`${splitPct}% artist share`}
                       value={`$${fmt(showIncome)}`}
@@ -525,6 +572,8 @@ export default function RunResults() {
               }
 
               if (dt === "guarantee vs door") {
+                const netDoor = bookingFeeTotalDisplay > 0 ? netTicketRevenueDisplay : grossRevenue;
+                const splitAmount = netDoor * (splitPct / 100);
                 const splitWins = splitAmount > guarantee;
                 const isTie = splitAmount === guarantee;
                 const badge = isTie
@@ -541,6 +590,24 @@ export default function RunResults() {
                       sub={ticketSub}
                       muted
                     />
+                    {bookingFeeTotalDisplay > 0 && (
+                      <Row
+                        label="Less: platform fees"
+                        value={`−$${fmt(bookingFeeTotalDisplay)}`}
+                        icon={Ticket}
+                        sub={`$${fmt(Number(formData.bookingFeePerTicket) || 0)} per ticket`}
+                        muted
+                        valueClass="text-red-600"
+                      />
+                    )}
+                    {bookingFeeTotalDisplay > 0 && (
+                      <Row
+                        label="Net door revenue"
+                        value={`$${fmt(netDoor)}`}
+                        icon={Ticket}
+                        muted
+                      />
+                    )}
                     <Row
                       label={`${splitPct}% split amount`}
                       value={`$${fmt(splitAmount)}`}
@@ -697,6 +764,11 @@ export default function RunResults() {
           {/* Marketing */}
           {marketingCost > 0 && (
             <Row label="Marketing" value={`−$${fmt(marketingCost)}`} icon={Megaphone} valueClass="text-muted-foreground" />
+          )}
+
+          {/* Support act */}
+          {supportActCostDisplay > 0 && (
+            <Row label="Support act" value={`−$${fmt(supportActCostDisplay)}`} icon={Music} valueClass="text-muted-foreground" />
           )}
 
           {/* Extra costs */}
@@ -867,11 +939,24 @@ export default function RunResults() {
       {isTicketed && breakEvenTickets > 0 && (
         <Section title="Break-Even" defaultOpen>
           <div className="space-y-4 mt-2">
-            {/* Key numbers */}
+            {/* Show-cost recovery threshold (if there are show-specific costs) */}
+            {showCostBreakEvenTickets != null && showCostBreakEvenTickets > 0 && showCostBreakEvenTickets < breakEvenTickets && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Show cost recovery</p>
+                <p className="text-2xl font-bold text-amber-700">{showCostBreakEvenTickets} <span className="text-sm font-normal">tickets</span></p>
+                <p className="text-xs text-amber-700 mt-0.5">to cover your show-night costs (marketing + support act)</p>
+              </div>
+            )}
+
+            {/* Full break-even (all costs including travel) */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg bg-muted/40 px-4 py-3 text-center">
                 <p className="text-2xl font-bold text-foreground">{breakEvenTickets}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">tickets to break even</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {showCostBreakEvenTickets != null && showCostBreakEvenTickets > 0 && showCostBreakEvenTickets < breakEvenTickets
+                    ? "tickets to cover all costs"
+                    : "tickets to break even"}
+                </p>
               </div>
               <div className="rounded-lg bg-muted/40 px-4 py-3 text-center">
                 <p className="text-2xl font-bold text-foreground">{breakEvenCapacity.toFixed(0)}%</p>
@@ -880,60 +965,94 @@ export default function RunResults() {
             </div>
 
             {/* Visual bar */}
-            {(formData.capacity as number) > 0 && (
-              <div className="space-y-2">
-                <div className="relative h-5 rounded-full bg-muted/50 overflow-hidden">
-                  {/* Break-even zone */}
-                  <div
-                    className="absolute inset-y-0 left-0 bg-red-200"
-                    style={{ width: `${Math.min(breakEvenCapacity, 100)}%` }}
-                  />
-                  {/* Expected attendance zone */}
-                  {(formData.expectedAttendancePct as number) > 0 && (
+            {(formData.capacity as number) > 0 && (() => {
+              const cap = formData.capacity as number;
+              const expectedPct = formData.expectedAttendancePct as number;
+              const showCostPct = showCostBreakEvenTickets != null && cap > 0
+                ? (showCostBreakEvenTickets / cap) * 100
+                : null;
+              return (
+                <div className="space-y-2">
+                  <div className="relative h-5 rounded-full bg-muted/50 overflow-hidden">
+                    {/* Show-cost recovery zone (amber) */}
+                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
+                      <div
+                        className="absolute inset-y-0 left-0 bg-amber-200"
+                        style={{ width: `${Math.min(showCostPct, 100)}%` }}
+                      />
+                    )}
+                    {/* Break-even zone (red, starts after show-cost if applicable) */}
                     <div
-                      className="absolute inset-y-0 left-0 bg-green-200"
+                      className="absolute inset-y-0 bg-red-200"
                       style={{
-                        left: `${Math.min(breakEvenCapacity, 100)}%`,
-                        width: `${Math.max(0, Math.min((formData.expectedAttendancePct as number) - breakEvenCapacity, 100 - breakEvenCapacity))}%`,
+                        left: showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity
+                          ? `${Math.min(showCostPct, 100)}%`
+                          : "0%",
+                        width: showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity
+                          ? `${Math.min(breakEvenCapacity - showCostPct, 100 - showCostPct)}%`
+                          : `${Math.min(breakEvenCapacity, 100)}%`,
                       }}
                     />
-                  )}
-                  {/* Break-even marker */}
-                  <div
-                    className="absolute inset-y-0 w-0.5 bg-red-500"
-                    style={{ left: `${Math.min(breakEvenCapacity, 100)}%` }}
-                  />
-                  {/* Expected attendance marker */}
-                  {(formData.expectedAttendancePct as number) > 0 && (
+                    {/* Profit zone (green, from break-even to expected) */}
+                    {expectedPct > 0 && (
+                      <div
+                        className="absolute inset-y-0 bg-green-200"
+                        style={{
+                          left: `${Math.min(breakEvenCapacity, 100)}%`,
+                          width: `${Math.max(0, Math.min(expectedPct - breakEvenCapacity, 100 - breakEvenCapacity))}%`,
+                        }}
+                      />
+                    )}
+                    {/* Show-cost marker (amber) */}
+                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
+                      <div
+                        className="absolute inset-y-0 w-0.5 bg-amber-500"
+                        style={{ left: `${Math.min(showCostPct, 100)}%` }}
+                      />
+                    )}
+                    {/* Break-even marker (red) */}
                     <div
-                      className="absolute inset-y-0 w-0.5 bg-green-600"
-                      style={{ left: `${Math.min(formData.expectedAttendancePct as number, 100)}%` }}
+                      className="absolute inset-y-0 w-0.5 bg-red-500"
+                      style={{ left: `${Math.min(breakEvenCapacity, 100)}%` }}
                     />
-                  )}
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-sm bg-red-400" />
-                    Break-even at {breakEvenCapacity.toFixed(0)}%
-                  </span>
-                  {(formData.expectedAttendancePct as number) > 0 && (
+                    {/* Expected attendance marker (green) */}
+                    {expectedPct > 0 && (
+                      <div
+                        className="absolute inset-y-0 w-0.5 bg-green-600"
+                        style={{ left: `${Math.min(expectedPct, 100)}%` }}
+                      />
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" />
+                        Show costs at {showCostPct.toFixed(0)}%
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
-                      <span className="inline-block w-2 h-2 rounded-sm bg-green-500" />
-                      Expected {formData.expectedAttendancePct as number}%
+                      <span className="inline-block w-2 h-2 rounded-sm bg-red-400" />
+                      Full break-even at {breakEvenCapacity.toFixed(0)}%
                     </span>
+                    {expectedPct > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-sm bg-green-500" />
+                        Expected {expectedPct}%
+                      </span>
+                    )}
+                  </div>
+                  {breakEvenCapacity > (formData.expectedAttendancePct as number) ? (
+                    <p className="text-xs text-red-600">
+                      Break-even requires more than your expected attendance — you'll likely fall short on costs.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-700">
+                      Your expected attendance is above break-even — you should cover all costs.
+                    </p>
                   )}
                 </div>
-                {breakEvenCapacity > (formData.expectedAttendancePct as number) ? (
-                  <p className="text-xs text-red-600">
-                    Break-even requires more than your expected attendance — you'll likely fall short.
-                  </p>
-                ) : (
-                  <p className="text-xs text-green-700">
-                    Your expected attendance is above break-even — you should cover costs.
-                  </p>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
         </Section>
       )}

@@ -31,6 +31,8 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
     guarantee: r.guarantee != null ? Number(r.guarantee) : null,
     merchEstimate: r.merchEstimate != null ? Number(r.merchEstimate) : null,
     marketingCost: r.marketingCost != null ? Number(r.marketingCost) : null,
+    bookingFeePerTicket: r.bookingFeePerTicket != null ? Number(r.bookingFeePerTicket) : null,
+    supportActCost: r.supportActCost != null ? Number(r.supportActCost) : null,
     accommodationNights: r.accommodationNights != null ? Number(r.accommodationNights) : null,
     accommodationCost: r.accommodationCost != null ? Number(r.accommodationCost) : null,
     foodCost: r.foodCost != null ? Number(r.foodCost) : null,
@@ -50,7 +52,7 @@ function toDbRun(data: Record<string, unknown>) {
   const result: Record<string, unknown> = {};
   const numericFields = new Set([
     'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
-    'splitPct', 'guarantee', 'merchEstimate', 'marketingCost',
+    'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'bookingFeePerTicket', 'supportActCost',
     'accommodationNights', 'accommodationCost',
     'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit',
     'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',

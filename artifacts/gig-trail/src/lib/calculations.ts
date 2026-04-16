@@ -29,7 +29,7 @@
  *   MINOR — new derived outputs added; existing outputs unchanged
  *   PATCH — bug fix that corrects previously wrong outputs
  */
-export const CALC_ENGINE_VERSION = "1.0.0";
+export const CALC_ENGINE_VERSION = "1.1.0";
 
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, SYSTEM_FALLBACK_FUEL_PRICE } from "./gig-constants";
 import { calculateMemberEarnings, type MemberEarningsSummary } from "./member-utils";
@@ -58,17 +58,30 @@ export interface ShowIncomeInput {
   dealType?: string | null; // "100% door" | "percentage split" | "guarantee vs door"
   splitPct?: number | null;
   guarantee?: number | null;
+  /** Per-ticket platform/booking fee deducted from gross before any split (e.g. Humanitix, Eventbrite) */
+  bookingFeePerTicket?: number | null;
 }
 
 export interface ShowIncomeResult {
   showIncome: number;
   expectedTicketsSold: number;
+  /** Total ticket revenue before booking fees and splits (tickets × price) */
   grossRevenue: number;
+  /** Total booking platform fees deducted from gross */
+  bookingFeeTotal: number;
+  /** Revenue available for splitting after booking fees: grossRevenue − bookingFeeTotal */
+  netTicketRevenue: number;
 }
 
 /**
  * Calculate show income from any deal structure.
  * This is the single source of truth — no page should reimplement this logic.
+ *
+ * Booking fee flow:
+ *   grossRevenue      = tickets × ticketPrice
+ *   bookingFeeTotal   = tickets × bookingFeePerTicket
+ *   netTicketRevenue  = grossRevenue − bookingFeeTotal
+ *   artist share      = based on netTicketRevenue (split/door deal applied to net)
  */
 export function calculateShowIncome(input: ShowIncomeInput): ShowIncomeResult {
   const {
@@ -80,10 +93,11 @@ export function calculateShowIncome(input: ShowIncomeInput): ShowIncomeResult {
     dealType,
     splitPct,
     guarantee,
+    bookingFeePerTicket,
   } = input;
 
   if (showType === "Flat Fee") {
-    return { showIncome: n(fee), expectedTicketsSold: 0, grossRevenue: 0 };
+    return { showIncome: n(fee), expectedTicketsSold: 0, grossRevenue: 0, bookingFeeTotal: 0, netTicketRevenue: 0 };
   }
 
   if (showType === "Ticketed Show" || showType === "Hybrid") {
@@ -92,25 +106,28 @@ export function calculateShowIncome(input: ShowIncomeInput): ShowIncomeResult {
     const price = n(ticketPrice);
     const split = n(splitPct);
     const guar = n(guarantee);
+    const feePerTicket = n(bookingFeePerTicket);
 
     const expectedTicketsSold = Math.floor((cap * pct) / 100);
     const grossRevenue = expectedTicketsSold * price;
+    const bookingFeeTotal = expectedTicketsSold * feePerTicket;
+    const netTicketRevenue = Math.max(0, grossRevenue - bookingFeeTotal);
 
     let doorIncome = 0;
     if (dealType === "100% door") {
-      doorIncome = grossRevenue;
+      doorIncome = netTicketRevenue;
     } else if (dealType === "percentage split") {
-      doorIncome = grossRevenue * (split / 100);
+      doorIncome = netTicketRevenue * (split / 100);
     } else if (dealType === "guarantee vs door") {
-      doorIncome = Math.max(guar, grossRevenue * (split / 100));
+      doorIncome = Math.max(guar, netTicketRevenue * (split / 100));
     }
 
     const showIncome = showType === "Hybrid" ? guar + doorIncome : doorIncome;
 
-    return { showIncome, expectedTicketsSold, grossRevenue };
+    return { showIncome, expectedTicketsSold, grossRevenue, bookingFeeTotal, netTicketRevenue };
   }
 
-  return { showIncome: 0, expectedTicketsSold: 0, grossRevenue: 0 };
+  return { showIncome: 0, expectedTicketsSold: 0, grossRevenue: 0, bookingFeeTotal: 0, netTicketRevenue: 0 };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -236,6 +253,8 @@ export interface TicketBreakEvenInput {
   totalCost: number;
   /** Merch and guarantee are deducted from costs before calculating ticket need */
   merchEstimate?: number | null;
+  /** Per-ticket platform fee — reduces artist's net per ticket sold */
+  bookingFeePerTicket?: number | null;
 }
 
 export interface TicketBreakEvenResult {
@@ -246,9 +265,9 @@ export interface TicketBreakEvenResult {
   impossible: boolean;
 }
 
-/** Tickets needed for a single ticketed show to break even. */
+/** Tickets needed for a single ticketed show to break even on ALL costs. */
 export function calculateTicketBreakEven(input: TicketBreakEvenInput): TicketBreakEvenResult {
-  const { showType, dealType, ticketPrice, splitPct, guarantee, capacity, totalCost, merchEstimate } = input;
+  const { showType, dealType, ticketPrice, splitPct, guarantee, capacity, totalCost, merchEstimate, bookingFeePerTicket } = input;
 
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
   if (!isTicketed || n(ticketPrice) <= 0) {
@@ -256,6 +275,8 @@ export function calculateTicketBreakEven(input: TicketBreakEvenInput): TicketBre
   }
 
   const price = n(ticketPrice);
+  const feePerTicket = n(bookingFeePerTicket);
+  const netPricePerTicket = Math.max(0, price - feePerTicket);
   const split = n(splitPct);
   const guar = showType === "Hybrid" ? n(guarantee) : 0;
   const merch = n(merchEstimate);
@@ -265,12 +286,17 @@ export function calculateTicketBreakEven(input: TicketBreakEvenInput): TicketBre
 
   let breakEvenTickets: number;
   if (dealType === "100% door") {
-    breakEvenTickets = remainingCosts > 0 ? Math.ceil(remainingCosts / price) : 0;
+    // Artist gets full net price per ticket
+    breakEvenTickets = netPricePerTicket > 0 && remainingCosts > 0
+      ? Math.ceil(remainingCosts / netPricePerTicket)
+      : 0;
   } else {
-    // percentage split or guarantee vs door — artist only receives their share per ticket
+    // percentage split or guarantee vs door — artist only receives their share of net per ticket
     const effectiveSplit = split > 0 ? split / 100 : 1.0;
-    const netPerTicket = price * effectiveSplit;
-    breakEvenTickets = netPerTicket > 0 ? Math.ceil(remainingCosts / netPerTicket) : 0;
+    const artistNetPerTicket = netPricePerTicket * effectiveSplit;
+    breakEvenTickets = artistNetPerTicket > 0 && remainingCosts > 0
+      ? Math.ceil(remainingCosts / artistNetPerTicket)
+      : 0;
   }
 
   const cap = n(capacity);
@@ -278,6 +304,39 @@ export function calculateTicketBreakEven(input: TicketBreakEvenInput): TicketBre
   const impossible = cap > 0 && breakEvenTickets > cap;
 
   return { breakEvenTickets, breakEvenCapacityPct, impossible };
+}
+
+/**
+ * Tickets needed just to cover show-specific costs (marketing + support act).
+ * Answers: "How many tickets until this show stops costing me money on the night?"
+ * Does NOT include travel costs (fuel, accommodation, food).
+ */
+export function calculateShowCostBreakEven(input: {
+  showType: string;
+  dealType?: string | null;
+  ticketPrice: number;
+  splitPct?: number | null;
+  guarantee?: number | null;
+  bookingFeePerTicket?: number | null;
+  showOnlyCosts: number;
+}): number {
+  const { showType, dealType, ticketPrice, splitPct, guarantee, bookingFeePerTicket, showOnlyCosts } = input;
+  const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
+  if (!isTicketed || n(ticketPrice) <= 0 || showOnlyCosts <= 0) return 0;
+
+  const price = n(ticketPrice);
+  const feePerTicket = n(bookingFeePerTicket);
+  const netPricePerTicket = Math.max(0, price - feePerTicket);
+  const split = n(splitPct);
+  const guar = showType === "Hybrid" ? n(guarantee) : 0;
+  const costsAfterGuarantee = Math.max(0, showOnlyCosts - guar);
+
+  if (dealType === "100% door") {
+    return netPricePerTicket > 0 ? Math.ceil(costsAfterGuarantee / netPricePerTicket) : 0;
+  }
+  const effectiveSplit = split > 0 ? split / 100 : 1.0;
+  const artistNetPerTicket = netPricePerTicket * effectiveSplit;
+  return artistNetPerTicket > 0 ? Math.ceil(costsAfterGuarantee / artistNetPerTicket) : 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -346,6 +405,8 @@ export interface SingleShowInput {
   dealType?: string | null;
   splitPct?: number | null;
   guarantee?: number | null;
+  /** Per-ticket platform/booking fee (e.g. Humanitix, Eventbrite) */
+  bookingFeePerTicket?: number | null;
   // Merch & extra income
   merchEstimate?: number | null;
   // Route / fuel
@@ -362,6 +423,8 @@ export interface SingleShowInput {
   foodCost?: number | null;
   marketingCost?: number | null;
   extraCosts?: number | null;
+  /** Cost of the support act on the bill */
+  supportActCost?: number | null;
   // People
   peopleCount?: number | null;
   minTakeHomePerPerson?: number | null;
@@ -371,7 +434,12 @@ export interface SingleShowResult {
   // Income
   showIncome: number;
   expectedTicketsSold: number;
+  /** Gross: tickets × ticket price before any fees or splits */
   grossRevenue: number;
+  /** Total booking platform fees deducted from gross */
+  bookingFeeTotal: number;
+  /** Net door revenue after booking fees, before split */
+  netTicketRevenue: number;
   merch: number;
   totalIncome: number;
   // Costs
@@ -382,6 +450,7 @@ export interface SingleShowResult {
   foodCost: number;
   marketingCost: number;
   extraCosts: number;
+  supportActCost: number;
   totalCost: number;
   // Profit
   netProfit: number;
@@ -390,10 +459,12 @@ export interface SingleShowResult {
   // Viability
   status: ViabilityStatus;
   statusColor: string;
-  // Break-even
+  // Break-even (full — all costs)
   breakEvenTickets: number;
   breakEvenCapacityPct: number | null;
   breakEvenImpossible: boolean;
+  /** Tickets to cover show-specific costs only (marketing + support act, not travel) */
+  showCostBreakEvenTickets: number;
 }
 
 /**
@@ -402,7 +473,7 @@ export interface SingleShowResult {
  */
 export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
   // Income
-  const { showIncome, expectedTicketsSold, grossRevenue } = calculateShowIncome({
+  const { showIncome, expectedTicketsSold, grossRevenue, bookingFeeTotal, netTicketRevenue } = calculateShowIncome({
     showType: input.showType,
     fee: input.fee,
     capacity: input.capacity,
@@ -411,6 +482,7 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     dealType: input.dealType,
     splitPct: input.splitPct,
     guarantee: input.guarantee,
+    bookingFeePerTicket: input.bookingFeePerTicket,
   });
 
   const merch = n(input.merchEstimate);
@@ -436,9 +508,10 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
   const foodCost = n(input.foodCost);
   const marketingCost = n(input.marketingCost);
   const extraCosts = n(input.extraCosts);
+  const supportActCost = n(input.supportActCost);
 
   const totalCost =
-    fuel.fuelCost + accom.accommodationCost + foodCost + marketingCost + extraCosts;
+    fuel.fuelCost + accom.accommodationCost + foodCost + marketingCost + extraCosts + supportActCost;
   const netProfit = totalIncome - totalCost;
 
   // Per-person
@@ -454,7 +527,7 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     minTakeHomePerPerson,
   });
 
-  // Break-even
+  // Full break-even (all costs)
   const be = calculateTicketBreakEven({
     showType: input.showType,
     dealType: input.dealType,
@@ -464,12 +537,27 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     capacity: n(input.capacity),
     totalCost,
     merchEstimate: input.merchEstimate,
+    bookingFeePerTicket: input.bookingFeePerTicket,
+  });
+
+  // Show-cost break-even (just marketing + support act, not travel/accom/food)
+  const showOnlyCosts = marketingCost + supportActCost;
+  const showCostBreakEvenTickets = calculateShowCostBreakEven({
+    showType: input.showType,
+    dealType: input.dealType,
+    ticketPrice: n(input.ticketPrice),
+    splitPct: input.splitPct,
+    guarantee: input.guarantee,
+    bookingFeePerTicket: input.bookingFeePerTicket,
+    showOnlyCosts,
   });
 
   return {
     showIncome,
     expectedTicketsSold,
     grossRevenue,
+    bookingFeeTotal,
+    netTicketRevenue,
     merch,
     totalIncome,
     fuelCost: fuel.fuelCost,
@@ -479,6 +567,7 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     foodCost,
     marketingCost,
     extraCosts,
+    supportActCost,
     totalCost,
     netProfit,
     takeHomePerPerson,
@@ -488,6 +577,7 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     breakEvenTickets: be.breakEvenTickets,
     breakEvenCapacityPct: be.breakEvenCapacityPct,
     breakEvenImpossible: be.impossible,
+    showCostBreakEvenTickets,
   };
 }
 
@@ -504,16 +594,20 @@ export interface StopPreviewInput {
   dealType?: string | null;
   splitPct?: number | null;
   guarantee?: number | null;
+  bookingFeePerTicket?: number | null;
   merchEstimate?: number | null;
   accommodationCost?: number | null;
   marketingCost?: number | null;
   extraCosts?: number | null;
+  supportActCost?: number | null;
 }
 
 export interface StopPreviewResult {
   showIncome: number;
   expectedTicketsSold: number;
   grossRevenue: number;
+  bookingFeeTotal: number;
+  netTicketRevenue: number;
   merch: number;
   totalIncome: number;
   totalCost: number;
@@ -525,7 +619,7 @@ export interface StopPreviewResult {
  * No fuel — fuel is calculated at the tour level from stop coordinates.
  */
 export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult {
-  const { showIncome, expectedTicketsSold, grossRevenue } = calculateShowIncome({
+  const { showIncome, expectedTicketsSold, grossRevenue, bookingFeeTotal, netTicketRevenue } = calculateShowIncome({
     showType: input.showType,
     fee: input.fee,
     capacity: input.capacity,
@@ -534,6 +628,7 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
     dealType: input.dealType,
     splitPct: input.splitPct,
     guarantee: input.guarantee,
+    bookingFeePerTicket: input.bookingFeePerTicket,
   });
 
   const merch = n(input.merchEstimate);
@@ -542,12 +637,15 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
   const accommodationCost = n(input.accommodationCost);
   const marketingCost = n(input.marketingCost);
   const extraCosts = n(input.extraCosts);
-  const totalCost = accommodationCost + marketingCost + extraCosts;
+  const supportActCost = n(input.supportActCost);
+  const totalCost = accommodationCost + marketingCost + extraCosts + supportActCost;
 
   return {
     showIncome,
     expectedTicketsSold,
     grossRevenue,
+    bookingFeeTotal,
+    netTicketRevenue,
     merch,
     totalIncome,
     totalCost,

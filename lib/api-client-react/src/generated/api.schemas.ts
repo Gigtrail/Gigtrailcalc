@@ -236,6 +236,10 @@ export interface Run {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  /** @nullable */
+  bookingFeePerTicket?: number | null;
+  /** @nullable */
+  supportActCost?: number | null;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
@@ -331,6 +335,10 @@ export interface CreateRunBody {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  /** @nullable */
+  bookingFeePerTicket?: number | null;
+  /** @nullable */
+  supportActCost?: number | null;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;

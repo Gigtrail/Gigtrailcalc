@@ -34,6 +34,8 @@ export const runsTable = pgTable("runs", {
   guarantee: numeric("guarantee", { precision: 10, scale: 2 }),
   merchEstimate: numeric("merch_estimate", { precision: 10, scale: 2 }),
   marketingCost: numeric("marketing_cost", { precision: 10, scale: 2 }),
+  bookingFeePerTicket: numeric("booking_fee_per_ticket", { precision: 8, scale: 2 }),
+  supportActCost: numeric("support_act_cost", { precision: 10, scale: 2 }),
   accommodationRequired: boolean("accommodation_required").notNull().default(false),
   accommodationType: text("accommodation_type"),
   singleRooms: integer("single_rooms"),

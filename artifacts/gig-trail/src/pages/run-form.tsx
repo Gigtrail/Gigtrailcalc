@@ -69,6 +69,8 @@ const runSchema = z.object({
   dealType: z.string().optional().nullable(),
   splitPct: z.coerce.number().optional().nullable(),
   guarantee: z.coerce.number().optional().nullable(),
+  bookingFeePerTicket: z.coerce.number().optional().nullable(),
+  supportActCost: z.coerce.number().optional().nullable(),
   merchEstimate: z.coerce.number().optional().nullable(),
   marketingCost: z.coerce.number().optional().nullable(),
   accommodationRequired: z.boolean(),
@@ -165,6 +167,8 @@ export default function RunForm() {
       dealType: "100% door",
       splitPct: 70,
       guarantee: 0,
+      bookingFeePerTicket: 0,
+      supportActCost: 0,
       merchEstimate: 0,
       marketingCost: 0,
       accommodationRequired: false,
@@ -249,6 +253,8 @@ export default function RunForm() {
       dealType: vals.dealType,
       splitPct: vals.splitPct,
       guarantee: vals.guarantee,
+      bookingFeePerTicket: vals.bookingFeePerTicket,
+      supportActCost: vals.supportActCost,
       merchEstimate: vals.merchEstimate,
       distanceKm,
       vehicleConsumptionLPer100: vehicleConsumption,
@@ -281,8 +287,11 @@ export default function RunForm() {
       profitPerMember: result.profitPerMember,
       expectedTicketsSold: result.expectedTicketsSold,
       grossRevenue: result.grossRevenue,
+      bookingFeeTotal: result.bookingFeeTotal,
+      netTicketRevenue: result.netTicketRevenue,
       breakEvenTickets: result.breakEvenTickets,
       breakEvenCapacity: result.breakEvenCapacityPct ?? 0,
+      showCostBreakEvenTickets: result.showCostBreakEvenTickets,
       accommodationCost: result.accommodationCost,
       distanceKm,
       driveTimeMinutes,
@@ -486,6 +495,8 @@ export default function RunForm() {
             expectedAttendancePct: toNumOrNull(vals.expectedAttendancePct),
             splitPct: toNumOrNull(vals.splitPct),
             guarantee: toNumOrNull(vals.guarantee),
+            bookingFeePerTicket: toNumOrNull(vals.bookingFeePerTicket),
+            supportActCost: toNumOrNull(vals.supportActCost),
             merchEstimate: toNumOrNull(vals.merchEstimate),
             accommodationRequired: accomRequired,
             singleRooms: accomSingleRooms,
@@ -512,8 +523,11 @@ export default function RunForm() {
             minTakeHomePerPerson: snapshotFields.minTakeHomePerPerson,
             breakEvenTickets: computed.breakEvenTickets,
             breakEvenCapacity: computed.breakEvenCapacity,
+            showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
             expectedTicketsSold: computed.expectedTicketsSold,
             grossRevenue: computed.grossRevenue,
+            bookingFeeTotal: computed.bookingFeeTotal,
+            netTicketRevenue: computed.netTicketRevenue,
           },
 
           // ── Derived display values ───────────────────────────────────────
@@ -558,6 +572,8 @@ export default function RunForm() {
           expectedAttendancePct: toNum(vals.expectedAttendancePct),
           splitPct: toNum(vals.splitPct),
           guarantee: toNum(vals.guarantee),
+          bookingFeePerTicket: toNum(vals.bookingFeePerTicket),
+          supportActCost: toNum(vals.supportActCost),
           merchEstimate: toNum(vals.merchEstimate),
           distanceKm: toNum(vals.distanceKm),
           fuelEfficiency: Number(selectedVehicle?.avgConsumption ?? profile?.fuelConsumption ?? 11.5),
@@ -692,6 +708,8 @@ export default function RunForm() {
         dealType: run.dealType,
         splitPct: run.splitPct,
         guarantee: run.guarantee,
+        bookingFeePerTicket: run.bookingFeePerTicket ?? 0,
+        supportActCost: run.supportActCost ?? 0,
         merchEstimate: run.merchEstimate,
         marketingCost: run.marketingCost,
         accommodationRequired: run.accommodationRequired ?? false,
@@ -1344,6 +1362,37 @@ export default function RunForm() {
                             )}
                           />
                         )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="bookingFeePerTicket"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Platform Fee per Ticket ($)</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
+                              </FormControl>
+                              <p className="text-xs text-muted-foreground">Fee charged by the ticketing platform (e.g. Humanitix, Eventbrite) — deducted from gross before your split</p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="supportActCost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Support Act Cost ($)</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" {...field} value={field.value || 0} />
+                              </FormControl>
+                              <p className="text-xs text-muted-foreground">What you're paying the support act on the bill</p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       </div>
                     </div>
                   )}

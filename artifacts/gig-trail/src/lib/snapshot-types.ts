@@ -81,6 +81,8 @@ export interface SnapFormInputs {
   expectedAttendancePct?: number | null;
   splitPct?: number | null;
   guarantee?: number | null;
+  bookingFeePerTicket?: number | null;
+  supportActCost?: number | null;
   merchEstimate?: number | null;
   accommodationRequired: boolean;
   singleRooms: number;
@@ -113,6 +115,12 @@ export interface SnapOutputs {
   breakEvenCapacity: number;
   expectedTicketsSold: number;
   grossRevenue: number;
+  /** Total booking platform fees (bookingFeePerTicket × expectedTicketsSold) */
+  bookingFeeTotal?: number;
+  /** Net door revenue after booking fees, before artist's split */
+  netTicketRevenue?: number;
+  /** Tickets needed to cover just show-specific costs (marketing + support act) */
+  showCostBreakEvenTickets?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,6 +197,12 @@ export interface CalcSnapshot {
   grossRevenue: number;
   breakEvenTickets: number;
   breakEvenCapacity: number;
+  /** Optional — present on snapshots saved with engine ≥ 1.1.0 */
+  showCostBreakEvenTickets?: number;
+  /** Optional — present on snapshots saved with engine ≥ 1.1.0 */
+  bookingFeeTotal?: number;
+  /** Optional — present on snapshots saved with engine ≥ 1.1.0 */
+  netTicketRevenue?: number;
   fuelUsedLitres: number;
   formData: Record<string, unknown>;
 }
