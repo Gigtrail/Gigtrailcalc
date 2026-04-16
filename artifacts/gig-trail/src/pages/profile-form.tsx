@@ -485,28 +485,21 @@ export default function ProfileForm() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Accommodation */}
-          <Card className="border-border/50 bg-card/50">
-            <CardHeader>
-              <CardTitle>Accommodation</CardTitle>
-              <CardDescription>Managed via Act Setup.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+              {/* Accommodation summary — inline instead of a separate card */}
+              <div className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/20 px-4 py-2.5 mt-2">
                 <div className="flex items-center gap-2 text-sm">
                   <BedDouble className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground font-medium">Accommodation:</span>
                   {accommodationRequired ? (
-                    <span className="text-foreground font-medium">
+                    <span className="text-foreground text-xs font-medium">
                       {[
                         singleRoomsDefaultWatch > 0 && `${singleRoomsDefaultWatch} single`,
                         doubleRoomsDefaultWatch > 0 && `${doubleRoomsDefaultWatch} double`,
                       ].filter(Boolean).join(" + ") || "Required"}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">Not required</span>
+                    <span className="text-muted-foreground text-xs">Not required</span>
                   )}
                 </div>
                 <Button
@@ -681,14 +674,72 @@ export default function ProfileForm() {
                 </div>
               )}
 
-              {isPro && canUseAdvancedDriving(plan as Plan) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            </CardContent>
+          </Card>
+
+          {/* Touring Defaults */}
+          <Card className="border-border/50 bg-card/50">
+            <CardHeader>
+              <CardTitle>Touring Defaults</CardTitle>
+              <CardDescription>
+                These fill in your calculations automatically. You can change any of them for an individual show.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="minTakeHomePerPerson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Min Take-Home Per Person ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="e.g. 150"
+                          {...field}
+                          value={field.value ?? 0}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Your target profit floor per person, per show. The verdict banner turns red when this isn't met. You can change it per show.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="avgFoodPerDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Food & Drink Per Person / Day ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="e.g. 40"
+                          {...field}
+                          value={field.value ?? 0}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Multiplied by your headcount to pre-fill food costs on every show. You can change it per show.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {isPro && canUseAdvancedDriving(plan as Plan) && (
                   <FormField
                     control={form.control}
                     name="maxDriveHoursPerDay"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Max drive hours per day</FormLabel>
+                        <FormLabel>Max Drive Hours Per Day</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -706,8 +757,8 @@ export default function ProfileForm() {
                       </FormItem>
                     )}
                   />
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
 

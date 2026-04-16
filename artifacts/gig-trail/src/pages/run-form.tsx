@@ -478,7 +478,7 @@ export default function RunForm() {
             distanceKm: toNum(vals.distanceKm),
             returnTrip: vals.returnTrip ?? false,
             fuelPrice: toNum(vals.fuelPrice),
-            fuelEfficiency: toNum(vals.fuelEfficiency),
+            fuelEfficiency: Number(selectedVehicle?.avgConsumption ?? profile?.fuelConsumption ?? 11.5),
             fee: toNumOrNull(vals.fee),
             capacity: toNumOrNull(vals.capacity),
             ticketPrice: toNumOrNull(vals.ticketPrice),
@@ -559,7 +559,7 @@ export default function RunForm() {
           guarantee: toNum(vals.guarantee),
           merchEstimate: toNum(vals.merchEstimate),
           distanceKm: toNum(vals.distanceKm),
-          fuelEfficiency: toNum(vals.fuelEfficiency),
+          fuelEfficiency: Number(selectedVehicle?.avgConsumption ?? profile?.fuelConsumption ?? 11.5),
           fuelPrice: toNum(vals.fuelPrice),
           accommodationNights: toNum(vals.accommodationNights),
           singleRooms: toNum(vals.singleRooms),
@@ -616,6 +616,10 @@ export default function RunForm() {
       if (!currentFee || currentFee === 0) {
         form.setValue("fee", profile.expectedGigFee);
       }
+    }
+    // Apply profile's default fuel price when one has been set
+    if (profile.defaultFuelPrice != null && Number(profile.defaultFuelPrice) > 0) {
+      form.setValue("fuelPrice", Number(profile.defaultFuelPrice));
     }
     if (!isPro && profile.homeBase) {
       form.setValue("origin", profile.homeBase);
@@ -1179,6 +1183,9 @@ export default function RunForm() {
                           <FormControl>
                             <Input type="number" min="0" step="0.01" {...field} />
                           </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Set a default in your profile to pre-fill this automatically.
+                          </p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1225,6 +1232,9 @@ export default function RunForm() {
                           <FormControl>
                             <Input type="number" min="0" {...field} value={field.value || 0} />
                           </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            Pre-filled from your profile default. Change it here for this show only.
+                          </p>
                           <FormMessage />
                         </FormItem>
                       )}
