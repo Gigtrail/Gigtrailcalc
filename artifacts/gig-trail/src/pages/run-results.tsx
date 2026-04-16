@@ -444,30 +444,141 @@ export default function RunResults() {
         defaultOpen
       >
         <div className="divide-y divide-border/30 mt-1">
-          {/* Show income */}
-          <Row
-            label={dealLabel}
-            value={`$${fmt(showIncome)}`}
-            icon={Music}
-            sub={
-              isTicketed && result.expectedTicketsSold > 0
-                ? `${result.expectedTicketsSold} tickets × $${formData.ticketPrice} expected`
-                : showType === "Ticketed Show" || showType === "Hybrid"
+          {/* Deal-type income breakdown */}
+          {(() => {
+            const dt = formData.dealType as string;
+            const splitPct = Number(formData.splitPct) || 0;
+            const guarantee = Number(formData.guarantee) || 0;
+            const grossRevenue = result.grossRevenue;
+            const splitAmount = grossRevenue * (splitPct / 100);
+            const ticketSub =
+              result.expectedTicketsSold > 0
+                ? `${result.expectedTicketsSold} tickets × $${formData.ticketPrice}`
+                : isTicketed
                 ? `Based on ${formData.expectedAttendancePct}% of ${formData.capacity} cap`
-                : undefined
-            }
-            valueClass="text-green-700"
-          />
+                : undefined;
 
-          {/* Gross door revenue (percentage split context) */}
-          {isTicketed && result.grossRevenue > 0 && showIncome !== result.grossRevenue && (
-            <Row
-              label="Gross door (before split)"
-              value={`$${fmt(result.grossRevenue)}`}
-              icon={Ticket}
-              muted
-            />
-          )}
+            if (showType === "Flat Fee") {
+              return (
+                <Row
+                  label="Guaranteed fee"
+                  value={`$${fmt(showIncome)}`}
+                  icon={Music}
+                  valueClass="text-green-700"
+                />
+              );
+            }
+
+            if (showType === "Ticketed Show") {
+              if (dt === "100% door") {
+                return (
+                  <Row
+                    label="100% of door"
+                    value={`$${fmt(showIncome)}`}
+                    icon={Music}
+                    sub={ticketSub}
+                    valueClass="text-green-700"
+                  />
+                );
+              }
+
+              if (dt === "percentage split") {
+                return (
+                  <>
+                    <Row
+                      label="Gross door revenue"
+                      value={`$${fmt(grossRevenue)}`}
+                      icon={Ticket}
+                      sub={ticketSub}
+                      muted
+                    />
+                    <Row
+                      label={`${splitPct}% artist share`}
+                      value={`$${fmt(showIncome)}`}
+                      icon={Music}
+                      valueClass="text-green-700"
+                    />
+                  </>
+                );
+              }
+
+              if (dt === "guarantee vs door") {
+                const splitWins = splitAmount > guarantee;
+                const isTie = splitAmount === guarantee;
+                const badge = isTie
+                  ? { label: "Tie", classes: "bg-gray-100 text-gray-600" }
+                  : splitWins
+                  ? { label: "Split wins", classes: "bg-green-100 text-green-700" }
+                  : { label: "Guarantee wins", classes: "bg-blue-100 text-blue-700" };
+                return (
+                  <>
+                    <Row
+                      label="Gross door revenue"
+                      value={`$${fmt(grossRevenue)}`}
+                      icon={Ticket}
+                      sub={ticketSub}
+                      muted
+                    />
+                    <Row
+                      label={`${splitPct}% split amount`}
+                      value={`$${fmt(splitAmount)}`}
+                      icon={Music}
+                      muted
+                    />
+                    <Row
+                      label="Guarantee floor"
+                      value={`$${fmt(guarantee)}`}
+                      icon={Music}
+                      muted
+                    />
+                    <div className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Music className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground">Artist earns</span>
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${badge.classes}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums text-green-700 shrink-0">
+                        ${fmt(showIncome)}
+                      </span>
+                    </div>
+                  </>
+                );
+              }
+            }
+
+            if (showType === "Hybrid") {
+              const doorIncome = showIncome - guarantee;
+              return (
+                <>
+                  <Row
+                    label="Base guarantee"
+                    value={`$${fmt(guarantee)}`}
+                    icon={Music}
+                    valueClass="text-green-700"
+                  />
+                  <Row
+                    label="Door income"
+                    value={`$${fmt(doorIncome)}`}
+                    icon={Ticket}
+                    sub={ticketSub}
+                    valueClass="text-green-700"
+                  />
+                </>
+              );
+            }
+
+            return (
+              <Row
+                label={dealLabel}
+                value={`$${fmt(showIncome)}`}
+                icon={Music}
+                sub={ticketSub}
+                valueClass="text-green-700"
+              />
+            );
+          })()}
 
           {/* Merch */}
           {merch > 0 && (
