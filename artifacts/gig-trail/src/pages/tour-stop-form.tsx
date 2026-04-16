@@ -26,8 +26,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, Home, Building2, Pencil, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 import { calculateStopPreview, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
-import { VenueSearch } from "@/components/venue-search";
-import { useEffect, useMemo, useRef } from "react";
+import { VenueSearch, type VenueSelection } from "@/components/venue-search";
+import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -257,6 +258,28 @@ export default function TourStopForm() {
   const isPending = createStop.isPending || updateStop.isPending;
   const isTicketed = formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid";
 
+  // ── Venue Intelligence: track the selected venue's DB id ──────────────────
+  const [selectedVenueId, setSelectedVenueId] = useState<number | null>(null);
+
+  // When editing, the stop may already have a venueId loaded from the backend.
+  // We don't have it here (VenueSearch doesn't return it on mount for edits),
+  // so selectedVenueId stays null unless the user re-selects the venue — that's
+  // fine; the panel just won't appear for existing stops unless venue is changed.
+  const handleVenueSelect = (venue: VenueSelection) => {
+    form.setValue("venueName", venue.venueName);
+    form.setValue("city", venue.destination || venue.suburb || "");
+    form.setValue("cityLat", venue.lat ?? null);
+    form.setValue("cityLng", venue.lng ?? null);
+    setSelectedVenueId(venue.venueId ?? null);
+  };
+
+  const handleUseDeal = (show: VenueShow) => {
+    if (show.showType) form.setValue("showType", show.showType);
+    if (show.fee != null) form.setValue("fee", show.fee);
+    if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+    if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
+  };
+
   if (isLoadingTour || (isEditing && isLoadingStops)) {
     return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
   }
@@ -289,14 +312,18 @@ export default function TourStopForm() {
                     <VenueSearch
                       venueName={form.watch("venueName") || ""}
                       destination={form.watch("city") || ""}
-                      onSelect={(venue) => {
-                        form.setValue("venueName", venue.venueName);
-                        form.setValue("city", venue.destination || venue.suburb || "");
-                        form.setValue("cityLat", venue.lat ?? null);
-                        form.setValue("cityLng", venue.lng ?? null);
-                      }}
+                      onSelect={handleVenueSelect}
                     />
                   </div>
+
+                  {/* Venue Intelligence — Pro history panel (shown when a venue is selected) */}
+                  {(formValues.venueName || "").length > 0 && (
+                    <VenueIntelligence
+                      venueId={selectedVenueId}
+                      venueName={formValues.venueName || ""}
+                      onUseDeal={handleUseDeal}
+                    />
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField

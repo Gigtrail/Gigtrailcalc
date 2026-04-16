@@ -1,0 +1,122 @@
+Enhance the Add Show / Edit Stop and Single Show Calculator flows to include Venue History and Intelligence features, gated behind a Pro subscription.
+
+GOAL
+
+Provide powerful venue insights for Pro users while keeping the core calculator accessible for free users.
+
+-----------------------------------
+FEATURE SPLIT
+-----------------------------------
+
+FREE USERS:
+- Can select and save venues
+- Can enter deal details manually
+- Can use calculator normally
+- Do NOT see venue history or insights
+
+PRO USERS:
+- See full venue history
+- See last deal summary
+- See averages and insights
+- Access smart actions (e.g. "Use last deal")
+
+-----------------------------------
+PART 1 — VENUE CONTEXT SECTION
+-----------------------------------
+
+When a venue is selected in Add Show / Edit Stop:
+
+IF USER IS PRO:
+Display:
+
+1. Venue Summary
+- times played
+- last played date
+
+2. Last Deal
+- last deal type
+- last fee
+- merch
+- notes
+
+3. Show History
+- list of past shows with:
+  - date
+  - deal type
+  - earnings
+  - audience
+  - wouldDoAgain
+
+4. Smart Actions
+- Use last deal
+- View full venue
+
+-----------------------------------
+PART 2 — FREE USER EXPERIENCE
+-----------------------------------
+
+If user is NOT Pro:
+
+Show locked section:
+
+Title:
+"Venue History (Pro)"
+
+Body:
+"Unlock past shows, deal history, and smart suggestions for this venue."
+
+Button:
+"Upgrade to Pro"
+
+Do NOT show actual data.
+
+-----------------------------------
+PART 3 — SINGLE SHOW CALC
+-----------------------------------
+
+Apply same gating logic:
+
+IF PRO:
+- show venue history + last deal + suggestions
+
+IF FREE:
+- show locked upgrade prompt
+
+-----------------------------------
+PART 4 — TRAIL ROW ACTIONS
+-----------------------------------
+
+When clicking "Venue" or "History":
+
+IF PRO:
+- open venue detail with full history
+
+IF FREE:
+- show upgrade prompt modal
+
+-----------------------------------
+PART 5 — DATA RULES
+-----------------------------------
+
+- Venue history comes from Past Shows
+- Averages calculated from completed shows only
+- No partial or misleading data shown
+
+-----------------------------------
+PART 6 — UX REQUIREMENTS
+-----------------------------------
+
+- Locked sections should look clean, not broken
+- Use subtle lock icon or "Pro" label
+- Do not interrupt core workflow
+- Upgrade prompts should feel helpful, not aggressive
+
+-----------------------------------
+PART 7 — ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Free users can still fully use the calculator
+- Pro users get enhanced venue intelligence
+- Locked sections clearly communicate value
+- No accidental exposure of Pro-only data
+- Feature feels like an upgrade, not a restriction

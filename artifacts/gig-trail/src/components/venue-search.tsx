@@ -12,6 +12,8 @@ export interface VenueSelection {
   country?: string;
   lat?: number;
   lng?: number;
+  /** Set when the venue was selected from the user's own venue database */
+  venueId?: number;
 }
 
 interface PastVenue {
@@ -202,6 +204,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
       suburb: v.city ?? undefined,
       state: v.state ?? undefined,
       country: v.country ?? undefined,
+      venueId: v.id,
     });
   }
 

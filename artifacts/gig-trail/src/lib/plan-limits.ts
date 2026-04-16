@@ -8,7 +8,8 @@ export type PlanFeature =
   | "larger_band"
   | "tour_builder"
   | "advanced_driving"
-  | "shared_accommodation";
+  | "shared_accommodation"
+  | "venue_intelligence";
 
 export interface FeatureInfo {
   name: string;
@@ -73,6 +74,13 @@ export const FEATURE_REGISTRY: Record<PlanFeature, FeatureInfo> = {
     proUnlock: "Auto-calculated rooms",
     proDescription:
       "Set room configurations once on your profile and have accommodation costs calculated automatically every show.",
+  },
+  venue_intelligence: {
+    name: "Venue Intelligence",
+    freeLimit: "Not included",
+    proUnlock: "Venue History (Pro)",
+    proDescription:
+      "Unlock past shows, deal history, and smart suggestions for this venue. See what you earned last time and auto-fill your deal details.",
   },
 };
 

@@ -30,6 +30,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
+import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
 import { usePlan } from "@/hooks/use-plan";
 import { UsageMeter } from "@/components/usage-meter";
 import { cn } from "@/lib/utils";
@@ -205,6 +206,7 @@ export default function RunForm() {
   const [quickAddSubmitting, setQuickAddSubmitting] = useState(false);
   // Track which vehicle is selected for this run (may differ from profile.defaultVehicleId locally)
   const [runVehicleId, setRunVehicleId] = useState<number | null>(null);
+  const [runSelectedVenueId, setRunSelectedVenueId] = useState<number | null>(null);
 
   const createOrUpdateVenue = useCreateOrUpdateVenue();
   const { data: vehicles } = useGetVehicles();
@@ -1041,8 +1043,23 @@ export default function RunForm() {
                           form.setValue("city", venue.suburb || null);
                           form.setValue("state", venue.state || null);
                           form.setValue("country", venue.country || null);
+                          setRunSelectedVenueId(venue.venueId ?? null);
                         }}
                       />
+
+                      {/* Venue Intelligence — shows history + last deal for Pro users */}
+                      {(formValues.venueName || "").length > 0 && (
+                        <VenueIntelligence
+                          venueId={runSelectedVenueId}
+                          venueName={formValues.venueName || ""}
+                          onUseDeal={(show: VenueShow) => {
+                            if (show.showType) form.setValue("showType", show.showType);
+                            if (show.fee != null) form.setValue("fee", show.fee);
+                            if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+                            if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
+                          }}
+                        />
+                      )}
                     </div>
                     <FormField
                       control={form.control}
