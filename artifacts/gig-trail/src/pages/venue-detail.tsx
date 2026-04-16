@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import {
   ArrowLeft, MapPin, Mic2, TrendingUp, Calendar, Globe, Phone, Mail,
   Star, StarOff, Edit2, Check, X, ExternalLink, Music,
@@ -95,12 +96,13 @@ function ShowRow({ show }: { show: VenueShow }) {
 // ─── Edit field helper ────────────────────────────────────────────────────────
 
 function EditableField({
-  label, value, onSave, multiline = false, placeholder,
+  label, value, onSave, multiline = false, locationAutocomplete = false, placeholder,
 }: {
   label: string;
   value?: string | null;
   onSave: (v: string | null) => void;
   multiline?: boolean;
+  locationAutocomplete?: boolean;
   placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -122,6 +124,14 @@ function EditableField({
             className="text-sm min-h-[80px]"
             placeholder={placeholder}
             autoFocus
+          />
+        ) : locationAutocomplete ? (
+          <PlacesAutocomplete
+            value={draft}
+            onChange={(text) => setDraft(text)}
+            placeholder={placeholder}
+            className="text-sm h-8"
+            onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
           />
         ) : (
           <Input
@@ -376,6 +386,7 @@ export default function VenueDetail() {
               label="Full address"
               value={venue.fullAddress}
               placeholder="123 Gig Street, Melbourne VIC 3000"
+              locationAutocomplete
               onSave={v => save({ fullAddress: v })}
             />
             <EditableField
