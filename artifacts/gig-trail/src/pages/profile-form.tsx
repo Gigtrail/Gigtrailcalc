@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Save,
   Wrench,
   Plus,
@@ -304,9 +305,13 @@ function ActTypePills({ current, onChange }: { current: string; onChange: (t: st
   );
 }
 
-// ─── Inline member list (used in both wizard + edit) ─────────────────────────
+// ─── Plan limits ─────────────────────────────────────────────────────────────
 
-function MemberRow({
+const FREE_MEMBER_LIMIT = 3;
+
+// ─── Member card (collapsible, used in both wizard + edit) ────────────────────
+
+function MemberCard({
   member, index, actType, totalActive, showRole,
   onChangeName, onChangeRole, onChangeFee, onRemove,
 }: {
@@ -314,46 +319,81 @@ function MemberRow({
   onChangeName: (v: string) => void; onChangeRole: (v: string) => void;
   onChangeFee: (v: number) => void; onRemove: () => void;
 }) {
+  const [expanded, setExpanded] = useState(!member.name);
   const canRemove = actType === "Band" || totalActive > (actType === "Solo" ? 1 : 2);
-  const placeholder = actType === "Solo" ? "Your name" : actType === "Duo" ? (index === 0 ? "Your name" : "Their name") : `Member ${index + 1}`;
+  const namePlaceholder =
+    actType === "Solo" ? "Your name"
+    : actType === "Duo" ? (index === 0 ? "Your name" : "Their name")
+    : "Band Member";
+  const displayName = member.name || namePlaceholder;
+  const fee = member.expectedGigFee ?? 0;
 
   return (
-    <div className="grid grid-cols-[1fr_auto] gap-2 items-start">
-      <div className="space-y-1.5">
-        <Input
-          placeholder={placeholder}
-          value={member.name}
-          onChange={e => onChangeName(e.target.value)}
-          className="h-9"
-        />
-        {showRole && (
-          <Input
-            placeholder="Role (optional)"
-            value={member.role ?? ""}
-            onChange={e => onChangeRole(e.target.value)}
-            className="h-8 text-xs"
-          />
-        )}
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
-          <Input
-            type="number" min="0" placeholder="0"
-            value={member.expectedGigFee ?? ""}
-            onChange={e => onChangeFee(e.target.value === "" ? 0 : Number(e.target.value))}
-            className="h-8 pl-6 text-xs"
-          />
-        </div>
-      </div>
+    <div className="rounded-lg border border-border/40 bg-card/80 overflow-hidden">
+      {/* Always-visible collapsed header */}
       <button
         type="button"
-        onClick={onRemove}
-        disabled={!canRemove}
-        className={`mt-0.5 flex items-center justify-center w-8 h-8 rounded-lg border transition-colors ${
-          canRemove ? "border-border/40 text-muted-foreground hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5" : "border-transparent text-transparent cursor-default"
-        }`}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
       >
-        <X className="w-3.5 h-3.5" />
+        <div className="flex-1 min-w-0 flex items-baseline gap-1.5 overflow-hidden">
+          <span className={`text-sm font-medium truncate ${!member.name ? "text-muted-foreground italic" : ""}`}>
+            {displayName}
+          </span>
+          {member.role && (
+            <span className="text-xs text-muted-foreground shrink-0">— {member.role}</span>
+          )}
+          {fee > 0 && (
+            <span className="text-xs text-muted-foreground shrink-0">· ${fee}</span>
+          )}
+        </div>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        />
+        {canRemove && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={e => { e.stopPropagation(); onRemove(); }}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onRemove(); } }}
+            className="ml-0.5 flex items-center justify-center w-6 h-6 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </span>
+        )}
       </button>
+
+      {/* Expandable edit fields */}
+      <div className={`grid transition-all duration-200 ease-in-out ${expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="overflow-hidden">
+          <div className="px-3 pt-2 pb-3 border-t border-border/30 space-y-2">
+            <Input
+              placeholder={namePlaceholder}
+              value={member.name}
+              onChange={e => onChangeName(e.target.value)}
+              className="h-9"
+            />
+            {showRole && (
+              <Input
+                placeholder="Role (optional)"
+                value={member.role ?? ""}
+                onChange={e => onChangeRole(e.target.value)}
+                className="h-8 text-xs"
+              />
+            )}
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">$</span>
+              <Input
+                type="number" min="0" placeholder="0"
+                value={member.expectedGigFee ?? ""}
+                onChange={e => onChangeFee(e.target.value === "" ? 0 : Number(e.target.value))}
+                className="h-8 pl-6 text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -753,7 +793,7 @@ export default function ProfileForm() {
 
                   <div className="space-y-2">
                     {activeMembers.map((m, idx) => (
-                      <MemberRow
+                      <MemberCard
                         key={m.id}
                         member={m}
                         index={idx}
@@ -769,13 +809,24 @@ export default function ProfileForm() {
                   </div>
 
                   {(actType === "Band" || actType === "Duo") && (
-                    <button
-                      type="button"
-                      onClick={addMember}
-                      className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2 pt-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" />Add member
-                    </button>
+                    <div className="space-y-1.5 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={addMember}
+                        disabled={!isPro && activeMembers.length >= FREE_MEMBER_LIMIT}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-4 h-4" />
+                        + Add {actType === "Duo" ? "another person" : "band member"}
+                      </button>
+                      {!isPro && activeMembers.length >= FREE_MEMBER_LIMIT && (
+                        <p className="text-xs text-muted-foreground text-center">
+                          You've reached the free limit.{" "}
+                          <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade to Pro</Link>
+                          {" "}to add more members.
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -1156,7 +1207,7 @@ export default function ProfileForm() {
 
                 <div className="space-y-2">
                   {activeMembers.map((m, idx) => (
-                    <MemberRow
+                    <MemberCard
                       key={m.id}
                       member={m}
                       index={idx}
@@ -1172,13 +1223,24 @@ export default function ProfileForm() {
                 </div>
 
                 {actType !== "Solo" && (
-                  <button
-                    type="button"
-                    onClick={addMember}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline underline-offset-2 pt-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />Add {actType === "Duo" ? "another person" : "member"}
-                  </button>
+                  <div className="space-y-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={addMember}
+                      disabled={!isPro && activeMembers.length >= FREE_MEMBER_LIMIT}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4" />
+                      + Add {actType === "Duo" ? "another person" : "band member"}
+                    </button>
+                    {!isPro && activeMembers.length >= FREE_MEMBER_LIMIT && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        You've reached the free limit.{" "}
+                        <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade to Pro</Link>
+                        {" "}to add more members.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 

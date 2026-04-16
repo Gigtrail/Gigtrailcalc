@@ -1,0 +1,82 @@
+Refactor the band member setup UI in the Profile creation flow to be clearer, more structured, and easier to use.
+
+GOAL
+
+Make adding and managing band members feel intuitive and visually separated, instead of a stacked form.
+
+-----------------------------------
+LAYOUT CHANGE
+-----------------------------------
+
+Replace stacked input fields with a "member card" layout.
+
+Each member should appear as a separate card showing:
+- name
+- role
+- fee
+
+Example collapsed state:
+"Julian — Guitar • $75"
+
+-----------------------------------
+EDITING BEHAVIOUR
+-----------------------------------
+
+- clicking a member card expands it into editable fields:
+  - Name
+  - Role
+  - Fee
+
+- allow inline editing
+- include remove (X) button on each card
+
+-----------------------------------
+ADD MEMBER BUTTON
+-----------------------------------
+
+Replace small text link with a clear button:
+
+"+ Add band member"
+
+- make it full width or visually prominent
+- place below member list
+
+-----------------------------------
+PRO LIMIT LOGIC
+-----------------------------------
+
+Free users:
+- limit number of members (e.g. 3)
+
+When limit reached:
+- disable add button
+- show message:
+"You’ve reached the free limit. Upgrade to Pro to add more members."
+
+Pro users:
+- no limit
+
+-----------------------------------
+VISUAL IMPROVEMENTS
+-----------------------------------
+
+- add spacing between member cards
+- use subtle card styling or dividers
+- combine role + fee into one readable line in collapsed state
+
+-----------------------------------
+DEFAULT VALUES
+-----------------------------------
+
+- use "Band Member" as default name
+- role optional
+- fee defaults to 0
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- band members are clearly separated visually
+- adding/removing members feels intuitive
+- UI is less cluttered and easier to scan
+- Pro limit is enforced cleanly without breaking flow
