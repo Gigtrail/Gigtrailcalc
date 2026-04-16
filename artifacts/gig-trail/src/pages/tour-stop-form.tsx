@@ -28,6 +28,7 @@ import { calculateStopPreview, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, type VenueSelection } from "@/components/venue-search";
 import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
+import { DealTypeInfo } from "@/components/deal-type-info";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -444,6 +445,8 @@ export default function TourStopForm() {
                       </FormItem>
                     )}
                   />
+
+                  <DealTypeInfo showType={formValues.showType} />
 
                   {(formValues.showType === "Flat Fee" || formValues.showType === "Hybrid") && (
                     <FormField

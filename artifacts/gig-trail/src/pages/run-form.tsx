@@ -31,6 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
+import { DealTypeInfo } from "@/components/deal-type-info";
 import { usePlan } from "@/hooks/use-plan";
 import { UsageMeter } from "@/components/usage-meter";
 import { cn } from "@/lib/utils";
@@ -1272,6 +1273,8 @@ export default function RunForm() {
                       </FormItem>
                     )}
                   />
+
+                  <DealTypeInfo showType={formValues.showType} />
 
                   {(formValues.showType === "Flat Fee" || formValues.showType === "Hybrid") && (
                     <FormField
