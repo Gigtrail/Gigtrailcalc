@@ -1,0 +1,256 @@
+Implement a complete Venue system that:
+
+1. Immediately adds valid venues from Tour Builder into Saved Venues
+2. Separates Venue creation from Past Show creation
+3. Automatically creates Past Shows when appropriate
+4. Upgrades the Venue page into a full “Venue Activity” view showing past, current, and pending deals
+
+GOAL
+
+Turn Gig Trail into a tool that builds a private venue intelligence database over time, based on real touring activity.
+
+-----------------------------------
+CORE DATA MODEL
+-----------------------------------
+
+Use three entities:
+
+1. Venue (the place)
+2. Tour Stop (planned show)
+3. Past Show (completed show)
+
+Relationships:
+- one Venue → many Past Shows
+- one Venue → many Tour Stops (future + pending)
+- one Tour Stop → one Past Show (when completed)
+
+-----------------------------------
+PART 1 — FIX CURRENT BUG (VENUE NOT UPDATING)
+-----------------------------------
+
+Problem:
+Adding a show in Tour Builder does not update Saved Venues.
+
+Fix:
+Decouple Venue creation from Past Show creation.
+
+-----------------------------------
+VENUE SYNC (IMMEDIATE)
+-----------------------------------
+
+When a Tour Stop is created or edited:
+
+If it has:
+- a venue/show name
+- a usable address
+
+Then:
+- normalize venue name and address
+- attempt to match existing Venue for this user
+- if found → reuse
+- if not found → create new Venue
+- store venueId on the Tour Stop
+- update Saved Venues immediately
+
+DO NOT wait for:
+- past date
+- tour completion
+- past show import
+
+-----------------------------------
+PART 2 — PAST SHOW SYNC (SEPARATE FLOW)
+-----------------------------------
+
+Create Past Show only when:
+- show date is in the past
+OR
+- user marks show/tour as completed
+
+Past Show should:
+- link to venueId
+- link to sourceTourId
+- link to sourceStopId
+
+-----------------------------------
+PLANNED VS ACTUAL
+-----------------------------------
+
+From Tour:
+- plannedFee
+- plannedMerch
+- plannedNotes
+
+From Past Show edits:
+- actualFee
+- actualMerch
+- actualAudience
+- actualNotes
+- wouldDoAgain
+
+Never overwrite actual values during sync.
+
+-----------------------------------
+DUPLICATE PREVENTION
+-----------------------------------
+
+Venues:
+- match using normalized name + address
+- reuse existing records
+
+Past Shows:
+- use sourceTourId + sourceStopId
+- update instead of duplicating
+
+-----------------------------------
+PART 3 — VENUE ACTIVITY VIEW
+-----------------------------------
+
+Upgrade Venue page to show full activity, not just history.
+
+Rename concept:
+“Venue History” → “Venue Activity”
+
+-----------------------------------
+ACTIVITY SECTIONS
+-----------------------------------
+
+1. Upcoming / Confirmed
+- future Tour Stops with status = confirmed
+- show:
+  - date
+  - act/profile
+  - deal (planned)
+  - linked tour
+
+2. Pending / Hold
+- Tour Stops or opportunities with:
+  - pending / hold status
+- show:
+  - proposed deal
+  - notes
+
+3. Past Shows
+- completed shows
+- show:
+  - date
+  - actual fee
+  - merch
+  - audience
+  - wouldDoAgain
+  - notes
+
+-----------------------------------
+STATUS MODEL
+-----------------------------------
+
+Support statuses:
+- pending
+- hold
+- confirmed
+- played
+- cancelled
+
+Display as badges.
+
+-----------------------------------
+VENUE INSIGHTS
+-----------------------------------
+
+On Venue page, show:
+
+- times played
+- last played
+- average fee
+- average merch
+- average audience
+- average net result
+- would play again ratio
+
+IMPORTANT:
+- calculate ONLY from Past Shows (played)
+- do NOT include pending or future data
+
+-----------------------------------
+DATA SOURCES
+-----------------------------------
+
+Past Shows:
+- from Past Show records
+
+Upcoming:
+- from Tour Stops (future dates, confirmed)
+
+Pending:
+- from Tour Stops or opportunity records with pending status
+
+-----------------------------------
+TOUR STOP REQUIREMENTS
+-----------------------------------
+
+Each Tour Stop should support:
+- venueId
+- booking status (pending / hold / confirmed)
+- deal info (planned)
+
+-----------------------------------
+UI REQUIREMENTS
+-----------------------------------
+
+Saved Venues page:
+- updates immediately when valid stops are added
+- shows:
+  - venue name
+  - location
+  - number of shows (past)
+  - optional avg stats
+
+Venue page:
+- grouped sections:
+  - Upcoming
+  - Pending
+  - Past Shows
+
+OR
+- timeline view (optional later)
+
+-----------------------------------
+EDGE CASES
+-----------------------------------
+
+1. Future shows
+- appear in Upcoming
+- do NOT create Past Shows
+
+2. Incomplete stops
+- do NOT create Venue or Past Show
+
+3. Deleted stops
+- if no actual data → remove link
+- if actual data exists → preserve Past Show
+
+4. Date changes
+- if moved to future → remove from Past Shows unless manually completed
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Adding a show creates or links a Venue immediately
+- Saved Venues updates without needing past-date logic
+- Past Shows only created when appropriate
+- No duplicate venues created
+- Venue page shows activity (past + upcoming + pending)
+- Venue stats use only completed shows
+- System builds a private venue database over time
+
+-----------------------------------
+IMPORTANT
+-----------------------------------
+
+Mental model:
+
+Venue = place
+Tour Stop = planned gig
+Past Show = what actually happened
+
+Do not merge or flatten these.

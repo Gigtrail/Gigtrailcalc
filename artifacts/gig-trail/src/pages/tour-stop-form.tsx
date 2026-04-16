@@ -54,6 +54,7 @@ const stopSchema = z.object({
   fuelPriceOverride: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
   stopOrder: z.number().optional(),
+  bookingStatus: z.string().optional().nullable(),
 });
 
 type StopFormValues = z.infer<typeof stopSchema>;
@@ -125,6 +126,7 @@ export default function TourStopForm() {
       fuelPriceOverride: null,
       notes: "",
       stopOrder: stops ? stops.length : 0,
+      bookingStatus: "confirmed",
     },
   });
 
@@ -172,6 +174,7 @@ export default function TourStopForm() {
         fuelPriceOverride: stop.fuelPriceOverride,
         notes: stop.notes || "",
         stopOrder: stop.stopOrder,
+        bookingStatus: stop.bookingStatus || "confirmed",
       });
     } else if (!isEditing && stops && !hasReset.current) {
       hasReset.current = true;
@@ -332,6 +335,29 @@ export default function TourStopForm() {
                       )}
                     />
                   </div>
+
+                  <FormField
+                    control={form.control}
+                    name="bookingStatus"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Booking Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? "confirmed"}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="confirmed">Confirmed</SelectItem>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="hold">On Hold</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-border/40">
                      <FormField

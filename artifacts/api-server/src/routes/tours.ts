@@ -82,6 +82,43 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
 const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
+function normalizeVenueName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// Immediately find or create a venue for a stop and link it. Returns the venueId.
+async function syncStopVenue(
+  userId: string,
+  stopId: number,
+  venueName: string,
+  city?: string | null,
+): Promise<number | null> {
+  const normalized = normalizeVenueName(venueName);
+  if (!normalized) return null;
+
+  const [existing] = await db.select().from(venuesTable)
+    .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
+
+  let venueId: number;
+  if (existing) {
+    if (!existing.city && city) {
+      await db.update(venuesTable).set({ city }).where(eq(venuesTable.id, existing.id));
+    }
+    venueId = existing.id;
+  } else {
+    const [created] = await db.insert(venuesTable).values({
+      userId,
+      venueName: venueName.trim(),
+      normalizedVenueName: normalized,
+      city: city ?? null,
+    }).returning();
+    venueId = created.id;
+  }
+
+  await db.update(tourStopsTable).set({ venueId }).where(eq(tourStopsTable.id, stopId));
+  return venueId;
+}
+
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {
   const { userId, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userPlan);
@@ -182,6 +219,7 @@ router.get("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void> 
 });
 
 router.post("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = CreateTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -194,10 +232,20 @@ router.post("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void>
   }
   const stopData = toDbNumeric({ ...parsed.data, tourId: params.data.tourId }, STOP_NUMERIC) as typeof tourStopsTable.$inferInsert;
   const [stop] = await db.insert(tourStopsTable).values(stopData).returning();
+
+  // Immediately find/create venue if venueName is set
+  if (stop.venueName?.trim()) {
+    const venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
+    if (venueId) {
+      res.status(201).json(serializeStop({ ...stop, venueId }));
+      return;
+    }
+  }
   res.status(201).json(serializeStop(stop));
 });
 
 router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = UpdateTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -208,10 +256,22 @@ router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Prom
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [stop] = await db.update(tourStopsTable).set(toDbNumeric(parsed.data as Record<string, unknown>, STOP_NUMERIC) as Partial<typeof tourStopsTable.$inferInsert>).where(eq(tourStopsTable.id, params.data.stopId)).returning();
+  const [stop] = await db.update(tourStopsTable)
+    .set(toDbNumeric(parsed.data as Record<string, unknown>, STOP_NUMERIC) as Partial<typeof tourStopsTable.$inferInsert>)
+    .where(eq(tourStopsTable.id, params.data.stopId))
+    .returning();
   if (!stop) {
     res.status(404).json({ error: "Stop not found" });
     return;
+  }
+
+  // Re-sync venue when venueName is present (handles renames + new venues)
+  if (stop.venueName?.trim()) {
+    const venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
+    if (venueId) {
+      res.json(UpdateTourStopResponse.parse(serializeStop({ ...stop, venueId })));
+      return;
+    }
   }
   res.json(UpdateTourStopResponse.parse(serializeStop(stop)));
 });
@@ -234,10 +294,6 @@ router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Pro
 // POST /tours/:tourId/stops/:stopId/past-show
 // Creates or updates a "run" (past show) from a tour stop, linking venue + tour
 
-function normalizeVenueName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
 router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const tourId = parseInt(req.params.tourId);
@@ -253,29 +309,10 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
   const [stop] = await db.select().from(tourStopsTable).where(eq(tourStopsTable.id, stopId));
   if (!stop) { res.status(404).json({ error: "Stop not found" }); return; }
 
-  // 1. Find or create venue
-  let venueId: number | null = null;
-  if (stop.venueName?.trim()) {
-    const normalized = normalizeVenueName(stop.venueName);
-    const [existing] = await db.select().from(venuesTable)
-      .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
-
-    if (existing) {
-      venueId = existing.id;
-      // Update location if we have better data
-      if (stop.city && !existing.city) {
-        await db.update(venuesTable).set({ city: stop.city, updatedAt: new Date() }).where(eq(venuesTable.id, existing.id));
-      }
-    } else {
-      const [created] = await db.insert(venuesTable).values({
-        userId,
-        venueName: stop.venueName.trim(),
-        normalizedVenueName: normalized,
-        city: stop.city ?? null,
-        updatedAt: new Date(),
-      }).returning();
-      venueId = created.id;
-    }
+  // Use existing venueId from stop (already synced on save), or find/create as fallback
+  let venueId: number | null = stop.venueId ?? null;
+  if (!venueId && stop.venueName?.trim()) {
+    venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
   }
 
   // 2. Check if a Past Show already exists for this stop

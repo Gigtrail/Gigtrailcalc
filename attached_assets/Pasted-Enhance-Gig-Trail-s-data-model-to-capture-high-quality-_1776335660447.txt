@@ -1,0 +1,110 @@
+Enhance Gig Trail’s data model to capture high-quality structured venue and deal data that can later be used for aggregated insights and monetisation.
+
+GOAL
+
+Build a clean, structured data foundation that captures real-world touring outcomes without adding friction to the user experience.
+
+-----------------------------------
+CORE PRINCIPLE
+-----------------------------------
+
+Users should not feel like they are “building a database”.
+
+Data should be collected naturally through:
+- Tour Builder
+- Past Shows
+- Venue usage
+
+-----------------------------------
+DATA MODEL REQUIREMENTS
+-----------------------------------
+
+Ensure clear separation between:
+
+1. Venue (static)
+- name
+- address
+- city/state/country
+- notes
+- optional contact info
+
+2. Past Show (event)
+- venueId
+- date
+- act/profile
+- deal type
+- guarantee
+- ticket split
+- ticket price
+- planned merch
+- actual merch
+- audience
+- expenses
+- net result
+- wouldDoAgain
+- notes
+
+3. Context fields (critical for future insights)
+- act type (solo / duo / band)
+- deal type (flat / split / ticketed / hybrid)
+- region/location
+- weekday/weekend
+
+-----------------------------------
+PLANNED VS ACTUAL
+-----------------------------------
+
+Maintain both:
+- planned values from Tour Builder
+- actual values from Past Show edits
+
+Never overwrite actual data with planned data.
+
+-----------------------------------
+DATA QUALITY
+-----------------------------------
+
+- enforce consistent field types
+- avoid free-text where structured fields are possible
+- allow optional fields, but encourage key inputs
+
+-----------------------------------
+VENUE INTELLIGENCE PREPARATION
+-----------------------------------
+
+Add computed fields (not stored permanently) such as:
+- average guarantee per venue
+- average merch per venue
+- average audience per venue
+- repeat success rate
+- profitability score
+
+These should be derived from Past Shows only.
+
+-----------------------------------
+PRIVACY MODEL
+-----------------------------------
+
+- all raw data remains private to the user
+- no sharing of individual deal data
+- design system so aggregation can happen later without exposing user data
+
+-----------------------------------
+FUTURE-PROOFING
+-----------------------------------
+
+Structure data so it can later support:
+- regional averages
+- deal benchmarking
+- tour prediction models
+- venue scoring
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Data is captured automatically through normal usage
+- No duplicate or conflicting data structures
+- Past Shows store real outcomes clearly
+- Venues group multiple shows correctly
+- Data is structured enough for future aggregation and analysis

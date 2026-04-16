@@ -256,9 +256,34 @@ export interface VenueShow {
   createdAt: string;
 }
 
+export interface VenueStop {
+  id: number;
+  tourId: number;
+  /** @nullable */
+  tourName?: string | null;
+  /** @nullable */
+  date?: string | null;
+  /** @nullable */
+  venueName?: string | null;
+  city: string;
+  /** @nullable */
+  state?: string | null;
+  showType: string;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  guarantee?: number | null;
+  /** @nullable */
+  bookingStatus?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface VenueDetail extends Venue {
   stats: VenueStats;
   shows: VenueShow[];
+  upcomingStops: VenueStop[];
+  pendingStops: VenueStop[];
 }
 
 export interface CreateVenueBody {
@@ -625,6 +650,10 @@ export interface CreateTourBody {
 export interface TourStop {
   id: number;
   tourId: number;
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  bookingStatus?: string | null;
   stopOrder: number;
   /** @nullable */
   date: string | null;
@@ -669,6 +698,10 @@ export interface TourStop {
 }
 
 export interface CreateTourStopBody {
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  bookingStatus?: string | null;
   stopOrder?: number;
   /** @nullable */
   date?: string | null;

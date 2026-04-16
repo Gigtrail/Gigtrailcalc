@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, ilike, desc, sql } from "drizzle-orm";
-import { db, venuesTable, runsTable } from "@workspace/db";
+import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -137,10 +137,48 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     wouldPlayAgainRatio: timesPlayed > 0 ? wouldPlayAgainCount / timesPlayed : null,
   };
 
+  // Fetch upcoming (confirmed, future) and pending tour stops at this venue
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const tourStops = await db
+    .select({
+      id: tourStopsTable.id,
+      tourId: tourStopsTable.tourId,
+      tourName: toursTable.name,
+      date: tourStopsTable.date,
+      venueName: tourStopsTable.venueName,
+      city: tourStopsTable.city,
+      state: sql<string | null>`null`, // state not on stops
+      showType: tourStopsTable.showType,
+      fee: tourStopsTable.fee,
+      guarantee: tourStopsTable.guarantee,
+      bookingStatus: tourStopsTable.bookingStatus,
+      notes: tourStopsTable.notes,
+    })
+    .from(tourStopsTable)
+    .leftJoin(toursTable, eq(tourStopsTable.tourId, toursTable.id))
+    .where(eq(tourStopsTable.venueId, id));
+
+  const serializeVenueStop = (s: typeof tourStops[0]) => ({
+    ...s,
+    fee: s.fee != null ? Number(s.fee) : null,
+    guarantee: s.guarantee != null ? Number(s.guarantee) : null,
+  });
+
+  const upcomingStops = tourStops
+    .filter(s => s.date && s.date >= today && s.bookingStatus === "confirmed")
+    .map(serializeVenueStop);
+
+  const pendingStops = tourStops
+    .filter(s => s.bookingStatus === "pending" || s.bookingStatus === "hold")
+    .map(serializeVenueStop);
+
   res.json({
     ...serializeVenue(venue),
     stats,
     shows: shows.map(serializeShow),
+    upcomingStops,
+    pendingStops,
   });
 });
 

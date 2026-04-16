@@ -870,6 +870,8 @@ export const GetTourStopsParams = zod.object({
 export const GetTourStopsResponseItem = zod.object({
   id: zod.number(),
   tourId: zod.number(),
+  venueId: zod.number().nullable(),
+  bookingStatus: zod.string().nullable(),
   stopOrder: zod.number(),
   date: zod.string().nullable(),
   city: zod.string(),
@@ -903,6 +905,8 @@ export const CreateTourStopParams = zod.object({
 });
 
 export const CreateTourStopBody = zod.object({
+  venueId: zod.number().nullish(),
+  bookingStatus: zod.string().nullish(),
   stopOrder: zod.number().optional(),
   date: zod.string().nullish(),
   city: zod.string(),
@@ -936,6 +940,8 @@ export const UpdateTourStopParams = zod.object({
 });
 
 export const UpdateTourStopBody = zod.object({
+  venueId: zod.number().nullish(),
+  bookingStatus: zod.string().nullish(),
   stopOrder: zod.number().optional(),
   date: zod.string().nullish(),
   city: zod.string(),
@@ -963,6 +969,8 @@ export const UpdateTourStopBody = zod.object({
 export const UpdateTourStopResponse = zod.object({
   id: zod.number(),
   tourId: zod.number(),
+  venueId: zod.number().nullable(),
+  bookingStatus: zod.string().nullable(),
   stopOrder: zod.number(),
   date: zod.string().nullable(),
   city: zod.string(),

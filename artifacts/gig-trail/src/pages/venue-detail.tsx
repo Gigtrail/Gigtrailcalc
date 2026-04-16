@@ -5,7 +5,7 @@ import {
   getGetVenueQueryKey,
   getGetVenuesQueryKey,
 } from "@workspace/api-client-react";
-import type { VenueShow, PatchVenueBody } from "@workspace/api-client-react";
+import type { VenueShow, VenueStop, PatchVenueBody } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -161,6 +161,36 @@ function EditableField({
   );
 }
 
+function bookingStatusBadge(status: string | null | undefined) {
+  if (status === "pending") return <Badge variant="outline" className="text-[10px] py-0 border-yellow-400/60 text-yellow-700 dark:text-yellow-400">Pending</Badge>;
+  if (status === "hold") return <Badge variant="outline" className="text-[10px] py-0 border-blue-400/60 text-blue-700 dark:text-blue-400">On Hold</Badge>;
+  return <Badge variant="outline" className="text-[10px] py-0 border-[#2E7D32]/60 text-[#2E7D32]">Confirmed</Badge>;
+}
+
+function VenueStopRow({ stop }: { stop: VenueStop }) {
+  const income = stop.fee ?? stop.guarantee;
+  return (
+    <tr className="group border-t border-border/30 hover:bg-primary/3 transition-colors">
+      <td className="py-2.5 pl-4 pr-2 text-sm text-muted-foreground whitespace-nowrap w-28">
+        {fmtDate(stop.date)}
+      </td>
+      <td className="py-2.5 px-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {bookingStatusBadge(stop.bookingStatus)}
+          {stop.tourName && (
+            <span className="text-xs text-muted-foreground/70">via <span className="font-medium text-foreground/70">{stop.tourName}</span></span>
+          )}
+        </div>
+        {stop.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xs">{stop.notes}</p>}
+      </td>
+      <td className="py-2.5 px-2 text-sm tabular-nums whitespace-nowrap text-muted-foreground">
+        {income != null ? fmt(income) : "—"}
+      </td>
+      <td className="py-2.5 px-2 text-xs text-muted-foreground">{stop.showType ?? "—"}</td>
+    </tr>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function VenueDetail() {
@@ -209,7 +239,7 @@ export default function VenueDetail() {
     );
   }
 
-  const { stats, shows } = venue;
+  const { stats, shows, upcomingStops = [], pendingStops = [] } = venue;
   const timesPlayed = stats?.timesPlayed ?? 0;
   const wouldPlayPct = stats?.wouldPlayAgainRatio != null
     ? Math.round(stats.wouldPlayAgainRatio * 100)
@@ -273,6 +303,64 @@ export default function VenueDetail() {
               </p>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Upcoming & Pending stops */}
+      {(upcomingStops.length > 0 || pendingStops.length > 0) && (
+        <div className="space-y-3">
+          {upcomingStops.length > 0 && (
+            <Card className="border-[#2E7D32]/30 bg-[#2E7D32]/5">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-[#2E7D32] flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> Upcoming Confirmed Dates ({upcomingStops.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/30 bg-muted/10">
+                        <th className="py-1.5 pl-4 pr-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Tour / Status</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Fee</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {upcomingStops.map(stop => <VenueStopRow key={stop.id} stop={stop} />)}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {pendingStops.length > 0 && (
+            <Card className="border-yellow-400/30 bg-yellow-50/30 dark:bg-yellow-900/5">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-yellow-700 dark:text-yellow-500 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" /> Pending / On Hold ({pendingStops.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/30 bg-muted/10">
+                        <th className="py-1.5 pl-4 pr-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Date</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Tour / Status</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Fee</th>
+                        <th className="py-1.5 px-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingStops.map(stop => <VenueStopRow key={stop.id} stop={stop} />)}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

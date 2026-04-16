@@ -5,6 +5,8 @@ import { z } from "zod/v4";
 export const tourStopsTable = pgTable("tour_stops", {
   id: serial("id").primaryKey(),
   tourId: integer("tour_id").notNull(),
+  venueId: integer("venue_id"),
+  bookingStatus: text("booking_status").default("confirmed"),
   stopOrder: integer("stop_order").notNull().default(0),
   date: text("date"),
   city: text("city").notNull(),

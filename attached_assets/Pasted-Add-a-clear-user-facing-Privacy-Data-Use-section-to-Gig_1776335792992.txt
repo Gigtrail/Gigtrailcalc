@@ -1,0 +1,68 @@
+Add a clear, user-facing “Privacy & Data Use” section to Gig Trail that explains how touring, deal, and venue data is handled.
+
+GOAL
+
+Build trust with users by clearly explaining how their data is used, stored, and protected — especially given the sensitive nature of deal and income information.
+
+-----------------------------------
+CREATE SETTINGS SECTION
+-----------------------------------
+
+Add a new section:
+"Privacy & Data"
+
+This should be human-readable, not legal-heavy.
+
+-----------------------------------
+CONTENT REQUIREMENTS
+-----------------------------------
+
+Include clear sections:
+
+1. Data Privacy
+- "Your tour data, deals, and venue history are private to your account."
+- "We do not share your individual data with other users."
+
+2. Aggregated Insights
+- "We may use anonymised, aggregated data to improve insights such as average fees or venue performance."
+- "This data is never linked to you personally."
+
+3. No Raw Data Sharing
+- "We never expose your specific deal details to other users or venues."
+
+4. User Control
+- "You can edit or delete your data at any time."
+
+5. Purpose
+- "Your data helps you track performance and make better touring decisions."
+
+-----------------------------------
+LIGHTWEIGHT UI INTEGRATION
+-----------------------------------
+
+Add small trust indicators in key areas:
+
+- Onboarding:
+  "Your data stays private and is used to improve your own touring insights."
+
+- Venue / Past Shows:
+  Tooltip or helper text:
+  "Your deal history is private to you."
+
+-----------------------------------
+UX REQUIREMENTS
+-----------------------------------
+
+- Keep tone simple and human
+- Avoid legal jargon
+- Keep it reassuring but honest
+- Do not overwhelm the user
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Users can easily understand how their data is used
+- Clear distinction between private data and aggregated insights
+- Trust messaging appears in key parts of the product
+- No implication that user data is publicly visible
