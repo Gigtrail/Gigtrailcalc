@@ -324,6 +324,12 @@ export default function Onboarding() {
           <p className="text-center text-xs text-muted-foreground">
             You can edit everything later from your settings
           </p>
+          <div className="flex items-center justify-center gap-1.5 pt-1">
+            <Lock className="w-3 h-3 text-muted-foreground/60" />
+            <p className="text-center text-xs text-muted-foreground/60">
+              Your data stays private and is used to improve your own touring insights only
+            </p>
+          </div>
         </div>
       </div>
 

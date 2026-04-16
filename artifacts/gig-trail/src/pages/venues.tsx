@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useGetVenues } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Building2, MapPin, Search, X, TrendingUp, Clock, Star } from "lucide-react";
+import { Building2, MapPin, Search, X, TrendingUp, Clock, Star, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +63,10 @@ export default function Venues() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Saved Venues</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Your private venue database — built from past shows and tour history
+          </p>
+          <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
+            <Lock className="w-3 h-3 shrink-0" />
+            Your deal history is private to you
           </p>
         </div>
       </div>

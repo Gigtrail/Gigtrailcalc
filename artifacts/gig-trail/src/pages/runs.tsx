@@ -235,6 +235,10 @@ export default function Runs() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Past Shows</h1>
           <p className="text-muted-foreground mt-0.5 text-sm">Your touring spreadsheet.</p>
+          <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
+            <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Your deal history is private to you
+          </p>
         </div>
         <Button asChild>
           <Link href="/runs/new">

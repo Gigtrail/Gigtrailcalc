@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2 } from "lucide-react";
+import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2, Shield } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -107,6 +107,14 @@ export function AppSidebar() {
                     <Badge className={`ml-auto ${PLAN_COLORS[plan] || PLAN_COLORS.free}`}>
                       {PLAN_LABELS[plan] || plan}
                     </Badge>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/privacy"}>
+                  <Link href="/privacy" className="flex items-center gap-3 w-full">
+                    <Shield className="w-5 h-5" />
+                    <span>Privacy & Data</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

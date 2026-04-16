@@ -26,6 +26,7 @@ import Venues from "@/pages/venues";
 import Garage from "@/pages/vehicles";
 import GarageVehicleForm from "@/pages/vehicle-form";
 import Onboarding from "@/pages/onboarding";
+import Privacy from "@/pages/privacy";
 import NotFound from "@/pages/not-found";
 import { useGetProfiles, setAuthTokenGetter } from "@workspace/api-client-react";
 
@@ -159,6 +160,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/billing">
               {() => <ProtectedRoute component={Billing} />}
+            </Route>
+            <Route path="/privacy">
+              {() => <ProtectedRoute component={Privacy} />}
             </Route>
             <Route path="/profiles">
               {() => <ProtectedRoute component={Profiles} />}
