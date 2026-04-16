@@ -160,40 +160,6 @@ export default function TourDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
 
-  // ── Persist computed financial totals so the tours list stays accurate ─────
-  const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const calcPersistReady = useRef(false);
-  useEffect(() => {
-    // Skip the initial render — only start persisting after the first real calc
-    if (!calcPersistReady.current) {
-      if (calc) calcPersistReady.current = true;
-      return;
-    }
-    if (!calc || !tour) return;
-    if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    calcSaveTimerRef.current = setTimeout(() => {
-      updateTour.mutate(
-        {
-          id: tourId,
-          data: {
-            name: tour.name,
-            totalDistance: Math.round(calc.totalDistance ?? 0),
-            totalIncome: Math.round((calc.grossIncome ?? 0) * 100) / 100,
-            totalCost: Math.round((calc.totalExpenses ?? 0) * 100) / 100,
-            totalProfit: Math.round((calc.netProfit ?? 0) * 100) / 100,
-          },
-        },
-        {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() }),
-        }
-      );
-    }, 1500);
-    return () => {
-      if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calc]);
-
   const deleteStop = useDeleteTourStop();
   const createStop = useCreateTourStop();
   const updateTour = useUpdateTour();
@@ -368,6 +334,39 @@ export default function TourDetail() {
       fuelPrices,
     );
   }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
+
+  // ── Persist computed financial totals so the tours list stays accurate ─────
+  const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const calcPersistReady = useRef(false);
+  useEffect(() => {
+    if (!calcPersistReady.current) {
+      if (calc) calcPersistReady.current = true;
+      return;
+    }
+    if (!calc || !tour) return;
+    if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
+    calcSaveTimerRef.current = setTimeout(() => {
+      updateTour.mutate(
+        {
+          id: tourId,
+          data: {
+            name: tour.name,
+            totalDistance: Math.round(calc.totalDistance ?? 0),
+            totalIncome: Math.round((calc.grossIncome ?? 0) * 100) / 100,
+            totalCost: Math.round((calc.totalExpenses ?? 0) * 100) / 100,
+            totalProfit: Math.round((calc.netProfit ?? 0) * 100) / 100,
+          },
+        },
+        {
+          onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() }),
+        }
+      );
+    }, 1500);
+    return () => {
+      if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calc]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
