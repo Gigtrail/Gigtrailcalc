@@ -964,8 +964,8 @@ export default function TourForm() {
           {step === 3 && (
             <StepShell
               step={3}
-              title="What are you driving?"
-              subtitle="Pick a vehicle from your garage. Fuel costs will be calculated per vehicle."
+              title="What's your main vehicle?"
+              subtitle="You can add more vehicles later in your tour setup."
               chips={
                 <>
                   <SummaryChip label="Tour" value={name || "—"} />
@@ -1011,10 +1011,23 @@ export default function TourForm() {
                 </div>
               )}
 
-              {selectedVehicle && (
-                <div className="bg-muted/40 rounded-lg px-4 py-2.5 text-xs text-muted-foreground border border-border/30">
-                  Fuel type auto-set to <span className="font-medium text-foreground capitalize">{selectedVehicle.fuelType}</span> — you can adjust this in the next step.
+              {selectedVehicle ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 bg-secondary/10 rounded-lg px-4 py-2.5 border border-secondary/20">
+                    <CheckCircle2 className="w-4 h-4 text-secondary shrink-0" />
+                    <span className="text-xs font-medium text-secondary">Using 1 vehicle for now</span>
+                    <span className="text-xs text-muted-foreground ml-auto">Fuel: <span className="capitalize">{selectedVehicle.fuelType}</span> — adjust in next step</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Need multiple vehicles? Open your tour after saving to add more.
+                  </p>
                 </div>
+              ) : (
+                vehicles && vehicles.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    Tap a vehicle to select it as your primary ride for this tour.
+                  </p>
+                )
               )}
             </StepShell>
           )}
