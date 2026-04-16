@@ -48,6 +48,12 @@ export interface Profile {
   /** @nullable */
   defaultFuelPrice: number | null;
   /** @nullable */
+  defaultPetrolPrice: number | null;
+  /** @nullable */
+  defaultDieselPrice: number | null;
+  /** @nullable */
+  defaultLpgPrice: number | null;
+  /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;
   /** @nullable */
@@ -95,6 +101,12 @@ export interface CreateProfileBody {
   maxDriveHoursPerDay?: number | null;
   /** @nullable */
   defaultFuelPrice?: number | null;
+  /** @nullable */
+  defaultPetrolPrice?: number | null;
+  /** @nullable */
+  defaultDieselPrice?: number | null;
+  /** @nullable */
+  defaultLpgPrice?: number | null;
   /** @nullable */
   notes?: string | null;
 }

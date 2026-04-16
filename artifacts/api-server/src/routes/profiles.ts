@@ -37,6 +37,9 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
     avgFoodPerDay: Number(p.avgFoodPerDay),
     minTakeHomePerPerson: Number(p.minTakeHomePerPerson),
     defaultFuelPrice: p.defaultFuelPrice != null ? Number(p.defaultFuelPrice) : null,
+    defaultPetrolPrice: p.defaultPetrolPrice != null ? Number(p.defaultPetrolPrice) : null,
+    defaultDieselPrice: p.defaultDieselPrice != null ? Number(p.defaultDieselPrice) : null,
+    defaultLpgPrice: p.defaultLpgPrice != null ? Number(p.defaultLpgPrice) : null,
     homeBaseLat: p.homeBaseLat != null ? Number(p.homeBaseLat) : null,
     homeBaseLng: p.homeBaseLng != null ? Number(p.homeBaseLng) : null,
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
@@ -75,6 +78,9 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
     minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
     defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
+    defaultPetrolPrice: parsed.data.defaultPetrolPrice != null ? String(parsed.data.defaultPetrolPrice) : null,
+    defaultDieselPrice: parsed.data.defaultDieselPrice != null ? String(parsed.data.defaultDieselPrice) : null,
+    defaultLpgPrice: parsed.data.defaultLpgPrice != null ? String(parsed.data.defaultLpgPrice) : null,
   }).returning();
   res.status(201).json(GetProfileResponse.parse(serializeProfile(profile)));
 });
@@ -114,6 +120,12 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
   if (parsed.data.defaultFuelPrice != null) updateData.defaultFuelPrice = String(parsed.data.defaultFuelPrice);
   else if (parsed.data.defaultFuelPrice === null) updateData.defaultFuelPrice = null;
+  if (parsed.data.defaultPetrolPrice != null) updateData.defaultPetrolPrice = String(parsed.data.defaultPetrolPrice);
+  else if (parsed.data.defaultPetrolPrice === null) updateData.defaultPetrolPrice = null;
+  if (parsed.data.defaultDieselPrice != null) updateData.defaultDieselPrice = String(parsed.data.defaultDieselPrice);
+  else if (parsed.data.defaultDieselPrice === null) updateData.defaultDieselPrice = null;
+  if (parsed.data.defaultLpgPrice != null) updateData.defaultLpgPrice = String(parsed.data.defaultLpgPrice);
+  else if (parsed.data.defaultLpgPrice === null) updateData.defaultLpgPrice = null;
   const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });

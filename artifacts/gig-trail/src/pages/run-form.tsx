@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
-import { resolveFuelPrice } from "@/lib/fuel-price";
+import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import {
@@ -158,7 +158,7 @@ export default function RunForm() {
       destination: "",
       distanceKm: 0,
       returnTrip: true,
-      fuelPrice: 1.5,
+      fuelPrice: 0,
       showType: "Flat Fee",
       fee: 0,
       capacity: 0,
@@ -219,6 +219,7 @@ export default function RunForm() {
     overrides?: {
       distanceKm?: number;
       vehicleConsumption?: number;
+      vehicleFuelType?: string | null;
       driveTimeMinutes?: number | null;
       accommodationNights?: number;
       accommodationRequired?: boolean;
@@ -233,8 +234,21 @@ export default function RunForm() {
       ?? (profile ? Number(profile.fuelConsumption) : 0);
     const driveTimeMinutes = overrides?.driveTimeMinutes !== undefined ? overrides.driveTimeMinutes : null;
 
-    const resolvedFuel = resolveFuelPrice(vals.fuelPrice, profile?.defaultFuelPrice);
-    const fuelPriceSource = resolvedFuel.source;
+    const vehicleFuelType = overrides?.vehicleFuelType ?? null;
+    const profileAssumptions = profile
+      ? {
+          petrol: profile.defaultPetrolPrice ?? undefined,
+          diesel: profile.defaultDieselPrice ?? undefined,
+          lpg: profile.defaultLpgPrice ?? undefined,
+        }
+      : {};
+    const resolvedFuel = resolveFuelPriceForVehicle(
+      vehicleFuelType,
+      vals.fuelPrice,
+      profileAssumptions,
+      profile?.defaultFuelPrice
+    );
+    const fuelPriceSource: FuelPriceSource = resolvedFuel.source;
 
     const accommodationRequired = overrides?.accommodationRequired ?? vals.accommodationRequired ?? false;
     const singleRooms = overrides?.singleRooms ?? Number(vals.singleRooms) ?? 0;
@@ -360,14 +374,16 @@ export default function RunForm() {
       const perNightRate = accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE;
       const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * perNightRate : 0;
 
-      // Use selected garage vehicle's consumption if available
+      // Use selected garage vehicle's consumption and fuel type if available
       const selectedVehicle = runVehicleId ? vehicles?.find(v => v.id === runVehicleId) : null;
-      const vehicleConsumptionOverride = selectedVehicle ? { vehicleConsumption: selectedVehicle.avgConsumption } : {};
+      const vehicleOverrides = selectedVehicle
+        ? { vehicleConsumption: selectedVehicle.avgConsumption, vehicleFuelType: selectedVehicle.fuelType }
+        : {};
 
       // Pass room overrides only — accommodationNights comes from the form value the user set
       const computed = computeGigResults(vals, {
         ...routeOverride,
-        ...vehicleConsumptionOverride,
+        ...vehicleOverrides,
         accommodationRequired: accomRequired,
         singleRooms: accomSingleRooms,
         doubleRooms: accomDoubleRooms,
@@ -634,10 +650,9 @@ export default function RunForm() {
         form.setValue("fee", profile.expectedGigFee);
       }
     }
-    // Apply profile's default fuel price when one has been set
-    if (profile.defaultFuelPrice != null && Number(profile.defaultFuelPrice) > 0) {
-      form.setValue("fuelPrice", Number(profile.defaultFuelPrice));
-    }
+    // Note: fuelPrice field is a per-show manual override only.
+    // The profile's fuel assumptions (defaultPetrolPrice / defaultDieselPrice / defaultLpgPrice)
+    // are applied automatically by the calculation engine — no pre-fill needed here.
     if (!isPro && profile.homeBase) {
       form.setValue("origin", profile.homeBase);
       form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
@@ -1198,12 +1213,12 @@ export default function RunForm() {
                       name="fuelPrice"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Fuel Price ($/L)</FormLabel>
+                          <FormLabel>Fuel Price Override ($/L)</FormLabel>
                           <FormControl>
-                            <Input type="number" min="0" step="0.01" {...field} />
+                            <Input type="number" min="0" step="0.01" placeholder="Leave blank to use profile assumption" {...field} value={field.value || ""} onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))} />
                           </FormControl>
                           <p className="text-xs text-muted-foreground">
-                            Set a default in your profile to pre-fill this automatically.
+                            Optional. Leave at 0 to use your profile's fuel assumption (set per fuel type in your profile). Automatic fuel pricing coming soon.
                           </p>
                           <FormMessage />
                         </FormItem>

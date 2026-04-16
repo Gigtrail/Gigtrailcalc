@@ -25,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ChevronLeft, Save, Settings2, BookUser, BedDouble, Wrench, Plus, Star, Truck, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Save, Settings2, BookUser, BedDouble, Wrench, Plus, Star, Truck, CheckCircle2, Fuel } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -73,6 +73,9 @@ const profileSchema = z.object({
   vehicleName: z.string().optional().nullable(),
   fuelConsumption: z.coerce.number().min(0),
   defaultFuelPrice: z.coerce.number().min(0).optional().nullable(),
+  defaultPetrolPrice: z.coerce.number().min(0).optional().nullable(),
+  defaultDieselPrice: z.coerce.number().min(0).optional().nullable(),
+  defaultLpgPrice: z.coerce.number().min(0).optional().nullable(),
   defaultVehicleId: z.number().optional().nullable(),
   maxDriveHoursPerDay: z.coerce.number().min(1).max(24).optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -139,6 +142,9 @@ export default function ProfileForm() {
       vehicleName: "",
       fuelConsumption: 11.5,
       defaultFuelPrice: null,
+      defaultPetrolPrice: null,
+      defaultDieselPrice: null,
+      defaultLpgPrice: null,
       defaultVehicleId: null,
       maxDriveHoursPerDay: 8,
       notes: "",
@@ -191,6 +197,9 @@ export default function ProfileForm() {
         vehicleName: profile.vehicleName || "",
         fuelConsumption: profile.fuelConsumption ?? 11.5,
         defaultFuelPrice: profile.defaultFuelPrice ?? null,
+        defaultPetrolPrice: profile.defaultPetrolPrice ?? null,
+        defaultDieselPrice: profile.defaultDieselPrice ?? null,
+        defaultLpgPrice: profile.defaultLpgPrice ?? null,
         defaultVehicleId: profile.defaultVehicleId ?? null,
         maxDriveHoursPerDay: profile.maxDriveHoursPerDay ?? 8,
         notes: profile.notes || "",
@@ -733,6 +742,91 @@ export default function ProfileForm() {
                     </FormItem>
                   )}
                 />
+              </div>
+
+              {/* ── Fuel Assumptions ─────────────────────────────────────────── */}
+              <div className="pt-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <Fuel className="w-4 h-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold">Fuel Assumptions</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Set your assumed $/L price for each fuel type. Used automatically based on your vehicle's fuel type. You can override per show.
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="defaultPetrolPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Petrol ($/L)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 1.85"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="defaultDieselPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Diesel ($/L)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 1.95"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="defaultLpgPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LPG ($/L)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 0.90"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex items-start gap-2 mt-3 text-xs text-amber-700/80 bg-amber-50 rounded-lg px-3 py-2">
+                  <Fuel className="w-3 h-3 mt-0.5 shrink-0" />
+                  <span>
+                    Using manual fuel price assumptions. Automatic fuel pricing is coming soon — leave blank to use Australian averages (Petrol $1.85, Diesel $1.95, LPG $0.90).
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {isPro && canUseAdvancedDriving(plan as Plan) && (
                   <FormField
                     control={form.control}
