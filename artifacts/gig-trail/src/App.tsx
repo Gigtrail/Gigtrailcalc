@@ -21,6 +21,7 @@ import Tours from "@/pages/tours";
 import TourForm from "@/pages/tour-form";
 import TourDetail from "@/pages/tour-detail";
 import TourStopForm from "@/pages/tour-stop-form";
+import VenueDetail from "@/pages/venue-detail";
 import Garage from "@/pages/vehicles";
 import GarageVehicleForm from "@/pages/vehicle-form";
 import Onboarding from "@/pages/onboarding";
@@ -209,6 +210,9 @@ function ClerkProviderWithRoutes() {
             </Route>
             <Route path="/tours/:id">
               {() => <ProtectedRoute component={TourDetail} />}
+            </Route>
+            <Route path="/venues/:id">
+              {() => <ProtectedRoute component={VenueDetail} />}
             </Route>
             <Route component={NotFound} />
           </Switch>

@@ -1,0 +1,252 @@
+Implement a unified system where Tour Builder, Past Shows, and Venues work together to build a private venue intelligence database over time.
+
+GOAL
+
+Gig Trail should evolve from a tour planner into a tool that helps musicians remember, evaluate, and make better decisions about venues based on real past experience.
+
+This system should:
+- reuse Venue records (no duplicates)
+- store multiple show histories per venue
+- automatically feed Past Shows from tours when appropriate
+- gradually build a private venue database for each user
+
+-----------------------------------
+CORE DATA MODEL
+-----------------------------------
+
+Use three core entities:
+
+1. Venue
+Represents a place (static / reusable)
+
+2. Tour Stop
+Represents a planned show inside a tour
+
+3. Past Show
+Represents an actual performance that has occurred
+
+Relationship:
+- one Venue → many Past Shows
+- one Tour → many Tour Stops
+- one Tour Stop → one Past Show (when completed)
+
+-----------------------------------
+VENUE MODEL (PRIVATE DATABASE)
+-----------------------------------
+
+Each user should build their own private venue database over time.
+
+Venue stores:
+- name
+- full address
+- suburb/city/state/country
+- optional contact info
+- optional capacity
+- optional website
+- optional notes (room, sound, parking, accommodation, etc.)
+
+Do NOT store financial outcomes (fees, merch, etc.) directly on the venue.
+
+-----------------------------------
+PAST SHOW MODEL
+-----------------------------------
+
+Each Past Show represents one real gig.
+
+Store:
+- venueId
+- show date
+- tourId (if from a tour)
+- stopId (if from a tour)
+- profile/act used
+- deal type
+- guarantee / fee
+- ticket split if applicable
+- merch (planned + actual)
+- audience (planned + actual)
+- expenses if relevant
+- net result
+- would do again (boolean)
+- notes
+
+-----------------------------------
+PLANNED VS ACTUAL
+-----------------------------------
+
+Support both:
+
+Planned (from Tour Builder):
+- plannedFee
+- plannedMerch
+- plannedNotes
+
+Actual (edited later in Past Shows):
+- actualFee
+- actualMerch
+- actualAudience
+- actualNotes
+- wouldDoAgain
+
+Do NOT overwrite actual values when syncing from tours.
+
+-----------------------------------
+TOUR → PAST SHOW FLOW
+-----------------------------------
+
+When a Tour Stop becomes eligible:
+- valid date
+- valid venue
+- saved tour
+- and either:
+  - show date is in the past
+  - OR user marks show/tour as completed
+
+Then:
+
+1. Find or create Venue
+2. Create or update Past Show linked to:
+   - venueId
+   - sourceTourId
+   - sourceStopId
+
+-----------------------------------
+DUPLICATE PREVENTION
+-----------------------------------
+
+Do NOT create duplicate venues.
+
+Use matching:
+- normalized venue name
+- normalized address
+- or existing venueId if selected
+
+Do NOT create duplicate Past Shows:
+- use sourceTourId + sourceStopId
+- update existing records instead
+
+-----------------------------------
+SYNC RULES
+-----------------------------------
+
+Before show date:
+- Past Show updates when Tour Stop changes
+
+After show date:
+- preserve actual values entered by user
+- only update planned fields if needed
+
+-----------------------------------
+VENUE INTELLIGENCE (KEY FEATURE)
+-----------------------------------
+
+Each venue should build a history over time.
+
+Derived insights per venue:
+- times played
+- last played date
+- average fee
+- average merch
+- average audience
+- average net result
+- “would play again” ratio
+
+These should be calculated from Past Shows, not stored directly.
+
+-----------------------------------
+VENUE PAGE / VIEW
+-----------------------------------
+
+Each venue should have:
+
+1. Venue details
+2. Summary stats:
+   - times played
+   - last played
+   - averages (fee, merch, audience)
+3. Show history list:
+   - each Past Show as its own record
+
+-----------------------------------
+PAST SHOWS PAGE
+-----------------------------------
+
+Each show:
+- remains its own record
+- links back to the Venue
+- optionally shows:
+  “From Tour: {Tour Name}”
+
+-----------------------------------
+POSITIONING
+-----------------------------------
+
+This is NOT a public venue directory.
+
+This is:
+- a private venue database
+- built automatically from real tours and shows
+- unique to each user
+
+-----------------------------------
+EDGE CASES
+-----------------------------------
+
+1. Future shows
+- remain as Tour Stops only
+- do not appear in Past Shows unless marked completed
+
+2. Incomplete stops
+- skip Past Show creation
+
+3. Deleted tour stops
+- if no actual data → remove Past Show
+- if actual data exists → preserve Past Show and unlink
+
+4. Date changes
+- if moved to future → do not treat as completed unless manually marked
+
+-----------------------------------
+DATA MODEL ADDITIONS
+-----------------------------------
+
+Venue:
+- id
+- userId
+- name
+- address fields
+- notes
+
+Past Show:
+- id
+- venueId
+- sourceTourId
+- sourceStopId
+- planned fields
+- actual fields
+- importedFromTour (boolean)
+- importedAt
+
+-----------------------------------
+ACCEPTANCE CRITERIA
+-----------------------------------
+
+- Venues are reused across multiple shows
+- Each show creates its own Past Show record
+- No duplicate venues created for the same location
+- Tour stops automatically feed Past Shows when appropriate
+- Past Shows retain both planned and actual data
+- Venue pages show meaningful history and averages
+- System builds a private venue database over time
+- No public/shared venue system is introduced at this stage
+
+-----------------------------------
+IMPORTANT
+-----------------------------------
+
+Mental model must remain:
+
+Venue = place
+Past Show = what happened there
+
+Do not collapse multiple gigs into one record.
+Do not store historical financial data at the venue level.

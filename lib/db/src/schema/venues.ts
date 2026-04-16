@@ -13,6 +13,15 @@ export const venuesTable = pgTable("venues", {
   country: text("country"),
   lastTotalProfit: text("last_total_profit"),
   lastStatus: text("last_status"),
+  // Extended detail fields
+  address: text("address"),
+  suburb: text("suburb"),
+  fullAddress: text("full_address"),
+  capacity: integer("capacity"),
+  website: text("website"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  roomNotes: text("room_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

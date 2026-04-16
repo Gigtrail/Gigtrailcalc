@@ -400,8 +400,22 @@ export default function Runs() {
                       onClick={() => navigate(`/runs/results?runId=${run.id}`)}
                     >
                       <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-xs">{dateStr}</td>
-                      <td className="px-3 py-2.5 font-medium max-w-[180px]">
-                        <span className="truncate block">{venueName}</span>
+                      <td className="px-3 py-2.5 font-medium max-w-[200px]">
+                        {run.venueId ? (
+                          <button
+                            className="truncate block text-left hover:text-primary hover:underline underline-offset-2 transition-colors w-full"
+                            onClick={e => { e.stopPropagation(); navigate(`/venues/${run.venueId}`); }}
+                          >
+                            {venueName}
+                          </button>
+                        ) : (
+                          <span className="truncate block">{venueName}</span>
+                        )}
+                        {run.importedFromTour && run.tourName && (
+                          <span className="text-[10px] font-normal text-primary/60 mt-0.5 block truncate">
+                            Tour: {run.tourName}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{location}</td>
                       <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmt(run.totalIncome)}</td>

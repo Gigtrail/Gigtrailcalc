@@ -55,6 +55,12 @@ export const runsTable = pgTable("runs", {
   wouldDoAgain: text("would_do_again"),
   notes: text("notes"),
   calculationSnapshot: jsonb("calculation_snapshot"),
+  // Tour linkage
+  sourceTourId: integer("source_tour_id"),
+  sourceStopId: integer("source_stop_id"),
+  importedFromTour: boolean("imported_from_tour").notNull().default(false),
+  importedAt: timestamp("imported_at", { withTimezone: true }),
+  tourName: text("tour_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -173,8 +173,88 @@ export interface Venue {
   lastTotalProfit?: number | null;
   /** @nullable */
   lastStatus?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
+  showCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VenueStats {
+  timesPlayed: number;
+  /** @nullable */
+  lastPlayed?: string | null;
+  /** @nullable */
+  avgFee?: number | null;
+  /** @nullable */
+  avgProfit?: number | null;
+  /** @nullable */
+  avgMerch?: number | null;
+  /** @nullable */
+  avgAudience?: number | null;
+  /** @nullable */
+  wouldPlayAgainRatio?: number | null;
+}
+
+export interface VenueShow {
+  id: number;
+  /** @nullable */
+  showDate?: string | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  showType: string;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  guarantee?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  merchEstimate?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  importedFromTour: boolean;
+  /** @nullable */
+  tourName?: string | null;
+  /** @nullable */
+  sourceTourId?: number | null;
+  /** @nullable */
+  sourceStopId?: number | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface VenueDetail extends Venue {
+  stats: VenueStats;
+  shows: VenueShow[];
 }
 
 export interface CreateVenueBody {
@@ -191,6 +271,49 @@ export interface CreateVenueBody {
   lastTotalProfit?: number | null;
   /** @nullable */
   lastStatus?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
+}
+
+export interface PatchVenueBody {
+  /** @nullable */
+  venueName?: string;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
 }
 
 export interface Run {
@@ -289,6 +412,15 @@ export interface Run {
   notes?: string | null;
   /** @nullable */
   calculationSnapshot?: Record<string, unknown> | null;
+  /** @nullable */
+  sourceTourId?: number | null;
+  /** @nullable */
+  sourceStopId?: number | null;
+  importedFromTour?: boolean;
+  /** @nullable */
+  importedAt?: string | null;
+  /** @nullable */
+  tourName?: string | null;
   createdAt: string;
 }
 

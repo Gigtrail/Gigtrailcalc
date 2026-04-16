@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc, count, inArray } from "drizzle-orm";
-import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable } from "@workspace/db";
+import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable, runsTable, venuesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateTourBody,
@@ -228,6 +228,108 @@ router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Pro
     return;
   }
   res.sendStatus(204);
+});
+
+// ─── Sync tour stop → Past Show ─────────────────────────────────────────────
+// POST /tours/:tourId/stops/:stopId/past-show
+// Creates or updates a "run" (past show) from a tour stop, linking venue + tour
+
+function normalizeVenueName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const tourId = parseInt(req.params.tourId);
+  const stopId = parseInt(req.params.stopId);
+  if (isNaN(tourId) || isNaN(stopId)) {
+    res.status(400).json({ error: "Invalid ids" });
+    return;
+  }
+
+  const [tour] = await db.select().from(toursTable).where(and(eq(toursTable.id, tourId), eq(toursTable.userId, userId)));
+  if (!tour) { res.status(404).json({ error: "Tour not found" }); return; }
+
+  const [stop] = await db.select().from(tourStopsTable).where(eq(tourStopsTable.id, stopId));
+  if (!stop) { res.status(404).json({ error: "Stop not found" }); return; }
+
+  // 1. Find or create venue
+  let venueId: number | null = null;
+  if (stop.venueName?.trim()) {
+    const normalized = normalizeVenueName(stop.venueName);
+    const [existing] = await db.select().from(venuesTable)
+      .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
+
+    if (existing) {
+      venueId = existing.id;
+      // Update location if we have better data
+      if (stop.city && !existing.city) {
+        await db.update(venuesTable).set({ city: stop.city, updatedAt: new Date() }).where(eq(venuesTable.id, existing.id));
+      }
+    } else {
+      const [created] = await db.insert(venuesTable).values({
+        userId,
+        venueName: stop.venueName.trim(),
+        normalizedVenueName: normalized,
+        city: stop.city ?? null,
+        updatedAt: new Date(),
+      }).returning();
+      venueId = created.id;
+    }
+  }
+
+  // 2. Check if a Past Show already exists for this stop
+  const [existingRun] = await db.select().from(runsTable)
+    .where(and(eq(runsTable.userId, userId), eq(runsTable.sourceStopId, stopId)));
+
+  const fee = stop.fee != null ? Number(stop.fee) : null;
+  const guarantee = stop.guarantee != null ? Number(stop.guarantee) : null;
+  const merch = stop.merchEstimate != null ? Number(stop.merchEstimate) : null;
+
+  if (existingRun) {
+    // Update only planned fields; preserve any actual values already entered
+    const update: Partial<typeof runsTable.$inferInsert> = {
+      venueName: stop.venueName ?? existingRun.venueName,
+      city: stop.city ?? existingRun.city,
+      showDate: stop.date ?? existingRun.showDate,
+      showType: stop.showType,
+      fee: fee != null ? String(fee) : existingRun.fee,
+      guarantee: guarantee != null ? String(guarantee) : existingRun.guarantee,
+      merchEstimate: merch != null ? String(merch) : existingRun.merchEstimate,
+      notes: existingRun.actualProfit != null ? existingRun.notes : (stop.notes ?? existingRun.notes),
+      venueId: venueId ?? existingRun.venueId,
+      tourName: tour.name,
+    };
+    const [updated] = await db.update(runsTable).set(update).where(eq(runsTable.id, existingRun.id)).returning();
+    res.json({ ...updated, id: updated.id, createdPastShow: false });
+    return;
+  }
+
+  // 3. Create new Past Show
+  const [created] = await db.insert(runsTable).values({
+    userId,
+    venueId,
+    venueName: stop.venueName ?? null,
+    city: stop.city ?? null,
+    showDate: stop.date ?? null,
+    status: "completed",
+    showType: stop.showType,
+    fee: fee != null ? String(fee) : null,
+    guarantee: guarantee != null ? String(guarantee) : null,
+    merchEstimate: merch != null ? String(merch) : null,
+    notes: stop.notes ?? null,
+    distanceKm: "0",
+    fuelPrice: "0",
+    returnTrip: false,
+    sourceTourId: tourId,
+    sourceStopId: stopId,
+    importedFromTour: true,
+    importedAt: new Date(),
+    tourName: tour.name,
+    accommodationRequired: false,
+  }).returning();
+
+  res.status(201).json({ ...created, id: created.id, createdPastShow: true });
 });
 
 // ─── Tour Vehicles ──────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import {
   useGetTour, useGetTourStops, useGetProfile,
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
   useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
-  getGetTourVehiclesQueryKey, getGetToursQueryKey,
+  getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
   Clock, History, Search, Home, Building2, Pencil, BarChart2, Lightbulb, Ticket,
-  Download,
+  Download, BookmarkPlus, CheckCircle,
 } from "lucide-react";
 import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
@@ -164,6 +164,8 @@ export default function TourDetail() {
   const createStop = useCreateTourStop();
   const updateTour = useUpdateTour();
   const addTourVehicleMutation = useAddTourVehicle();
+  const syncStopToPastShow = useSyncStopToPastShow();
+  const [syncedStopIds, setSyncedStopIds] = useState<Set<number>>(new Set());
   const deleteTourVehicleMutation = useDeleteTourVehicle();
 
   const handleDeleteStop = (stopId: number) => {
@@ -815,7 +817,39 @@ export default function TourDetail() {
                                 </>
                               )}
                             </div>
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex gap-2 justify-end flex-wrap">
+                              {stop.venueName && (
+                                <Button
+                                  variant="outline" size="sm"
+                                  className={`h-7 text-xs ${syncedStopIds.has(stop.id) ? "text-[#2E7D32] border-[#2E7D32]/30" : "text-muted-foreground"}`}
+                                  disabled={syncStopToPastShow.isPending}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    syncStopToPastShow.mutate(
+                                      { tourId, stopId: stop.id },
+                                      {
+                                        onSuccess: (result) => {
+                                          setSyncedStopIds(prev => new Set([...prev, stop.id]));
+                                          queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
+                                          toast({
+                                            title: result.createdPastShow
+                                              ? "Saved to Past Shows"
+                                              : "Past Show updated",
+                                            description: stop.venueName ?? undefined,
+                                          });
+                                        },
+                                        onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+                                      }
+                                    );
+                                  }}
+                                >
+                                  {syncedStopIds.has(stop.id) ? (
+                                    <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
+                                  ) : (
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                  )}
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost" size="sm"
                                 className="h-7 text-xs text-muted-foreground hover:text-foreground"
@@ -908,7 +942,39 @@ export default function TourDetail() {
                                 </>
                               )}
                             </div>
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex gap-2 justify-end flex-wrap">
+                              {stop.venueName && (
+                                <Button
+                                  variant="outline" size="sm"
+                                  className={`h-7 text-xs ${syncedStopIds.has(stop.id) ? "text-[#2E7D32] border-[#2E7D32]/30" : "text-muted-foreground"}`}
+                                  disabled={syncStopToPastShow.isPending}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    syncStopToPastShow.mutate(
+                                      { tourId, stopId: stop.id },
+                                      {
+                                        onSuccess: (result) => {
+                                          setSyncedStopIds(prev => new Set([...prev, stop.id]));
+                                          queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
+                                          toast({
+                                            title: result.createdPastShow
+                                              ? "Saved to Past Shows"
+                                              : "Past Show updated",
+                                            description: stop.venueName ?? undefined,
+                                          });
+                                        },
+                                        onError: () => toast({ title: "Failed to save", variant: "destructive" }),
+                                      }
+                                    );
+                                  }}
+                                >
+                                  {syncedStopIds.has(stop.id) ? (
+                                    <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
+                                  ) : (
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                  )}
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost" size="sm"
                                 className="h-7 text-xs text-muted-foreground hover:text-foreground"
