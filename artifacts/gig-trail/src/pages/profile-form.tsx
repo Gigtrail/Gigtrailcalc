@@ -461,7 +461,7 @@ export default function ProfileForm() {
   const { id } = useParams();
   const { toast } = useToast();
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   const isEditing = !!id;
   const profileId = isEditing ? parseInt(id) : 0;
@@ -819,7 +819,7 @@ export default function ProfileForm() {
                       {!isPro && activeMembers.length >= FREE_MEMBER_LIMIT && (
                         <p className="text-xs text-muted-foreground text-center">
                           You've reached the free limit.{" "}
-                          <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade to Pro</Link>
+                          <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade</Link>
                           {" "}to add more members.
                         </p>
                       )}
@@ -858,7 +858,7 @@ export default function ProfileForm() {
                     <CardDescription className="mt-1">
                       {isPro
                         ? "Select your vehicle for this act. Garage vehicles use exact fuel figures for accurate cost calculations."
-                        : "Pick the vehicle that best matches how you tour. Upgrade to Pro to add custom vehicles."}
+                        : "Pick the vehicle that best matches how you tour. Upgrade to add custom vehicles."}
                     </CardDescription>
                   </div>
                   {isPro && (
@@ -1223,7 +1223,7 @@ export default function ProfileForm() {
                     {!isPro && activeMembers.length >= FREE_MEMBER_LIMIT && (
                       <p className="text-xs text-muted-foreground text-center">
                         You've reached the free limit.{" "}
-                        <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade to Pro</Link>
+                        <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade</Link>
                         {" "}to add more members.
                       </p>
                     )}
@@ -1321,7 +1321,7 @@ export default function ProfileForm() {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground px-1">Want to add your own vehicle? <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade to Pro</Link></p>
+                  <p className="text-xs text-muted-foreground px-1">Want to add your own vehicle? <Link href="/billing" className="text-primary underline underline-offset-2">Upgrade</Link></p>
                 </div>
               )}
 

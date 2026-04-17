@@ -105,7 +105,7 @@ export default function Runs() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const { plan, limits } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   const [search, setSearch] = useState("");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");

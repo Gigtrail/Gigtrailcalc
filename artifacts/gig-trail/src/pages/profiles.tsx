@@ -46,7 +46,7 @@ export default function Profiles() {
   const { toast } = useToast();
   const { plan, limits } = usePlan();
 
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   const [defaultProfileId, setDefaultProfileId] = useState<number | null>(() => {
     const stored = localStorage.getItem(DEFAULT_PROFILE_KEY);

@@ -163,9 +163,9 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
     return;
   }
 
-  const isPro = userPlan === "pro" || userPlan === "unlimited";
+  const isPaid = userPlan === "paid";
 
-  if (isPro) {
+  if (isPaid) {
     res.json(TrackCalculationResponse.parse({ allowed: true, count: 0, limit: null }));
     return;
   }

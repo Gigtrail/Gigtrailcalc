@@ -68,7 +68,7 @@ export default function Landing() {
                 badge: null,
               },
               {
-                name: "Pro",
+                name: "Paid",
                 tagline: "Plan smarter tours",
                 price: "AU$12",
                 period: "/mo",
@@ -79,7 +79,7 @@ export default function Landing() {
                   "Accommodation automation",
                   "Full profit breakdowns",
                 ],
-                cta: "Go Pro",
+                cta: "Get started",
                 highlight: true,
                 badge: "Most popular",
               },

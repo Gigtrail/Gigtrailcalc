@@ -55,7 +55,7 @@ export default function Onboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   const [actName, setActName] = useState("");
   const [actType, setActType] = useState("Solo");
@@ -340,15 +340,15 @@ export default function Onboarding() {
             <div className="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center mb-2">
               <Zap className="w-5 h-5 text-accent" />
             </div>
-            <DialogTitle className="text-lg font-bold">Band setups are on Pro</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Band setups require a Paid plan</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
-              Upgrade to Pro to unlock Band act type, unlimited saved runs, the full tour builder, and more.
+              Upgrade to unlock Band act type, unlimited saved runs, the full Tour Builder, and more.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">
             <Link href="/billing">
               <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                Upgrade to Pro — AU$12/mo
+                Upgrade — AU$12/mo or AU$79/yr
               </Button>
             </Link>
             <Button

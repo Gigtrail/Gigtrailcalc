@@ -1,5 +1,9 @@
 // Seed Gig Trail subscription products in Stripe (Sandbox/Test mode)
 // Run with: pnpm --filter @workspace/scripts run seed-stripe
+//
+// Creates one product ("Gig Trail Paid") with metadata { plan: "pro" }
+// which is normalized to "paid" internally by the app's sync logic.
+// Prices: AU$12/mo and AU$79/yr.
 
 import Stripe from "stripe";
 
@@ -36,47 +40,53 @@ async function main() {
   const stripe = await getStripe();
   console.log("Connected to Stripe. Seeding Gig Trail products...\n");
 
-  const existing = await stripe.products.search({ query: "name:'Gig Trail Pro' AND active:'true'" });
+  // Check for existing product (metadata.plan === "pro" = Paid tier)
+  const existing = await stripe.products.search({
+    query: "active:'true' AND metadata['plan']:'pro'",
+  });
+
   if (existing.data.length > 0) {
-    console.log("Products already exist. Listing current products:\n");
+    console.log("Paid product already exists. Current products:\n");
     const all = await stripe.products.list({ active: true, limit: 20 });
     for (const p of all.data.filter((p) => p.name.startsWith("Gig Trail"))) {
       const prices = await stripe.prices.list({ product: p.id, active: true });
       for (const pr of prices.data) {
-        console.log(`  ${p.name} — ${pr.id}: ${(pr.unit_amount! / 100).toFixed(2)} ${pr.currency.toUpperCase()} / ${(pr.recurring as any)?.interval}`);
+        console.log(
+          `  ${p.name} [plan=${p.metadata?.plan}] — ${pr.id}: ${((pr.unit_amount ?? 0) / 100).toFixed(2)} ${pr.currency.toUpperCase()} / ${(pr.recurring as any)?.interval}`
+        );
       }
     }
     return;
   }
 
-  const pro = await stripe.products.create({
-    name: "Gig Trail Pro",
-    description: "Unlimited runs, full Tour Builder, ticketed show tools, routing & fuel estimates.",
+  // Create Paid product (AU$12/mo + AU$79/yr)
+  // Note: metadata.plan is "pro" for backward compat with existing Stripe webhooks;
+  // the app normalizes "pro" → "paid" internally.
+  const paid = await stripe.products.create({
+    name: "Gig Trail Paid",
+    description: "Unlimited calculations, full Tour Builder, multi-vehicle garage, venue intelligence, and more.",
     metadata: { plan: "pro" },
   });
-  const proPrice = await stripe.prices.create({
-    product: pro.id,
-    unit_amount: 500,
+
+  const monthlyPrice = await stripe.prices.create({
+    product: paid.id,
+    unit_amount: 1200,
     currency: "aud",
     recurring: { interval: "month" },
+    nickname: "Paid Monthly AU$12/mo",
   });
-  console.log(`Created: ${pro.name} (${pro.id})`);
-  console.log(`  Price: AU$5.00/mo — ${proPrice.id}`);
 
-  const unlimited = await stripe.products.create({
-    name: "Gig Trail Unlimited Bands",
-    description: "Unlimited profiles, vehicles, runs, tours — everything in Pro.",
-    metadata: { plan: "unlimited" },
-  });
-  const unlimitedPrice = await stripe.prices.create({
-    product: unlimited.id,
-    unit_amount: 799,
+  const yearlyPrice = await stripe.prices.create({
+    product: paid.id,
+    unit_amount: 7900,
     currency: "aud",
-    recurring: { interval: "month" },
+    recurring: { interval: "year" },
+    nickname: "Paid Yearly AU$79/yr",
   });
-  console.log(`Created: ${unlimited.name} (${unlimited.id})`);
-  console.log(`  Price: AU$7.99/mo — ${unlimitedPrice.id}`);
 
+  console.log(`Created: ${paid.name} (${paid.id})`);
+  console.log(`  Monthly: AU$12.00/mo — ${monthlyPrice.id}`);
+  console.log(`  Yearly:  AU$79.00/yr — ${yearlyPrice.id}`);
   console.log("\nAll products seeded successfully.");
 }
 

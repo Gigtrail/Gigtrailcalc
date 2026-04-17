@@ -1,0 +1,348 @@
+Update the Gig Trail pricing system to a simple **2-tier model only** and also **remove all old “Save Show / Save Old Show” style actions and legacy save buttons** that are no longer needed.
+
+## Pricing model
+
+The app should only support:
+
+* **Free**
+* **Paid** = **$12/month** or **$79/year**
+
+This is **not** just a UI tweak. I need the **backend, Stripe logic, plan config, entitlement checks, upgrade flow, stored plan normalization, and old pricing references cleaned up properly**.
+
+---
+
+## Core goal
+
+Make the app consistently use this structure:
+
+### Free Plan
+
+Includes:
+
+* Single Show Calculator
+* 1 profile
+* 1 vehicle
+* Manual fuel input
+* Limited history
+
+  * keep the existing free history cap if already defined
+  * otherwise set it to **5**
+* No Tour Builder
+
+### Paid Plan
+
+Includes everything in Free, plus:
+
+* Tour Builder
+* Multiple shows per tour
+* Multiple vehicles
+* Band members + fee tracking
+* Profit breakdown per member
+* Save and edit tours
+* Full history
+
+---
+
+## Also remove legacy save-show actions
+
+There are still old save buttons / save flows hanging around.
+
+I want all outdated or duplicate show-saving actions removed, especially anything like:
+
+* **Save Show**
+* **Save Old Show**
+* duplicate manual save buttons
+* legacy history-save buttons that no longer fit the current flow
+
+### Desired behavior
+
+* Show calculations should save automatically only if that is the current intended system
+* If there is already an autosave/history system, rely on that
+* Remove confusing duplicate save actions from UI and backend flows
+* Do not leave dead handlers, orphaned buttons, or obsolete save endpoints behind
+
+If there are still multiple save paths for:
+
+* single show history
+* old show history
+* tour save
+* result save actions
+
+please simplify them so the logic is clean and current.
+
+---
+
+## Important
+
+Do this as a **proper source-of-truth refactor**, not a surface patch.
+
+That means:
+
+1. Find every place where pricing / plans / entitlements are defined
+2. Find every place where old save-show logic/buttons/actions are defined
+3. Remove or disable old pricing tiers, legacy plan names, hidden “pro” logic, unused tier checks, stale Stripe references, and outdated show-save actions
+4. Make the app only recognise:
+
+   * `free`
+   * `paid_monthly`
+   * `paid_yearly`
+     or an equivalent clean internal naming system
+
+If there are old internal names like:
+
+* `pro`
+* `premium`
+* `core`
+* `starter`
+* `legacy_paid`
+
+normalize them properly.
+
+---
+
+## What to update
+
+# 1. Plan configuration / source of truth
+
+Find the central pricing / subscription / feature config and refactor it so there is one clean plan definition object.
+
+Expected structure idea:
+
+* free
+* paid_monthly
+* paid_yearly
+
+Each should define:
+
+* display name
+* billing period
+* price
+* Stripe price ID reference
+* feature access / entitlements
+* limits
+
+Do not leave feature limits scattered across multiple files if avoidable.
+
+---
+
+# 2. Stripe integration
+
+Update Stripe backend logic so it only supports:
+
+* **$12/month**
+* **$79/year**
+
+Tasks:
+
+* remove old price references
+* remove deprecated products/prices from code
+* ensure checkout session creation only uses the new monthly/yearly paid prices
+* ensure webhook handling maps active subscriptions correctly to the new paid tier
+* ensure billing portal / subscription status reads correctly
+
+If environment variables are used for Stripe price IDs:
+
+* rename clearly if needed
+* keep backward compatibility only if necessary
+* otherwise clean them up and document the required new env vars
+
+Suggested env names:
+
+* `STRIPE_PRICE_PAID_MONTHLY`
+* `STRIPE_PRICE_PAID_YEARLY`
+
+---
+
+# 3. Entitlement / feature gating
+
+Refactor all plan checks so features are gated by capability, not messy plan-name string comparisons wherever possible.
+
+Examples:
+
+* `canUseTourBuilder`
+* `canUseMultipleVehicles`
+* `canUseMultipleProfiles`
+* `hasUnlimitedHistory`
+
+Free users should be blocked from Paid-only features with clear messaging.
+
+Paid users should unlock all premium functionality currently intended for the paid tier.
+
+If the code currently checks things like:
+
+* `plan === "pro"`
+* `plan === "premium"`
+* `tier === "core"`
+* `subscriptionStatus === "active" && tier === "core"`
+
+normalize this into one consistent entitlement layer.
+
+---
+
+# 4. Usage limits
+
+Make sure free-plan limits are enforced in backend logic too, not just UI.
+
+Specifically check:
+
+* max profiles = 1 on free
+* max vehicles = 1 on free
+* no Tour Builder on free
+* history limit enforced on free
+* paid users get full access
+
+If there are DB-level or API-level validations, update those too.
+
+---
+
+# 5. Existing user compatibility
+
+Check for old saved users/subscriptions.
+
+If old plan values exist in the database, add a safe migration / normalization path:
+
+* old paid plan values should map to the new paid tier
+* old free values should map to free
+* avoid breaking existing subscribers
+
+Please add a lightweight migration helper if needed.
+
+---
+
+# 6. Remove old save-show logic and buttons
+
+Please inspect for all old or duplicate save-show logic in:
+
+* single show calculator result screens
+* history screens
+* old show views
+* save buttons in modals
+* legacy result cards
+* API endpoints / actions for manual show save
+* handlers that create duplicate history records
+* button copy that still says “Save Show” or similar
+
+### Refactor target
+
+* one clean current save strategy
+* no duplicate manual save controls unless absolutely necessary
+* no legacy “old show” flow
+* no stale handlers in backend
+* no hidden UI buttons left behind
+
+If autosave is already the intended product direction:
+
+* calculations/history should save automatically in the correct place
+* manual save buttons for old flow should be removed
+
+If tours still need an explicit save action, keep that only if it is genuinely part of the current product logic. Do not remove valid **tour save/edit** functionality. The cleanup is specifically about old/duplicate **show save** actions.
+
+---
+
+# 7. UI + backend consistency
+
+Make sure frontend and backend match.
+
+Update:
+
+* pricing page text
+* upgrade modal
+* checkout labels
+* billing summary
+* subscription status labels
+* feature comparison tables
+* onboarding upgrade prompts
+* any old save-show button text
+* any tooltips or helper copy referring to manual show saving
+* history screen labels if they refer to old save logic
+
+The app should clearly show only:
+
+* Free
+* Paid — $12/month or $79/year
+
+Do not add Pro yet.
+
+---
+
+# 8. Clean up dead code
+
+Please remove or simplify:
+
+* unused tier constants
+* obsolete pricing helpers
+* dead feature flags for removed plans
+* outdated upgrade copy
+* old fallback logic referencing removed plans
+* obsolete save-show handlers
+* dead save button components
+* duplicate show history write functions if they are no longer needed
+
+Do not leave confusing commented-out legacy pricing or save-flow code unless absolutely necessary.
+
+---
+
+## Deliverables
+
+When complete, provide:
+
+1. A summary of all files changed
+2. What old pricing logic was removed
+3. What the new source-of-truth plan structure is
+4. What old save-show logic/buttons were removed
+5. Any required new env vars
+6. Any migration notes for existing users
+7. Anything still hardcoded that should be improved later
+
+---
+
+## Implementation preference
+
+Keep this refactor clean and practical.
+
+Priority order:
+
+1. correctness
+2. consistency
+3. removal of confusing legacy save flows
+4. future ability to add Pro later without another messy rewrite
+
+Even though we are only using 2 tiers now, please structure the code so a future Pro tier can be added cleanly later.
+
+---
+
+## Extra check
+
+Please specifically inspect for pricing references in:
+
+* Stripe checkout session creation
+* webhook handlers
+* subscription sync logic
+* feature gating helpers
+* profile / vehicle / history limits
+* tour builder access
+* database stored plan names
+* settings / billing page
+* onboarding upgrade prompts
+
+And specifically inspect for old save-show references in:
+
+* result screen actions
+* history buttons
+* old show cards
+* manual save handlers
+* autosave flows
+* duplicate DB writes
+* API routes / mutations
+* button labels / copy
+
+After changes, verify:
+
+* free users stay free
+* paid monthly works
+* paid yearly works
+* entitlement checks behave correctly
+* no old pricing labels remain
+* no legacy save-show buttons remain
+* no duplicate show-save logic remains
+* tours still save/edit correctly if that is intended

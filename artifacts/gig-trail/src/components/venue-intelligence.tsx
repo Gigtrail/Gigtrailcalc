@@ -74,7 +74,7 @@ function LockedVenueHistory({ venueName }: { venueName: string }) {
         <Button asChild size="sm" className="h-7 text-xs px-3 gap-1.5">
           <Link href="/billing">
             <Zap className="w-3 h-3" />
-            Upgrade to Pro
+            Upgrade
           </Link>
         </Button>
       </div>
@@ -108,7 +108,7 @@ function ShowRow({ show }: { show: VenueShow }) {
 
 export function VenueIntelligence({ venueId, venueName, onUseDeal }: VenueIntelligenceProps) {
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   // Fetch full venue detail only for Pro users with a known venueId
   const { data: venue, isLoading } = useGetVenue(venueId ?? 0, {

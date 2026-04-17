@@ -7,8 +7,18 @@ const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 
 export interface AuthenticatedRequest extends Request {
   userId: string;
-  userPlan: "free" | "pro" | "unlimited";
+  userPlan: "free" | "paid";
   userRole: "user" | "admin";
+}
+
+/**
+ * Normalize any legacy plan value to the canonical 2-tier set.
+ * Old "pro" and "unlimited" both map to "paid".
+ */
+export function normalizePlan(raw: string | null | undefined): "free" | "paid" {
+  if (!raw) return "free";
+  if (raw === "pro" || raw === "unlimited" || raw === "paid") return "paid";
+  return "free";
 }
 
 async function resolveEmail(userId: string, claimEmail?: string): Promise<string | undefined> {
@@ -32,7 +42,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const email = await resolveEmail(userId, auth?.sessionClaims?.email as string | undefined);
   const user = await ensureUser(userId, email);
-  (req as AuthenticatedRequest).userPlan = (user.plan as "free" | "pro" | "unlimited") ?? "free";
+  (req as AuthenticatedRequest).userPlan = normalizePlan(user.plan);
   (req as AuthenticatedRequest).userRole = (user.role as "user" | "admin") ?? "user";
   next();
 }
@@ -52,11 +62,11 @@ async function ensureUser(userId: string, email?: string) {
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
   if (existing) {
-    // Persist email if missing, and always enforce permanent admin privileges
     const updates: Record<string, string> = {};
     if (email && existing.email !== email) updates.email = email;
     if (isPermanentAdmin && existing.role !== "admin") updates.role = "admin";
-    if (isPermanentAdmin && existing.plan !== "pro" && existing.plan !== "unlimited") updates.plan = "pro";
+    // Ensure permanent admin always has paid plan (normalize legacy values too)
+    if (isPermanentAdmin && normalizePlan(existing.plan) !== "paid") updates.plan = "paid";
 
     if (Object.keys(updates).length > 0) {
       const [updated] = await db
@@ -73,7 +83,7 @@ async function ensureUser(userId: string, email?: string) {
     id: userId,
     email: email ?? null,
     role: isPermanentAdmin ? "admin" : "user",
-    plan: isPermanentAdmin ? "pro" : "free",
+    plan: isPermanentAdmin ? "paid" : "free",
   };
 
   const [created] = await db
@@ -97,38 +107,29 @@ export interface PlanLimits {
 }
 
 export function getPlanLimits(plan: string): PlanLimits {
-  switch (plan) {
-    case "unlimited":
-      return {
-        maxProfiles: 10,
-        maxVehicles: 10,
-        maxRuns: Infinity,
-        toursEnabled: true,
-        ticketedShowEnabled: true,
-        marketingCostEnabled: true,
-        routingEnabled: true,
-      };
-    case "pro":
-      return {
-        maxProfiles: 10,
-        maxVehicles: Infinity,
-        maxRuns: Infinity,
-        toursEnabled: true,
-        ticketedShowEnabled: true,
-        marketingCostEnabled: true,
-        routingEnabled: true,
-      };
-    default:
-      return {
-        maxProfiles: 1,
-        maxVehicles: 1,
-        maxRuns: 5,
-        toursEnabled: false,
-        ticketedShowEnabled: false,
-        marketingCostEnabled: false,
-        routingEnabled: false,
-      };
+  // Normalize for any legacy values still in DB before migration settles
+  const normalized = normalizePlan(plan);
+  if (normalized === "paid") {
+    return {
+      maxProfiles: 10,
+      maxVehicles: Infinity,
+      maxRuns: Infinity,
+      toursEnabled: true,
+      ticketedShowEnabled: true,
+      marketingCostEnabled: true,
+      routingEnabled: true,
+    };
   }
+  // free
+  return {
+    maxProfiles: 1,
+    maxVehicles: 1,
+    maxRuns: 5,
+    toursEnabled: false,
+    ticketedShowEnabled: false,
+    marketingCostEnabled: false,
+    routingEnabled: false,
+  };
 }
 
 export async function countUserRecords(table: any, userId: string): Promise<number> {

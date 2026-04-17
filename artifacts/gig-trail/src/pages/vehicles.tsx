@@ -47,7 +47,7 @@ export default function Garage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
   const [, setLocation] = useLocation();
 
   // Build a map: profileId -> profile name

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useCreateRun, useGetProfiles, useGetRun } from "@workspace/api-client-react";
+import { useGetProfiles, useGetRun } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -184,14 +184,12 @@ export interface GigTrailResultData {
 export default function RunResults() {
   const [, setLocation] = useLocation();
   const [result, setResult] = useState<GigTrailResultData | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const [accomOn, setAccomOn] = useState(true);
   const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
   const { toast } = useToast();
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
-  const createRun = useCreateRun();
+  const isPro = plan === "paid";
   const { data: profiles } = useGetProfiles();
 
   const { data: snapshotRun, isLoading: isLoadingSnapshot } = useGetRun(snapshotRunId || 0, {
@@ -346,18 +344,6 @@ export default function RunResults() {
   const insights = allInsights.slice(0, 3);
 
   // Actions
-  const handleSave = async () => {
-    if (effectiveRunId) { sessionStorage.removeItem("gigtrail_result"); setLocation(`/runs/${effectiveRunId}`); return; }
-    setIsSaving(true);
-    const payload = formData as Parameters<typeof createRun.mutate>[0]["data"];
-    try {
-      const newRun = await createRun.mutateAsync({ data: payload });
-      toast({ title: "Show saved" });
-      sessionStorage.removeItem("gigtrail_result");
-      setLocation(`/runs/${newRun.id}`);
-    } catch { toast({ title: "Failed to save show", variant: "destructive" }); }
-    finally { setIsSaving(false); }
-  };
   const handleEdit = () => { effectiveRunId ? setLocation(`/runs/${effectiveRunId}/edit`) : setLocation("/runs/new"); };
   const handleBack = () => { snapshotMode ? setLocation("/runs") : handleEdit(); };
   const handleAnother = () => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs/new"); };
@@ -417,7 +403,7 @@ export default function RunResults() {
       ) : saveFailed ? (
         <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-          <span>Couldn't auto-save — tap "Save This Show" below to keep this result</span>
+          <span>Auto-save failed — edit and recalculate to save this result</span>
         </div>
       ) : null}
 
@@ -1114,23 +1100,18 @@ export default function RunResults() {
             </Button>
           </>
         ) : (
-          <>
-            <Button size="lg" className="w-full text-base font-bold" onClick={handleSave} disabled={isSaving}>
-              <Save className="w-4 h-4 mr-2" />{isSaving ? "Saving..." : "Save This Show"}
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" onClick={handleEdit} className="w-full">
+              <Edit className="w-4 h-4 mr-2" />Edit Run
             </Button>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" onClick={handleEdit} className="w-full">
-                <Edit className="w-4 h-4 mr-2" />Edit Run
-              </Button>
-              <Button variant="outline" onClick={handleAnother} className="w-full">
-                <RotateCcw className="w-4 h-4 mr-2" />New Run
-              </Button>
-            </div>
-          </>
+            <Button variant="outline" onClick={handleAnother} className="w-full">
+              <RotateCcw className="w-4 h-4 mr-2" />New Run
+            </Button>
+          </div>
         )}
         {!snapshotMode && !isPro && (
           <Button variant="ghost" className="w-full text-muted-foreground text-xs" asChild>
-            <a href="/billing">Upgrade to Pro for unlimited calculations &amp; smarter recommendations</a>
+            <a href="/billing">Upgrade for unlimited calculations &amp; smarter recommendations</a>
           </Button>
         )}
       </div>

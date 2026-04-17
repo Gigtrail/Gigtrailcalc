@@ -188,7 +188,7 @@ export default function RunForm() {
 
   const formValues = useWatch({ control: form.control });
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
 
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
@@ -1670,7 +1670,7 @@ export default function RunForm() {
               Come back next week
             </Button>
             <Button onClick={() => { setShowLimitModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
-              See Pro plans
+              See paid plans
             </Button>
           </DialogFooter>
         </DialogContent>

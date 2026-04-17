@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Crown, Star, ShieldCheck, Search } from "lucide-react";
+import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Star, ShieldCheck, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,18 +10,12 @@ import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal, useAdmin
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
-const PLAN_ORDER = ["free", "pro", "unlimited"] as const;
-const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Pro Plus" };
-const PLAN_COLORS: Record<string, string> = {
-  free: "bg-muted text-muted-foreground",
-  pro: "bg-primary/10 text-primary border border-primary/30",
-  unlimited: "bg-accent/10 text-accent border border-accent/30",
-};
-
 type Period = "monthly" | "yearly";
 
 interface StaticPlan {
   key: string;
+  /** Stripe product metadata.plan value used for price lookup */
+  stripePlanKey: string;
   name: string;
   tagline: string;
   badge?: string;
@@ -36,6 +30,7 @@ interface StaticPlan {
 const STATIC_PLANS: StaticPlan[] = [
   {
     key: "free",
+    stripePlanKey: "free",
     name: "Free",
     tagline: "Try it out",
     monthlyPrice: "AU$0",
@@ -51,8 +46,9 @@ const STATIC_PLANS: StaticPlan[] = [
     ],
   },
   {
-    key: "pro",
-    name: "Pro",
+    key: "paid",
+    stripePlanKey: "pro", // Stripe product metadata still uses "pro" — normalized to "paid" on sync
+    name: "Paid",
     tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
     monthlyPrice: "AU$12",
@@ -62,14 +58,22 @@ const STATIC_PLANS: StaticPlan[] = [
     yearlyNote: "Less than AU$7/month · Save 45%",
     features: [
       "Unlimited calculations",
+      "Tour Builder",
       "Multiple vehicles in Garage",
-      "Assign vehicles to band members",
+      "Band members & fee tracking",
       "Accommodation automation",
       "Full profit breakdowns",
-      "Save and compare shows",
+      "Unlimited saved history",
+      "Venue Intelligence",
     ],
   },
 ];
+
+const PLAN_LABEL: Record<string, string> = { free: "Free", paid: "Paid" };
+const PLAN_COLOR: Record<string, string> = {
+  free: "bg-muted text-muted-foreground",
+  paid: "bg-primary/10 text-primary border border-primary/30",
+};
 
 function AdminPanel() {
   const [search, setSearch] = useState("");
@@ -89,7 +93,7 @@ function AdminPanel() {
     try {
       await updatePlan.mutateAsync({ userId: user.id, plan: newPlan });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Plan updated", description: `${user.email ?? user.id} → ${newPlan}` });
+      toast({ title: "Plan updated", description: `${user.email ?? user.id} → ${PLAN_LABEL[newPlan] ?? newPlan}` });
     } catch (e: any) {
       toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
     }
@@ -154,7 +158,7 @@ function AdminPanel() {
                     </td>
                     <td className="px-3 py-2">
                       <Select
-                        value={user.plan}
+                        value={user.plan === "pro" || user.plan === "unlimited" ? "paid" : user.plan}
                         onValueChange={val => handlePlanChange(user, val)}
                         disabled={updatePlan.isPending}
                       >
@@ -163,7 +167,7 @@ function AdminPanel() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="free">Free</SelectItem>
-                          <SelectItem value="pro">Pro</SelectItem>
+                          <SelectItem value="paid">Paid</SelectItem>
                         </SelectContent>
                       </Select>
                     </td>
@@ -194,7 +198,7 @@ export default function Billing() {
       await updatePlan.mutateAsync({ userId: me.userId, plan: newPlan });
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       refetch();
-      toast({ title: "Plan updated", description: `Your plan is now ${newPlan}.` });
+      toast({ title: "Plan updated", description: `Your plan is now ${PLAN_LABEL[newPlan] ?? newPlan}.` });
     } catch (e: any) {
       toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
     }
@@ -219,10 +223,10 @@ export default function Billing() {
     }
   }, []);
 
-  const handleUpgrade = async (planKey: string) => {
+  const handleUpgrade = async (staticPlan: StaticPlan) => {
     const products = plansData?.data ?? [];
-    // Support both: one product with multiple prices, or separate products per interval
-    const matching = products.filter((p) => p.metadata?.plan === planKey);
+    // Use stripePlanKey for Stripe metadata matching ("pro" maps to our "paid" tier)
+    const matching = products.filter((p) => p.metadata?.plan === staticPlan.stripePlanKey);
     const targetInterval = period === "yearly" ? "year" : "month";
     const fallbackInterval = period === "yearly" ? "month" : "year";
 
@@ -268,6 +272,9 @@ export default function Billing() {
     );
   }
 
+  // Normalize any legacy plan values for UI display
+  const displayPlan = (plan === "paid") ? "paid" : "free";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -285,17 +292,20 @@ export default function Billing() {
         </CardHeader>
         <CardContent className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            {plan === "unlimited" ? <Crown className="w-5 h-5 text-accent" /> : plan === "pro" ? <Star className="w-5 h-5 text-primary" /> : <Zap className="w-5 h-5 text-muted-foreground" />}
+            {displayPlan === "paid"
+              ? <Star className="w-5 h-5 text-primary" />
+              : <Zap className="w-5 h-5 text-muted-foreground" />
+            }
             <div>
-              <div className="font-semibold text-foreground">{PLAN_LABELS[plan]}</div>
+              <div className="font-semibold text-foreground">{PLAN_LABEL[displayPlan]}</div>
               {me?.email && <div className="text-sm text-muted-foreground">{me.email}</div>}
             </div>
-            <Badge className={PLAN_COLORS[plan] || PLAN_COLORS.free}>{PLAN_LABELS[plan]}</Badge>
+            <Badge className={PLAN_COLOR[displayPlan] || PLAN_COLOR.free}>{PLAN_LABEL[displayPlan]}</Badge>
           </div>
           <div className="flex items-center gap-2">
             {role === "admin" && me?.userId && (
               <Select
-                value={plan === "unlimited" ? "pro" : plan}
+                value={displayPlan}
                 onValueChange={handleAdminSelfPlanChange}
                 disabled={updatePlan.isPending}
               >
@@ -305,7 +315,7 @@ export default function Billing() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -363,14 +373,12 @@ export default function Billing() {
       {/* Plan cards */}
       <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
         {STATIC_PLANS.map((staticPlan) => {
-          const isCurrentPlan = plan === staticPlan.key;
-          const currentIndex = PLAN_ORDER.indexOf(plan as any);
-          const planIndex = PLAN_ORDER.indexOf(staticPlan.key as any);
-          const isUpgrade = planIndex > currentIndex;
-          const isPaidPlan = staticPlan.key !== "free";
+          const isCurrentPlan = displayPlan === staticPlan.key;
+          const isUpgrade = staticPlan.key === "paid" && displayPlan === "free";
+          const isPaidCard = staticPlan.key !== "free";
           const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
           const displayPeriod = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
-          const showBestValue = period === "yearly" && isPaidPlan;
+          const showBestValue = period === "yearly" && isPaidCard;
 
           return (
             <Card
@@ -379,7 +387,7 @@ export default function Billing() {
                 "border relative transition-all",
                 isCurrentPlan
                   ? "border-primary bg-primary/5"
-                  : staticPlan.key === "pro"
+                  : staticPlan.key === "paid"
                   ? "border-primary/40 bg-card shadow-md"
                   : "border-border/40 bg-card"
               )}
@@ -391,7 +399,7 @@ export default function Billing() {
                   </Badge>
                 </div>
               )}
-              {showBestValue && staticPlan.key === "pro" && (
+              {showBestValue && staticPlan.key === "paid" && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-green-600 text-white text-xs shadow-sm px-3 py-0.5">
                     Best value
@@ -442,11 +450,11 @@ export default function Billing() {
                   <Button
                     className={cn("w-full", isUpgrade ? "bg-primary hover:bg-primary/90 text-primary-foreground" : "")}
                     variant={isUpgrade ? "default" : "outline"}
-                    onClick={() => handleUpgrade(staticPlan.key)}
+                    onClick={() => handleUpgrade(staticPlan)}
                     disabled={createCheckout.isPending}
                   >
                     {createCheckout.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                    {isUpgrade ? `Upgrade to ${staticPlan.name}` : `Switch to ${staticPlan.name}`}
+                    {isUpgrade ? "Upgrade to Paid" : "Switch to Paid"}
                   </Button>
                 )}
               </CardContent>
@@ -458,9 +466,9 @@ export default function Billing() {
       {/* Value message */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-5">
-          <h3 className="font-semibold mb-1 text-foreground">Gig Trail Pro is built for working musicians</h3>
+          <h3 className="font-semibold mb-1 text-foreground">Gig Trail Paid is built for working musicians</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Stop guessing if a gig is worth the drive. Pro gives you unlimited calculations, smarter vehicle management,
+            Stop guessing if a gig is worth the drive. Paid gives you unlimited calculations, the full Tour Builder, smarter vehicle management,
             and accommodation planning — so you can make better decisions for every show, every time.
           </p>
         </CardContent>

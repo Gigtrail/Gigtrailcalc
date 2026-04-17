@@ -14,7 +14,7 @@ export interface PlanLimits {
 export interface MeResponse {
   userId: string;
   email: string | null;
-  plan: "free" | "pro" | "unlimited";
+  plan: "free" | "paid";
   role: "user" | "admin";
   limits: PlanLimits;
   hasStripeCustomer: boolean;

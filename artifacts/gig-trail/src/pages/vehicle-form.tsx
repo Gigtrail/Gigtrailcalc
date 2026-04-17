@@ -47,7 +47,7 @@ export default function GarageVehicleForm() {
   const { id } = useParams();
   const { toast } = useToast();
   const { plan } = usePlan();
-  const isPro = plan === "pro" || plan === "unlimited";
+  const isPro = plan === "paid";
   const [showEstimator, setShowEstimator] = useState(false);
   const queryClient = useQueryClient();
 
@@ -185,14 +185,14 @@ export default function GarageVehicleForm() {
             <Truck className="w-7 h-7 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold">Custom garage vehicles are a Pro feature</h2>
+            <h2 className="text-xl font-semibold">Custom garage vehicles require a Paid plan</h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Upgrade to Pro to add your own vehicles with custom fuel figures, tank size, and more.
+              Upgrade to add your own vehicles with custom fuel figures, tank size, and more.
             </p>
           </div>
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={() => setLocation("/garage")}>Back to Garage</Button>
-            <Button onClick={() => setLocation("/billing")}>Upgrade to Pro</Button>
+            <Button onClick={() => setLocation("/billing")}>Upgrade</Button>
           </div>
         </div>
       </div>

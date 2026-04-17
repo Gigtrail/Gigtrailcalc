@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
+import { requireAuth, getPlanLimits, normalizePlan, type AuthenticatedRequest } from "../middlewares/auth";
 import { storage } from "../storage";
 import { db, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
@@ -34,12 +34,13 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
       res.json({ plan: "free" });
       return;
     }
-    const product = await storage.getProductBySubscriptionId(user.stripeSubscriptionId);
-    const plan = (product?.metadata as any)?.plan ?? "pro";
+    // Always normalize to canonical plan value — "pro" metadata in Stripe → "paid" in our system
+    const rawPlan = (await storage.getProductBySubscriptionId(user.stripeSubscriptionId) as any)?.metadata?.plan ?? "paid";
+    const plan = normalizePlan(rawPlan);
     await storage.updateUserStripeInfo(userId, { plan });
     res.json({ plan });
   } catch {
-    res.json({ plan: user.plan ?? "free" });
+    res.json({ plan: normalizePlan(user.plan) });
   }
 });
 

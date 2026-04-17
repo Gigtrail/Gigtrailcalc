@@ -129,7 +129,7 @@ export function AppSidebar() {
             <div className="w-full rounded-lg bg-primary/10 border border-primary/20 p-3 space-y-1 cursor-pointer hover:bg-primary/15 transition-colors">
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-medium text-primary">Upgrade to Pro</span>
+                <span className="text-xs font-medium text-primary">Upgrade</span>
               </div>
               <p className="text-xs text-muted-foreground">Unlock tours, unlimited runs & more from AU$12/mo</p>
             </div>
