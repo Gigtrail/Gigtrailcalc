@@ -6,6 +6,7 @@ import {
   normalizeRole,
   hasProAccess,
   PERMANENT_ADMIN_EMAIL,
+  isPermanentAdminEmail,
   type AuthenticatedRequest,
   type UserRole,
   type AccessSource,
@@ -20,7 +21,7 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, accessSource, userPlan } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
   const limits = getPlanLimits(userRole);
-  res.json({
+  const response = {
     userId,
     email: user?.email ?? null,
     role: userRole,
@@ -28,7 +29,9 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
     plan: userPlan,
     limits,
     hasStripeCustomer: !!user?.stripeCustomerId,
-  });
+  };
+  console.log(`[/api/me] userId=${userId} email=${response.email} role=${response.role} plan=${response.plan} accessSource=${response.accessSource}`);
+  res.json(response);
 });
 
 router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
@@ -39,7 +42,7 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
   const currentAccessSource = (user?.accessSource as AccessSource) ?? "default";
 
   // Hard stop: permanent admin is never modified by Stripe sync under any circumstances
-  if (user?.email === PERMANENT_ADMIN_EMAIL) {
+  if (isPermanentAdminEmail(user?.email)) {
     res.json({ role: "admin", plan: "paid" });
     return;
   }

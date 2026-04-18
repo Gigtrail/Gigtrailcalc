@@ -74,8 +74,46 @@ async function seedPromoCodes() {
   }
 }
 
+async function repairPermanentAdmin() {
+  try {
+    const { db, usersTable } = await import("@workspace/db");
+    const { ilike } = await import("drizzle-orm");
+    const { PERMANENT_ADMIN_EMAIL } = await import("./middlewares/auth");
+
+    const [row] = await db
+      .select()
+      .from(usersTable)
+      .where(ilike(usersTable.email, PERMANENT_ADMIN_EMAIL));
+
+    if (!row) {
+      logger.info("[PermanentAdmin] No DB row found yet — will be created on first sign-in");
+      return;
+    }
+
+    const needsRepair = row.role !== "admin" || row.plan !== "paid" || row.accessSource !== "admin";
+    if (!needsRepair) {
+      logger.info(`[PermanentAdmin] DB row OK: role=${row.role} plan=${row.plan} accessSource=${row.accessSource}`);
+      return;
+    }
+
+    const { eq } = await import("drizzle-orm");
+    await db
+      .update(usersTable)
+      .set({ role: "admin", plan: "paid", accessSource: "admin" })
+      .where(eq(usersTable.id, row.id));
+
+    logger.warn(
+      `[PermanentAdmin] Repaired DB row for ${row.email}: ` +
+      `role: ${row.role} → admin, plan: ${row.plan} → paid, accessSource: ${row.accessSource} → admin`
+    );
+  } catch (err) {
+    logger.error({ err }, "[PermanentAdmin] Repair check failed (non-fatal)");
+  }
+}
+
 await initStripe();
 await seedPromoCodes();
+await repairPermanentAdmin();
 
 app.listen(port, (err) => {
   if (err) {

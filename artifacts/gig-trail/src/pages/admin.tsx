@@ -342,7 +342,7 @@ function PromoCodesPanel() {
 type AdminTab = "users" | "promo";
 
 export default function Admin() {
-  const { isAdmin, isLoading } = usePlan();
+  const { isAdmin, isLoading, role, plan, accessSource, me } = usePlan();
   const [tab, setTab] = useState<AdminTab>("users");
 
   if (isLoading) {
@@ -387,6 +387,18 @@ export default function Admin() {
           </Button>
         </a>
       </div>
+
+      {/* Dev debug card — only shown in development */}
+      {import.meta.env.DEV && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-mono space-y-1">
+          <p className="font-bold text-amber-800 mb-1">🔍 Auth Debug (dev only)</p>
+          <p><span className="text-amber-600">email:</span> {me?.email ?? "(not loaded)"}</p>
+          <p><span className="text-amber-600">role:</span> {role}</p>
+          <p><span className="text-amber-600">plan:</span> {plan}</p>
+          <p><span className="text-amber-600">accessSource:</span> {accessSource}</p>
+          <p><span className="text-amber-600">isAdmin:</span> {String(isAdmin)}</p>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border/40">

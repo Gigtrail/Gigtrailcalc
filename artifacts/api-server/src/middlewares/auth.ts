@@ -5,6 +5,15 @@ import type { Request, Response, NextFunction } from "express";
 
 export const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 
+/**
+ * Case-insensitive, whitespace-trimmed check for the permanent admin email.
+ * Use this everywhere instead of a bare === comparison.
+ */
+export function isPermanentAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === PERMANENT_ADMIN_EMAIL.toLowerCase();
+}
+
 export type UserRole = "free" | "pro" | "tester" | "admin";
 export type AccessSource = "default" | "stripe" | "promo" | "admin";
 
@@ -128,9 +137,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const role = normalizeRole(user.role, user.plan);
   const accessSource = (user.accessSource as AccessSource) ?? "default";
   const effectiveEmail = email ?? user.email ?? "(unknown)";
+  const permAdminActive = isPermanentAdminEmail(effectiveEmail);
 
-  // [Auth] Defensive log: trace resolved role for every authenticated request
-  console.log(`[Auth] userId=${userId} email=${effectiveEmail} stored_role=${user.role} resolved_role=${role} access_source=${accessSource}`);
+  console.log(
+    `[Auth] userId=${userId} email=${effectiveEmail} ` +
+    `db_role=${user.role} db_plan=${user.plan} db_access=${user.accessSource} ` +
+    `→ effective_role=${role} access_source=${accessSource}` +
+    (permAdminActive ? " [PERMANENT-ADMIN]" : "")
+  );
 
   (req as AuthenticatedRequest).userRole = role;
   (req as AuthenticatedRequest).accessSource = accessSource;
@@ -148,7 +162,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
 }
 
 async function ensureUser(userId: string, email?: string) {
-  const isPermanentAdmin = email === PERMANENT_ADMIN_EMAIL;
+  const isPermAdmin = isPermanentAdminEmail(email);
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
@@ -156,16 +170,26 @@ async function ensureUser(userId: string, email?: string) {
     const updates: Record<string, string> = {};
     if (email && existing.email !== email) updates.email = email;
 
-    // Permanent admin always gets admin role AND correct access_source
+    // Permanent admin: repair role, plan, and accessSource if any are wrong
     const existingRole = normalizeRole(existing.role, existing.plan);
-    if (isPermanentAdmin && (existingRole !== "admin" || existing.accessSource !== "admin")) {
+    const needsAdminRepair =
+      isPermAdmin &&
+      (existingRole !== "admin" || existing.accessSource !== "admin" || existing.plan !== "paid");
+
+    if (needsAdminRepair) {
       updates.role = "admin";
+      updates.plan = "paid";
       updates.accessSource = "admin";
-      console.log(`[Auth] Repairing permanent admin role/access_source for ${email} (was: role=${existing.role}, access_source=${existing.accessSource})`);
+      console.log(
+        `[Auth][PermanentAdmin] Repairing DB row for ${email}: ` +
+        `role: ${existing.role} → admin, ` +
+        `plan: ${existing.plan} → paid, ` +
+        `accessSource: ${existing.accessSource} → admin`
+      );
     }
 
     // One-time migration: if role is legacy "user" → migrate to 4-tier
-    if (existing.role === "user") {
+    if (!isPermAdmin && existing.role === "user") {
       const migratedRole = normalizeRole("user", existing.plan);
       updates.role = migratedRole;
       if (!updates.accessSource) {
@@ -184,14 +208,20 @@ async function ensureUser(userId: string, email?: string) {
     return existing;
   }
 
-  const newRole: UserRole = isPermanentAdmin ? "admin" : "free";
+  const newRole: UserRole = isPermAdmin ? "admin" : "free";
   const newValues = {
     id: userId,
     email: email ?? null,
     role: newRole,
-    plan: isPermanentAdmin ? "paid" : "free",
-    accessSource: isPermanentAdmin ? "admin" : "default",
+    plan: isPermAdmin ? "paid" : "free",
+    accessSource: isPermAdmin ? "admin" : "default",
   };
+
+  console.log(
+    isPermAdmin
+      ? `[Auth][PermanentAdmin] Creating new DB row for ${email} with admin/paid/admin`
+      : `[Auth] Creating new user row for ${email ?? userId}`
+  );
 
   const [created] = await db
     .insert(usersTable)

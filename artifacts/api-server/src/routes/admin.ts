@@ -1,11 +1,10 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, requireAdmin, type AuthenticatedRequest, hasProAccess, type UserRole } from "../middlewares/auth";
+import { requireAuth, requireAdmin, isPermanentAdminEmail, type AuthenticatedRequest, hasProAccess, type UserRole } from "../middlewares/auth";
 import { db, usersTable, promoCodesTable, promoCodeRedemptionsTable } from "@workspace/db";
 import { eq, ilike, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 const VALID_ROLES: UserRole[] = ["free", "pro", "tester", "admin"];
 
 // ─── User management ─────────────────────────────────────────────────────────
@@ -41,6 +40,7 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res): Promise<
 });
 
 router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { userId: actingAdminId } = req as AuthenticatedRequest;
   const { id } = req.params;
   const { role } = req.body as { role?: string };
 
@@ -59,7 +59,13 @@ router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res
     return;
   }
 
-  if (target.email === PERMANENT_ADMIN_EMAIL && role !== "admin") {
+  console.log(
+    `[Admin] Role update attempt: acting_admin=${actingAdminId} ` +
+    `target_id=${target.id} target_email=${target.email} requested_role=${role}`
+  );
+
+  if (isPermanentAdminEmail(target.email) && role !== "admin") {
+    console.warn(`[Admin] Blocked attempt to demote permanent admin ${target.email} to ${role}`);
     res.status(403).json({ error: "Cannot change the permanent admin account role." });
     return;
   }
@@ -77,6 +83,7 @@ router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res
       plan: usersTable.plan,
     });
 
+  console.log(`[Admin] Role updated: target_id=${updated?.id} new_role=${updated?.role}`);
   res.json({ user: updated });
 });
 
