@@ -56,10 +56,8 @@ export function normalizeRole(raw: string | null | undefined, plan?: string | nu
   if (!raw) return "free";
   // Already valid 4-tier values
   if (raw === "free" || raw === "pro" || raw === "tester" || raw === "admin") return raw;
-  // Legacy 2-tier
-  if (raw === "admin") return "admin";
+  // Legacy 2-tier "user" → derive from plan column for backward compat
   if (raw === "user") {
-    // Migrate based on plan if we can
     if (plan === "paid" || plan === "pro" || plan === "unlimited") return "pro";
     return "free";
   }

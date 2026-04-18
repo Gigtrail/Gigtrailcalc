@@ -1,19 +1,21 @@
 import { Router, type IRouter } from "express";
 import { storage } from "../storage";
 import { stripeService } from "../stripeService";
-import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import { requireAuth, derivePlanFromRole, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
 router.get("/stripe/subscription", requireAuth, async (req, res): Promise<void> => {
-  const { userId } = req as AuthenticatedRequest;
+  const { userId, userRole } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
+  // Always derive plan from role — never read the legacy plan column for permission output
+  const derivedPlan = derivePlanFromRole(userRole);
   if (!user?.stripeSubscriptionId) {
-    res.json({ subscription: null, plan: user?.plan ?? "free" });
+    res.json({ subscription: null, plan: derivedPlan });
     return;
   }
   const subscription = await storage.getSubscription(user.stripeSubscriptionId);
-  res.json({ subscription, plan: user.plan });
+  res.json({ subscription, plan: derivedPlan });
 });
 
 router.post("/stripe/checkout", requireAuth, async (req, res): Promise<void> => {

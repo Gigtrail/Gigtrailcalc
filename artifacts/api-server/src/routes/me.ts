@@ -76,7 +76,7 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
 
   // ── No Stripe subscription ────────────────────────────────────────────────
   if (!user?.stripeSubscriptionId) {
-    res.json({ role: "free", plan: "free" });
+    res.json({ role: "free", plan: derivePlanFromRole("free") });
     return;
   }
 

@@ -12,7 +12,7 @@ import {
   GetProfilesResponse,
   TrackCalculationResponse,
 } from "@workspace/api-zod";
-import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
+import { requireAuth, getPlanLimits, hasProAccess, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 
 const FREE_CALC_LIMIT = 5;
 
@@ -150,7 +150,7 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
+  const { userId, userRole } = req as AuthenticatedRequest;
   const id = parseInt(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid profile id" });
@@ -163,7 +163,7 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
     return;
   }
 
-  const isPaid = userPlan === "paid";
+  const isPaid = hasProAccess(userRole);
 
   if (isPaid) {
     res.json(TrackCalculationResponse.parse({ allowed: true, count: 0, limit: null }));
@@ -192,9 +192,9 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
 
 // ─── GET weekly usage (read-only, no increment) ───────────────────────────────
 router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
+  const { userId, userRole } = req as AuthenticatedRequest;
 
-  if (userPlan === "paid") {
+  if (hasProAccess(userRole)) {
     res.json({ used: 0, limit: null, resetsIn: null, isPaid: true });
     return;
   }
