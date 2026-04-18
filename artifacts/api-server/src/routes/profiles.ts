@@ -190,4 +190,30 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
   res.json(TrackCalculationResponse.parse({ allowed: true, count, limit: FREE_CALC_LIMIT }));
 });
 
+// ─── GET weekly usage (read-only, no increment) ───────────────────────────────
+router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userPlan } = req as AuthenticatedRequest;
+
+  if (userPlan === "paid") {
+    res.json({ used: 0, limit: null, resetsIn: null, isPaid: true });
+    return;
+  }
+
+  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
+
+  if (profiles.length === 0) {
+    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPaid: false });
+    return;
+  }
+
+  const profile = profiles[0];
+  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
+  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
+  const resetsIn = needsReset
+    ? 7
+    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
+
+  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPaid: false });
+});
+
 export default router;

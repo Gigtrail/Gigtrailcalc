@@ -1,0 +1,94 @@
+We have a bug where the permanent admin account `thegigtrail@gmail.com` is not always showing up as admin in the app.
+
+Please inspect and fix the auth + admin-resolution flow across these files:
+
+- artifacts/api-server/src/middlewares/auth.ts
+- artifacts/api-server/src/routes/me.ts
+- artifacts/api-server/src/routes/admin.ts
+- artifacts/gig-trail/src/hooks/use-plan.ts
+- artifacts/gig-trail/src/pages/admin.tsx
+
+Goal:
+Ensure that whenever the signed-in Clerk user resolves to email `thegigtrail@gmail.com`, they are ALWAYS treated as:
+- role: "admin"
+- accessSource: "admin"
+- plan: "paid"
+
+Required tasks:
+
+1. In `middlewares/auth.ts`
+- Keep `PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com"`.
+- Make the email comparison robust:
+  - trim whitespace
+  - lowercase both emails before comparing
+- Add a helper like `isPermanentAdminEmail(email?: string): boolean`.
+- In `ensureUser`, if the user is the permanent admin, always enforce:
+  - role = "admin"
+  - accessSource = "admin"
+  - plan = "paid"
+- Do this both for existing users and newly created users.
+- If an existing row has any other value, repair it automatically.
+- Add clear server logs showing:
+  - resolved Clerk email
+  - stored DB role
+  - final effective role
+  - accessSource
+  - whether permanent-admin enforcement triggered
+
+2. In `routes/me.ts`
+- Make sure `/api/me` returns:
+  - userId
+  - email
+  - role
+  - accessSource
+  - plan
+  - limits
+  - hasStripeCustomer
+- Add a temporary debug log for `/api/me` showing the response values for the current user.
+
+3. In `routes/admin.ts`
+- Preserve the guard that prevents changing the permanent admin away from admin.
+- Add a clear 403 error if anyone tries to demote `thegigtrail@gmail.com`.
+- Log role update attempts with:
+  - acting admin userId
+  - target user id
+  - target email
+  - requested role
+
+4. In `use-plan.ts`
+- Ensure the frontend reads `role`, `accessSource`, and `plan` directly from `/api/me`.
+- Ensure `isAdmin` is strictly `role === "admin"`.
+
+5. In `pages/admin.tsx`
+- Add a temporary debug card at the top of the page visible only in development that shows:
+  - current signed-in email
+  - current role
+  - current plan
+  - current access source
+  - isAdmin
+- This helps confirm whether the issue is Clerk email resolution or DB state.
+
+6. Add a one-time startup/dev utility or script that checks the DB for any user row with email `thegigtrail@gmail.com` and repairs it to:
+- role = "admin"
+- plan = "paid"
+- accessSource = "admin"
+
+7. Also inspect whether any Stripe sync logic can overwrite plan or role for admin users.
+- Permanent admin must never be downgraded by Stripe sync, webhook handling, or billing portal flows.
+- If necessary, add a guard: if email is the permanent admin email, skip any downgrade logic.
+
+8. After patching, print a short summary in the console of:
+- what files were changed
+- what exact root cause was found
+- how to test:
+  - sign out
+  - sign back in with `thegigtrail@gmail.com`
+  - open `/api/me`
+  - verify admin page access
+  - verify role cannot be changed away from admin
+
+Important:
+- Do not rewrite unrelated UI.
+- Keep the patch minimal and targeted.
+- Do not remove existing promo code or role management features.
+- Prefer small helper functions and explicit logs over broad refactors.

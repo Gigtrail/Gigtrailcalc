@@ -18,6 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   usePlan,
+  useWeeklyUsage,
   useStripePlans,
   useCreateCheckout,
   useCustomerPortal,
@@ -602,6 +603,7 @@ function AdminPanel() {
 export default function Billing() {
   const [period, setPeriod] = useState<Period>("yearly");
   const { plan, role, accessSource, isPro, me, isLoading, refetch } = usePlan();
+  const { data: weeklyUsage } = useWeeklyUsage();
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
@@ -707,60 +709,116 @@ export default function Billing() {
       </div>
 
       {/* Current plan */}
-      <Card className="bg-card border-border/40">
+      <Card className="bg-card border-border/60 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-medium text-muted-foreground">Current Plan</CardTitle>
         </CardHeader>
-        <CardContent className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            {isPro
-              ? <Star className="w-5 h-5 text-primary" />
-              : <Zap className="w-5 h-5 text-muted-foreground" />
-            }
-            <div>
-              <div className="font-semibold text-foreground">{ROLE_LABELS[role] ?? role}</div>
-              {me?.email && <div className="text-sm text-muted-foreground">{me.email}</div>}
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              {isPro
+                ? <Star className="w-5 h-5 text-primary" />
+                : <Zap className="w-5 h-5 text-muted-foreground" />
+              }
+              <div>
+                <div className="font-semibold text-foreground">{ROLE_LABELS[role] ?? role}</div>
+                {me?.email && <div className="text-sm text-muted-foreground">{me.email}</div>}
+              </div>
+              <Badge className={ROLE_COLORS[role] || ROLE_COLORS.free}>
+                {ROLE_LABELS[role] ?? role}
+              </Badge>
+              {accessSource !== "default" && accessSource !== "stripe" && (
+                <span className="text-xs text-muted-foreground">
+                  via {ACCESS_LABELS[accessSource] ?? accessSource}
+                </span>
+              )}
             </div>
-            <Badge className={ROLE_COLORS[role] || ROLE_COLORS.free}>
-              {ROLE_LABELS[role] ?? role}
-            </Badge>
-            {accessSource !== "default" && accessSource !== "stripe" && (
-              <span className="text-xs text-muted-foreground">
-                via {ACCESS_LABELS[accessSource] ?? accessSource}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {role === "admin" && me?.userId && (
+                <Select
+                  value={role}
+                  onValueChange={handleAdminSelfRoleChange}
+                  disabled={updateRole.isPending}
+                >
+                  <SelectTrigger className="h-8 text-xs w-28">
+                    {updateRole.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="free">Free</SelectItem>
+                    <SelectItem value="pro">Pro</SelectItem>
+                    <SelectItem value="tester">Tester</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {me?.hasStripeCustomer && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManageBilling}
+                  disabled={customerPortal.isPending}
+                >
+                  {customerPortal.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                  Manage Billing
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {role === "admin" && me?.userId && (
-              <Select
-                value={role}
-                onValueChange={handleAdminSelfRoleChange}
-                disabled={updateRole.isPending}
-              >
-                <SelectTrigger className="h-8 text-xs w-28">
-                  {updateRole.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="tester">Tester</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {me?.hasStripeCustomer && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleManageBilling}
-                disabled={customerPortal.isPending}
-              >
-                {customerPortal.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                Manage Billing
-              </Button>
-            )}
-          </div>
+
+          {/* Weekly usage — free plan only */}
+          {!isPro && weeklyUsage && !weeklyUsage.isPaid && (
+            <div className="border-t border-border/40 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Usage this week
+                </span>
+                {weeklyUsage.resetsIn != null && (
+                  <span className="text-[11px] text-muted-foreground/70">
+                    Resets in {weeklyUsage.resetsIn} day{weeklyUsage.resetsIn !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              {/* Progress bar */}
+              <div className="h-2 w-full rounded-full bg-muted overflow-hidden mb-2">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    weeklyUsage.used >= (weeklyUsage.limit ?? 5)
+                      ? "bg-destructive"
+                      : weeklyUsage.used >= 4
+                      ? "bg-amber-500"
+                      : "bg-primary/60"
+                  )}
+                  style={{ width: `${Math.min(((weeklyUsage.used / (weeklyUsage.limit ?? 5)) * 100), 100)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className={cn(
+                  "font-medium",
+                  weeklyUsage.used >= (weeklyUsage.limit ?? 5) ? "text-destructive" : "text-muted-foreground"
+                )}>
+                  {weeklyUsage.used >= (weeklyUsage.limit ?? 5)
+                    ? "You've used all free calculations for this week"
+                    : `${weeklyUsage.used} of ${weeklyUsage.limit} calculations used`
+                  }
+                </span>
+                {weeklyUsage.used < (weeklyUsage.limit ?? 5) && (
+                  <span className="text-muted-foreground/70">
+                    {(weeklyUsage.limit ?? 5) - weeklyUsage.used} remaining
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Paid plan — unlimited note */}
+          {isPro && (
+            <div className="border-t border-border/40 pt-3 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-sm text-muted-foreground">Unlimited calculations included</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

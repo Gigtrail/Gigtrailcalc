@@ -62,6 +62,30 @@ export function usePlan() {
   return { plan, role, accessSource, isPro, isAdmin, isTester, limits, me: data, isLoading, refetch };
 }
 
+// ─── Weekly calc usage ────────────────────────────────────────────────────────
+
+export interface WeeklyUsage {
+  used: number;
+  limit: number | null;
+  resetsIn: number | null;
+  isPaid: boolean;
+}
+
+export function useWeeklyUsage() {
+  const { isSignedIn } = useUser();
+  return useQuery<WeeklyUsage>({
+    queryKey: ["/api/profiles/weekly-usage"],
+    queryFn: async () => {
+      const res = await fetch("/api/profiles/weekly-usage", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch usage");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export interface StripePlan {
   id: string;
   name: string;

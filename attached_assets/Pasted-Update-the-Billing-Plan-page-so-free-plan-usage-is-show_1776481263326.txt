@@ -1,0 +1,164 @@
+Update the Billing / Plan page so free-plan usage is shown visually as a progress bar near the bottom of the sidebar account area and/or inside the current plan card.
+
+GOAL:
+Make the free plan feel more tangible by showing how many of the 5 weekly free calculations have been used.
+
+IMPORTANT:
+This is for the Free plan only.
+The UI should feel clean, helpful, and motivating — not aggressive.
+Keep the current parchment / warm neutral design language.
+
+---
+
+## FEATURE REQUEST
+
+For Free users, show weekly calculation usage as a progress indicator.
+
+Display:
+
+* calculations used this week
+* total included calculations
+* remaining calculations
+
+Example:
+
+* “2 of 5 free calculations used this week”
+* or “3 free calculations left this week”
+
+Also show this visually as a progress bar.
+
+---
+
+## WHERE TO SHOW IT
+
+Preferred placement:
+
+1. In the sidebar bottom account area near the user profile / upgrade block
+   AND / OR
+2. In the Billing & Plan page inside the Current Plan card
+
+At minimum, add it to the Billing page.
+If it also works nicely in the sidebar, include a compact version there too.
+
+---
+
+## UI BEHAVIOUR
+
+For Free plan:
+
+* show a progress bar with 5 total weekly uses
+* fill amount should reflect real usage count
+* include supporting text above or below the bar
+
+Examples:
+
+* “Usage this week”
+* “2 / 5 calculations used”
+* “3 free runs remaining”
+
+Visual style:
+
+* rounded progress bar
+* warm muted track
+* filled portion in brand accent or a softer warm tone
+* subtle, clean, premium feel
+* should match current app styling
+
+If user has 0 used:
+
+* bar should be empty
+* text can say “5 free calculations available this week”
+
+If user has used all 5:
+
+* bar full
+* show a clear but calm message like:
+  “You’ve used all free calculations for this week”
+* optionally pair with subtle upgrade encouragement
+
+For paid users:
+
+* do NOT show a capped 5-use bar
+* instead show something simple like:
+  “Unlimited calculations included”
+  or hide the component entirely
+
+---
+
+## DATA / LOGIC
+
+Use real usage data if already available in the app.
+If weekly calculation count is already tracked, connect to that source.
+
+If not already tracked cleanly:
+
+* identify the existing logic that limits free calculations
+* expose the current weekly usage count to the billing UI
+* do not fake numbers
+
+The component should calculate:
+
+* used = actual count this week
+* total = 5
+* remaining = max(0, 5 - used)
+
+---
+
+## BILLING PAGE IMPROVEMENT
+
+On the “Current Plan” card for Free users:
+add a more useful plan summary, including:
+
+* current plan name
+* usage this week progress
+* optional line for what resets when
+
+Example:
+Free
+2 / 5 calculations used this week
+Resets every week
+
+This should feel more informative than the current plain badge.
+
+---
+
+## SIDEBAR VERSION (OPTIONAL BUT PREFERRED)
+
+In the lower sidebar account area, add a compact usage widget for Free users:
+
+Example:
+Free Usage
+[progress bar]
+2 / 5 used this week
+
+Place it above the Upgrade card or integrated into that lower account block.
+
+Keep it compact and visually tidy.
+
+---
+
+## STYLE NOTES
+
+Keep:
+
+* parchment background
+* warm borders
+* subtle depth
+* clean typography
+
+Do not:
+
+* make the bar neon or overly app-like
+* clutter the sidebar
+* add loud warning colors unless absolutely necessary
+
+---
+
+## DELIVERABLE
+
+After making the change, report:
+
+1. which files were updated
+2. where the usage data comes from
+3. where the progress bar appears
+4. how free vs paid states are handled

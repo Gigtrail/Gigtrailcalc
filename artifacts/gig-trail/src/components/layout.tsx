@@ -16,9 +16,10 @@ import {
 import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2, Shield, MessageSquare, ShieldCheck } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
-import { usePlan } from "@/hooks/use-plan";
+import { usePlan, useWeeklyUsage } from "@/hooks/use-plan";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const mainNavItems = [
   { title: "Dashboard",   url: "/dashboard",  icon: Home },
@@ -61,6 +62,7 @@ export function AppSidebar() {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { role, isPro, isAdmin } = usePlan();
+  const { data: weeklyUsage } = useWeeklyUsage();
 
   return (
     <Sidebar>
@@ -179,6 +181,40 @@ export function AppSidebar() {
 
       {/* ── Footer: upgrade card + user identity ── */}
       <SidebarFooter className="p-3 space-y-2">
+        {/* Weekly usage meter — free plan only */}
+        {!isPro && weeklyUsage && !weeklyUsage.isPaid && weeklyUsage.limit != null && (
+          <Link href="/billing">
+            <div className="w-full rounded-md border border-border/50 bg-muted/30 px-3 py-2.5 space-y-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                  This week
+                </span>
+                {weeklyUsage.resetsIn != null && (
+                  <span className="text-[10px] text-muted-foreground/60">
+                    resets in {weeklyUsage.resetsIn}d
+                  </span>
+                )}
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    weeklyUsage.used >= weeklyUsage.limit
+                      ? "bg-destructive"
+                      : weeklyUsage.used >= weeklyUsage.limit - 1
+                      ? "bg-amber-500"
+                      : "bg-primary/60"
+                  )}
+                  style={{ width: `${Math.min((weeklyUsage.used / weeklyUsage.limit) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground/80">
+                {weeklyUsage.used} / {weeklyUsage.limit} calculations used
+              </p>
+            </div>
+          </Link>
+        )}
+
         {!isPro && (
           <Link href="/billing">
             <div className="w-full rounded-lg bg-primary text-primary-foreground p-3 space-y-1 cursor-pointer hover:bg-primary/90 transition-colors shadow-sm">
