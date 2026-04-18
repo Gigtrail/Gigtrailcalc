@@ -3,7 +3,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 
-const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
+export const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 
 export type UserRole = "free" | "pro" | "tester" | "admin";
 export type AccessSource = "default" | "stripe" | "promo" | "admin";

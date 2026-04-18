@@ -5,6 +5,7 @@ import {
   normalizePlan,
   normalizeRole,
   hasProAccess,
+  PERMANENT_ADMIN_EMAIL,
   type AuthenticatedRequest,
   type UserRole,
   type AccessSource,
@@ -36,6 +37,12 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
 
   const currentRole = normalizeRole(user?.role ?? "free", user?.plan);
   const currentAccessSource = (user?.accessSource as AccessSource) ?? "default";
+
+  // Hard stop: permanent admin is never modified by Stripe sync under any circumstances
+  if (user?.email === PERMANENT_ADMIN_EMAIL) {
+    res.json({ role: "admin", plan: "paid" });
+    return;
+  }
 
   // Never override tester or admin roles via Stripe
   if (currentRole === "tester" || currentRole === "admin") {
