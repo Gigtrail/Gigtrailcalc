@@ -115,7 +115,16 @@ export function calculateShowIncome(input: ShowIncomeInput): ShowIncomeResult {
 
     const effectiveDealType = dealType ?? "100% door";
     let doorIncome = 0;
-    if (effectiveDealType === "100% door") {
+    if (showType === "Hybrid") {
+      // Hybrid = guarantee + door percentage on top.
+      // The guarantee is added separately below, so the door portion here
+      // must be a pure split (or full door if no split was specified) and
+      // must NOT include a "guarantee vs door" floor (which would double-count).
+      const hybridSplit = effectiveDealType === "percentage split" || effectiveDealType === "guarantee vs door"
+        ? split
+        : 100;
+      doorIncome = netTicketRevenue * (hybridSplit / 100);
+    } else if (effectiveDealType === "100% door") {
       doorIncome = netTicketRevenue;
     } else if (effectiveDealType === "percentage split") {
       doorIncome = netTicketRevenue * (split / 100);

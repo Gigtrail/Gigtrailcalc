@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, getGetVehiclesQueryKey, getGetProfilesQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -624,6 +624,8 @@ export default function RunForm() {
           const newRun = await createRun.mutateAsync({ data: payload });
           savedRunId = newRun.id;
         }
+        // Refresh the History sidebar / dashboard so the new or edited run appears immediately.
+        queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
       } catch (saveErr: unknown) {
         saveFailed = true;
         console.error("[GigTrail] Auto-save failed:", saveErr);

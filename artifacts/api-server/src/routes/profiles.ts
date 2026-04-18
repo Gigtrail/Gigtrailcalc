@@ -13,7 +13,7 @@ import {
   TrackCalculationResponse,
 } from "@workspace/api-zod";
 import { requireAuth, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
-import { FREE_CALC_LIMIT_PER_WEEK } from "@workspace/entitlements";
+import { FREE_CALC_LIMIT_PER_WEEK, getPlanLimits, hasProAccess } from "@workspace/entitlements";
 
 const FREE_CALC_LIMIT = FREE_CALC_LIMIT_PER_WEEK;
 

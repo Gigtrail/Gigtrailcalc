@@ -1,0 +1,337 @@
+I want you to do a FULL APP SWEEP of the Gig Trail calculator and systematically find and fix anything that is not saving, not loading, not persisting, or not correctly syncing between frontend, backend, database, auth, and local state.
+
+This is NOT a quick patch.
+Treat this like a stability + persistence audit across the whole app.
+
+GOAL:
+Make the app reliable so that when a user creates, edits, saves, reloads, signs in, signs out, changes profile data, changes tours, changes shows, changes vehicles, changes members, changes settings, or upgrades plans — the correct data is always saved and always loaded back in properly.
+
+==================================================
+PRIMARY OBJECTIVES
+==================================================
+
+1. FIND EVERYTHING THAT FAILS TO SAVE
+- Any form input that appears editable but is not persisted
+- Any toggle, checkbox, dropdown, or settings field that resets unexpectedly
+- Any modal that updates visually but does not save to DB / API / state
+- Any “save” button that gives false confidence
+- Any autosave flow that is broken or partial
+- Any field that saves in one screen but doesn’t show elsewhere
+
+2. FIND EVERYTHING THAT FAILS TO LOAD
+- Data exists in DB but is not rehydrating into UI
+- Data loads only after refresh
+- Data loads in one page but not another
+- Default profile data not flowing into calculators properly
+- Existing tours/shows/profiles/garage/members/history not restoring correctly
+- Entitlement / role / plan / admin / tester access not loading correctly
+
+3. TRACE CONNECTIONS END TO END
+For each major feature, verify:
+UI input
+→ local component state
+→ shared store / query cache / context
+→ API request
+→ backend validation
+→ DB write
+→ DB read
+→ API response
+→ frontend re-render / rehydrate
+
+If any link in the chain is broken, fix it.
+
+4. REMOVE FAKE STATE
+If anything looks saved only because it updates local UI, but is not actually persisted properly, fix it.
+No fake saves.
+No optimistic UI without real persistence.
+No duplicate source-of-truth problems.
+
+==================================================
+AREAS TO AUDIT
+==================================================
+
+Do a complete audit of these sections:
+
+A. AUTH / USER / ACCESS
+- login/logout persistence
+- current user loading
+- admin access
+- tester access
+- promo code entitlement assignment
+- free/pro plan gating
+- plan upgrades/downgrades
+- permanent admin email enforcement for thegigtrail@gmail.com
+- role / plan / accessSource consistency across backend and frontend
+
+B. PROFILE
+- home base / origin defaults
+- default vehicle preferences
+- default fuel type / fuel price
+- band setup
+- profile edits persisting correctly
+- profile defaults flowing into single calc + tour builder
+- ability to override defaults without corrupting profile
+
+C. SINGLE SHOW CALCULATOR
+- all fields saving/loading correctly if intended
+- default values from profile
+- origin loading properly
+- destination / return trip / one-way toggle
+- expenses
+- accommodation toggle and values
+- member fee logic
+- vehicle selection
+- fuel cost calculations
+- result summary matching the saved inputs
+
+D. TOUR BUILDER
+- tour creation
+- tour title / dates / settings persistence
+- adding/editing/removing stops
+- stop order persistence
+- distance calculations
+- show details persisting
+- deal structure persistence
+- ticketed show logic persistence
+- break-even / ticket-needed calculations saving/loading correctly
+- full tour totals recalculating after load
+- saved tours opening exactly as previously configured
+
+E. MEMBERS / BAND SETUP
+- member creation/edit/delete
+- fees
+- instruments / labels if any
+- expected fees syncing into calculations
+- members saving once and appearing everywhere they should
+- no duplicated state between profile and tour
+
+F. VEHICLES / GARAGE / FLEET
+- vehicle creation/edit/delete
+- default vehicles
+- standard/free vehicles
+- pro custom vehicles
+- fuel type
+- litres per 100km / mpg conversion if used
+- assigned home base if implemented
+- multiple vehicles on a tour
+- fuel cost per vehicle showing correctly
+- garage data rehydrating correctly after refresh
+
+G. PAST SHOWS / HISTORY / SAVED CALCS
+- records saving reliably
+- only showing intended venue/show summaries
+- saved calculation snapshots opening exactly as they were
+- no partial history objects
+- no mismatch between historical display and actual saved data
+
+H. DASHBOARD / SUMMARY / REPORTING
+- dashboard cards using real live data, not placeholders
+- totals reflecting current saved state
+- no stale cache after edits
+- no broken derived values after reload
+
+I. BILLING / STRIPE / PLAN UI
+- frontend plan names consistent everywhere
+- no old “paid” vs “pro” mismatch
+- upgrade state syncing correctly after purchase
+- gated features unlock immediately or on proper refresh flow
+- backend + frontend entitlement checks consistent
+
+J. SETTINGS / MISC
+- app preferences
+- collapsibles / expanded state only if meant to persist
+- theme or UI prefs if relevant
+- feedback board if partially wired
+- any hidden forms or legacy screens still connected to old schema
+
+==================================================
+WHAT I WANT YOU TO DO
+==================================================
+
+STEP 1 — MAP THE APP
+Create a quick internal map of:
+- frontend pages/components
+- key stores/contexts/hooks
+- API routes
+- DB models/tables
+- auth/entitlement middleware
+- save/load flows
+
+STEP 2 — TRACE EVERY MAJOR SAVE/LOAD FLOW
+For each major feature above:
+- identify source of truth
+- identify save method
+- identify load method
+- identify defaults
+- identify derived calculations
+- identify where it breaks
+
+STEP 3 — FIX SYSTEMIC ISSUES FIRST
+Prioritize root-cause fixes such as:
+- mismatched field names between frontend/backend
+- stale query cache
+- missing invalidations
+- bad useEffect dependencies
+- controlled/uncontrolled form issues
+- local state not initialized from server data
+- save mutations not updating canonical state
+- DB columns not included in serializers
+- serializer fields not included in frontend types
+- API silently dropping fields
+- plan/role normalization issues
+- duplicated schemas
+- legacy fallback logic causing inconsistency
+
+STEP 4 — FIX FEATURE-SPECIFIC ISSUES
+Then fix remaining broken fields one by one.
+
+STEP 5 — HARDEN THE APP
+Add guardrails where needed:
+- proper default values
+- clear empty states
+- schema validation
+- defensive null handling
+- stable query keys
+- no silent save failures
+- toast or inline error feedback on real failure
+- loading states where needed
+- remove dead legacy code that conflicts with current logic
+
+STEP 6 — VERIFY
+After fixes, test the app thoroughly.
+
+==================================================
+TESTING REQUIREMENTS
+==================================================
+
+I want real verification, not assumptions.
+
+Test these flows:
+
+1. New user sign up
+- free user loads correctly
+- onboarding/profile saves
+- defaults appear in calculators
+
+2. Existing user reload flow
+- saved profile reloads
+- saved tours reload
+- saved members reload
+- saved vehicles reload
+- saved history reload
+
+3. Admin user flow
+- thegigtrail@gmail.com remains admin
+- role/plan/accessSource repaired if needed
+- admin UI appears properly
+- admin stays admin after refresh/login/logout
+
+4. Tester flow
+- tester promo code works
+- tester access persists
+- tester features show correctly after refresh
+
+5. Pro user flow
+- pro-only features save/load correctly
+- locked/free fallback doesn’t corrupt pro data
+
+6. Tour editing flow
+- create tour
+- add stops
+- add expenses
+- assign vehicles/members
+- save
+- refresh
+- reopen
+- verify everything is identical
+
+7. Single show flow
+- use profile defaults
+- override values
+- calculate
+- save if applicable
+- reload and verify
+
+8. Garage/member sync flow
+- create/update/delete and confirm those changes appear everywhere they should
+
+9. Billing/entitlement flow
+- plan labels and gating consistent everywhere
+
+10. Regression test
+- ensure fixes do not break unrelated pages
+
+==================================================
+IMPORTANT IMPLEMENTATION RULES
+==================================================
+
+- Do not just patch symptoms.
+Find root causes.
+- Do not leave duplicate logic in multiple places.
+Centralize where possible.
+- Do not keep legacy fallbacks unless absolutely necessary.
+If kept, document why.
+- Do not let frontend and backend use different naming for the same concept.
+- Do not leave fake “saved” UI states.
+- Do not invent placeholder data in dashboards or summaries.
+Use real persisted data only.
+- Keep the UI simple and stable.
+- Preserve existing styling unless a small tweak is needed to clarify save state / loading state / errors.
+
+==================================================
+OUTPUT I WANT FROM YOU
+==================================================
+
+When complete, give me:
+
+1. A CLEAR AUDIT SUMMARY
+- what was broken
+- why it was broken
+- what was fixed
+
+2. A FILE-BY-FILE CHANGE LIST
+- each file changed
+- what changed in it
+- why
+
+3. A LIST OF ANY RISKY OR PARTIAL AREAS STILL LEFT
+- anything not fully fixable
+- any schema debt
+- any recommended next cleanup
+
+4. VERIFICATION RESULTS
+- what exact flows were tested
+- what passed
+- what failed
+- screenshots/log evidence if available
+
+5. FINAL STATUS:
+Use one of:
+- STABLE
+- MOSTLY STABLE WITH MINOR KNOWN ISSUES
+- NEEDS ANOTHER PASS
+
+==================================================
+EXTRA CHECKS TO DO
+==================================================
+
+Please specifically check for:
+- origin/home base default not pulling from profile
+- values appearing in UI but not in saved records
+- distance/fuel totals not updating after edits
+- ticketed show totals double-counting or using wrong expected outcome logic
+- member percentages showing where flat counts should show
+- deal structure not saving in tour builder
+- saved tours/history not opening with exact previous state
+- admin role being removed again
+- plan naming inconsistencies
+- tester code visibility / privacy issues
+- old deprecated pricing or access logic still hanging around
+
+==================================================
+FINAL INSTRUCTION
+==================================================
+
+Do the sweep properly.
+Think like a senior engineer doing a production stabilization pass before alpha testing.
+I want reliability first, not flashy changes.

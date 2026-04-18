@@ -58,6 +58,8 @@ export default function Garage() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+          // Profiles may reference this vehicle as their default — refresh so the UI doesn't keep showing it.
+          queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
           toast({ title: `"${name}" removed from garage` });
         },
         onError: () => {
