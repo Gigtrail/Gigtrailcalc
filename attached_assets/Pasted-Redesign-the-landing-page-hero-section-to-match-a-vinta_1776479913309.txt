@@ -1,0 +1,163 @@
+Redesign the landing page hero section to match a vintage parchment, road-worn aesthetic using the uploaded Gig Trail logo as the central focus.
+
+GOAL:
+Move away from a dark SaaS-style UI and create a warm, parchment-style landing experience that feels handcrafted, musical, and road-built.
+
+This should feel like:
+
+* an old touring map
+* a worn gig poster
+* something real musicians connect with
+  NOT a tech startup landing page
+
+---
+
+HERO LAYOUT (CRITICAL):
+
+Replace the current hero with a centered layout:
+
+TOP:
+
+* small navigation bar remains
+
+CENTER (MAIN FOCUS):
+
+* Large Gig Trail logo (uploaded asset)
+* Logo must be the dominant visual element
+* Centered horizontally
+* Sized prominently (do not make it small)
+
+UNDER LOGO:
+Small label:
+“Fuel Calculator”
+
+MAIN HEADLINE:
+“Know if your gigs are worth it before you lock them in”
+
+SUBTEXT:
+“Fuel, fees, accommodation… it adds up fast.”
+
+SMALL LINE:
+“Scroll down to get started”
+
+Add a subtle down arrow indicator
+
+---
+
+BACKGROUND (VERY IMPORTANT):
+
+Replace dark background with a parchment texture style:
+
+Use:
+
+* warm beige / parchment tones
+* subtle grain / paper texture (CSS or image)
+* slightly uneven / organic feel
+
+Base colors:
+
+* background: #EADFCF or similar parchment tone
+* darker edges or subtle vignette optional
+* text: dark brown / charcoal (not pure black)
+
+DO NOT use:
+
+* pure black backgrounds
+* bright white sections
+* blue tones
+* modern SaaS gradients
+
+---
+
+DECORATIVE ELEMENTS:
+
+Add subtle vintage UI elements:
+
+* thin horizontal divider lines left and right of logo
+* slightly distressed styling
+* small ornamental separators
+* optional faint map/grid texture
+
+Keep it subtle — not overdesigned
+
+---
+
+BUTTONS:
+
+Primary button:
+“Try the Tour Calculator”
+
+* burnt orange background (#B8651E)
+* darker hover
+
+Secondary button:
+“Get the Touring Guide”
+
+* outlined or muted parchment style
+
+Buttons should feel tactile, not glossy
+
+---
+
+SCREENSHOTS:
+
+Remove the current dark UI screenshot from the hero.
+
+Instead:
+
+* keep screenshots for lower sections
+* hero should focus on brand + message
+
+---
+
+RESPONSIVE:
+
+On mobile:
+
+* logo stays centered and large
+* text stacks cleanly underneath
+* spacing remains balanced
+* no overflow or cramped layout
+
+---
+
+KEEP REST OF PAGE:
+
+* problem section
+* calculator section
+* ebook section
+* beta form
+
+BUT:
+Gradually transition sections from parchment → slightly darker tones if needed
+(do NOT jump straight to black)
+
+---
+
+LOGO USAGE:
+
+Use the uploaded Gig Trail logo asset.
+
+Ensure:
+
+* transparent background if available
+* clean scaling (no blur)
+* proper padding around it
+
+---
+
+IMPORTANT:
+
+Do NOT rebuild the entire site structure.
+ONLY redesign the hero and adjust styling direction to match it.
+
+---
+
+DELIVERABLE:
+
+After changes, report:
+
+1. which files were updated
+2. how the parchment background was implemented (CSS or image)
+3. where the logo is loaded from
+4. any assets that still need replacing or improving
