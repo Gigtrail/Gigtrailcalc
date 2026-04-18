@@ -2,20 +2,39 @@ import { getAuth, clerkClient } from "@clerk/express";
 import { db, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
+import {
+  PERMANENT_ADMIN_EMAIL,
+  isPermanentAdminEmail,
+  normalizeRole,
+  derivePlanFromRole,
+  hasProAccess,
+  isFreeRole,
+  isProRole,
+  isTesterRole,
+  isAdminRole,
+  getEntitlements,
+  getPlanLimits,
+  type UserRole,
+  type AccessSource,
+  type Entitlements,
+  type PlanLimits,
+} from "@workspace/entitlements";
 
-export const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
-
-/**
- * Case-insensitive, whitespace-trimmed check for the permanent admin email.
- * Use this everywhere instead of a bare === comparison.
- */
-export function isPermanentAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return email.trim().toLowerCase() === PERMANENT_ADMIN_EMAIL.toLowerCase();
-}
-
-export type UserRole = "free" | "pro" | "tester" | "admin";
-export type AccessSource = "default" | "stripe" | "promo" | "admin";
+// Re-export so existing imports from "../middlewares/auth" keep compiling.
+export {
+  PERMANENT_ADMIN_EMAIL,
+  isPermanentAdminEmail,
+  normalizeRole,
+  derivePlanFromRole,
+  hasProAccess,
+  isFreeRole,
+  isProRole,
+  isTesterRole,
+  isAdminRole,
+  getEntitlements,
+  getPlanLimits,
+};
+export type { UserRole, AccessSource, Entitlements, PlanLimits };
 
 export interface AuthenticatedRequest extends Request {
   userId: string;
@@ -23,86 +42,8 @@ export interface AuthenticatedRequest extends Request {
   accessSource: AccessSource;
   /** Derived from role for backward compat — "paid" if hasProAccess(userRole) */
   userPlan: "free" | "paid";
-}
-
-// ─── Role helpers ────────────────────────────────────────────────────────────
-
-export function hasProAccess(role: string): boolean {
-  return role === "pro" || role === "tester" || role === "admin";
-}
-
-export function isFreeRole(role: string): boolean {
-  return role === "free";
-}
-
-export function isProRole(role: string): boolean {
-  return role === "pro";
-}
-
-export function isTesterRole(role: string): boolean {
-  return role === "tester";
-}
-
-export function isAdminRole(role: string): boolean {
-  return role === "admin";
-}
-
-/**
- * Coerce any role value into the canonical 4-tier set.
- * Anything unrecognised becomes "free".
- * The legacy `plan` parameter is ignored — kept only for call-site compatibility.
- */
-export function normalizeRole(raw: string | null | undefined, _plan?: string | null): UserRole {
-  if (!raw) return "free";
-  if (raw === "free" || raw === "pro" || raw === "tester" || raw === "admin") return raw;
-  return "free";
-}
-
-/**
- * Derive the canonical plan string from a role.
- * role is the single source of truth — plan is always a derived value.
- */
-export function derivePlanFromRole(role: string): "free" | "paid" {
-  return hasProAccess(role) ? "paid" : "free";
-}
-
-// ─── Plan limits ─────────────────────────────────────────────────────────────
-
-export interface PlanLimits {
-  maxProfiles: number;
-  maxVehicles: number;
-  maxRuns: number;
-  toursEnabled: boolean;
-  ticketedShowEnabled: boolean;
-  marketingCostEnabled: boolean;
-  routingEnabled: boolean;
-}
-
-/**
- * Returns feature limits for a given role.
- * Role is the sole authority — do NOT pass the legacy plan column here.
- */
-export function getPlanLimits(role: string): PlanLimits {
-  if (hasProAccess(role)) {
-    return {
-      maxProfiles: 10,
-      maxVehicles: Infinity,
-      maxRuns: Infinity,
-      toursEnabled: true,
-      ticketedShowEnabled: true,
-      marketingCostEnabled: true,
-      routingEnabled: true,
-    };
-  }
-  return {
-    maxProfiles: 1,
-    maxVehicles: 1,
-    maxRuns: 5,
-    toursEnabled: false,
-    ticketedShowEnabled: false,
-    marketingCostEnabled: false,
-    routingEnabled: false,
-  };
+  /** The full Entitlements object — single source of truth for any limit/flag check. */
+  entitlements: Entitlements;
 }
 
 // ─── User resolution ─────────────────────────────────────────────────────────
@@ -129,7 +70,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const email = await resolveEmail(userId, auth?.sessionClaims?.email as string | undefined);
   const user = await ensureUser(userId, email);
 
-  const role = normalizeRole(user.role, user.plan);
+  const role = normalizeRole(user.role);
   const accessSource = (user.accessSource as AccessSource) ?? "default";
   const effectiveEmail = email ?? user.email ?? "(unknown)";
   const permAdminActive = isPermanentAdminEmail(effectiveEmail);
@@ -141,15 +82,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     (permAdminActive ? " [PERMANENT-ADMIN]" : "")
   );
 
-  (req as AuthenticatedRequest).userRole = role;
-  (req as AuthenticatedRequest).accessSource = accessSource;
-  (req as AuthenticatedRequest).userPlan = hasProAccess(role) ? "paid" : "free";
+  const authReq = req as AuthenticatedRequest;
+  authReq.userRole = role;
+  authReq.accessSource = accessSource;
+  authReq.userPlan = derivePlanFromRole(role);
+  authReq.entitlements = getEntitlements(role);
   next();
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authReq = req as AuthenticatedRequest;
-  if (!isAdminRole(authReq.userRole)) {
+  if (!authReq.entitlements?.canAccessAdmin) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -166,7 +109,7 @@ async function ensureUser(userId: string, email?: string) {
     if (email && existing.email !== email) updates.email = email;
 
     // Permanent admin: repair role, plan, and accessSource if any are wrong
-    const existingRole = normalizeRole(existing.role, existing.plan);
+    const existingRole = normalizeRole(existing.role);
     const needsAdminRepair =
       isPermAdmin &&
       (existingRole !== "admin" || existing.accessSource !== "admin" || existing.plan !== "paid");
@@ -185,7 +128,7 @@ async function ensureUser(userId: string, email?: string) {
 
     // One-time migration: if role is legacy "user" → migrate to 4-tier
     if (!isPermAdmin && existing.role === "user") {
-      const migratedRole = normalizeRole("user", existing.plan);
+      const migratedRole = normalizeRole("user");
       updates.role = migratedRole;
       if (!updates.accessSource) {
         updates.accessSource = migratedRole === "pro" ? "stripe" : "default";

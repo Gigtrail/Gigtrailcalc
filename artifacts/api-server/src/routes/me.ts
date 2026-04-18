@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import {
   requireAuth,
   getPlanLimits,
+  getEntitlements,
   derivePlanFromRole,
   normalizeRole,
   hasProAccess,
@@ -10,6 +11,7 @@ import {
   type UserRole,
   type AccessSource,
 } from "../middlewares/auth";
+import { serializeEntitlements } from "@workspace/entitlements";
 import { storage } from "../storage";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -20,6 +22,7 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, accessSource, userPlan } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
   const limits = getPlanLimits(userRole);
+  const entitlements = serializeEntitlements(getEntitlements(userRole));
   const response = {
     userId,
     email: user?.email ?? null,
@@ -27,6 +30,7 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
     accessSource,
     plan: userPlan,
     limits,
+    entitlements,
     hasStripeCustomer: !!user?.stripeCustomerId,
   };
   console.log(`[/api/me] userId=${userId} email=${response.email} role=${response.role} plan=${response.plan} accessSource=${response.accessSource}`);
@@ -50,7 +54,7 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
 
-  const currentRole = normalizeRole(user?.role ?? "free", user?.plan);
+  const currentRole = normalizeRole(user?.role ?? "free");
   const currentAccessSource = (user?.accessSource as AccessSource) ?? "default";
 
   // ── Hard stop: permanent admin is immutable ──────────────────────────────

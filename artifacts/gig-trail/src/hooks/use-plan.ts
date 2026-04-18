@@ -1,20 +1,30 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
+import {
+  getEntitlements,
+  hasProAccess,
+  isAdminRole,
+  isTesterRole,
+  derivePlanFromRole,
+  deserializeEntitlements,
+  type UserRole,
+  type AccessSource,
+  type Entitlements,
+  type EntitlementsWire,
+  type PlanLimits,
+} from "@workspace/entitlements";
 
-export type UserRole = "free" | "pro" | "tester" | "admin";
+// Re-export types for downstream callers (use the central package directly when possible).
+export {
+  hasProAccess,
+  getEntitlements,
+  isAdminRole,
+  isTesterRole,
+  derivePlanFromRole,
+};
+export type { UserRole, AccessSource, Entitlements, PlanLimits };
 
 export const PROMO_SESSION_KEY = "gig_trail_pending_promo";
-export type AccessSource = "default" | "stripe" | "promo" | "admin";
-
-export interface PlanLimits {
-  maxProfiles: number;
-  maxVehicles: number;
-  maxRuns: number;
-  toursEnabled: boolean;
-  ticketedShowEnabled: boolean;
-  marketingCostEnabled: boolean;
-  routingEnabled: boolean;
-}
 
 export interface MeResponse {
   userId: string;
@@ -22,13 +32,14 @@ export interface MeResponse {
   role: UserRole;
   accessSource: AccessSource;
   plan: "free" | "paid";
+  /** Legacy shape — derived from entitlements server-side. */
   limits: PlanLimits;
+  /** JSON-safe entitlements shape (Infinity is encoded as null). */
+  entitlements: EntitlementsWire;
   hasStripeCustomer: boolean;
 }
 
-export function hasProAccess(role: UserRole | string): boolean {
-  return role === "pro" || role === "tester" || role === "admin";
-}
+const FREE_ENTITLEMENTS = getEntitlements("free");
 
 export function usePlan() {
   const { isSignedIn } = useUser();
@@ -46,20 +57,41 @@ export function usePlan() {
   const role: UserRole = data?.role ?? "free";
   const accessSource: AccessSource = data?.accessSource ?? "default";
   const plan = data?.plan ?? "free";
-  const isPro = hasProAccess(role);
-  const isAdmin = role === "admin";
-  const isTester = role === "tester";
-  const limits = data?.limits ?? {
-    maxProfiles: 1,
-    maxVehicles: 1,
-    maxRuns: 5,
-    toursEnabled: false,
-    ticketedShowEnabled: false,
-    marketingCostEnabled: false,
-    routingEnabled: false,
+
+  // Prefer server-sent entitlements (single source of truth). Fall back to local
+  // computation from role for first-paint / loading states. They MUST match.
+  const entitlements: Entitlements = data?.entitlements
+    ? deserializeEntitlements(data.entitlements)
+    : (data ? getEntitlements(role) : FREE_ENTITLEMENTS);
+
+  const isPro = entitlements.canUseProFeatures;
+  const isAdmin = entitlements.canAccessAdmin;
+  const isTester = isTesterRole(role);
+
+  // Legacy shape kept for older call-sites that read .limits.maxProfiles etc.
+  const limits: PlanLimits = data?.limits ?? {
+    maxProfiles: entitlements.maxProfiles === Infinity ? Number.MAX_SAFE_INTEGER : entitlements.maxProfiles,
+    maxVehicles: entitlements.maxVehicles === Infinity ? Number.MAX_SAFE_INTEGER : entitlements.maxVehicles,
+    maxRuns: entitlements.maxSavedRuns === Infinity ? Number.MAX_SAFE_INTEGER : entitlements.maxSavedRuns,
+    toursEnabled: entitlements.canUseTourBuilder,
+    ticketedShowEnabled: entitlements.canUseTicketedShows,
+    marketingCostEnabled: entitlements.canUseMarketingCost,
+    routingEnabled: entitlements.canUseRouting,
   };
 
-  return { plan, role, accessSource, isPro, isAdmin, isTester, limits, me: data, isLoading, refetch };
+  return {
+    plan,
+    role,
+    accessSource,
+    isPro,
+    isAdmin,
+    isTester,
+    entitlements,
+    limits,
+    me: data,
+    isLoading,
+    refetch,
+  };
 }
 
 // ─── Weekly calc usage ────────────────────────────────────────────────────────

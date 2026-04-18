@@ -78,7 +78,7 @@ async function repairPermanentAdmin() {
   try {
     const { db, usersTable } = await import("@workspace/db");
     const { ilike } = await import("drizzle-orm");
-    const { PERMANENT_ADMIN_EMAIL } = await import("./middlewares/auth");
+    const { PERMANENT_ADMIN_EMAIL, derivePlanFromRole } = await import("@workspace/entitlements");
 
     const [row] = await db
       .select()
@@ -90,7 +90,8 @@ async function repairPermanentAdmin() {
       return;
     }
 
-    const needsRepair = row.role !== "admin" || row.plan !== "paid" || row.accessSource !== "admin";
+    const expectedPlan = derivePlanFromRole("admin");
+    const needsRepair = row.role !== "admin" || row.plan !== expectedPlan || row.accessSource !== "admin";
     if (!needsRepair) {
       logger.info(`[PermanentAdmin] DB row OK: role=${row.role} plan=${row.plan} accessSource=${row.accessSource}`);
       return;
@@ -99,7 +100,7 @@ async function repairPermanentAdmin() {
     const { eq } = await import("drizzle-orm");
     await db
       .update(usersTable)
-      .set({ role: "admin", plan: "paid", accessSource: "admin" })
+      .set({ role: "admin", plan: expectedPlan, accessSource: "admin" })
       .where(eq(usersTable.id, row.id));
 
     logger.warn(

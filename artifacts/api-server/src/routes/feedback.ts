@@ -64,7 +64,7 @@ router.post("/feedback", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userRole } = req as AuthenticatedRequest;
+  const { userId, entitlements } = req as AuthenticatedRequest;
   const postId = Number(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
@@ -93,8 +93,7 @@ router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const isOwner = existing.userId === userId;
-  const isAdmin = userRole === "admin";
-  if (!isOwner && !isAdmin) {
+  if (!isOwner && !entitlements.canAccessAdmin) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }

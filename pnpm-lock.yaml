@@ -4,6 +4,72 @@ settings:
   autoInstallPeers: false
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@replit/vite-plugin-cartographer':
+      specifier: ^0.5.1
+      version: 0.5.1
+    '@replit/vite-plugin-dev-banner':
+      specifier: ^0.1.1
+      version: 0.1.2
+    '@replit/vite-plugin-runtime-error-modal':
+      specifier: ^0.0.6
+      version: 0.0.6
+    '@tailwindcss/vite':
+      specifier: ^4.1.14
+      version: 4.2.1
+    '@tanstack/react-query':
+      specifier: ^5.90.21
+      version: 5.90.21
+    '@types/node':
+      specifier: ^25.3.3
+      version: 25.3.5
+    '@types/react':
+      specifier: ^19.2.0
+      version: 19.2.14
+    '@types/react-dom':
+      specifier: ^19.2.0
+      version: 19.2.3
+    '@vitejs/plugin-react':
+      specifier: ^5.0.4
+      version: 5.1.4
+    class-variance-authority:
+      specifier: ^0.7.1
+      version: 0.7.1
+    clsx:
+      specifier: ^2.1.1
+      version: 2.1.1
+    drizzle-orm:
+      specifier: ^0.45.1
+      version: 0.45.1
+    framer-motion:
+      specifier: ^12.23.24
+      version: 12.35.1
+    lucide-react:
+      specifier: ^0.545.0
+      version: 0.545.0
+    react:
+      specifier: 19.1.0
+      version: 19.1.0
+    react-dom:
+      specifier: 19.1.0
+      version: 19.1.0
+    tailwind-merge:
+      specifier: ^3.3.1
+      version: 3.5.0
+    tailwindcss:
+      specifier: ^4.1.14
+      version: 4.2.1
+    tsx:
+      specifier: ^4.21.0
+      version: 4.21.0
+    vite:
+      specifier: ^7.3.0
+      version: 7.3.1
+    zod:
+      specifier: ^3.25.76
+      version: 3.25.76
+
 overrides:
   esbuild>@esbuild/darwin-arm64: '-'
   esbuild>@esbuild/darwin-x64: '-'
@@ -93,10 +159,10 @@ importers:
     dependencies:
       stripe:
         specifier: ^22.0.1
-        version: 22.0.1
+        version: 22.0.1(@types/node@25.3.5)
       stripe-replit-sync:
         specifier: ^1.0.0
-        version: 1.0.0(stripe@22.0.1)
+        version: 1.0.0(stripe@22.0.1(@types/node@25.3.5))
     devDependencies:
       prettier:
         specifier: ^3.8.1
@@ -116,6 +182,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/entitlements':
+        specifier: workspace:*
+        version: link:../../lib/entitlements
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -292,6 +361,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/entitlements':
+        specifier: workspace:*
+        version: link:../../lib/entitlements
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -593,6 +665,12 @@ importers:
       drizzle-kit:
         specifier: ^0.31.9
         version: 0.31.9
+
+  lib/entitlements:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.3.5
 
   scripts:
     dependencies:
@@ -6193,19 +6271,17 @@ snapshots:
 
   strip-json-comments@5.0.3: {}
 
-  stripe-replit-sync@1.0.0(stripe@22.0.1):
+  stripe-replit-sync@1.0.0(stripe@22.0.1(@types/node@25.3.5)):
     dependencies:
       pg: 8.20.0
       pg-node-migrations: 0.0.8
-      stripe: 22.0.1
+      stripe: 22.0.1(@types/node@25.3.5)
       ws: 8.20.0
       yesql: 7.0.0
     transitivePeerDependencies:
       - bufferutil
       - pg-native
       - utf-8-validate
-
-  stripe@22.0.1: {}
 
   stripe@22.0.1(@types/node@25.3.5):
     optionalDependencies:

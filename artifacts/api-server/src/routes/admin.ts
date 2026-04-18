@@ -1,11 +1,10 @@
 import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin, isPermanentAdminEmail, derivePlanFromRole, type AuthenticatedRequest, type UserRole } from "../middlewares/auth";
+import { VALID_ROLES } from "@workspace/entitlements";
 import { db, usersTable, promoCodesTable, promoCodeRedemptionsTable } from "@workspace/db";
 import { eq, ilike, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
-
-const VALID_ROLES: UserRole[] = ["free", "pro", "tester", "admin"];
 
 // ─── User management ─────────────────────────────────────────────────────────
 
@@ -114,8 +113,8 @@ router.post("/admin/promo-codes", requireAuth, requireAdmin, async (req, res): P
     return;
   }
   const upperCode = code.trim().toUpperCase();
-  if (!grantsRole || !["free", "pro", "tester", "admin"].includes(grantsRole)) {
-    res.status(400).json({ error: "grantsRole must be one of: free, pro, tester, admin" });
+  if (!grantsRole || !VALID_ROLES.includes(grantsRole as UserRole)) {
+    res.status(400).json({ error: `grantsRole must be one of: ${VALID_ROLES.join(", ")}` });
     return;
   }
 
@@ -153,7 +152,7 @@ router.patch("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, re
     notes?: string | null;
   };
 
-  if (updates.grantsRole && !["free", "pro", "tester", "admin"].includes(updates.grantsRole)) {
+  if (updates.grantsRole && !VALID_ROLES.includes(updates.grantsRole as UserRole)) {
     res.status(400).json({ error: "Invalid grantsRole" });
     return;
   }

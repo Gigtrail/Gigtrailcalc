@@ -12,9 +12,10 @@ import {
   GetProfilesResponse,
   TrackCalculationResponse,
 } from "@workspace/api-zod";
-import { requireAuth, getPlanLimits, hasProAccess, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
+import { requireAuth, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
+import { FREE_CALC_LIMIT_PER_WEEK } from "@workspace/entitlements";
 
-const FREE_CALC_LIMIT = 5;
+const FREE_CALC_LIMIT = FREE_CALC_LIMIT_PER_WEEK;
 
 function todayString() {
   return new Date().toISOString().split("T")[0];
