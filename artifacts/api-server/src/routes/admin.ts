@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, requireAdmin, isPermanentAdminEmail, type AuthenticatedRequest, hasProAccess, type UserRole } from "../middlewares/auth";
+import { requireAuth, requireAdmin, isPermanentAdminEmail, derivePlanFromRole, type AuthenticatedRequest, type UserRole } from "../middlewares/auth";
 import { db, usersTable, promoCodesTable, promoCodeRedemptionsTable } from "@workspace/db";
 import { eq, ilike, desc } from "drizzle-orm";
 
@@ -70,7 +70,7 @@ router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res
     return;
   }
 
-  const newPlan = hasProAccess(role) ? "paid" : "free";
+  const newPlan = derivePlanFromRole(role);
   const [updated] = await db
     .update(usersTable)
     .set({ role, plan: newPlan, accessSource: "admin" })

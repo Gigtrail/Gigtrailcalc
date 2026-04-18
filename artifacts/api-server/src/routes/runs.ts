@@ -77,8 +77,8 @@ router.get("/runs", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/runs", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   if (limits.maxRuns !== Infinity) {
     const count = await countUserRecords(runsTable, userId);
     if (count >= limits.maxRuns) {

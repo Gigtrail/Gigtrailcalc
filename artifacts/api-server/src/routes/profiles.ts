@@ -57,8 +57,8 @@ router.get("/profiles", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   const count = await countUserRecords(profilesTable, userId);
   if (count >= limits.maxProfiles) {
     res.status(403).json({ error: "Plan limit reached", code: "LIMIT_PROFILES", limit: limits.maxProfiles, plan: userPlan });

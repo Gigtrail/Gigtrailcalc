@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, type AuthenticatedRequest, type UserRole, hasProAccess } from "../middlewares/auth";
+import { requireAuth, derivePlanFromRole, isPermanentAdminEmail, type AuthenticatedRequest, type UserRole } from "../middlewares/auth";
 import { db, promoCodesTable, promoCodeRedemptionsTable, usersTable } from "@workspace/db";
 import { eq, and, ilike } from "drizzle-orm";
 
@@ -84,14 +84,20 @@ router.post("/me/redeem-promo", requireAuth, async (req, res): Promise<void> => 
     return;
   }
 
-  // Don't downgrade — if user is already admin or tester, don't override
-  if (user.role === "admin" || user.role === "tester") {
-    res.json({ role: user.role, message: "Your current role already includes full access" });
+  // Hard stop: permanent admin is never modified by promo codes
+  if (isPermanentAdminEmail(user.email)) {
+    res.json({ role: "admin", plan: "paid", message: "Your current role already includes full access" });
     return;
   }
 
-  // Apply the role
-  const newPlan = hasProAccess(grantsRole) ? "paid" : "free";
+  // Don't downgrade — if user is already admin or tester, don't override
+  if (user.role === "admin" || user.role === "tester") {
+    res.json({ role: user.role, plan: derivePlanFromRole(user.role), message: "Your current role already includes full access" });
+    return;
+  }
+
+  // Apply the role — plan is always derived from role, never stored separately
+  const newPlan = derivePlanFromRole(grantsRole);
   await db
     .update(usersTable)
     .set({ role: grantsRole, plan: newPlan, accessSource: "promo" })

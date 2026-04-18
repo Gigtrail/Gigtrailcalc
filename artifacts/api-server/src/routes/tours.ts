@@ -120,8 +120,8 @@ async function syncStopVenue(
 }
 
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   if (!limits.toursEnabled) {
     res.json(GetToursResponse.parse([]));
     return;
@@ -136,8 +136,8 @@ router.get("/tours", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/tours", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   if (!limits.toursEnabled) {
     res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
     return;
@@ -152,8 +152,8 @@ router.post("/tours", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   if (!limits.toursEnabled) {
     res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
     return;

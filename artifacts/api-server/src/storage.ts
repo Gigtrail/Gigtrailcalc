@@ -7,9 +7,13 @@ export class Storage {
     return user ?? null;
   }
 
+  /**
+   * Write only Stripe IDs — never writes role or plan.
+   * role/plan are managed exclusively by the auth middleware and role-update routes.
+   */
   async updateUserStripeInfo(
     userId: string,
-    stripeInfo: { stripeCustomerId?: string; stripeSubscriptionId?: string; plan?: string }
+    stripeInfo: { stripeCustomerId?: string; stripeSubscriptionId?: string }
   ) {
     const [user] = await db
       .update(usersTable)

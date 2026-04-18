@@ -103,8 +103,8 @@ router.get("/vehicles", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan } = req as AuthenticatedRequest;
-  const limits = getPlanLimits(userPlan);
+  const { userId, userRole, userPlan } = req as AuthenticatedRequest;
+  const limits = getPlanLimits(userRole);
   const count = await countUserRecords(vehiclesTable, userId);
   if (count >= limits.maxVehicles) {
     res.status(403).json({ error: "Plan limit reached", code: "LIMIT_VEHICLES", limit: limits.maxVehicles, plan: userPlan });

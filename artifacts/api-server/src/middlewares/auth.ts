@@ -67,7 +67,16 @@ export function normalizeRole(raw: string | null | undefined, plan?: string | nu
 }
 
 /**
- * Kept for backward compatibility with Stripe sync logic.
+ * Derive the canonical plan string from a role.
+ * role is the single source of truth — plan is always a derived value.
+ */
+export function derivePlanFromRole(role: string): "free" | "paid" {
+  return hasProAccess(role) ? "paid" : "free";
+}
+
+/**
+ * @deprecated Do not use to gate permissions. Use derivePlanFromRole(role) instead.
+ * Kept only for legacy DB value normalisation during migration reads.
  */
 export function normalizePlan(raw: string | null | undefined): "free" | "paid" {
   if (!raw) return "free";
@@ -87,8 +96,12 @@ export interface PlanLimits {
   routingEnabled: boolean;
 }
 
-export function getPlanLimits(roleOrPlan: string): PlanLimits {
-  if (hasProAccess(roleOrPlan) || normalizePlan(roleOrPlan) === "paid") {
+/**
+ * Returns feature limits for a given role.
+ * Role is the sole authority — do NOT pass the legacy plan column here.
+ */
+export function getPlanLimits(role: string): PlanLimits {
+  if (hasProAccess(role)) {
     return {
       maxProfiles: 10,
       maxVehicles: Infinity,
@@ -178,7 +191,7 @@ async function ensureUser(userId: string, email?: string) {
 
     if (needsAdminRepair) {
       updates.role = "admin";
-      updates.plan = "paid";
+      updates.plan = derivePlanFromRole("admin");
       updates.accessSource = "admin";
       console.log(
         `[Auth][PermanentAdmin] Repairing DB row for ${email}: ` +
@@ -213,7 +226,7 @@ async function ensureUser(userId: string, email?: string) {
     id: userId,
     email: email ?? null,
     role: newRole,
-    plan: isPermAdmin ? "paid" : "free",
+    plan: derivePlanFromRole(newRole),
     accessSource: isPermAdmin ? "admin" : "default",
   };
 
