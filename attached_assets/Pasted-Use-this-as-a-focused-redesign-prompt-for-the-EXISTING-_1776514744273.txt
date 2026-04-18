@@ -1,0 +1,500 @@
+Use this as a focused redesign prompt for the EXISTING Single Show Calculator screen. This is not a full rebuild from scratch. It is a smart redesign/refactor of the current screen and logic.
+
+GOAL
+Redesign the current Single Show Calculator so it feels:
+- smoother
+- easier to use
+- less intimidating
+- more interactive
+- more visually rewarding
+- more likely to drive repeated calc usage
+
+This calculator is the HOOK of the app.
+
+IMPORTANT PRODUCT RULES
+1. Free users get 5 calcs per week.
+2. A calc is only counted when the user presses the Calculate button and a valid result is returned.
+3. Do NOT auto-update results live while users edit fields.
+4. Users must be able to use both:
+   - sliders / quick controls for exploration
+   - hard numeric inputs for exact data
+5. If the user changes inputs after the last calc, mark the result as stale and require pressing Calculate again.
+6. Add subtle micro-celebration feedback after calculate.
+7. Keep real data wiring. Do NOT replace with fake mock data.
+
+CURRENT PROBLEM
+The current page is functional, but it still feels like a form. It needs to feel more like a touring decision tool.
+
+The current issues to solve:
+- no strong hook at the top
+- too much “fill in fields” energy
+- too much vertical admin feel
+- no result-first reward
+- no slider + hard input hybrid controls
+- quick view is too weak
+- trail notes interrupt flow
+- costs are readable but not interactive enough
+- no clear stale-result state after edits
+- no visible usage motivation near the action
+
+REDESIGN STRATEGY
+Keep the existing structure and data model where possible, but improve layout, hierarchy, interaction, and state handling.
+
+==================================================
+1. ADD A TOP RESULT STRIP / HERO SUMMARY
+==================================================
+
+Add a sticky or near-top summary card directly under the “Single Show Calculator” title.
+
+Before first calculation:
+- neutral empty state
+- headline: “Run the numbers”
+- supporting text: “Fill in a few details, then hit Calculate Gig.”
+
+After calculation:
+Show:
+- status badge: Worth It / Borderline / Risky
+- likely net result in dollars
+- break-even tickets if relevant
+- travel summary if available
+
+Example structure:
+- left: status + headline
+- center: likely result
+- right: supporting metrics
+
+Examples of status copy:
+- Worth It
+- Borderline
+- Risky
+
+Examples of support copy:
+- “You’ll likely come out about $280 ahead.”
+- “You need 38 tickets to break even.”
+- “Travel is taking a decent bite out of this one.”
+
+IMPORTANT:
+- result strip only updates on Calculate
+- if inputs change after calc, keep previous result visible but mark it stale with a badge:
+  - “Out of date”
+  - or “Recalculate to refresh”
+
+Add a subtle result refresh animation:
+- fade
+- tiny number pop
+- or smooth count-up
+Do not overdo it.
+
+==================================================
+2. ADD FREE USAGE BAR NEAR THE TOP
+==================================================
+
+Show free usage near the top result strip, not hidden at bottom.
+
+Examples:
+- “Free plan: 2/5 calcs used this week”
+- progress bar underneath
+
+At 4/5:
+show a soft nudge:
+- “You’ve been busy planning — 4/5 used this week”
+
+At 5/5:
+- disable calculate action for free users
+- replace with an upgrade CTA state
+- message:
+  “You’ve been busy planning”
+  “You’ve used your 5 free calcs this week.”
+  “Upgrade to keep testing unlimited show ideas.”
+
+CTA:
+- Unlock Unlimited
+
+This should feel aspirational, not hostile.
+
+==================================================
+3. TIGHTEN THE PAGE HEADER
+==================================================
+
+Keep:
+- Single Show Calculator
+- subtitle
+
+But improve subtitle copy:
+Current:
+- “Fill in the details then hit Calculate Gig.”
+
+Suggested:
+- “Run the numbers before you lock in the gig.”
+or
+- “Quickly test whether this show stacks up.”
+
+Keep back button.
+
+==================================================
+4. CLEAN UP SHOW DETAILS CARD
+==================================================
+
+Keep this card, but reduce admin feel.
+
+Card title:
+Show Details
+
+Keep fields:
+- Venue / Destination
+- Show Date
+- Travel assumptions block
+
+Improvements:
+- make helper copy lighter and shorter
+- reduce visual heaviness of explanatory text
+- make “Can’t find venue? Enter manually” more subtle but still visible
+- keep profile badge but do not let it dominate
+
+Travel block improvements:
+- show a clearer compact travel preview
+Examples:
+  - “Origin not set”
+  - “184 km • approx 2h 10m”
+  - “Travel will calculate once location is set”
+
+Make the travel assumptions block feel like a smart helper, not a dead summary box.
+
+If possible:
+- add tiny icons with better spacing
+- improve hierarchy between profile name, origin, vehicle, and distance
+
+==================================================
+5. REDESIGN INCOME CARD WITH HYBRID INPUTS
+==================================================
+
+Keep the Income card and deal structure flow, but make it far more interactive.
+
+Card title:
+Income
+
+Subtitle:
+How you’re getting paid for this show
+
+Deal structure control:
+Keep dropdown or improve it into segmented pills if easy.
+Options:
+- Flat Fee
+- Ticketed Show
+- Door Deal
+- Guarantee + %
+- Other / Custom
+
+IMPORTANT:
+Only show relevant fields for the selected deal type.
+
+For key numeric fields, add a hybrid input pattern:
+- slider for quick exploration
+- exact numeric input for precise entry
+
+For example under Flat Fee:
+- Flat Fee ($)
+  - slider
+  - numeric field
+
+For merch:
+- Merch Estimate ($)
+  - slider
+  - numeric field
+
+For ticketed deals:
+- Ticket Price
+- Capacity
+- Expected Attendance or Attendance %
+- Share / Split where relevant
+
+Slider rules:
+- should feel smooth and tactile
+- should not look childish
+- should match GigTrail styling
+- should sync with number input
+
+Number input rules:
+- preserve exact data entry
+- easy to edit
+- no weird rounding surprises
+
+Keep the “More info” helper row if useful, but reduce its visual weight.
+Make the card less like a long form and more like a smart control panel.
+
+==================================================
+6. MAKE COSTS CARD MORE INTERACTIVE
+==================================================
+
+Keep the Costs card structure, because the collapsed summary concept is good.
+
+Current idea is good:
+- Fuel
+- Accommodation
+- Food & Drink
+etc.
+
+But improve it.
+
+Requirements:
+- default state should remain compact
+- each row should feel clickable / editable
+- show clearer status badges:
+  - Auto
+  - From profile
+  - Manual
+  - Not required
+
+Add “Edit for this show” functionality in a cleaner way.
+If already present, visually improve it.
+
+For editable costs:
+use the same hybrid pattern where practical:
+- slider for quick cost testing
+- exact input for precise override
+
+Examples:
+Fuel:
+- if auto calculated, show summary first
+- expandable details can include:
+  - distance
+  - fuel price
+  - fuel efficiency
+  - override amount
+
+Accommodation:
+- simple toggle:
+  - none
+  - one night
+  - multiple nights
+- plus exact number field
+
+Food & Drink:
+- slider + exact amount
+
+Make this section feel interactive and tweakable, not static.
+
+==================================================
+7. MOVE TRAIL NOTES OUT OF THE MAIN FLOW
+==================================================
+
+The current Trail Notes block interrupts the main calculator flow.
+
+Move it lower on the page into:
+- an Optional Details section
+or
+- a collapsible “Notes & extras” panel
+
+It should not sit between costs and action.
+
+Keep notes functionality, but demote its importance visually.
+
+==================================================
+8. REPLACE / UPGRADE QUICK VIEW
+==================================================
+
+The current quick view is too weak and doesn’t add much value.
+
+Replace it with a more useful pre-calc or post-calc summary panel.
+
+Before calc:
+Show something like:
+- Travel: not ready / estimated
+- Known costs: ~$150
+- Income type: Flat Fee
+
+After calc:
+Show something like:
+- Last result: +$280
+- Travel: ~$140
+- Known costs: ~$150
+- Income model: Flat Fee
+
+Keep it compact.
+This should help users feel oriented, not just repeat what they already know.
+
+==================================================
+9. KEEP THE STICKY CALCULATE BAR, BUT IMPROVE IT
+==================================================
+
+Keep the sticky bottom Calculate Gig bar/button. This is good.
+
+But improve the surrounding state.
+
+Left side of bar can show:
+Before calc:
+- “Ready to calculate”
+After calc:
+- “Last result: +$280”
+If stale:
+- “Inputs changed — hit Calculate to refresh”
+
+Right side:
+- primary button: Calculate Gig
+
+IMPORTANT:
+- calculate button must remain the main action
+- result does NOT update until pressed
+- if free user has hit 5/5, replace button with upgrade CTA
+
+==================================================
+10. ADD STALE RESULT STATE AFTER ANY EDIT
+==================================================
+
+This is critical.
+
+After a result has been generated, if the user changes:
+- venue
+- date
+- income values
+- costs
+- assumptions
+or anything affecting calc
+
+Then:
+- mark result strip as stale
+- show badge/message:
+  - “Out of date”
+  - “Inputs changed”
+  - “Recalculate to refresh”
+
+Do NOT clear previous result instantly.
+Keep it visible but visibly stale.
+
+This protects the 5-calcs-per-week model and prevents live scenario abuse.
+
+==================================================
+11. ADD MICRO-CELEBRATION FEEDBACK
+==================================================
+
+After Calculate, show a subtle feedback moment.
+
+Examples:
+Positive:
+- “Nice — this one works.”
+Borderline:
+- “Close — a few tweaks could improve it.”
+Negative:
+- “Risky — worth a second look.”
+
+Can be:
+- toast
+- inline message near result
+- brief animated chip
+
+Keep tone supportive, not cheesy.
+
+==================================================
+12. MOBILE / RESPONSIVE IMPROVEMENTS
+==================================================
+
+This page must feel great on mobile.
+
+Requirements:
+- sticky result strip should work on smaller screens
+- sticky calculate button must remain easy to hit
+- sliders must be easy to drag
+- numeric inputs must remain large enough
+- avoid cramped side-by-side layouts unless they genuinely fit
+- maintain a smooth vertical reading flow
+
+The current screen is close, but improve spacing rhythm and hierarchy.
+
+==================================================
+13. VISUAL DESIGN DIRECTION
+==================================================
+
+Preserve GigTrail aesthetic:
+- old parchment / Americana / touring notebook feel
+- warm paper background
+- soft shadows
+- burnt orange accent
+- dark brown text
+- gentle borders
+- not too dark
+- not corporate SaaS
+- not overdesigned
+
+Visual goals:
+- practical
+- tactile
+- road-worn
+- welcoming
+- confident
+
+==================================================
+14. COPY IMPROVEMENTS
+==================================================
+
+Update UI copy to feel more human and musician-friendly.
+
+Avoid corporate phrasing.
+
+Prefer:
+- “Run the numbers”
+- “How you’re getting paid”
+- “Costs”
+- “Worth it?”
+- “Inputs changed — hit Calculate to refresh”
+- “You’ve been busy planning”
+
+Reduce repeated profile/default explainer copy where possible.
+Keep helpers short.
+
+==================================================
+15. TECH / STATE HANDLING
+==================================================
+
+Implement or preserve a proper separation between:
+- current editable form state
+- lastCalculatedState
+- displayedResult
+
+Rules:
+- displayedResult should come from lastCalculatedState only
+- editing form after calc sets page to dirty / stale
+- usage count increments only when Calculate succeeds
+- no usage count increment for field edits
+- no live results from form edits
+
+If backend usage tracking exists:
+- wire to it properly
+If not:
+- create a clean reusable pattern for weekly calc usage gating
+
+==================================================
+16. DO NOT DO THESE THINGS
+==================================================
+
+Do NOT:
+- rebuild whole app unnecessarily
+- swap to fake/mock data
+- remove exact hard-entry numeric controls
+- auto-run results on slider move
+- hide the Calculate button
+- make the top area too busy
+- clutter the screen with too many helper paragraphs
+- make the UI darker or more corporate
+- turn the page into a spreadsheet
+
+==================================================
+17. SUCCESS CRITERIA
+==================================================
+
+When finished, the redesigned Single Show Calculator should feel like:
+- easier to use than before
+- more visually rewarding
+- less form-heavy
+- more interactive
+- more likely to be used repeatedly
+- better aligned with the 5-calcs-per-week conversion model
+- still precise enough for real-world data entry
+
+DELIVERABLES WHEN COMPLETE
+Please provide:
+1. summary of files changed
+2. explanation of component/state changes
+3. how stale result handling works
+4. how weekly usage count is enforced
+5. any backend or schema changes needed
+6. anything you cleaned up from the old UI while redesigning

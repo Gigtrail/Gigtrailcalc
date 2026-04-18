@@ -42,6 +42,9 @@ import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-pri
 import { trackEvent } from "@/lib/analytics";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
+import { ResultsStrip } from "@/components/results-strip";
+import { SliderInput } from "@/components/slider-input";
+import { Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -318,6 +321,41 @@ export default function RunForm() {
   }, [profiles]);
 
   const [calculationResult, setCalculationResult] = useState<ReturnType<typeof computeGigResults> | null>(null);
+  const [lastCalcKey, setLastCalcKey] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
+
+  // Build a stable signature of inputs that affect the calc result.
+  // Used to detect when the displayed result is "stale" after edits.
+  const buildCalcKey = useCallback((vals: typeof formValues) => {
+    return JSON.stringify({
+      profileId: vals.profileId ?? null,
+      showType: vals.showType ?? null,
+      dealType: vals.dealType ?? null,
+      fee: Number(vals.fee) || 0,
+      capacity: Number(vals.capacity) || 0,
+      ticketPrice: Number(vals.ticketPrice) || 0,
+      expectedAttendancePct: Number(vals.expectedAttendancePct) || 0,
+      splitPct: Number(vals.splitPct) || 0,
+      guarantee: Number(vals.guarantee) || 0,
+      bookingFeePerTicket: Number(vals.bookingFeePerTicket) || 0,
+      supportActCost: Number(vals.supportActCost) || 0,
+      merchEstimate: Number(vals.merchEstimate) || 0,
+      marketingCost: Number(vals.marketingCost) || 0,
+      distanceKm: Number(vals.distanceKm) || 0,
+      returnTrip: !!vals.returnTrip,
+      fuelPrice: Number(vals.fuelPrice) || 0,
+      accommodationRequired: !!vals.accommodationRequired,
+      singleRooms: Number(vals.singleRooms) || 0,
+      doubleRooms: Number(vals.doubleRooms) || 0,
+      accommodationNights: Number(vals.accommodationNights) || 0,
+      foodCost: Number(vals.foodCost) || 0,
+      extraCosts: Number(vals.extraCosts) || 0,
+      runVehicleId,
+    });
+  }, [runVehicleId]);
+
+  const currentCalcKey = buildCalcKey(formValues);
+  const isStale = !!calculationResult && lastCalcKey !== null && lastCalcKey !== currentCalcKey;
 
   const handleCalculate = useCallback(async () => {
     const vals = form.getValues();
@@ -420,6 +458,9 @@ export default function RunForm() {
       };
 
       setCalculationResult(computed);
+      setLastCalcKey(buildCalcKey(form.getValues()));
+      setCelebrate(true);
+      window.setTimeout(() => setCelebrate(false), 1600);
       trackEvent("show_calc_completed", {
         deal_type: vals.dealType ?? "flat_fee",
         distance: typeof vals.distanceKm === "string" ? parseFloat(vals.distanceKm) : (vals.distanceKm ?? 0),
@@ -844,17 +885,39 @@ export default function RunForm() {
     return <div className="p-8 text-center text-muted-foreground">Loading run...</div>;
   }
 
+  const stripData = calculationResult
+    ? {
+        status: calculationResult.status,
+        netProfit: calculationResult.netProfit,
+        breakEvenTickets: calculationResult.breakEvenTickets,
+        distanceKm: calculationResult.distanceKm,
+        driveTimeMinutes: calculationResult.driveTimeMinutes,
+        isTicketed,
+      }
+    : null;
+
+  const usageLimit = calcUsage?.limit ?? (isPro ? null : 5);
+  const usageReached = !isPro && usageLimit !== null && (calcUsage?.count ?? 0) >= usageLimit;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-2xl mx-auto">
-      <div className="flex items-center gap-4">
+    <div className="space-y-4 animate-in fade-in duration-500 max-w-2xl mx-auto pb-2">
+      <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/runs")} className="h-8 w-8">
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{isEditing ? "Edit Show" : "Single Show Calculator"}</h1>
-          <p className="text-muted-foreground mt-1">Fill in the details then hit Calculate Gig.</p>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{isEditing ? "Edit Show" : "Single Show Calculator"}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Run the numbers before you lock in the gig.</p>
         </div>
       </div>
+
+      <ResultsStrip
+        result={stripData}
+        isStale={isStale}
+        celebrate={celebrate}
+        isPro={isPro}
+        calcUsage={calcUsage}
+      />
 
       <div>
         <Form {...form}>
@@ -1318,13 +1381,18 @@ export default function RunForm() {
                     name={formValues.showType === "Hybrid" ? "guarantee" : "fee"}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{formValues.showType === "Hybrid" ? "Guarantee" : "Flat Fee"} ($)</FormLabel>
+                        <FormLabel>{formValues.showType === "Hybrid" ? "Guarantee" : "Flat Fee"}</FormLabel>
                         <FormControl>
-                          <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
+                          <SliderInput
+                            value={Number(field.value) || 0}
+                            onChange={(n) => field.onChange(n)}
+                            min={0}
+                            max={5000}
+                            step={50}
+                            prefix="$"
+                            ariaLabel={formValues.showType === "Hybrid" ? "Guarantee" : "Flat Fee"}
+                          />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Pre-filled from your profile default. Change it here for this show only.
-                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1333,34 +1401,47 @@ export default function RunForm() {
 
                 {isTicketed && (
                   <div className="space-y-4 rounded-lg border border-border/40 bg-background/60 p-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="capacity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Venue Capacity</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" {...field} value={field.value || 0} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="ticketPrice"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Ticket Price ($)</FormLabel>
-                            <FormControl>
-                              <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                    <FormField
+                      control={form.control}
+                      name="capacity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Venue Capacity</FormLabel>
+                          <FormControl>
+                            <SliderInput
+                              value={Number(field.value) || 0}
+                              onChange={(n) => field.onChange(n)}
+                              min={0}
+                              max={2000}
+                              step={10}
+                              ariaLabel="Venue Capacity"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="ticketPrice"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ticket Price</FormLabel>
+                          <FormControl>
+                            <SliderInput
+                              value={Number(field.value) || 0}
+                              onChange={(n) => field.onChange(n)}
+                              min={0}
+                              max={200}
+                              step={1}
+                              prefix="$"
+                              ariaLabel="Ticket Price"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium leading-none">Expected Attendance</label>
@@ -1468,15 +1549,23 @@ export default function RunForm() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/40">
+                <div className="space-y-4 pt-2 border-t border-border/40">
                   <FormField
                     control={form.control}
                     name="merchEstimate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Merch Estimate ($)</FormLabel>
+                        <FormLabel>Merch Estimate</FormLabel>
                         <FormControl>
-                          <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
+                          <SliderInput
+                            value={Number(field.value) || 0}
+                            onChange={(n) => field.onChange(n)}
+                            min={0}
+                            max={2000}
+                            step={25}
+                            prefix="$"
+                            ariaLabel="Merch Estimate"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1489,9 +1578,17 @@ export default function RunForm() {
                       name="marketingCost"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Marketing Cost ($)</FormLabel>
+                          <FormLabel>Marketing Cost</FormLabel>
                           <FormControl>
-                            <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
+                            <SliderInput
+                              value={Number(field.value) || 0}
+                              onChange={(n) => field.onChange(n)}
+                              min={0}
+                              max={2000}
+                              step={25}
+                              prefix="$"
+                              ariaLabel="Marketing Cost"
+                            />
                           </FormControl>
                           {calculationResult && (
                             <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)</p>
@@ -1610,15 +1707,23 @@ export default function RunForm() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                       <FormField
                         control={form.control}
                         name="foodCost"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Food & Drink ($)</FormLabel>
+                            <FormLabel>Food & Drink</FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                              <SliderInput
+                                value={Number(field.value) || 0}
+                                onChange={(n) => field.onChange(n)}
+                                min={0}
+                                max={500}
+                                step={5}
+                                prefix="$"
+                                ariaLabel="Food and drink cost"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1629,9 +1734,17 @@ export default function RunForm() {
                         name="extraCosts"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Extra Costs ($)</FormLabel>
+                            <FormLabel>Extra Costs</FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                              <SliderInput
+                                value={Number(field.value) || 0}
+                                onChange={(n) => field.onChange(n)}
+                                min={0}
+                                max={1000}
+                                step={10}
+                                prefix="$"
+                                ariaLabel="Extra costs"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1678,27 +1791,7 @@ export default function RunForm() {
               </CardContent>
             </Card>
 
-            {/* ────────────────────────── 4. NOTES (low emphasis) ────────────────────────── */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm text-muted-foreground">Trail Notes <span className="text-xs font-normal">(optional)</span></FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Any specifics about the run..."
-                      className="min-h-[80px] bg-card/30 border-border/40"
-                      {...field}
-                      value={field.value || ""}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* ────────────────────────── 5. QUICK VIEW + CTA ────────────────────────── */}
+            {/* ────────────────────────── 4. QUICK VIEW (post/pre-calc summary) ────────────────────────── */}
             {(() => {
               const distNum = Number(formValues.distanceKm) || 0;
               const totalDist = distNum * (formValues.returnTrip ? 2 : 1);
@@ -1709,15 +1802,34 @@ export default function RunForm() {
               const dealLabel = formValues.showType === "Ticketed Show"
                 ? (formValues.dealType ?? "Ticketed")
                 : (formValues.showType ?? "Flat Fee");
+              const lastResult = calculationResult;
 
               return (
                 <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick View</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {lastResult ? "Quick View · last calc" : "Quick View"}
+                    </span>
+                    {isStale && (
+                      <span className="ml-auto text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                        Stale
+                      </span>
+                    )}
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
+                  <div className={cn("grid gap-2 text-center", lastResult ? "grid-cols-4" : "grid-cols-3")}>
+                    {lastResult && (
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Last result</div>
+                        <div className={cn(
+                          "text-sm font-semibold tabular-nums",
+                          lastResult.netProfit >= 0 ? "text-emerald-700" : "text-rose-700"
+                        )}>
+                          {lastResult.netProfit >= 0 ? "+" : "−"}${Math.abs(Math.round(lastResult.netProfit)).toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                    <div className={lastResult ? "border-l border-border/40" : ""}>
                       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Travel</div>
                       <div className="text-sm font-medium text-foreground">
                         {distNum > 0 ? `~${totalDist.toFixed(0)} km` : "—"}
@@ -1730,7 +1842,7 @@ export default function RunForm() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Income type</div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Income</div>
                       <div className="text-sm font-medium text-foreground capitalize">{dealLabel}</div>
                     </div>
                   </div>
@@ -1738,33 +1850,92 @@ export default function RunForm() {
               );
             })()}
 
-            <div className="space-y-3 pb-2 sticky bottom-2 z-10 bg-background/0">
-              <Button
-                type="button"
-                size="lg"
-                className="w-full text-base font-bold shadow-md"
-                onClick={handleCalculate}
-                disabled={isCalculating}
-              >
-                <Calculator className="w-4 h-4 mr-2" />
-                {isCalculating ? "Calculating..." : "Calculate Gig"}
-              </Button>
-              {!isPro && calcUsage && calcUsage.limit !== null && (
-                <UsageMeter
-                  used={calcUsage.count}
-                  limit={calcUsage.limit}
-                  label="calculations this week"
+            {/* ────────────────────────── 5. NOTES & EXTRAS (collapsible) ────────────────────────── */}
+            <details className="group rounded-lg border border-border/40 bg-card/30">
+              <summary className="cursor-pointer list-none px-3 py-2.5 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition-transform" />
+                <span className="font-medium">Notes & extras</span>
+                <span className="text-xs">(optional)</span>
+              </summary>
+              <div className="px-3 pb-3 pt-1">
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Any specifics about the run..."
+                          className="min-h-[80px] bg-card/30 border-border/40"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              )}
-              {!isPro && !calcUsage && (
-                <p className="text-xs text-center text-muted-foreground">5 free calculations per week</p>
-              )}
-              {isEditing && (
-                <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isPending ? "Saving..." : "Save Changes"}
-                </Button>
-              )}
+              </div>
+            </details>
+
+            {/* ────────────────────────── 6. STICKY CALCULATE BAR ────────────────────────── */}
+            <div className="sticky bottom-2 z-10 pb-2">
+              <div className="rounded-xl border border-border/60 bg-card/95 backdrop-blur-sm shadow-md p-3 space-y-2">
+                {usageReached ? (
+                  <>
+                    <div className="text-center space-y-0.5">
+                      <div className="text-sm font-semibold text-foreground">You've been busy planning</div>
+                      <div className="text-xs text-muted-foreground">
+                        You've used your {usageLimit} free calcs this week. Upgrade to keep testing unlimited show ideas.
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="w-full text-base font-bold shadow-sm"
+                      onClick={() => setLocation("/upgrade")}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Unlock Unlimited
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs text-muted-foreground min-w-0 truncate">
+                        {isCalculating
+                          ? "Crunching the numbers…"
+                          : isStale
+                            ? "Inputs changed — hit Calculate to refresh"
+                            : calculationResult
+                              ? `Last result: ${calculationResult.netProfit >= 0 ? "+" : "−"}$${Math.abs(Math.round(calculationResult.netProfit)).toLocaleString()}`
+                              : "Ready to calculate"}
+                      </div>
+                      {!isPro && usageLimit !== null && (
+                        <div className="text-xs text-muted-foreground tabular-nums shrink-0">
+                          {(calcUsage?.count ?? 0)}/{usageLimit}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="lg"
+                      className="w-full text-base font-bold shadow-sm"
+                      onClick={handleCalculate}
+                      disabled={isCalculating}
+                    >
+                      <Calculator className="w-4 h-4 mr-2" />
+                      {isCalculating ? "Calculating..." : isStale ? "Recalculate" : "Calculate Gig"}
+                    </Button>
+                    {isEditing && (
+                      <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
+                        <Save className="w-4 h-4 mr-2" />
+                        {isPending ? "Saving..." : "Save Changes"}
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </form>
         </Form>
