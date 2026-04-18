@@ -1,0 +1,195 @@
+Refine the app sidebar and dashboard UI so it feels more polished, better grouped, and has stronger visual hierarchy.
+
+GOAL:
+Make the layout feel more premium, more intentional, and easier to scan.
+The current UI is clean but a little flat. Improve hierarchy, grouping, spacing, and emphasis without making it cluttered.
+
+IMPORTANT:
+Keep the current parchment / warm neutral style direction.
+Do not revert back to dark SaaS styling.
+Do not break existing navigation or responsive behaviour.
+
+---
+
+## PART 1 — SIDEBAR INFORMATION ARCHITECTURE
+
+Rework the sidebar into clearer sections.
+
+TOP / MAIN NAV:
+Keep the main working tools grouped together near the top:
+
+* Dashboard
+* Tour Builder
+* Calculator
+* Past Shows
+* Venues
+* Profiles
+* Feedback
+
+These should remain the primary navigation group.
+
+BOTTOM / ACCOUNT AREA:
+Move account-related items down near the user identity block at the bottom:
+
+* Billing
+* Privacy & Data
+* any Settings / Account links if they exist
+
+These should visually belong to the account/profile area, not the main work area.
+
+Structure suggestion:
+
+[Logo]
+[Main Nav]
+...
+large flexible spacer
+[Upgrade card]
+[Account section]
+
+* Billing
+* Privacy & Data
+  [User profile row with name/email/logout or account action]
+
+This should feel like:
+top = work
+bottom = account
+
+---
+
+## PART 2 — SIDEBAR VISUAL POLISH
+
+Improve sidebar hierarchy and styling:
+
+1. ACTIVE ITEM
+   Make the active nav item pop more:
+
+* slightly stronger background contrast
+* subtle inner shadow or soft border
+* slightly bolder text
+* icon tint aligned with brand accent
+* keep it tasteful, not loud
+
+2. HOVER STATES
+   Add cleaner hover states:
+
+* subtle warm background shift
+* smoother transition
+* clearer affordance
+
+3. SECTION LABELS
+   Style section labels like:
+
+* small uppercase
+* muted brown/grey
+* more breathing room above sections
+
+4. LOGO AREA
+   Make the logo area feel more intentional:
+
+* a bit more top padding
+* centered nicely
+* Fuel Calculator subtitle should feel cleaner and less cramped
+* do not distort logo
+
+---
+
+## PART 3 — DASHBOARD “POP” IMPROVEMENTS
+
+The dashboard cards need a little more punch and hierarchy.
+
+Improve:
+
+1. PAGE HEADER
+   “Tour Snapshot” area:
+
+* stronger title hierarchy
+* better spacing between title and profit summary line
+* make the green net profit line stand out more cleanly
+* make the travelled distance / profitable shows metadata more muted
+
+2. STAT CARDS
+   For the three top summary cards:
+
+* slightly stronger card shadows or border contrast
+* more separation between heading, numbers, and supporting text
+* improve internal spacing
+* let the key numbers breathe more
+* make labels slightly more refined and legible
+
+3. RIGHT STATUS CARD
+   The status card should feel more special:
+
+* slightly stronger accent border or glow
+* make “HEALTHY” and net profit stand out more
+* maintain subtlety
+
+4. “WHAT THIS MEANS” CARD
+   This section is useful but visually a bit flat.
+   Improve it with:
+
+* cleaner spacing between bullet rows
+* slightly clearer icon treatment
+* stronger readability
+* maybe a faint tinted background accent or left border
+
+5. RECENT SHOWS
+   Recent show cards should feel more clickable / alive:
+
+* slightly stronger hover state
+* clearer visual separation for tags
+* better spacing between venue name, profit, and tags
+
+---
+
+## PART 4 — COLOR / DEPTH / CONTRAST
+
+Stay within the current parchment palette, but improve depth slightly.
+
+Use:
+
+* slightly darker borders
+* slightly warmer card shadows
+* small contrast increase between page background and cards
+* subtle accent use for key values and active states
+
+Do NOT:
+
+* over-saturate orange everywhere
+* make it look glossy or overly modern
+* clutter with too many gradients
+
+---
+
+## PART 5 — RESPONSIVE / SIDEBAR BEHAVIOUR
+
+Ensure:
+
+* bottom account area still looks good on smaller heights
+* upgrade card does not awkwardly collide with profile/account links
+* spacing remains balanced on laptop screens
+* sidebar collapses cleanly if current app supports collapse
+
+---
+
+## PART 6 — IMPLEMENTATION NOTES
+
+Use existing component structure where possible.
+Prefer improving spacing, grouping, emphasis, and subtle interaction rather than rewriting everything.
+
+If the sidebar nav is driven by an array/config, reorganize it cleanly into:
+
+* main navigation group
+* account navigation group
+
+If the user/profile/footer area is already its own component, place account links above it.
+
+---
+
+## DELIVERABLE
+
+After making the changes, report:
+
+1. which files were updated
+2. how the nav items were regrouped
+3. what visual changes were made to active states, cards, and spacing
+4. anything that still feels worth refining next

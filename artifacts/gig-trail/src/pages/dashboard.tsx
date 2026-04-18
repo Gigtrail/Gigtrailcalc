@@ -259,7 +259,7 @@ function generateInsights(opts: {
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-2xl border border-border/40 bg-card shadow-sm px-5 py-5", className)}>
+    <div className={cn("rounded-2xl border border-border/60 bg-card shadow-[0_2px_12px_rgba(58,47,38,0.10)] px-5 py-5", className)}>
       {children}
     </div>
   );
@@ -267,7 +267,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 
 function CardLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-3">
+    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60 mb-4">
       {children}
     </p>
   );
@@ -287,28 +287,33 @@ function DashboardHero({
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="text-4xl font-bold tracking-tight text-foreground" style={{ fontFamily: "var(--app-font-serif)" }}>
           Tour Snapshot
         </h1>
         {!hasData ? (
-          <p className="text-muted-foreground mt-1.5 text-sm">
+          <p className="text-muted-foreground mt-2 text-sm">
             No touring data yet — add your first show to start tracking performance.
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground mt-1.5">
-            <span className={cn("font-semibold", profitColor)}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-2">
+            <span className={cn("text-base font-bold", profitColor)}>
               {sign(netProfit)}${fmtMoney(netProfit)} net profit
             </span>
-            {" · "}
-            {metrics.profitableCount} / {metrics.totalShows} show{metrics.totalShows !== 1 ? "s" : ""} profitable
+            <span className="text-muted-foreground/50">·</span>
+            <span className="text-sm text-muted-foreground">
+              {metrics.profitableCount}/{metrics.totalShows} show{metrics.totalShows !== 1 ? "s" : ""} profitable
+            </span>
             {metrics.totalKm > 0 && (
-              <> &middot; {metrics.totalKm.toLocaleString()} km travelled</>
+              <>
+                <span className="text-muted-foreground/50">·</span>
+                <span className="text-sm text-muted-foreground/70">{metrics.totalKm.toLocaleString()} km</span>
+              </>
             )}
-          </p>
+          </div>
         )}
       </div>
-      <div className="flex gap-2 shrink-0 sm:mt-0.5">
-        <Button asChild size="sm" className="bg-primary text-primary-foreground">
+      <div className="flex gap-2 shrink-0 sm:mt-1">
+        <Button asChild size="sm" className="bg-primary text-primary-foreground shadow-sm">
           <Link href="/runs/new">
             <Map className="w-4 h-4 mr-1.5" /> New Show
           </Link>
@@ -479,13 +484,13 @@ function DashboardInsights({
 }) {
   if (insights.length === 0) return null;
   return (
-    <Card className="h-full">
+    <Card className="h-full border-l-4 border-l-primary/30 bg-card">
       <CardLabel>💡 What This Means</CardLabel>
-      <ul className="space-y-3">
+      <ul className="space-y-4">
         {insights.map((ins, i) => (
-          <li key={i} className="flex gap-2 items-start">
+          <li key={i} className="flex gap-3 items-start py-1">
             <InsightIcon icon={ins.icon} tone={ins.tone} />
-            <span className="text-sm text-foreground leading-snug">{ins.text}</span>
+            <span className="text-sm text-foreground leading-relaxed">{ins.text}</span>
           </li>
         ))}
       </ul>
@@ -505,23 +510,23 @@ function TourStatusCard({
   const meta = tourStatusMeta(status, netProfit);
   const Icon = meta.icon;
   return (
-    <Card className={cn("border", meta.borderColor)}>
-      <div className="flex items-center gap-2 mb-3">
-        <div className={cn("w-7 h-7 rounded-full flex items-center justify-center", meta.bgColor)}>
+    <Card className={cn("border-2", meta.borderColor, "shadow-[0_4px_16px_rgba(58,47,38,0.12)]")}>
+      <div className="flex items-center gap-2.5 mb-4">
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shadow-sm", meta.bgColor)}>
           <Icon className={cn("w-4 h-4", meta.color)} />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground font-medium">Tour Status:</p>
-          <p className={cn("text-sm font-bold", meta.color)}>{status}</p>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Tour Status</p>
+          <p className={cn("text-sm font-bold tracking-wide", meta.color)}>{status}</p>
         </div>
       </div>
       {totalShows > 0 && (
         <>
-          <p className="text-xs text-muted-foreground mb-0.5">Net Profit:</p>
-          <p className={cn("text-xl font-bold tabular-nums", netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Net Profit</p>
+          <p className={cn("text-2xl font-bold tabular-nums", netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
             {sign(netProfit)}${fmtMoney(netProfit)}
           </p>
-          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-3 leading-relaxed border-t border-border/30 pt-3">
             {meta.tagline}
           </p>
         </>
@@ -561,10 +566,10 @@ function RecentShowCard({
 
   return (
     <Link href={`/runs/${run.id}`}>
-      <div className="group rounded-2xl border border-border/40 bg-card shadow-sm px-4 py-4 hover:shadow-md hover:border-border/70 transition-all cursor-pointer h-full flex flex-col justify-between gap-3">
+      <div className="group rounded-2xl border border-border/60 bg-card shadow-[0_2px_10px_rgba(58,47,38,0.09)] px-4 py-4 hover:shadow-[0_4px_16px_rgba(58,47,38,0.14)] hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer h-full flex flex-col justify-between gap-3">
         <div className="flex items-start gap-2 justify-between">
-          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{name}</p>
-          <span className="text-[10px] text-muted-foreground/60 shrink-0 pt-0.5">
+          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">{name}</p>
+          <span className="text-[10px] text-muted-foreground/50 shrink-0 pt-0.5 font-medium">
             {dateStr ? format(new Date(dateStr), "MMM d") : ""}
           </span>
         </div>
@@ -575,26 +580,26 @@ function RecentShowCard({
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             {deal}
           </span>
           {isBest && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <TrendingUp className="w-2.5 h-2.5" /> Best Performer
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+              <TrendingUp className="w-2.5 h-2.5" /> Best
             </span>
           )}
           {isWorst && !isBest && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-              <TrendingDown className="w-2.5 h-2.5" /> Worst Performer
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+              <TrendingDown className="w-2.5 h-2.5" /> Worst
             </span>
           )}
           {!isBest && !isWorst && profitable && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
               <CheckCircle2 className="w-2.5 h-2.5" /> Profitable
             </span>
           )}
           {!profitable && (
-            <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+            <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-600">
               Loss
             </span>
           )}

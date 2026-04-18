@@ -20,97 +20,116 @@ import { usePlan } from "@/hooks/use-plan";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
-  { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Tour Builder", url: "/tours", icon: Navigation },
-  { title: "Calculator", url: "/runs/new", icon: Calculator },
-  { title: "Past Shows", url: "/runs", icon: Clock },
-  { title: "Venues", url: "/venues", icon: Building2 },
-  { title: "Profiles", url: "/profiles", icon: Guitar },
-  { title: "Feedback", url: "/feedback", icon: MessageSquare },
+const mainNavItems = [
+  { title: "Dashboard",   url: "/dashboard",  icon: Home },
+  { title: "Tour Builder",url: "/tours",       icon: Navigation },
+  { title: "Calculator",  url: "/runs/new",    icon: Calculator },
+  { title: "Past Shows",  url: "/runs",        icon: Clock },
+  { title: "Venues",      url: "/venues",      icon: Building2 },
+  { title: "Profiles",    url: "/profiles",    icon: Guitar },
+  { title: "Feedback",    url: "/feedback",    icon: MessageSquare },
+];
+
+const accountNavItems = [
+  { title: "Billing",        url: "/billing",  icon: CreditCard },
+  { title: "Privacy & Data", url: "/privacy",  icon: Shield },
 ];
 
 function isNavActive(itemUrl: string, location: string): boolean {
   if (itemUrl === "/runs/new") {
-    return (
-      location === "/runs/new" ||
-      location === "/runs/results" ||
-      /^\/runs\/\d+\/edit$/.test(location)
-    );
+    return location === "/runs/new" || location === "/runs/results" || /^\/runs\/\d+\/edit$/.test(location);
   }
   if (itemUrl === "/runs") {
     return location === "/runs" || /^\/runs\/\d+$/.test(location);
   }
-  if (itemUrl === "/dashboard") {
-    return location === "/dashboard";
-  }
+  if (itemUrl === "/dashboard") return location === "/dashboard";
   return location === itemUrl || location.startsWith(itemUrl + "/");
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  free: "Free",
-  pro: "Pro",
-  tester: "Tester",
-  admin: "Admin",
+  free: "Free", pro: "Pro", tester: "Tester", admin: "Admin",
 };
 const ROLE_COLORS: Record<string, string> = {
-  free: "bg-muted text-muted-foreground text-xs",
-  pro: "bg-primary/15 text-primary border border-primary/30 text-xs",
+  free:   "bg-muted text-muted-foreground text-xs border border-border/50",
+  pro:    "bg-primary/15 text-primary border border-primary/30 text-xs",
   tester: "bg-violet-100 text-violet-700 border border-violet-300 text-xs",
-  admin: "bg-amber-100 text-amber-700 border border-amber-300 text-xs",
+  admin:  "bg-amber-100 text-amber-700 border border-amber-300 text-xs",
 };
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { plan, role, isPro, isAdmin } = usePlan();
+  const { role, isPro, isAdmin } = usePlan();
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 flex items-center justify-center">
+      {/* ── Logo ── */}
+      <SidebarHeader className="pt-6 pb-4 px-4 flex flex-col items-center gap-1">
         <Link href="/dashboard">
           <img
             src="/gig-trail-logo.png"
             alt="The Gig Trail"
-            className="h-20 w-auto object-contain"
+            className="h-24 w-auto object-contain"
+            style={{ imageRendering: "crisp-edges" }}
           />
         </Link>
       </SidebarHeader>
+
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>On the Road</SidebarGroupLabel>
+        {/* ── Main nav ── */}
+        <SidebarGroup className="pt-1">
+          <SidebarGroupLabel className="text-[10px] tracking-widest uppercase font-bold text-muted-foreground/60 mb-1 px-3">
+            On the Road
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isNavActive(item.url, location)}
-                  >
-                    <Link href={item.url} className="flex items-center gap-3 w-full">
-                      <item.icon className="w-5 h-5" />
-                      <span>{item.title}</span>
-                      {item.url === "/tours" && !isPro && (
-                        <Crown className="w-3.5 h-3.5 text-accent ml-auto" />
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {mainNavItems.map((item) => {
+                const active = isNavActive(item.url, location);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      className={active
+                        ? "bg-primary/12 text-primary font-semibold border border-primary/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]"
+                        : "hover:bg-sidebar-accent/70 transition-colors duration-150"
+                      }
+                    >
+                      <Link href={item.url} className="flex items-center gap-3 w-full">
+                        <item.icon
+                          className={active ? "w-4 h-4 text-primary" : "w-4 h-4 text-muted-foreground"}
+                        />
+                        <span>{item.title}</span>
+                        {item.url === "/tours" && !isPro && (
+                          <Crown className="w-3 h-3 text-primary/60 ml-auto" />
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* ── Admin (conditional) ── */}
         {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroup className="pt-3">
+            <SidebarGroupLabel className="text-[10px] tracking-widest uppercase font-bold text-muted-foreground/60 mb-1 px-3">
+              System
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/admin"}>
+                  <SidebarMenuButton asChild isActive={location === "/admin"}
+                    className={location === "/admin"
+                      ? "bg-primary/12 text-primary font-semibold border border-primary/20"
+                      : "hover:bg-sidebar-accent/70 transition-colors duration-150"
+                    }
+                  >
                     <Link href="/admin" className="flex items-center gap-3 w-full">
-                      <ShieldCheck className="w-5 h-5" />
+                      <ShieldCheck className={location === "/admin" ? "w-4 h-4 text-primary" : "w-4 h-4 text-muted-foreground"} />
                       <span>Admin</span>
                     </Link>
                   </SidebarMenuButton>
@@ -120,63 +139,75 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Account</SidebarGroupLabel>
+        {/* ── Flexible spacer pushes account to bottom ── */}
+        <div className="flex-1" />
+
+        {/* ── Account section ── */}
+        <SidebarGroup className="pt-3 mt-auto border-t border-sidebar-border/60">
+          <SidebarGroupLabel className="text-[10px] tracking-widest uppercase font-bold text-muted-foreground/60 mb-1 px-3">
+            Account
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/billing"}>
-                  <Link href="/billing" className="flex items-center gap-3 w-full">
-                    <CreditCard className="w-5 h-5" />
-                    <span>Billing</span>
-                    <Badge className={`ml-auto ${ROLE_COLORS[role] || ROLE_COLORS.free}`}>
-                      {ROLE_LABELS[role] || role}
-                    </Badge>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/privacy"}>
-                  <Link href="/privacy" className="flex items-center gap-3 w-full">
-                    <Shield className="w-5 h-5" />
-                    <span>Privacy & Data</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {accountNavItems.map((item) => {
+                const active = location === item.url;
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active}
+                      className={active
+                        ? "bg-primary/12 text-primary font-semibold border border-primary/20"
+                        : "hover:bg-sidebar-accent/70 transition-colors duration-150"
+                      }
+                    >
+                      <Link href={item.url} className="flex items-center gap-3 w-full">
+                        <item.icon className={active ? "w-4 h-4 text-primary" : "w-4 h-4 text-muted-foreground"} />
+                        <span>{item.title}</span>
+                        {item.url === "/billing" && (
+                          <Badge className={`ml-auto ${ROLE_COLORS[role] || ROLE_COLORS.free}`}>
+                            {ROLE_LABELS[role] || role}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
+      {/* ── Footer: upgrade card + user identity ── */}
       <SidebarFooter className="p-3 space-y-2">
         {!isPro && (
           <Link href="/billing">
-            <div className="w-full rounded-lg bg-primary/10 border border-primary/20 p-3 space-y-1 cursor-pointer hover:bg-primary/15 transition-colors">
+            <div className="w-full rounded-lg bg-primary text-primary-foreground p-3 space-y-1 cursor-pointer hover:bg-primary/90 transition-colors shadow-sm">
               <div className="flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-medium text-primary">Upgrade</span>
+                <Zap className="w-3.5 h-3.5" />
+                <span className="text-xs font-bold tracking-wide">Upgrade</span>
               </div>
-              <p className="text-xs text-muted-foreground">Unlock tours, unlimited runs & more from AU$12/mo</p>
+              <p className="text-xs opacity-80 leading-snug">Unlock tours, unlimited runs & more from AU$12/mo</p>
             </div>
           </Link>
         )}
+
         {user && (
-          <div className="flex items-center gap-2 px-1 py-1">
+          <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/40">
             <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
               <User className="w-3.5 h-3.5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-foreground truncate">
+              <div className="text-xs font-semibold text-foreground truncate">
                 {user.firstName || user.emailAddresses[0]?.emailAddress?.split("@")[0]}
               </div>
-              <div className="text-xs text-muted-foreground truncate">
+              <div className="text-[11px] text-muted-foreground truncate">
                 {user.emailAddresses[0]?.emailAddress}
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="w-7 h-7 text-muted-foreground hover:text-foreground shrink-0"
+              className="w-7 h-7 text-muted-foreground hover:text-foreground hover:bg-muted/50 shrink-0"
               onClick={() => signOut({ redirectUrl: "/" })}
               title="Sign out"
             >
@@ -195,7 +226,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-h-[100dvh] w-full bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
         <AppSidebar />
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 border-b border-border/60 flex items-center px-4 shrink-0 bg-background/90 backdrop-blur-sm sticky top-0 z-10">
+          <header className="h-12 border-b border-border/50 flex items-center px-4 shrink-0 bg-background/95 backdrop-blur-sm sticky top-0 z-10">
             <SidebarTrigger />
           </header>
           <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
