@@ -137,6 +137,16 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - Auto-managed by `stripe-replit-sync` — never insert manually
 - Includes: accounts, products, prices, subscriptions, customers, invoices, etc.
 
+### Feedback Board
+- Route: `/feedback` — authenticated, in sidebar
+- Any user can create a feedback post (title, description, category) and upvote any post
+- 1 vote per user (toggle — clicking again removes vote)
+- Posts sorted by upvotes desc, then newest first
+- Search bar filters by title/description/category in real time
+- Categories: Bug | Feature Request | Improvement | UX Issue
+- Statuses: Planned | In Progress | Released — admin users can update status inline
+- Beta banner at top: "You're part of the early beta — vote on what we build next."
+
 ## API Routes (artifacts/api-server/src/routes/)
 
 - `/api/me` — current user + plan + limits
@@ -152,6 +162,9 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/api/stripe/checkout` — create Stripe Checkout session
 - `/api/stripe/portal` — create Stripe Customer Portal session
 - `/api/stripe/webhook` — Stripe webhook handler (managed by stripe-replit-sync)
+- `/api/feedback` — GET all posts (sorted by votes), POST create post
+- `/api/feedback/:id/vote` — POST to toggle upvote (1 per user)
+- `/api/feedback/:id` — PATCH to update status/category (owner or admin only)
 
 ## Frontend Routes
 
@@ -166,6 +179,7 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/garage` — Garage (custom vehicle management, Pro)
 - `/garage/new` — Add custom vehicle
 - `/garage/:id/edit` — Edit custom vehicle
+- `/feedback` — Feedback board (all users)
 
 ## Important Notes
 

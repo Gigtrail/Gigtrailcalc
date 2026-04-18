@@ -9,3 +9,5 @@ export * from "./tourVehicles";
 export * from "./users";
 export * from "./promo_codes";
 export * from "./promo_code_redemptions";
+export * from "./feedback_posts";
+export * from "./feedback_votes";
