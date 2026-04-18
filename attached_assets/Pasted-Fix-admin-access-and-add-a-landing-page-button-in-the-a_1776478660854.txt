@@ -1,0 +1,67 @@
+Fix admin access and add a landing page button in the admin panel.
+
+GOAL:
+
+1. Restore and preserve admin access for `thegigtrail@gmail.com`
+2. Add a clear “View Landing Page” button to the admin panel
+
+IMPORTANT:
+`thegigtrail@gmail.com` must remain an admin user.
+Do not remove, downgrade, overwrite, or reset this account’s admin role during this change.
+If any seed, sync, auth, profile, or migration logic is currently removing admin access, fix that permanently.
+
+PART 1 — ADMIN ACCESS FIX
+
+REQUIREMENTS:
+
+* ensure `thegigtrail@gmail.com` has admin access right now
+* find where admin roles are assigned, seeded, synced, or overwritten
+* fix the root cause so future updates do not remove admin access again
+* if there is a whitelist/config/env-based admin system, include `thegigtrail@gmail.com`
+* if admin status is stored in the database, make sure this user is updated correctly
+* if auth/profile sync logic is overwriting roles on login, stop that from downgrading this account
+* if a migration or seed script resets roles, update it so this account always stays admin
+* avoid hardcoding fragile logic unless necessary, but it is acceptable to protect this specific account explicitly if that is the safest option
+
+VERIFY:
+
+* confirm `thegigtrail@gmail.com` is admin after the change
+* confirm login/session refresh does not remove admin access
+* confirm app restarts or reseeds do not remove admin access
+
+PART 2 — ADMIN PANEL BUTTON
+
+Add a clear “View Landing Page” button to the admin panel.
+
+REQUIREMENTS:
+
+* add the button in a visible spot in the admin panel header or top action area
+* label it exactly: “View Landing Page”
+* use the existing button/component styling system
+* make it visually secondary to core admin actions, but still easy to find
+* include an external-link icon if the project already uses one
+* clicking it should open the public landing page route
+
+ROUTING:
+
+* if the landing page is on `/`, link to `/`
+* if routing requires using the existing router link component, use that
+* opening in a new tab is preferred if it fits the current admin UX
+
+TECHNICAL:
+
+* use existing admin layout/components where possible
+* do not break current admin actions
+* keep responsive behaviour clean
+* if there is already a top button group in the admin panel, place it there
+* if not, create a simple action row near the admin page title
+
+DELIVERABLE:
+After making the change, report:
+
+1. which file(s) were updated
+2. where the button was placed
+3. what route it links to
+4. exactly what was causing `thegigtrail@gmail.com` to lose admin access
+5. exactly how that issue was fixed
+6. how admin access was verified afterward

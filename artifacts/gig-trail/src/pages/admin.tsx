@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Shield, Search, Users, Tag, ChevronDown, Pencil, Trash2, Plus, Check, X } from "lucide-react";
+import { Shield, Search, Users, Tag, ChevronDown, Pencil, Trash2, Plus, Check, X, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -370,14 +370,22 @@ export default function Admin() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-8">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
-          <Shield className="w-5 h-5 text-amber-600" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
+            <p className="text-sm text-muted-foreground">User management and access control</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-          <p className="text-sm text-muted-foreground">User management and access control</p>
-        </div>
+        <a href="/" target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground">
+            <ExternalLink className="w-3.5 h-3.5" />
+            View Landing Page
+          </Button>
+        </a>
       </div>
 
       {/* Tabs */}
