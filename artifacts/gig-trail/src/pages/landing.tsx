@@ -387,17 +387,17 @@ export default function Landing() {
           </div>
 
           {/* Logo */}
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
             <img
               src="/gig-trail-hero-logo.png"
               alt="The Gig Trail"
-              style={{ width: "clamp(300px, 52vw, 500px)", height: "auto", filter: "drop-shadow(0 4px 20px rgba(44,26,14,0.22))" }}
+              style={{ display: "block", width: "clamp(300px, 52vw, 500px)", height: "auto", objectFit: "contain" }}
             />
           </div>
 
           {/* Ornamental rule below logo */}
           <div style={{ marginBottom: 32 }}>
-            <OrnaDivider label="Tour Calculator" />
+            <OrnaDivider />
           </div>
 
           {/* Headline */}

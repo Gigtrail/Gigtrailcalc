@@ -1,0 +1,90 @@
+Fix the Gig Trail logo rendering in the landing page hero.
+
+PROBLEM:
+The uploaded logo file is correct, but the implemented version is being distorted or altered during rendering.
+The text under the logo is breaking visually and the logo appears to be processed incorrectly before display.
+
+GOAL:
+Use the original uploaded transparent PNG exactly as-is, with no distortion, cropping, filters, masking, or unwanted processing.
+
+REQUIREMENTS:
+
+1. USE THE RAW LOGO FILE
+
+* use the original uploaded logo asset directly
+* do not recreate, trace, stylize, compress, recolor, or process the logo
+* do not generate a derived version unless absolutely necessary
+* preserve transparency
+
+2. FIX IMAGE RENDERING
+   Check for and remove any styling or component behaviour causing distortion, including:
+
+* object-fit: cover
+* forced aspect ratio that does not match the logo
+* width/height mismatch
+* CSS filters
+* opacity changes
+* mix-blend-mode
+* background-blend-mode
+* masks
+* clipping
+* transform skew/scale issues
+* lazy image placeholders that are rendering badly
+* automatic optimisation that is degrading the file
+
+3. DISPLAY RULES
+   Render the logo with:
+
+* correct aspect ratio preserved
+* centered alignment
+* no crop
+* no stretch
+* no blur
+* no extra effects unless subtle shadow is explicitly added outside the image itself
+
+Preferred implementation:
+
+* standard img tag if that is the safest way to preserve the original file exactly
+* use object-contain, not object-cover
+* allow height to auto-scale from width, or use max-width with auto height
+
+4. FUEL CALCULATOR TEXT
+   The “Fuel Calculator” text under the logo is currently rendering badly.
+   Fix it so:
+
+* it is regular live text, not baked into or overlapping the image
+* it is centered
+* spacing below the logo is clean
+* typography matches the parchment/vintage theme
+* no clipping or broken letter rendering
+
+5. DEBUG THE ROOT CAUSE
+   Identify exactly what is causing the logo distortion.
+   Check:
+
+* image component being used
+* CSS classes on the image
+* parent container sizing
+* any image optimisation pipeline
+* any duplicated overlay or pseudo-element
+
+6. SAFE IMPLEMENTATION
+   Use a simple reliable structure like:
+
+* wrapper div centered
+* raw img tag
+* max-width
+* height auto
+* object-contain
+
+7. DO NOT CHANGE THE LOGO FILE
+   If the original uploaded PNG is valid, do not edit it.
+   Fix the implementation only.
+
+DELIVERABLE:
+Report back with:
+
+1. which file contains the hero logo implementation
+2. the exact cause of the distortion
+3. what was changed to fix it
+4. the final path of the logo file being used
