@@ -4,7 +4,7 @@ import { Check, MapPin, Fuel, BedDouble, DollarSign, TrendingUp, Map, Calendar, 
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 // Update this to your Payhip product URL
-const PAYHIP_URL = "https://payhip.com/gigtrail";
+const PAYHIP_URL = "https://thegigtrail.com/b/Upr79";
 
 // ─── Design tokens (dark road theme) ─────────────────────────────────────────
 const C = {
