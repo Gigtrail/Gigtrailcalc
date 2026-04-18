@@ -391,7 +391,7 @@ export default function Landing() {
             <img
               src="/gig-trail-hero-logo.png"
               alt="The Gig Trail"
-              style={{ width: "clamp(220px, 38vw, 340px)", height: "auto", filter: "drop-shadow(0 4px 16px rgba(44,26,14,0.20))" }}
+              style={{ width: "clamp(300px, 52vw, 500px)", height: "auto", filter: "drop-shadow(0 4px 20px rgba(44,26,14,0.22))" }}
             />
           </div>
 
