@@ -1,0 +1,218 @@
+Integrate PostHog analytics into the Gig Trail Tour Calculator using the official setup wizard and a clean event tracking layer.
+
+## GOAL
+
+- Install PostHog using the wizard
+- Ensure analytics runs safely (non-blocking)
+- Create a reusable trackEvent() system
+- Wire up key events (no overtracking)
+- Ensure compatibility with roles (free / pro / tester / admin)
+
+---
+
+## 1. INSTALL POSTHOG
+
+Run:
+npx -y @posthog/wizard@latest
+
+Follow prompts:
+- Choose JavaScript / React (depending on project)
+- Select PostHog Cloud (EU or US)
+- Enable autocapture = YES (for now)
+- Enable session recording = OPTIONAL (can enable later)
+
+---
+
+## 2. ENV SETUP
+
+Store PostHog key in environment variables:
+
+POSTHOG_KEY=your_project_api_key
+POSTHOG_HOST=https://app.posthog.com   (or EU host if selected)
+
+Do NOT hardcode keys in frontend files.
+
+---
+
+## 3. INITIALISE POSTHOG (CLIENT SIDE)
+
+Create a central analytics file:
+
+/lib/analytics.ts (or .js)
+
+Initialize PostHog:
+
+- import posthog-js
+- init using env variables
+- ensure it only runs in browser (not server)
+
+Example structure:
+
+if (typeof window !== "undefined") {
+  posthog.init(process.env.POSTHOG_KEY, {
+    api_host: process.env.POSTHOG_HOST,
+    capture_pageview: true
+  });
+}
+
+---
+
+## 4. CREATE TRACKING HELPER
+
+Create reusable function:
+
+trackEvent(eventName, properties = {})
+
+This function should:
+- call posthog.capture()
+- attach:
+  - user_id
+  - user_role
+  - access_source
+- fail silently if PostHog is unavailable
+- never block UI
+
+---
+
+## 5. IDENTIFY USERS
+
+When user logs in or signs up:
+
+posthog.identify(user.id, {
+  role: user.role,
+  access_source: user.access_source
+})
+
+This allows filtering by:
+- free vs pro vs tester vs admin
+
+---
+
+## 6. CORE EVENTS TO IMPLEMENT
+
+Wire ONLY these events:
+
+### AUTH
+signup_completed
+login_completed
+
+### ONBOARDING
+profile_created
+
+### CALCULATOR
+show_calc_started
+show_calc_completed
+
+tour_calc_started
+tour_calc_completed
+
+tour_saved
+
+### FEATURES
+vehicle_added
+member_added
+venue_history_viewed
+
+### PAYWALL
+pro_feature_clicked
+pricing_viewed
+
+upgrade_started
+upgrade_completed
+
+### ERROR
+calc_error
+save_failed
+
+---
+
+## 7. IMPORTANT EVENT EXAMPLES
+
+show_calc_completed should include:
+
+- profit
+- distance
+- fuel_cost
+- deal_type
+- break_even_point
+- is_profitable
+
+tour_calc_completed should include:
+
+- total_profit
+- total_distance
+- total_shows
+
+pro_feature_clicked should include:
+- feature_name
+
+---
+
+## 8. SESSION HANDLING
+
+PostHog handles sessions automatically.
+No custom session logic required.
+
+---
+
+## 9. PERFORMANCE RULES
+
+- DO NOT use await on tracking calls
+- events must fire in background
+- wrap calls in try/catch
+
+Example:
+
+try {
+  posthog.capture(...)
+} catch (e) {
+  // fail silently
+}
+
+---
+
+## 10. DEBUG MODE (DEV ONLY)
+
+Add optional console logging:
+
+if (process.env.NODE_ENV === "development") {
+  console.log("[Analytics]", eventName, properties)
+}
+
+---
+
+## 11. TESTING
+
+After setup:
+
+- run app
+- perform:
+  - signup
+  - run a calc
+  - save a tour
+
+Check PostHog dashboard:
+- confirm events appear
+- confirm user roles are attached
+
+---
+
+## 12. CLEANUP
+
+- ensure no duplicate initialisations
+- ensure no server-side execution
+- ensure no sensitive data is sent
+
+---
+
+## RESULT
+
+You now have:
+
+- PostHog installed via wizard
+- clean analytics wrapper
+- key events tracking user behaviour
+- role-aware analytics (free/pro/tester/admin)
+- zero impact on app performance
+
+Keep this minimal and expand later only if needed.
