@@ -1,0 +1,146 @@
+```text
+I need you to DEBUG and FIX why the permanent admin account is STILL not showing/admin-authorizing correctly in the running app.
+
+IMPORTANT:
+Do not just refactor architecture.
+Do not just tell me the logic exists.
+I need you to trace the LIVE auth path end-to-end and fix the real issue.
+
+OWNER ACCOUNT:
+thegigtrail@gmail.com
+
+PROBLEM:
+Previous work says permanent admin fallback, repair logic, and helper functions exist, but in the actual running app I still do NOT have admin status.
+So something in the real flow is still broken.
+
+YOUR JOB:
+Find the exact point where admin status is being lost, ignored, overwritten, cached, or not surfaced to the frontend.
+
+DEBUG THIS END-TO-END:
+1. Authentication provider user identity
+   - inspect the logged-in auth user object
+   - confirm exact email being returned
+   - confirm casing/whitespace normalization
+   - confirm the correct user row is being matched in DB
+
+2. Database user record
+   - inspect the DB row for thegigtrail@gmail.com
+   - print role, plan, accessSource, and any other entitlement fields actually used
+   - verify there is only one relevant user row and no duplicate/case-variant rows
+
+3. Repair logic
+   - verify the permanent admin repair function is actually called in the real request flow
+   - verify it runs before permission checks
+   - verify it writes to the correct row
+   - verify the write succeeds and persists
+
+4. /me or equivalent bootstrap endpoint
+   - inspect the exact response returned to the frontend
+   - log resolved auth state clearly:
+     - auth email
+     - normalized email
+     - DB role
+     - resolved isAdmin
+     - plan
+     - accessSource
+   - confirm whether backend is returning admin=true or equivalent
+
+5. Frontend gating
+   - inspect how admin UI is actually determined
+   - search for all places hiding admin UI
+   - find any checks using:
+     - plan
+     - paid/pro
+     - role only
+     - stale local state
+     - cached query data
+     - old hooks/selectors
+   - fix frontend so admin visibility comes from resolved backend auth state, not outdated logic
+
+6. Route/API protection
+   - verify /admin and related routes use the same resolved admin logic
+   - verify non-admin is blocked and owner email is allowed
+
+7. Caching/session issues
+   - inspect React query / SWR / Zustand / local storage / session cache / Clerk cache if used
+   - invalidate or refresh stale auth/me cache after repair
+   - make sure newly repaired admin status appears immediately without requiring weird manual steps
+
+8. Import/source-of-truth issues
+   - verify the app is importing the correct helper package/file
+   - verify no duplicate helper exists elsewhere
+   - verify there is no old isAdminRole/isPaidPlan logic still driving UI
+
+MANDATORY ACTIONS:
+- Add temporary debug logs at the critical points
+- Reproduce the issue
+- Identify the exact failing link
+- Fix it
+- Then remove any noisy temporary logs, but keep concise useful logs
+
+WHAT I WANT FIXED:
+- when I sign in as thegigtrail@gmail.com, the backend must resolve me as admin
+- the DB must be repaired if needed
+- the frontend must show admin access immediately
+- admin routes must work
+- no old plan logic should hide admin UI
+
+PLEASE SPECIFICALLY SEARCH FOR:
+- isAdminRole(
+- resolveIsAdmin(
+- canAccessAdmin
+- role === "admin"
+- plan ===
+- paid/pro plan gating
+- accessSource
+- /me
+- usePlan
+- useMe
+- currentUser
+- session user
+- sidebar/nav admin visibility
+- admin route components
+- any cached auth store
+
+IF YOU FIND THE ISSUE:
+Fix it directly rather than just describing it.
+
+LIKELY ROOT CAUSES TO CHECK FOR:
+- backend repaired DB but frontend still reads stale cached me response
+- admin helper exists but frontend still gates on plan
+- repair runs only on some routes, not initial bootstrap
+- duplicate user row or wrong user ID
+- permanent admin email helper added in one package, but app imports another helper
+- admin nav uses old entitlements.canAccessAdmin with role-only input
+- owner account is blocked by tester/user normalization elsewhere
+
+VALIDATION:
+After fixing:
+1. print the final DB row for the owner account
+2. print the final /me response for the owner account
+3. confirm exactly which file/path was the real bug
+4. confirm admin nav is visible
+5. confirm /admin loads
+6. confirm non-admin still cannot access admin
+7. run typecheck
+8. run tests if present
+9. run build
+
+OUTPUT FORMAT:
+At the end give me:
+1. ROOT CAUSE
+2. FILES CHANGED
+3. EXACT FIX APPLIED
+4. FINAL RESOLVED OWNER STATE
+   - email
+   - normalized email
+   - role
+   - plan
+   - accessSource
+   - isAdmin
+5. ANY MANUAL STEP I MUST DO (for example sign out/in, clear cache, restart dev server, reseed DB, etc.)
+
+IMPORTANT:
+Do not stop at “the logic already exists.”
+The running app still fails, so find the actual broken link and fix the real path being used.
+```

@@ -1,5 +1,20 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
+
+/**
+ * Fetch wrapper that attaches the Clerk Bearer token, matching the
+ * auto-generated `@workspace/api-client-react` behaviour. The plain `fetch()`
+ * + cookies path does NOT authenticate against the API in this proxied
+ * environment — the API server only reads the Authorization header.
+ */
+async function authedFetch(input: RequestInfo | URL, getToken: () => Promise<string | null>, init?: RequestInit): Promise<Response> {
+  const token = await getToken();
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+  return fetch(input, { ...init, headers, credentials: "include" });
+}
 import {
   getEntitlements,
   hasProAccess,
@@ -43,11 +58,12 @@ const FREE_ENTITLEMENTS = getEntitlements("free");
 
 export function usePlan() {
   const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   const { data, isLoading, refetch } = useQuery<MeResponse>({
     queryKey: ["/api/me"],
     queryFn: async () => {
-      const res = await fetch("/api/me", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch plan");
+      const res = await authedFetch("/api/me", () => getToken());
+      if (!res.ok) throw new Error(`Failed to fetch plan (${res.status})`);
       return res.json();
     },
     enabled: !!isSignedIn,
@@ -105,11 +121,12 @@ export interface WeeklyUsage {
 
 export function useWeeklyUsage() {
   const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   return useQuery<WeeklyUsage>({
     queryKey: ["/api/profiles/weekly-usage"],
     queryFn: async () => {
-      const res = await fetch("/api/profiles/weekly-usage", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch usage");
+      const res = await authedFetch("/api/profiles/weekly-usage", () => getToken());
+      if (!res.ok) throw new Error(`Failed to fetch usage (${res.status})`);
       return res.json();
     },
     enabled: !!isSignedIn,

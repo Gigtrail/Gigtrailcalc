@@ -86,6 +86,33 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(GetProfileResponse.parse(serializeProfile(profile)));
 });
 
+// NOTE: /profiles/weekly-usage MUST be registered before /profiles/:id,
+// otherwise Express matches the wildcard first and treats "weekly-usage" as an id.
+router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
+  const { userId, userRole } = req as AuthenticatedRequest;
+
+  if (hasProAccess(userRole)) {
+    res.json({ used: 0, limit: null, resetsIn: null, isPaid: true });
+    return;
+  }
+
+  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
+
+  if (profiles.length === 0) {
+    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPaid: false });
+    return;
+  }
+
+  const profile = profiles[0];
+  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
+  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
+  const resetsIn = needsReset
+    ? 7
+    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
+
+  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPaid: false });
+});
+
 router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const params = GetProfileParams.safeParse(req.params);
