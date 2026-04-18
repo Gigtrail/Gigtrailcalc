@@ -190,7 +190,9 @@ A full-stack web app for touring musicians to calculate whether a single show or
   - `resetAnalytics()` — called on sign-out
   - `trackEvent(name, props?)` — safe wrapper around `posthog.capture()`
 - Env vars required: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`
-- Events tracked: `signup_completed`, `profile_created`, `calc_started`, `calc_completed`, `calc_error`, `save_failed`, `tour_saved`, `vehicle_added`, `member_added`, `pricing_viewed`, `upgrade_started`, `upgrade_completed`, `pro_feature_clicked`
+- Events tracked: `login_completed`, `signup_completed`, `show_calc_started`, `show_calc_completed`, `calc_error`, `save_failed`, `tour_calc_started`, `tour_calc_completed`, `tour_saved`, `vehicle_added`, `member_added`, `pro_feature_clicked`, `pricing_viewed`, `upgrade_started`, `upgrade_completed`
+- `login_completed` uses `sessionStorage` key `gt_login_tracked` to fire once per browser session (cleared on sign-out)
+- `upgrade_started`/`upgrade_completed` pass plan name via `sessionStorage` key `gt_pending_plan` to survive the Stripe redirect
 - All calls are wrapped in try/catch — analytics never crashes the app
 
 ## Important Notes

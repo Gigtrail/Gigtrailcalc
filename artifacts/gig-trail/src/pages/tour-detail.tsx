@@ -56,6 +56,7 @@ import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
 } from "@/lib/member-utils";
 import { calculateTicketRecovery } from "@/lib/ticket-recovery";
+import { trackEvent } from "@/lib/analytics";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -414,6 +415,32 @@ export default function TourDetail() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calc]);
+
+  // ── Tour calc analytics ───────────────────────────────────────────────────
+  const tourCalcTrackedRef = useRef(false);
+  useEffect(() => {
+    if (tourCalcTrackedRef.current || !stops || stops.length === 0) return;
+    trackEvent("tour_calc_started", { tour_id: tourId, stop_count: stops.length });
+    tourCalcTrackedRef.current = true;
+  }, [stops, tourId]);
+
+  const tourCalcCompletedRef = useRef(false);
+  useEffect(() => {
+    if (tourCalcCompletedRef.current || !calc) return;
+    tourCalcCompletedRef.current = true;
+    const totalShows = calc.stopCalcs?.length ?? 0;
+    trackEvent("tour_calc_completed", {
+      tour_id: tourId,
+      total_shows: totalShows,
+      total_distance: Math.round(calc.totalDistance ?? 0),
+      total_fuel_cost: calc.totalFuelCost ?? 0,
+      total_accommodation_cost: (calc.tourAccommodationCost ?? 0) + (calc.totalStopAccommodation ?? 0),
+      total_expenses: calc.totalExpenses ?? 0,
+      total_income: calc.grossIncome ?? 0,
+      total_profit: calc.netProfit ?? 0,
+      is_profitable: (calc.netProfit ?? 0) > 0,
+    });
+  }, [calc, tourId]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;

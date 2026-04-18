@@ -1,0 +1,238 @@
+PostHog is already installed and the base analytics wiring/helper has already been added.
+
+Do NOT reinstall PostHog.
+Do NOT recreate the analytics setup from scratch.
+
+## GOAL
+
+Audit the current PostHog implementation in the Gig Trail calculator and finish/refine the event wiring so the most important user actions are tracked correctly.
+
+We want to:
+- confirm what is already wired
+- remove duplicates or bad tracking
+- add any missing core events
+- ensure events fire only at the correct successful moments
+
+---
+
+## 1. AUDIT CURRENT IMPLEMENTATION
+
+Review the current codebase and identify:
+
+- where PostHog is initialised
+- where the analytics helper lives
+- what events are already being tracked
+- whether identify/reset is already implemented
+- whether any events are duplicated
+- whether any events are firing too early or in the wrong places
+
+Do not blindly add new tracking without checking existing code first.
+
+---
+
+## 2. KEEP A SINGLE ANALYTICS ENTRY POINT
+
+Ensure there is one central analytics utility, for example:
+- src/lib/analytics.ts
+
+If multiple analytics helpers exist, consolidate them into one clean helper.
+
+It should expose:
+- trackEvent(eventName, properties?)
+- identifyUser(user)
+- resetAnalytics()
+
+Requirements:
+- fail silently if PostHog is unavailable
+- log to console in development
+- never block the UI
+- automatically include user_role and access_source where available
+
+---
+
+## 3. VERIFY USER IDENTIFICATION
+
+Check whether identifyUser(user) is called:
+
+- after successful signup
+- after successful login
+
+Check whether resetAnalytics() is called:
+- on logout
+
+If missing, add it.
+
+User properties to identify:
+- id
+- email
+- role
+- access_source
+- plan if available
+
+---
+
+## 4. ENSURE ONLY THESE CORE EVENTS EXIST FOR NOW
+
+Audit and wire only these events:
+
+### AUTH
+signup_completed
+login_completed
+
+### CALCULATOR
+show_calc_started
+show_calc_completed
+tour_calc_started
+tour_calc_completed
+tour_saved
+
+### FEATURES
+vehicle_added
+member_added
+
+### PAYWALL / MONETISATION
+pro_feature_clicked
+pricing_viewed
+upgrade_started
+upgrade_completed
+
+### ERROR
+calc_error
+save_failed
+
+If similar duplicate event names already exist, standardise them to these names.
+
+Example:
+- "calc_finished" should become "show_calc_completed" or "tour_calc_completed"
+- "pricing_opened" should become "pricing_viewed"
+
+---
+
+## 5. VALIDATE EVENT TIMING
+
+Make sure events fire at the correct moment:
+
+- signup_completed → only after account creation succeeds
+- login_completed → only after login succeeds
+- show_calc_started → when the user genuinely starts the single show flow
+- show_calc_completed → only when a valid calculation result is successfully produced
+- tour_calc_started → when the user genuinely starts the tour flow
+- tour_calc_completed → only when final tour results are successfully produced
+- tour_saved → only after the save succeeds
+- pro_feature_clicked → when a free user hits a locked feature
+- pricing_viewed → when the pricing modal/page actually opens
+- upgrade_started → when checkout/subscription flow is launched
+- upgrade_completed → only after payment/subscription confirmation succeeds
+- calc_error → when a calc genuinely fails
+- save_failed → when a save request genuinely fails
+
+Do not fire completion events before success is confirmed.
+
+---
+
+## 6. REQUIRED EVENT PROPERTIES
+
+Ensure these properties are attached where available:
+
+### show_calc_completed
+- deal_type
+- distance
+- fuel_cost
+- accommodation_cost
+- total_expenses
+- expected_income
+- projected_profit
+- break_even_tickets
+- is_profitable
+
+### tour_calc_completed
+- total_shows
+- total_distance
+- total_fuel_cost
+- total_accommodation_cost
+- total_expenses
+- total_income
+- total_profit
+- is_profitable
+
+### tour_saved
+- total_shows
+- total_profit
+
+### pro_feature_clicked
+- feature_name
+- current_role
+
+### pricing_viewed
+- source
+
+### upgrade_started
+- plan_type
+
+### upgrade_completed
+- plan_type
+- value
+
+### calc_error
+- calc_type
+- error_message
+
+### save_failed
+- entity_type
+- error_message
+
+Do not send sensitive data.
+
+---
+
+## 7. CHECK PAYWALL COVERAGE
+
+Audit locked/pro-only features and ensure free-user interactions fire:
+pro_feature_clicked
+
+Use specific feature names such as:
+- extra_profiles
+- extra_vehicles
+- venue_history
+- saved_tours
+- advanced_tour_tools
+
+This is important so we can learn which locked features actually create upgrade intent.
+
+---
+
+## 8. REMOVE NOISE
+
+If there are too many low-value events already added:
+- remove or comment them out
+- keep the analytics lean
+
+We want useful product insight, not event spam.
+
+---
+
+## 9. ADD A SIMPLE DEBUG CHECK
+
+In development mode:
+- console.log all tracked events as:
+[Analytics] event_name {properties}
+
+This makes it easy to manually test.
+
+---
+
+## 10. OUTPUT
+
+After auditing and updating, provide a short developer summary in comments or notes of:
+
+- which analytics files are used
+- which events are currently wired
+- which events were added/fixed
+- any places still needing manual review
+
+## RESULT
+
+Do not reinstall PostHog.
+Do not duplicate analytics setup.
+
+Just clean up, verify, and finish the existing analytics implementation so it is reliable and useful.

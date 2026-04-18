@@ -154,7 +154,6 @@ export default function Onboarding() {
       await queryClient.invalidateQueries();
 
       trackEvent("signup_completed", { act_type: actType });
-      trackEvent("profile_created", { act_type: actType, people_count: peopleCount, source: "onboarding" });
 
       const params = new URLSearchParams({
         profileId: String(profile.id),

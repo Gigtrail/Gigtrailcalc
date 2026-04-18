@@ -626,9 +626,11 @@ export default function Billing() {
   const isCanceled = searchParams.get("canceled") === "1";
 
   useEffect(() => {
-    trackEvent("pricing_viewed");
+    trackEvent("pricing_viewed", { source: isSuccess ? "post_checkout" : isCanceled ? "post_cancel" : "direct" });
     if (isSuccess) {
-      trackEvent("upgrade_completed");
+      const pendingPlan = sessionStorage.getItem("gt_pending_plan") ?? "unknown";
+      sessionStorage.removeItem("gt_pending_plan");
+      trackEvent("upgrade_completed", { plan_type: pendingPlan });
       toast({ title: "Subscription activated!", description: "Your plan has been upgraded. It may take a moment to reflect." });
       setTimeout(() => {
         fetch("/api/me/sync-plan", { method: "POST", credentials: "include" })
@@ -666,7 +668,8 @@ export default function Billing() {
       return;
     }
     try {
-      trackEvent("upgrade_started", { plan: staticPlan.name, interval: period });
+      sessionStorage.setItem("gt_pending_plan", staticPlan.stripePlanKey ?? staticPlan.name);
+      trackEvent("upgrade_started", { plan_type: staticPlan.stripePlanKey ?? staticPlan.name, interval: period });
       const { url } = await createCheckout.mutateAsync(price.id);
       window.location.href = url;
     } catch (e: any) {

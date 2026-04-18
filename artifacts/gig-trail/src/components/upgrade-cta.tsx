@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FEATURE_REGISTRY, type PlanFeature } from "@/lib/plan-limits";
 import { trackEvent } from "@/lib/analytics";
+import { usePlan } from "@/hooks/use-plan";
 
 interface UpgradeCTAProps {
   feature: PlanFeature;
@@ -17,9 +18,10 @@ export function UpgradeCTA({
   className,
 }: UpgradeCTAProps) {
   const info = FEATURE_REGISTRY[feature];
+  const { role } = usePlan();
 
   const handleClick = () => {
-    trackEvent("pro_feature_clicked", { feature_name: feature });
+    trackEvent("pro_feature_clicked", { feature_name: feature, current_role: role ?? "free" });
   };
 
   if (variant === "inline") {

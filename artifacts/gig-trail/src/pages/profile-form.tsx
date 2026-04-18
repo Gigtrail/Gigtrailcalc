@@ -692,7 +692,7 @@ export default function ProfileForm() {
       createProfile.mutate(
         { data: payload as Parameters<typeof createProfile.mutate>[0]["data"] },
         {
-          onSuccess: (created: { actType?: string; peopleCount?: number }) => { clearProfileDraft(); trackEvent("profile_created", { act_type: created.actType, people_count: created.peopleCount }); toast({ title: "Profile created" }); setLocation("/profiles"); },
+          onSuccess: () => { clearProfileDraft(); toast({ title: "Profile created" }); setLocation("/profiles"); },
           onError: () => toast({ title: "Failed to create profile", variant: "destructive" }),
         }
       );

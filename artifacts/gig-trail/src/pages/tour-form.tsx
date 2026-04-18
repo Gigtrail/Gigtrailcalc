@@ -517,7 +517,7 @@ export default function TourForm() {
         { data },
         {
           onSuccess: (newTour) => {
-            trackEvent("tour_saved", { tour_id: newTour.id });
+            trackEvent("tour_saved", { tour_id: newTour.id, total_shows: 0, total_profit: 0 });
             clearTourDraft();
             toast({ title: "Tour created! Now add your stops." });
             setLocation(`/tours/${newTour.id}`);
