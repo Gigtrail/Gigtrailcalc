@@ -198,13 +198,13 @@ export interface AdminUser {
   plan: string;
 }
 
-export function useAdminUsers(q: string) {
+export function useAdminUsers() {
   const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   return useQuery<{ users: AdminUser[] }>({
-    queryKey: ["/api/admin/users", q],
+    queryKey: ["/api/admin/users"],
     queryFn: async () => {
-      const params = q.length >= 2 ? `?q=${encodeURIComponent(q)}` : "";
-      const res = await fetch(`/api/admin/users${params}`, { credentials: "include" });
+      const res = await authedFetch("/api/admin/users", () => getToken());
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
@@ -214,13 +214,13 @@ export function useAdminUsers(q: string) {
 }
 
 export function useUpdateUserRole() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const res = await fetch(`/api/admin/users/${userId}/role`, {
+      const res = await authedFetch(`/api/admin/users/${userId}/role`, () => getToken(), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
@@ -258,10 +258,11 @@ export interface PromoCodeRedemption {
 
 export function useAdminPromoCodes() {
   const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   return useQuery<{ codes: PromoCode[] }>({
     queryKey: ["/api/admin/promo-codes"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/promo-codes", { credentials: "include" });
+      const res = await authedFetch("/api/admin/promo-codes", () => getToken());
       if (!res.ok) throw new Error("Failed to fetch promo codes");
       return res.json();
     },
@@ -271,6 +272,7 @@ export function useAdminPromoCodes() {
 }
 
 export function useCreatePromoCode() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (data: {
       code: string;
@@ -280,11 +282,10 @@ export function useCreatePromoCode() {
       expiresAt?: string | null;
       notes?: string | null;
     }) => {
-      const res = await fetch("/api/admin/promo-codes", {
+      const res = await authedFetch("/api/admin/promo-codes", () => getToken(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-        credentials: "include",
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create promo code");
@@ -294,13 +295,13 @@ export function useCreatePromoCode() {
 }
 
 export function useUpdatePromoCode() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<PromoCode> & { id: number }) => {
-      const res = await fetch(`/api/admin/promo-codes/${id}`, {
+      const res = await authedFetch(`/api/admin/promo-codes/${id}`, () => getToken(), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-        credentials: "include",
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to update promo code");
@@ -310,11 +311,11 @@ export function useUpdatePromoCode() {
 }
 
 export function useDeletePromoCode() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/admin/promo-codes/${id}`, {
+      const res = await authedFetch(`/api/admin/promo-codes/${id}`, () => getToken(), {
         method: "DELETE",
-        credentials: "include",
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to delete promo code");
@@ -325,10 +326,11 @@ export function useDeletePromoCode() {
 
 export function usePromoCodeRedemptions(id: number | null) {
   const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
   return useQuery<{ redemptions: PromoCodeRedemption[] }>({
     queryKey: ["/api/admin/promo-codes", id, "redemptions"],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/promo-codes/${id}/redemptions`, { credentials: "include" });
+      const res = await authedFetch(`/api/admin/promo-codes/${id}/redemptions`, () => getToken());
       if (!res.ok) throw new Error("Failed to fetch redemptions");
       return res.json();
     },
