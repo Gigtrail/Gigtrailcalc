@@ -71,9 +71,9 @@ const STATIC_PLANS: StaticPlan[] = [
     ],
   },
   {
-    key: "paid",
+    key: "pro",
     stripePlanKey: "pro",
-    name: "Paid",
+    name: "Pro",
     tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
     monthlyPrice: "AU$12",
@@ -696,7 +696,7 @@ export default function Billing() {
     );
   }
 
-  const displayPlanKey = isPro ? "paid" : "free";
+  const displayPlanKey = isPro ? "pro" : "free";
 
   return (
     <div className="space-y-6">
@@ -812,11 +812,11 @@ export default function Billing() {
             </div>
           )}
 
-          {/* Paid plan — unlimited note */}
+          {/* Pro plan — all features note */}
           {isPro && (
             <div className="border-t border-border/40 pt-3 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="text-sm text-muted-foreground">Unlimited calculations included</span>
+              <span className="text-sm text-muted-foreground">All Pro features unlocked</span>
             </div>
           )}
         </CardContent>
@@ -878,11 +878,11 @@ export default function Billing() {
       <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
         {STATIC_PLANS.map((staticPlan) => {
           const isCurrentPlan = displayPlanKey === staticPlan.key;
-          const isUpgrade = staticPlan.key === "paid" && !isPro;
-          const isPaidCard = staticPlan.key !== "free";
+          const isUpgrade = staticPlan.key === "pro" && !isPro;
+          const isProCard = staticPlan.key !== "free";
           const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
           const displayPeriodLabel = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
-          const showBestValue = period === "yearly" && isPaidCard;
+          const showBestValue = period === "yearly" && isProCard;
 
           return (
             <Card
@@ -891,7 +891,7 @@ export default function Billing() {
                 "border relative transition-all",
                 isCurrentPlan
                   ? "border-primary bg-primary/5"
-                  : staticPlan.key === "paid"
+                  : staticPlan.key === "pro"
                   ? "border-primary/40 bg-card shadow-md"
                   : "border-border/40 bg-card"
               )}
@@ -903,7 +903,7 @@ export default function Billing() {
                   </Badge>
                 </div>
               )}
-              {showBestValue && staticPlan.key === "paid" && (
+              {showBestValue && staticPlan.key === "pro" && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-green-600 text-white text-xs shadow-sm px-3 py-0.5">
                     Best value
@@ -958,7 +958,7 @@ export default function Billing() {
                     disabled={createCheckout.isPending}
                   >
                     {createCheckout.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                    {isUpgrade ? "Upgrade to Paid" : "Switch to Paid"}
+                    {isUpgrade ? "Upgrade to Pro" : "Switch to Pro"}
                   </Button>
                 )}
               </CardContent>
@@ -970,9 +970,9 @@ export default function Billing() {
       {/* Value message */}
       <Card className="bg-primary/5 border-primary/20">
         <CardContent className="p-5">
-          <h3 className="font-semibold mb-1 text-foreground">Gig Trail Paid is built for working musicians</h3>
+          <h3 className="font-semibold mb-1 text-foreground">Gig Trail Pro is built for working musicians</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Stop guessing if a gig is worth the drive. Paid gives you unlimited calculations, the full Tour Builder, smarter vehicle management,
+            Stop guessing if a gig is worth the drive. Pro gives you unlimited calculations, the full Tour Builder, smarter vehicle management,
             and accommodation planning — so you can make better decisions for every show, every time.
           </p>
         </CardContent>

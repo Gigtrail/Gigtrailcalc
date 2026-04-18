@@ -364,9 +364,9 @@ export default function Onboarding() {
             <div className="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center mb-2">
               <Zap className="w-5 h-5 text-accent" />
             </div>
-            <DialogTitle className="text-lg font-bold">Band setups require a Paid plan</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Band setups require Pro</DialogTitle>
             <DialogDescription className="text-muted-foreground text-sm leading-relaxed">
-              Upgrade to unlock Band act type, unlimited saved runs, the full Tour Builder, and more.
+              Upgrade to Pro to unlock Band act type, unlimited saved runs, the full Tour Builder, and more.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-1">

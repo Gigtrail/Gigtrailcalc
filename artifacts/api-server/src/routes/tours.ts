@@ -139,7 +139,7 @@ router.post("/tours", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userRole);
   if (!limits.toursEnabled) {
-    res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
+    res.status(403).json({ error: "Tour Builder requires Pro", code: "TOURS_LOCKED", plan: userPlan });
     return;
   }
   const parsed = CreateTourBody.safeParse(req.body);
@@ -155,7 +155,7 @@ router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userRole);
   if (!limits.toursEnabled) {
-    res.status(403).json({ error: "Tour Builder requires Pro or Unlimited plan", code: "TOURS_LOCKED", plan: userPlan });
+    res.status(403).json({ error: "Tour Builder requires Pro", code: "TOURS_LOCKED", plan: userPlan });
     return;
   }
   const params = GetTourParams.safeParse(req.params);

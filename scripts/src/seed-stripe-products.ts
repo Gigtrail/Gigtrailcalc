@@ -1,8 +1,8 @@
 // Seed Gig Trail subscription products in Stripe (Sandbox/Test mode)
 // Run with: pnpm --filter @workspace/scripts run seed-stripe
 //
-// Creates one product ("Gig Trail Paid") with metadata { plan: "pro" }
-// which is normalized to "paid" internally by the app's sync logic.
+// Creates one product ("Gig Trail Pro") with metadata { plan: "pro" }.
+// Stripe upgrade grants role="pro". Admin and tester roles are NOT granted by Stripe.
 // Prices: AU$12/mo and AU$79/yr.
 
 import Stripe from "stripe";
@@ -40,13 +40,13 @@ async function main() {
   const stripe = await getStripe();
   console.log("Connected to Stripe. Seeding Gig Trail products...\n");
 
-  // Check for existing product (metadata.plan === "pro" = Paid tier)
+  // Check for existing product (metadata.plan === "pro" = Pro tier)
   const existing = await stripe.products.search({
     query: "active:'true' AND metadata['plan']:'pro'",
   });
 
   if (existing.data.length > 0) {
-    console.log("Paid product already exists. Current products:\n");
+    console.log("Pro product already exists. Current products:\n");
     const all = await stripe.products.list({ active: true, limit: 20 });
     for (const p of all.data.filter((p) => p.name.startsWith("Gig Trail"))) {
       const prices = await stripe.prices.list({ product: p.id, active: true });
@@ -59,32 +59,30 @@ async function main() {
     return;
   }
 
-  // Create Paid product (AU$12/mo + AU$79/yr)
-  // Note: metadata.plan is "pro" for backward compat with existing Stripe webhooks;
-  // the app normalizes "pro" → "paid" internally.
-  const paid = await stripe.products.create({
-    name: "Gig Trail Paid",
-    description: "Unlimited calculations, full Tour Builder, multi-vehicle garage, venue intelligence, and more.",
+  // Create Pro product (AU$12/mo + AU$79/yr). Stripe webhook → role="pro".
+  const pro = await stripe.products.create({
+    name: "Gig Trail Pro",
+    description: "Full Tour Builder, multi-vehicle garage, venue intelligence, and all Pro features.",
     metadata: { plan: "pro" },
   });
 
   const monthlyPrice = await stripe.prices.create({
-    product: paid.id,
+    product: pro.id,
     unit_amount: 1200,
     currency: "aud",
     recurring: { interval: "month" },
-    nickname: "Paid Monthly AU$12/mo",
+    nickname: "Pro Monthly AU$12/mo",
   });
 
   const yearlyPrice = await stripe.prices.create({
-    product: paid.id,
+    product: pro.id,
     unit_amount: 7900,
     currency: "aud",
     recurring: { interval: "year" },
-    nickname: "Paid Yearly AU$79/yr",
+    nickname: "Pro Yearly AU$79/yr",
   });
 
-  console.log(`Created: ${paid.name} (${paid.id})`);
+  console.log(`Created: ${pro.name} (${pro.id})`);
   console.log(`  Monthly: AU$12.00/mo — ${monthlyPrice.id}`);
   console.log(`  Yearly:  AU$79.00/yr — ${yearlyPrice.id}`);
   console.log("\nAll products seeded successfully.");

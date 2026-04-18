@@ -33,7 +33,7 @@ export function UpgradeCTA({
         )}
       >
         <Lock className="w-3 h-3 flex-shrink-0 opacity-60" />
-        <span>{info.paidUnlock}</span>
+        <span>{info.proUnlock}</span>
         <Link href="/billing" onClick={handleClick}>
           <button className="text-primary font-medium hover:underline underline-offset-2 focus:outline-none">
             Upgrade
@@ -54,10 +54,10 @@ export function UpgradeCTA({
         <Zap className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-foreground leading-snug">
-            {info.paidUnlock}
+            {info.proUnlock}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            {info.paidDescription}
+            {info.proDescription}
           </p>
         </div>
         <Button asChild size="sm" className="flex-shrink-0 h-8 text-xs px-3">
@@ -82,13 +82,13 @@ export function UpgradeCTA({
             <Lock className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
           </div>
           <p className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
-            {info.paidUnlock}
+            {info.proUnlock}
           </p>
           <p className="text-xs text-muted-foreground mt-1.5 opacity-70 leading-relaxed max-w-[160px]">
             {info.freeLimit} on the free plan
           </p>
           <span className="mt-3 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-            See paid plans →
+            See Pro plan →
           </span>
         </div>
       </Link>

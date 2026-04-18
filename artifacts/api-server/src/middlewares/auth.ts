@@ -48,19 +48,13 @@ export function isAdminRole(role: string): boolean {
 }
 
 /**
- * Migrate a legacy role value from the old 2-tier system to the 4-tier system.
- * Old values: "user" → "free", "admin" → "admin"
- * Also handles any stray plan-encoded values.
+ * Coerce any role value into the canonical 4-tier set.
+ * Anything unrecognised becomes "free".
+ * The legacy `plan` parameter is ignored — kept only for call-site compatibility.
  */
-export function normalizeRole(raw: string | null | undefined, plan?: string | null): UserRole {
+export function normalizeRole(raw: string | null | undefined, _plan?: string | null): UserRole {
   if (!raw) return "free";
-  // Already valid 4-tier values
   if (raw === "free" || raw === "pro" || raw === "tester" || raw === "admin") return raw;
-  // Legacy 2-tier "user" → derive from plan column for backward compat
-  if (raw === "user") {
-    if (plan === "paid" || plan === "pro" || plan === "unlimited") return "pro";
-    return "free";
-  }
   return "free";
 }
 
@@ -70,16 +64,6 @@ export function normalizeRole(raw: string | null | undefined, plan?: string | nu
  */
 export function derivePlanFromRole(role: string): "free" | "paid" {
   return hasProAccess(role) ? "paid" : "free";
-}
-
-/**
- * @deprecated Do not use to gate permissions. Use derivePlanFromRole(role) instead.
- * Kept only for legacy DB value normalisation during migration reads.
- */
-export function normalizePlan(raw: string | null | undefined): "free" | "paid" {
-  if (!raw) return "free";
-  if (raw === "pro" || raw === "unlimited" || raw === "paid") return "paid";
-  return "free";
 }
 
 // ─── Plan limits ─────────────────────────────────────────────────────────────

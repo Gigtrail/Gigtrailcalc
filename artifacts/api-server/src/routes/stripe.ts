@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { storage } from "../storage";
 import { stripeService } from "../stripeService";
-import { requireAuth, derivePlanFromRole, type AuthenticatedRequest } from "../middlewares/auth";
+import { requireAuth, requireAdmin, derivePlanFromRole, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -62,7 +62,7 @@ router.post("/stripe/portal", requireAuth, async (req, res): Promise<void> => {
   res.json({ url: session.url });
 });
 
-router.post("/stripe/admin/setup-plans", async (req, res): Promise<void> => {
+router.post("/stripe/admin/setup-plans", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   try {
     const stripe = await (await import("../stripeClient")).getUncachableStripeClient();
     const { monthlyProductId, yearlyProductId } = req.body ?? {};
@@ -101,7 +101,7 @@ router.post("/stripe/admin/setup-plans", async (req, res): Promise<void> => {
         : await stripe.prices.create({ product: product.id, unit_amount: unitAmount, currency: "aud", recurring: { interval }, nickname: interval === "month" ? "Pro Monthly AU$12/mo" : "Pro Yearly AU$79/yr" });
 
       // Touch to fire product.updated webhook → syncs product row into DB
-      await stripe.products.update(product.id, { description: "Gig Trail Pro — unlimited calculations and smart tour planning." });
+      await stripe.products.update(product.id, { description: "Gig Trail Pro — full Tour Builder, multi-vehicle garage, venue intelligence and more." });
 
       return { product: { id: product.id, name: product.name, metadata: product.metadata }, price: { id: (price as any).id, amount: (price as any).unit_amount, interval } };
     }
