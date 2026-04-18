@@ -1,0 +1,83 @@
+Fix admin access for `thegigtrail@gmail.com` immediately and verify it actually works.
+
+GOAL:
+Restore permanent admin access for `thegigtrail@gmail.com` and fix the root cause so it does not get removed again.
+
+CRITICAL:
+This is not complete unless `thegigtrail@gmail.com` can log in and still has admin access after:
+
+1. a page refresh
+2. a logout/login
+3. an app restart
+4. any profile sync or seed logic
+
+Do not just patch the UI.
+Do not just update one row without checking what overwrites it.
+Find the root cause and fix it properly.
+
+PART 1 — FIND THE ROOT CAUSE
+
+Investigate all places where admin role/access can be assigned, overwritten, downgraded, or reset, including:
+
+* auth callbacks
+* user creation logic
+* profile sync logic
+* database seed scripts
+* migrations
+* admin whitelist logic
+* env/config-based admin checks
+* middleware / route guards
+* role defaults on signup
+* Google auth user provisioning
+* any code that recreates or overwrites the user profile on login
+
+Look specifically for why `thegigtrail@gmail.com` keeps losing admin access.
+
+PART 2 — FIX IT PERMANENTLY
+
+Requirements:
+
+* ensure `thegigtrail@gmail.com` is admin in the database right now
+* if there is an admin whitelist/config, include `thegigtrail@gmail.com`
+* if profile sync/login logic is downgrading roles, stop it
+* if signup/user provisioning always sets a default non-admin role, make sure it does NOT overwrite this account
+* if a seed/migration/reset script is causing the issue, fix that too
+* it is acceptable to explicitly protect `thegigtrail@gmail.com` as admin if that is the safest fix
+
+PART 3 — VERIFY WITH REAL CHECKS
+
+After making the fix, prove it works by doing all of the following:
+
+1. Query the user record for `thegigtrail@gmail.com` and show the relevant role/admin fields
+2. Log in or simulate the auth/session flow for this account
+3. Confirm admin-gated UI and/or admin routes are accessible
+4. Refresh / restart / re-run any sync logic that previously removed admin
+5. Query the user record again after those steps
+6. Confirm admin access still remains
+
+If there is no safe way to simulate login directly, inspect the exact auth/profile sync path and run the closest real verification possible.
+
+PART 4 — ADD A FAILSAFE
+
+Add a defensive failsafe so this specific account is not accidentally downgraded in future.
+This can be done via:
+
+* whitelist/config check
+* protected role assignment rule
+* admin bootstrap logic
+  Choose the cleanest safe option used by the codebase.
+
+IMPORTANT:
+Do not expose this email publicly in the frontend.
+This protection should exist only in backend/config/admin logic where appropriate.
+
+DELIVERABLE:
+Report back with:
+
+1. the exact root cause
+2. the exact file(s) changed
+3. the database/user record state before and after
+4. how you verified admin still works after refresh/login/restart
+5. any manual step still required from me
+
+DO NOT mark this complete unless `thegigtrail@gmail.com` is confirmed to still be admin after verification.
