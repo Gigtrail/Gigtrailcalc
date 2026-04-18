@@ -23,11 +23,11 @@ export default function SignUpPage() {
       const data = await res.json();
       if (data.valid) {
         setStatus("valid");
-        setStatusMsg(`Code accepted — ${data.grantsRole === "tester" ? "Tester access" : data.grantsRole === "pro" ? "Pro access" : data.grantsRole} will be applied to your account.`);
+        setStatusMsg("Promo code applied");
         sessionStorage.setItem(PROMO_SESSION_KEY, trimmed);
       } else {
         setStatus("invalid");
-        setStatusMsg(data.error ?? "Promo code not recognised");
+        setStatusMsg("Invalid promo code");
         sessionStorage.removeItem(PROMO_SESSION_KEY);
       }
     } catch {
@@ -64,7 +64,7 @@ export default function SignUpPage() {
         </Label>
         <div className="relative">
           <Input
-            placeholder="e.g. TESTER101"
+            placeholder="Enter promo code"
             value={code}
             onChange={e => handleChange(e.target.value)}
             onBlur={handleBlur}

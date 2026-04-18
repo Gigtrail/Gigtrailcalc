@@ -167,7 +167,7 @@ function PromoCodeDialog({ open, onClose, code }: PromoCodeDialogProps) {
             <div className="space-y-1">
               <Label>Code</Label>
               <Input
-                placeholder="e.g. TESTER101"
+                placeholder="e.g. SUMMER25"
                 value={formCode}
                 onChange={e => setFormCode(e.target.value.toUpperCase())}
                 required
