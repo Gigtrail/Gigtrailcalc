@@ -25,7 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search, Plus, Star } from "lucide-react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search, Plus, Star, DollarSign, Settings2, ChevronDown, ChevronUp, Eye, Pencil, Route } from "lucide-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
@@ -195,6 +195,7 @@ export default function RunForm() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
+  const [showTravelEdit, setShowTravelEdit] = useState(false);
   const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
   const [attendanceCount, setAttendanceCount] = useState<number>(0);
   // Garage box state
@@ -854,239 +855,264 @@ export default function RunForm() {
       </div>
 
       <div>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Build Your Run</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="profileId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Profile</FormLabel>
-                          <Select 
-                            onValueChange={handleProfileChange} 
-                            value={field.value ? field.value.toString() : "none"}
-                            disabled={isLoadingProfiles}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select profile" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">None</SelectItem>
-                              {profiles?.map(p => (
-                                <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+
+            {/* ────────────────────────── 1. SHOW DETAILS ────────────────────────── */}
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  Show Details
+                </CardTitle>
+                <CardDescription>Where and when</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Venue / Destination — always front and centre */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium leading-none">Venue / Destination</label>
+                  <VenueSearch
+                    venueName={formValues.venueName || ""}
+                    destination={formValues.destination || ""}
+                    onSelect={(venue: VenueSelection) => {
+                      form.setValue("venueName", venue.venueName || null);
+                      form.setValue("destination", venue.destination);
+                      form.setValue("destinationLat", venue.lat ?? null);
+                      form.setValue("destinationLng", venue.lng ?? null);
+                      form.setValue("city", venue.suburb || null);
+                      form.setValue("state", venue.state || null);
+                      form.setValue("country", venue.country || null);
+                      setRunSelectedVenueId(venue.venueId ?? null);
+                    }}
+                  />
+
+                  {/* Venue Intelligence — shows history + last deal for Pro users */}
+                  {(formValues.venueName || "").length > 0 && (
+                    <VenueIntelligence
+                      venueId={runSelectedVenueId}
+                      venueName={formValues.venueName || ""}
+                      onUseDeal={(show: VenueShow) => {
+                        if (show.showType) form.setValue("showType", show.showType);
+                        if (show.fee != null) form.setValue("fee", show.fee);
+                        if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+                        if (show.dealType) form.setValue("dealType", show.dealType);
+                        if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
+                        if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
+                        if (show.capacity != null) form.setValue("capacity", show.capacity);
+                        if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
+                      }}
                     />
-                    {/* Garage Box — vehicle selector for current act */}
-                    {(() => {
-                      const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
-                      if (!selectedProfile) {
-                        return (
-                          <div className="space-y-1.5">
-                            <label className="text-sm font-medium leading-none">Vehicle</label>
-                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px] text-muted-foreground">
-                              Select a profile to set vehicle
-                            </div>
-                          </div>
-                        );
-                      }
+                  )}
+                </div>
 
-                      // Vehicles assigned to this act (garage vehicles)
-                      const actVehicles = (vehicles ?? []).filter(v => v.assignedActIds?.includes(selectedProfile.id));
-                      // Currently selected vehicle (from garage)
-                      const activeVehicle = actVehicles.find(v => v.id === runVehicleId) ?? null;
-                      // Fallback: show profile-based vehicle (free tier or no garage vehicle)
-                      const profileVehicleLabel = selectedProfile.vehicleName
-                        ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
-                        : getStandardVehicle(selectedProfile.vehicleType).displayName;
-                      const profileFuelConsumption = selectedProfile.fuelConsumption;
+                {/* Show Date */}
+                <FormField
+                  control={form.control}
+                  name="showDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Show Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} value={field.value || ""} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                      const handleVehicleSwitch = (vehicleId: string) => {
-                        const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
-                        setRunVehicleId(vid);
-                        if (vid !== null) {
-                          updateProfile.mutate(
-                            { id: selectedProfile.id, data: { defaultVehicleId: vid } as never },
-                            {
-                              onSuccess: () => {
-                                queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
-                              },
-                            }
-                          );
-                        }
-                      };
+                {/* Compact travel summary using profile defaults */}
+                {(() => {
+                  const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
+                  const selectedVehicle = runVehicleId ? vehicles?.find(v => v.id === runVehicleId) : null;
+                  const vehicleLabel = selectedVehicle
+                    ? `${selectedVehicle.name}`
+                    : selectedProfile
+                      ? (selectedProfile.vehicleName
+                          ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
+                          : getStandardVehicle(selectedProfile.vehicleType).displayName)
+                      : null;
+                  const distNum = Number(formValues.distanceKm) || 0;
+                  const totalDist = distNum * (formValues.returnTrip ? 2 : 1);
+                  const distText = distNum > 0
+                    ? `${totalDist.toFixed(0)} km${formValues.returnTrip ? " round trip" : " one way"}`
+                    : "Auto-calculated when locations set";
 
-                      return (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium leading-none">Vehicle</label>
-                            {isPro && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setQuickAddName("");
-                                  setQuickAddType("van");
-                                  setQuickAddMakeDefault(true);
-                                  setShowQuickAdd(true);
-                                }}
-                                className="text-xs text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
-                              >
-                                <span className="text-base leading-none">+</span> Quick Add Vehicle
-                              </button>
-                            )}
-                          </div>
+                  return (
+                    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Travel Assumptions
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
+                          From profile
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground w-16 flex-shrink-0">Using:</span>
+                          <span className="font-medium text-foreground truncate">
+                            {selectedProfile?.name ?? "No profile"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-muted-foreground w-12 flex-shrink-0">From:</span>
+                          <span className="font-medium text-foreground truncate">
+                            {formValues.origin || "Not set"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-muted-foreground w-12 flex-shrink-0">Vehicle:</span>
+                          <span className="font-medium text-foreground truncate">
+                            {vehicleLabel ?? "Not set"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Route className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="text-muted-foreground w-12 flex-shrink-0">Distance:</span>
+                          <span className="font-medium text-foreground truncate">{distText}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowTravelEdit(v => !v)}
+                        className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 pt-1"
+                      >
+                        {showTravelEdit ? (
+                          <><ChevronUp className="w-3.5 h-3.5" /> Hide travel details</>
+                        ) : (
+                          <><Settings2 className="w-3.5 h-3.5" /> Edit travel assumptions</>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })()}
 
-                          {actVehicles.length > 0 ? (
+                {/* Expanded travel/profile/vehicle controls */}
+                {showTravelEdit && (
+                  <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="profileId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Profile</FormLabel>
                             <Select
-                              value={runVehicleId?.toString() ?? "profile"}
-                              onValueChange={handleVehicleSwitch}
+                              onValueChange={handleProfileChange}
+                              value={field.value ? field.value.toString() : "none"}
+                              disabled={isLoadingProfiles}
                             >
-                              <SelectTrigger className="h-9">
-                                <SelectValue />
-                              </SelectTrigger>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select profile" />
+                                </SelectTrigger>
+                              </FormControl>
                               <SelectContent>
-                                <SelectItem value="profile">
-                                  {profileVehicleLabel} — {profileFuelConsumption} L/100km (profile default)
-                                </SelectItem>
-                                {actVehicles.map(v => (
-                                  <SelectItem key={v.id} value={v.id.toString()}>
-                                    {v.name} — {v.avgConsumption} L/100km
-                                  </SelectItem>
+                                <SelectItem value="none">None</SelectItem>
+                                {profiles?.map(p => (
+                                  <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                          ) : (
-                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
-                              <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                              <span className="text-foreground">{profileVehicleLabel}</span>
-                              <span className="text-muted-foreground ml-auto text-xs">{profileFuelConsumption} L/100km</span>
-                            </div>
-                          )}
-
-                          {activeVehicle && (
-                            <p className="text-xs text-muted-foreground">
-                              {activeVehicle.fuelType} · {activeVehicle.avgConsumption} L/100km · Used for this act's calculations
-                            </p>
-                          )}
-                          {!activeVehicle && (
-                            <p className="text-xs text-muted-foreground">
-                              {isPro
-                                ? <>Add garage vehicles and assign them to this act for quick switching. <a href="/garage" className="text-primary underline underline-offset-2">Manage Garage</a></>
-                                : <>Vehicle is set in your profile. <a href="/profiles" className="text-primary underline underline-offset-2">Edit profile</a></>
-                              }
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Quick profile summary — visible as soon as a profile is selected */}
-                  {(() => {
-                    const sel = profiles?.find(p => p.id === formValues.profileId);
-                    if (!sel) return null;
-                    const { library, activeMemberIds } = migrateOldMembers(sel.bandMembers, sel.activeMemberIds ?? null);
-                    const activeMembers = resolveActiveMembers(library, activeMemberIds);
-                    const peopleCount = derivePeopleCount(sel.actType, activeMemberIds);
-                    const actCostPerShow = activeMembers.length > 0
-                      ? activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0)
-                      : (sel.expectedGigFee ?? 0);
-                    return (
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-                        <div>
-                          <div className="text-xs text-muted-foreground">Act Type</div>
-                          <div className="font-medium text-foreground">{sel.actType ?? "—"}</div>
-                        </div>
-                        <div className="hidden sm:block w-px h-7 bg-border/50" />
-                        <div>
-                          <div className="text-xs text-muted-foreground">People on Tour</div>
-                          <div className="font-medium text-foreground">{peopleCount}</div>
-                        </div>
-                        <div className="hidden sm:block w-px h-7 bg-border/50" />
-                        <div>
-                          <div className="text-xs text-muted-foreground">Act Cost / Show</div>
-                          <div className="font-medium text-foreground">
-                            {actCostPerShow > 0 ? `$${actCostPerShow.toLocaleString()}` : "—"}
-                          </div>
-                        </div>
-                        {sel.homeBase && (
-                          <>
-                            <div className="hidden sm:block w-px h-7 bg-border/50" />
-                            <div>
-                              <div className="text-xs text-muted-foreground">Home Base</div>
-                              <div className="font-medium text-foreground">{sel.homeBase}</div>
-                            </div>
-                          </>
+                            <FormMessage />
+                          </FormItem>
                         )}
-                      </div>
-                    );
-                  })()}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-sm font-medium leading-none">Venue / Destination</label>
-                      <VenueSearch
-                        venueName={formValues.venueName || ""}
-                        destination={formValues.destination || ""}
-                        onSelect={(venue: VenueSelection) => {
-                          form.setValue("venueName", venue.venueName || null);
-                          form.setValue("destination", venue.destination);
-                          form.setValue("destinationLat", venue.lat ?? null);
-                          form.setValue("destinationLng", venue.lng ?? null);
-                          form.setValue("city", venue.suburb || null);
-                          form.setValue("state", venue.state || null);
-                          form.setValue("country", venue.country || null);
-                          setRunSelectedVenueId(venue.venueId ?? null);
-                        }}
                       />
+                      {/* Garage Box — vehicle selector for current act */}
+                      {(() => {
+                        const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
+                        if (!selectedProfile) {
+                          return (
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-medium leading-none">Vehicle</label>
+                              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px] text-muted-foreground">
+                                Select a profile to set vehicle
+                              </div>
+                            </div>
+                          );
+                        }
+                        const actVehicles = (vehicles ?? []).filter(v => v.assignedActIds?.includes(selectedProfile.id));
+                        const activeVehicle = actVehicles.find(v => v.id === runVehicleId) ?? null;
+                        const profileVehicleLabel = selectedProfile.vehicleName
+                          ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
+                          : getStandardVehicle(selectedProfile.vehicleType).displayName;
+                        const profileFuelConsumption = selectedProfile.fuelConsumption;
 
-                      {/* Venue Intelligence — shows history + last deal for Pro users */}
-                      {(formValues.venueName || "").length > 0 && (
-                        <VenueIntelligence
-                          venueId={runSelectedVenueId}
-                          venueName={formValues.venueName || ""}
-                          onUseDeal={(show: VenueShow) => {
-                            if (show.showType) form.setValue("showType", show.showType);
-                            if (show.fee != null) form.setValue("fee", show.fee);
-                            if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
-                            if (show.dealType) form.setValue("dealType", show.dealType);
-                            if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
-                            if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
-                            if (show.capacity != null) form.setValue("capacity", show.capacity);
-                            if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
-                          }}
-                        />
-                      )}
+                        const handleVehicleSwitch = (vehicleId: string) => {
+                          const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
+                          setRunVehicleId(vid);
+                          if (vid !== null) {
+                            updateProfile.mutate(
+                              { id: selectedProfile.id, data: { defaultVehicleId: vid } as never },
+                              {
+                                onSuccess: () => {
+                                  queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+                                },
+                              }
+                            );
+                          }
+                        };
+
+                        return (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium leading-none">Vehicle</label>
+                              {isPro && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickAddName("");
+                                    setQuickAddType("van");
+                                    setQuickAddMakeDefault(true);
+                                    setShowQuickAdd(true);
+                                  }}
+                                  className="text-xs text-primary hover:text-primary/80 transition-colors font-medium flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" /> Quick Add
+                                </button>
+                              )}
+                            </div>
+
+                            {actVehicles.length > 0 ? (
+                              <Select
+                                value={runVehicleId?.toString() ?? "profile"}
+                                onValueChange={handleVehicleSwitch}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="profile">
+                                    {profileVehicleLabel} — {profileFuelConsumption} L/100km (profile default)
+                                  </SelectItem>
+                                  {actVehicles.map(v => (
+                                    <SelectItem key={v.id} value={v.id.toString()}>
+                                      {v.name} — {v.avgConsumption} L/100km
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                                <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-foreground">{profileVehicleLabel}</span>
+                                <span className="text-muted-foreground ml-auto text-xs">{profileFuelConsumption} L/100km</span>
+                              </div>
+                            )}
+
+                            {activeVehicle && (
+                              <p className="text-xs text-muted-foreground">
+                                {activeVehicle.fuelType} · {activeVehicle.avgConsumption} L/100km
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
-                    <FormField
-                      control={form.control}
-                      name="showDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Show Date</FormLabel>
-                          <FormControl>
-                            <Input type="date" {...field} value={field.value || ""} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
 
-                  <div>
+                    {/* Origin */}
                     {!isPro ? (
                       <FormField
                         control={form.control}
@@ -1097,13 +1123,11 @@ export default function RunForm() {
                               <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
                               Home Base
                             </FormLabel>
-                            <div className="relative">
-                              <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
-                                <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                                <span className={field.value ? "text-foreground" : "text-muted-foreground"}>
-                                  {field.value || "Select a profile to set your home base"}
-                                </span>
-                              </div>
+                            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                              <Lock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className={field.value ? "text-foreground" : "text-muted-foreground"}>
+                                {field.value || "Select a profile to set your home base"}
+                              </span>
                             </div>
                             <p className="text-xs text-muted-foreground">
                               Your home base comes from your profile.{" "}
@@ -1136,531 +1160,614 @@ export default function RunForm() {
                         )}
                       />
                     )}
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Distance — Auto/Manual toggle */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium leading-none">Distance to venue</label>
-                        <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
-                          <button
-                            type="button"
-                            onClick={() => { setDistanceMode("auto"); setRouteCalcFailed(false); }}
-                            className={cn(
-                              "px-2.5 py-1 transition-colors",
-                              distanceMode === "auto"
-                                ? "bg-primary text-primary-foreground"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                            )}
-                          >
-                            Auto
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDistanceMode("manual")}
-                            className={cn(
-                              "px-2.5 py-1 transition-colors",
-                              distanceMode === "manual"
-                                ? "bg-primary text-primary-foreground"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                            )}
-                          >
-                            Manual
-                          </button>
-                        </div>
-                      </div>
-                      {distanceMode === "auto" ? (
-                        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
-                          {(Number(formValues.distanceKm) || 0) > 0 ? (
-                            <span className="font-medium text-foreground">{formValues.distanceKm} km</span>
-                          ) : (
-                            <span className="text-muted-foreground">Auto-calculated from locations</span>
-                          )}
-                        </div>
-                      ) : (
-                        <FormField
-                          control={form.control}
-                          name="distanceKm"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input type="number" min="0" {...field} placeholder="Enter distance" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
 
-                      {/* One way only toggle + total distance */}
-                      <FormField
-                        control={form.control}
-                        name="returnTrip"
-                        render={({ field }) => (
-                          <div className="flex items-center justify-between pt-0.5">
-                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                              <Checkbox
-                                checked={!field.value}
-                                onCheckedChange={(checked) => field.onChange(!checked)}
-                              />
-                              <span className="text-sm text-muted-foreground">One way only</span>
-                            </label>
-                            {(Number(formValues.distanceKm) || 0) > 0 && (
-                              <span className="text-xs text-muted-foreground">
-                                Total:{" "}
-                                <span className="font-medium text-foreground">
-                                  {(Number(formValues.distanceKm) * (field.value ? 2 : 1)).toFixed(0)} km
-                                </span>
-                                {field.value ? " (return)" : " (one way)"}
-                              </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Distance — Auto/Manual toggle */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium leading-none">Distance to venue</label>
+                          <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
+                            <button
+                              type="button"
+                              onClick={() => { setDistanceMode("auto"); setRouteCalcFailed(false); }}
+                              className={cn(
+                                "px-2.5 py-1 transition-colors",
+                                distanceMode === "auto"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                              )}
+                            >
+                              Auto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDistanceMode("manual")}
+                              className={cn(
+                                "px-2.5 py-1 transition-colors",
+                                distanceMode === "manual"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                              )}
+                            >
+                              Manual
+                            </button>
+                          </div>
+                        </div>
+                        {distanceMode === "auto" ? (
+                          <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-sm min-h-[38px]">
+                            {(Number(formValues.distanceKm) || 0) > 0 ? (
+                              <span className="font-medium text-foreground">{formValues.distanceKm} km</span>
+                            ) : (
+                              <span className="text-muted-foreground">Auto-calculated from locations</span>
                             )}
                           </div>
-                        )}
-                      />
-
-                      {routeCalcFailed && distanceMode === "auto" && (
-                        <p className="text-xs text-amber-600">
-                          Route auto-calc failed — switch to Manual or make sure you select locations from the dropdown suggestions
-                        </p>
-                      )}
-                      {distanceMode === "auto" && !routeCalcFailed && (Number(formValues.distanceKm) || 0) === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          Calculated automatically when you select both locations
-                        </p>
-                      )}
-                      {distanceMode === "manual" && (Number(formValues.distanceKm) || 0) === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          Return trip is included automatically — check "One way only" if needed.
-                        </p>
-                      )}
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="fuelPrice"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Fuel Price Override ($/L)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" step="0.01" placeholder="Leave blank to use profile assumption" {...field} value={field.value || ""} onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))} />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground">
-                            Optional. Leave at 0 to use your profile's fuel assumption (set per fuel type in your profile). Automatic fuel pricing coming soon.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader>
-                  <CardTitle>Show Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="showType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Deal Structure</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select show type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Flat Fee">Flat Fee</SelectItem>
-                            <SelectItem value="Ticketed Show">Ticketed Show</SelectItem>
-                            <SelectItem value="Hybrid">Hybrid (Guarantee + Door)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <DealTypeInfo showType={formValues.showType} />
-
-                  {(formValues.showType === "Flat Fee" || formValues.showType === "Hybrid") && (
-                    <FormField
-                      control={form.control}
-                      name={formValues.showType === "Hybrid" ? "guarantee" : "fee"}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{formValues.showType === "Hybrid" ? "Guarantee" : "Flat Fee"} ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
-                          <p className="text-xs text-muted-foreground">
-                            Pre-filled from your profile default. Change it here for this show only.
-                          </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  {isTicketed && (
-                    <div className="space-y-4 border-t border-border/40 pt-4 mt-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="capacity"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Venue Capacity</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="ticketPrice"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Ticket Price ($)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium leading-none">Expected Attendance</label>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            min="0"
-                            max={formValues.capacity || undefined}
-                            value={attendanceCount || 0}
-                            onChange={e => {
-                              const count = Math.max(0, parseInt(e.target.value) || 0);
-                              const cap = Number(formValues.capacity) || 0;
-                              setAttendanceCount(count);
-                              form.setValue(
-                                "expectedAttendancePct",
-                                cap > 0 ? Math.min(100, Math.round((count / cap) * 100)) : 0
-                              );
-                            }}
-                            placeholder="e.g. 120"
-                          />
-                          {(formValues.capacity || 0) > 0 && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                              {Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}%
-                            </span>
-                          )}
-                        </div>
-                        {calculationResult && (
-                          <p className="text-xs text-muted-foreground">
-                            Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="dealType"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Door Deal</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value || "100% door"} value={field.value || "100% door"}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select deal" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="100% door">100% Door</SelectItem>
-                                  <SelectItem value="percentage split">Percentage Split</SelectItem>
-                                  <SelectItem value="guarantee vs door">Guarantee vs Door</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        {(formValues.dealType === "percentage split" || formValues.dealType === "guarantee vs door") && (
+                        ) : (
                           <FormField
                             control={form.control}
-                            name="splitPct"
+                            name="distanceKm"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Your Split (%)</FormLabel>
                                 <FormControl>
-                                  <Input type="number" min="0" max="100" {...field} value={field.value || 0} />
+                                  <Input type="number" min="0" {...field} placeholder="Enter distance" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
                         )}
-                      </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* One way only toggle + total distance */}
                         <FormField
                           control={form.control}
-                          name="bookingFeePerTicket"
+                          name="returnTrip"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Platform Fee per Ticket ($)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <p className="text-xs text-muted-foreground">Fee charged by the ticketing platform (e.g. Humanitix, Eventbrite) — deducted from gross before your split</p>
-                              <FormMessage />
-                            </FormItem>
+                            <div className="flex items-center justify-between pt-0.5">
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <Checkbox
+                                  checked={!field.value}
+                                  onCheckedChange={(checked) => field.onChange(!checked)}
+                                />
+                                <span className="text-sm text-muted-foreground">One way only</span>
+                              </label>
+                              {(Number(formValues.distanceKm) || 0) > 0 && (
+                                <span className="text-xs text-muted-foreground">
+                                  Total:{" "}
+                                  <span className="font-medium text-foreground">
+                                    {(Number(formValues.distanceKm) * (field.value ? 2 : 1)).toFixed(0)} km
+                                  </span>
+                                  {field.value ? " (return)" : " (one way)"}
+                                </span>
+                              )}
+                            </div>
                           )}
                         />
-                        <FormField
-                          control={form.control}
-                          name="supportActCost"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Support Act Cost ($)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <p className="text-xs text-muted-foreground">What you're paying the support act on the bill</p>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-                  )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/40 pt-4 mt-4">
-                    <FormField
-                      control={form.control}
-                      name="merchEstimate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Merch Estimate ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="0" {...field} value={field.value || 0} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    {isTicketed && (
+                        {routeCalcFailed && distanceMode === "auto" && (
+                          <p className="text-xs text-amber-600">
+                            Route auto-calc failed — switch to Manual or make sure you select locations from the dropdown suggestions
+                          </p>
+                        )}
+                        {distanceMode === "auto" && !routeCalcFailed && (Number(formValues.distanceKm) || 0) === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            Calculated automatically when you select both locations
+                          </p>
+                        )}
+                      </div>
                       <FormField
                         control={form.control}
-                        name="marketingCost"
+                        name="fuelPrice"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Marketing Cost ($)</FormLabel>
+                            <FormLabel>Fuel Price Override ($/L)</FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                              <Input type="number" min="0" step="0.01" placeholder="Leave blank for profile default" {...field} value={field.value || ""} onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))} />
                             </FormControl>
-                            {calculationResult && (
-                              <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)</p>
-                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Optional. Leave blank to use your profile's fuel assumption.
+                            </p>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50 bg-card/50">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Other Costs</CardTitle>
-                    {!overridingCosts && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs text-muted-foreground h-7 px-2"
-                        onClick={() => setOverridingCosts(true)}
-                      >
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-                  {!overridingCosts && (
-                    <p className="text-xs text-muted-foreground mt-0.5">Pulled from your profile — click Edit to override for this show.</p>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {overridingCosts ? (
-                    <>
-                      {/* Accommodation */}
-                      <div className="space-y-3">
-                        <FormField
-                          control={form.control}
-                          name="accommodationRequired"
-                          render={({ field }) => (
-                            <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                              <div>
-                                <FormLabel className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
-                                  <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
-                                  Accommodation Required for this show
-                                </FormLabel>
-                              </div>
-                              <FormControl>
-                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                        {formValues.accommodationRequired && (
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="singleRooms"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Single Rooms</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="doubleRooms"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Double / Queen Rooms</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <p className="col-span-2 text-xs text-muted-foreground -mt-1">
-                              Nights estimated from drive time. Single: ${SINGLE_ROOM_RATE}/night · Double: ${DOUBLE_ROOM_RATE}/night
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="foodCost"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Food & Drink ($)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="extraCosts"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Extra Costs ($)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" {...field} value={field.value || 0} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    /* Collapsed read-only summary */
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-sm py-1">
-                        <span className="flex items-center gap-1.5 text-muted-foreground">
-                          <BedDouble className="w-3.5 h-3.5" />
-                          Accommodation
-                        </span>
-                        <span className="font-medium text-foreground">
-                          {formValues.accommodationRequired
-                            ? [
-                                (Number(formValues.singleRooms) || 0) > 0 && `${formValues.singleRooms} single`,
-                                (Number(formValues.doubleRooms) || 0) > 0 && `${formValues.doubleRooms} double`,
-                              ].filter(Boolean).join(" + ") || "Required"
-                            : "Not required"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
-                        <span className="text-muted-foreground">Food & Drink</span>
-                        <span className="font-medium text-foreground">${Number(formValues.foodCost) || 0}</span>
-                      </div>
-                      {(Number(formValues.extraCosts) || 0) > 0 && (
-                        <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
-                          <span className="text-muted-foreground">Extra Costs</span>
-                          <span className="font-medium text-foreground">${Number(formValues.extraCosts) || 0}</span>
-                        </div>
-                      )}
                     </div>
-                  )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
+            {/* ────────────────────────── 2. INCOME (HERO) ────────────────────────── */}
+            <Card className="border-primary/30 bg-gradient-to-b from-primary/5 to-card/50 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  Income
+                </CardTitle>
+                <CardDescription>How you're getting paid for this show</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="showType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deal Structure</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Select show type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Flat Fee">Flat Fee</SelectItem>
+                          <SelectItem value="Ticketed Show">Ticketed Show</SelectItem>
+                          <SelectItem value="Hybrid">Hybrid (Guarantee + Door)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DealTypeInfo showType={formValues.showType} />
+
+                {(formValues.showType === "Flat Fee" || formValues.showType === "Hybrid") && (
                   <FormField
                     control={form.control}
-                    name="notes"
+                    name={formValues.showType === "Hybrid" ? "guarantee" : "fee"}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Trail Notes</FormLabel>
+                        <FormLabel>{formValues.showType === "Hybrid" ? "Guarantee" : "Flat Fee"} ($)</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Any specifics about the run..." className="min-h-[100px]" {...field} value={field.value || ""} />
+                          <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Pre-filled from your profile default. Change it here for this show only.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {isTicketed && (
+                  <div className="space-y-4 rounded-lg border border-border/40 bg-background/60 p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="capacity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Venue Capacity</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="ticketPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Ticket Price ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium leading-none">Expected Attendance</label>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          min="0"
+                          max={formValues.capacity || undefined}
+                          value={attendanceCount || 0}
+                          onChange={e => {
+                            const count = Math.max(0, parseInt(e.target.value) || 0);
+                            const cap = Number(formValues.capacity) || 0;
+                            setAttendanceCount(count);
+                            form.setValue(
+                              "expectedAttendancePct",
+                              cap > 0 ? Math.min(100, Math.round((count / cap) * 100)) : 0
+                            );
+                          }}
+                          placeholder="e.g. 120"
+                        />
+                        {(formValues.capacity || 0) > 0 && (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                            {Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}%
+                          </span>
+                        )}
+                      </div>
+                      {calculationResult && (
+                        <p className="text-xs text-muted-foreground">
+                          Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="dealType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Door Deal</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value || "100% door"} value={field.value || "100% door"}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select deal" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="100% door">100% Door</SelectItem>
+                                <SelectItem value="percentage split">Percentage Split</SelectItem>
+                                <SelectItem value="guarantee vs door">Guarantee vs Door</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {(formValues.dealType === "percentage split" || formValues.dealType === "guarantee vs door") && (
+                        <FormField
+                          control={form.control}
+                          name="splitPct"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Your Split (%)</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" max="100" {...field} value={field.value || 0} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="bookingFeePerTicket"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Platform Fee per Ticket ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" step="0.01" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">Fee charged by the ticketing platform — deducted from gross before your split</p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="supportActCost"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Support Act Cost ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">What you're paying the support act on the bill</p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/40">
+                  <FormField
+                    control={form.control}
+                    name="merchEstimate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Merch Estimate ($)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </CardContent>
-              </Card>
-              
-              <div className="space-y-3 pb-2">
-                <Button
-                  type="button"
-                  size="lg"
-                  className="w-full text-base font-bold"
-                  onClick={handleCalculate}
-                  disabled={isCalculating}
-                >
-                  <Calculator className="w-4 h-4 mr-2" />
-                  {isCalculating ? "Calculating..." : "Calculate Gig"}
+
+                  {isTicketed && (
+                    <FormField
+                      control={form.control}
+                      name="marketingCost"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Marketing Cost ($)</FormLabel>
+                          <FormControl>
+                            <Input type="number" min="0" className="bg-background" {...field} value={field.value || 0} />
+                          </FormControl>
+                          {calculationResult && (
+                            <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)</p>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ────────────────────────── 3. COSTS ────────────────────────── */}
+            <Card className="border-border/50 bg-card/50">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Fuel className="w-4 h-4 text-primary" />
+                      Costs
+                      {!overridingCosts && (
+                        <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wide text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
+                          Using profile defaults
+                        </span>
+                      )}
+                    </CardTitle>
+                    {!overridingCosts && (
+                      <CardDescription className="mt-0.5">
+                        Pulled from your profile — click Edit to override for this show.
+                      </CardDescription>
+                    )}
+                  </div>
+                  {!overridingCosts ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8 px-2 flex items-center gap-1"
+                      onClick={() => setOverridingCosts(true)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit for this show
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-8 px-2 text-muted-foreground"
+                      onClick={() => {
+                        const profile = profiles?.find(p => p.id === formValues.profileId);
+                        if (profile) applyProfileValues(profile);
+                        setOverridingCosts(false);
+                      }}
+                    >
+                      Reset to profile
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {overridingCosts ? (
+                  <>
+                    {/* Accommodation */}
+                    <div className="space-y-3">
+                      <FormField
+                        control={form.control}
+                        name="accommodationRequired"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center justify-between rounded-lg border border-border/50 p-3">
+                            <div>
+                              <FormLabel className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                                <BedDouble className="w-3.5 h-3.5 text-muted-foreground" />
+                                Accommodation Required for this show
+                              </FormLabel>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      {formValues.accommodationRequired && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <FormField
+                            control={form.control}
+                            name="singleRooms"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Single Rooms</FormLabel>
+                                <FormControl>
+                                  <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="doubleRooms"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Double / Queen Rooms</FormLabel>
+                                <FormControl>
+                                  <Input type="number" min="0" step="1" {...field} value={field.value ?? 0} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <p className="col-span-2 text-xs text-muted-foreground -mt-1">
+                            Nights estimated from drive time. Single: ${SINGLE_ROOM_RATE}/night · Double: ${DOUBLE_ROOM_RATE}/night
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="foodCost"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Food & Drink ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="extraCosts"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Extra Costs ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" {...field} value={field.value || 0} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  /* Collapsed read-only summary */
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-sm py-1">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Fuel className="w-3.5 h-3.5" />
+                        Fuel
+                      </span>
+                      <span className="font-medium text-foreground">Auto from profile</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <BedDouble className="w-3.5 h-3.5" />
+                        Accommodation
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {formValues.accommodationRequired
+                          ? [
+                              (Number(formValues.singleRooms) || 0) > 0 && `${formValues.singleRooms} single`,
+                              (Number(formValues.doubleRooms) || 0) > 0 && `${formValues.doubleRooms} double`,
+                            ].filter(Boolean).join(" + ") || "Required"
+                          : "Not required"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
+                      <span className="text-muted-foreground">Food & Drink</span>
+                      <span className="font-medium text-foreground">${Number(formValues.foodCost) || 0}</span>
+                    </div>
+                    {(Number(formValues.extraCosts) || 0) > 0 && (
+                      <div className="flex items-center justify-between text-sm py-1 border-t border-border/30">
+                        <span className="text-muted-foreground">Extra Costs</span>
+                        <span className="font-medium text-foreground">${Number(formValues.extraCosts) || 0}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ────────────────────────── 4. NOTES (low emphasis) ────────────────────────── */}
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm text-muted-foreground">Trail Notes <span className="text-xs font-normal">(optional)</span></FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Any specifics about the run..."
+                      className="min-h-[80px] bg-card/30 border-border/40"
+                      {...field}
+                      value={field.value || ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* ────────────────────────── 5. QUICK VIEW + CTA ────────────────────────── */}
+            {(() => {
+              const distNum = Number(formValues.distanceKm) || 0;
+              const totalDist = distNum * (formValues.returnTrip ? 2 : 1);
+              const knownCosts = (Number(formValues.foodCost) || 0)
+                + (Number(formValues.extraCosts) || 0)
+                + (Number(formValues.marketingCost) || 0)
+                + (Number(formValues.supportActCost) || 0);
+              const dealLabel = formValues.showType === "Ticketed Show"
+                ? (formValues.dealType ?? "Ticketed")
+                : (formValues.showType ?? "Flat Fee");
+
+              return (
+                <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Quick View</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Travel</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {distNum > 0 ? `~${totalDist.toFixed(0)} km` : "—"}
+                      </div>
+                    </div>
+                    <div className="border-l border-r border-border/40">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Known costs</div>
+                      <div className="text-sm font-medium text-foreground">
+                        {knownCosts > 0 ? `~$${knownCosts.toFixed(0)}` : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Income type</div>
+                      <div className="text-sm font-medium text-foreground capitalize">{dealLabel}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="space-y-3 pb-2 sticky bottom-2 z-10 bg-background/0">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full text-base font-bold shadow-md"
+                onClick={handleCalculate}
+                disabled={isCalculating}
+              >
+                <Calculator className="w-4 h-4 mr-2" />
+                {isCalculating ? "Calculating..." : "Calculate Gig"}
+              </Button>
+              {!isPro && calcUsage && calcUsage.limit !== null && (
+                <UsageMeter
+                  used={calcUsage.count}
+                  limit={calcUsage.limit}
+                  label="calculations this week"
+                />
+              )}
+              {!isPro && !calcUsage && (
+                <p className="text-xs text-center text-muted-foreground">5 free calculations per week</p>
+              )}
+              {isEditing && (
+                <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {isPending ? "Saving..." : "Save Changes"}
                 </Button>
-                {!isPro && calcUsage && calcUsage.limit !== null && (
-                  <UsageMeter
-                    used={calcUsage.count}
-                    limit={calcUsage.limit}
-                    label="calculations this week"
-                  />
-                )}
-                {!isPro && !calcUsage && (
-                  <p className="text-xs text-center text-muted-foreground">5 free calculations per week</p>
-                )}
-                {isEditing && (
-                  <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
-                    <Save className="w-4 h-4 mr-2" />
-                    {isPending ? "Saving..." : "Save Changes"}
-                  </Button>
-                )}
-              </div>
-            </form>
-          </Form>
+              )}
+            </div>
+          </form>
+        </Form>
       </div>
+
 
       <Dialog open={showLimitModal} onOpenChange={setShowLimitModal}>
         <DialogContent className="sm:max-w-md">

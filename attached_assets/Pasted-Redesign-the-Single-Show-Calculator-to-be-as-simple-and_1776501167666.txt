@@ -1,0 +1,302 @@
+Redesign the Single Show Calculator to be as simple and effective as possible.
+
+Core UX goal:
+This page should feel like a quick decision tool, not a setup form.
+The main question it should answer is:
+“Is this gig worth doing?”
+
+Key principle:
+Saved profile defaults should reduce effort, not create more interface.
+
+Right now too much profile/default data is shown upfront.
+I want to keep all current functionality, but hide complexity by default and only show overrides when needed.
+
+DO NOT change calculation logic.
+DO NOT remove functionality.
+DO refactor the UI structure, hierarchy, and progressive disclosure.
+
+======================================
+TARGET EXPERIENCE
+======================================
+
+A user should be able to:
+1. Enter the venue
+2. Enter the show date
+3. Choose how they’re getting paid
+4. Hit calculate
+
+Everything else should either:
+- happen automatically from profile defaults
+- appear as a compact summary
+- or live behind an Edit / Override action
+
+This screen should feel:
+- simple
+- fast
+- clean
+- guided
+- purpose-built for musicians
+- warm/parchment/rustic but modern
+- not cluttered
+- not corporate
+- not like a settings page
+
+======================================
+NEW PAGE STRUCTURE
+======================================
+
+Use this structure:
+
+1. Show Details
+2. Income
+3. Costs
+4. Notes
+5. Quick View + Calculate CTA
+
+--------------------------------------
+1. SHOW DETAILS
+--------------------------------------
+
+Rename the current top section from “Build Your Run” to:
+“Show Details”
+
+This section should only show the essentials clearly.
+
+Visible by default:
+- Venue / Destination
+- Show Date
+
+Then below that, show a compact summary row using profile defaults:
+- Profile being used
+- Origin / home base
+- Vehicle being used
+- Distance summary if available
+
+Example summary style:
+Using: Main Duo Profile
+From: Melbourne, VIC
+Vehicle: Hiace Diesel
+Distance: 312 km round trip
+
+Do NOT make profile and vehicle giant front-and-centre dropdowns by default if they are already set by the selected/default profile.
+If users need to change them, provide a compact:
+[Edit travel assumptions]
+or
+[Change profile / vehicle]
+
+Origin should pull from the selected profile home base by default.
+Distance should remain auto-calculated by default.
+
+Keep the ability to edit these values, but hide those controls until the user clicks the edit/change action.
+
+Advanced travel controls that should be hidden by default:
+- manual distance toggle/input
+- one way only
+- fuel price override
+- any travel override fields
+
+When expanded, these controls should appear inline in a clean sub-panel.
+When collapsed, only the summary is visible.
+
+If no profile/defaults exist:
+- show a safe empty state
+- keep placeholders
+- do not crash
+- still allow manual entry/edit
+
+--------------------------------------
+2. INCOME
+--------------------------------------
+
+This should be the most visually important section on the page.
+
+Visible:
+- Deal Structure
+- Contextual explanation / info box
+- Relevant deal inputs based on selected deal structure
+- Merch Estimate
+
+Design intent:
+This section should feel like the main money section.
+Users care most about what they are getting paid, so make this cleaner and more prominent than the defaults/travel data.
+
+The contextual explanation for deal type should look like a smart info panel, not just a flat strip.
+
+Keep existing deal-structure logic exactly as is.
+Only improve the layout/styling/hierarchy.
+
+--------------------------------------
+3. COSTS
+--------------------------------------
+
+This section should default to SUMMARY MODE, not FULL INPUT MODE.
+
+Title:
+“Costs”
+or
+“Costs (Using Profile Defaults)”
+
+By default show a compact summary card like:
+
+Fuel: Auto from profile
+Food & Drink: $150
+Accommodation: Not required
+
+Then show a clear button/link button:
+[Edit for this show]
+
+When the user clicks Edit:
+- expand the relevant override controls inline
+- allow changing per-show cost assumptions
+- keep all existing functionality
+- include a way to reset/revert back to profile defaults if sensible
+
+Important:
+The user should feel that the app is already handling defaults for them.
+Do not dump all cost fields open by default.
+
+--------------------------------------
+4. NOTES
+--------------------------------------
+
+Keep Trail Notes, but make it low priority.
+This should be visually quieter than the main calculator sections.
+
+--------------------------------------
+5. QUICK VIEW + CTA
+--------------------------------------
+
+Above the main Calculate button, add a compact Quick View summary strip/card using existing state if possible.
+
+Use only already-available values. Do not invent new logic.
+
+Possible items:
+- Distance
+- Estimated travel cost
+- Known costs
+- Deal type
+
+Example:
+Quick View
+Travel: ~312 km
+Known costs: ~$236
+Income type: Flat Fee
+
+This is not the final result card.
+It is just a lightweight pre-calc confidence summary.
+
+Then below that:
+Keep the main “Calculate Gig” button as the primary CTA.
+
+Make the bottom action area feel intentional and polished.
+
+If clean and easy:
+- consider a sticky CTA on mobile
+- ensure desktop spacing feels strong
+
+======================================
+VISUAL / INTERACTION RULES
+======================================
+
+1. Progressive disclosure
+- Profile/default-based controls should not all be open by default
+- Show summary first, details on demand
+
+2. Reduce cognitive load
+- The user should not have to think about fuel, vehicle, defaults, or travel assumptions unless they want to override them
+
+3. Keep the screen feeling fast
+- This should feel like:
+  “Chuck in the gig and see if it stacks up”
+
+4. Better hierarchy
+- Show Details = simple and compact
+- Income = hero section
+- Costs = compact summary with optional edit
+- Notes = low emphasis
+- CTA = strong and obvious
+
+5. Preserve current style direction
+- warm parchment / neutral tones
+- rustic but modern
+- clean and premium
+- no dark redesign
+- no flashy gradients
+- no clutter
+
+6. Use subtle chips/badges where useful
+Examples:
+- From profile
+- Auto
+- Optional
+- Override
+
+======================================
+IMPLEMENTATION NOTES
+======================================
+
+Please inspect the current component structure first and work with what already exists.
+
+Tasks:
+1. Identify the component for the Single Show Calculator page.
+2. Identify the existing state/data flow for:
+   - selected profile
+   - origin/home base
+   - vehicle
+   - distance mode
+   - fuel override
+   - cost defaults
+   - deal structure
+3. Refactor the UI so profile-based defaults are shown as summaries first.
+4. Add inline expand/collapse areas for:
+   - travel assumptions
+   - cost overrides
+5. Keep all existing calculation logic intact.
+6. Keep responsiveness solid for desktop and mobile.
+7. Reuse existing components/styles where sensible.
+8. If there is duplicated layout logic shared with Tour Builder, extract shared presentational patterns only if it is clean and low risk.
+
+======================================
+VERY IMPORTANT
+======================================
+
+Do not just restyle the current long form.
+Actually simplify the experience.
+
+The correct UX direction is:
+- always visible = things that change gig to gig
+- summary by default = things coming from profile
+- hidden until requested = advanced overrides
+
+Always visible:
+- Venue / Destination
+- Show Date
+- Deal Structure
+- Pay inputs
+- Merch Estimate
+- Calculate button
+
+Summary by default:
+- Profile
+- Origin
+- Vehicle
+- Distance
+- Fuel/default costs
+
+Hidden until requested:
+- profile switching controls if not needed
+- vehicle change controls
+- manual distance
+- one-way
+- fuel override
+- per-show cost overrides
+
+======================================
+DELIVERABLE
+======================================
+
+Please make the UI changes and then report back with:
+- which files changed
+- what structural changes were made
+- whether travel/cost sections now use collapsed summary-first behavior
+- confirmation that calculation logic was not changed
