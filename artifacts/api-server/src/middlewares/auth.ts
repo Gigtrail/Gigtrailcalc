@@ -5,6 +5,8 @@ import type { Request, Response, NextFunction } from "express";
 import {
   PERMANENT_ADMIN_EMAIL,
   isPermanentAdminEmail,
+  normalizeEmail,
+  resolveIsAdmin,
   normalizeRole,
   derivePlanFromRole,
   hasProAccess,
@@ -24,6 +26,8 @@ import {
 export {
   PERMANENT_ADMIN_EMAIL,
   isPermanentAdminEmail,
+  normalizeEmail,
+  resolveIsAdmin,
   normalizeRole,
   derivePlanFromRole,
   hasProAccess,

@@ -1,0 +1,117 @@
+Paste this into Replit:
+
+```text
+I need you to harden and simplify the admin-access system in this app without breaking existing auth.
+
+GOAL:
+Make admin access reliable and permanent for the owner account:
+thegigtrail@gmail.com
+
+CONTEXT:
+Right now admin access has been getting wiped/reset by onboarding, sync logic, or account updates.
+We already have some mix of DB role checks and email checks, but I want this cleaned up properly.
+
+WHAT I WANT:
+Use a layered permission model:
+
+1. DATABASE ROLE = primary source of truth
+   - Keep a user role field such as:
+     role: "admin" | "tester" | "user"
+
+2. PERMANENT ADMIN EMAIL FALLBACK = failsafe
+   - thegigtrail@gmail.com must ALWAYS resolve as admin
+   - email comparisons must be trimmed + lowercased
+   - this fallback should work even if DB role is accidentally wrong
+
+3. SERVER-SIDE ENFORCEMENT ONLY
+   - all admin API routes / server actions / protected backend logic must check admin access on the server
+   - do not rely on frontend-only checks
+
+4. AUTO-REPAIR LOGIC
+   - whenever the permanent admin logs in / syncs / hits auth bootstrap, automatically repair their account in DB if needed
+   - if role is not admin, fix it
+   - if plan/access fields are required for admin visibility, repair those too
+   - do not let onboarding or billing sync downgrade this account
+
+5. STARTUP SAFETY CHECK
+   - on server startup, run a repair pass that finds the permanent admin by email case-insensitively and fixes the account if needed
+
+6. ADMIN CANNOT BE DEMOTED
+   - prevent the permanent admin email from being demoted via admin panel, API, seed script, sync script, or any role update path
+   - if any code attempts to demote this account, block it and log a warning
+
+7. CLEAN ARCHITECTURE
+   - centralize this logic into reusable helpers instead of duplicating checks in multiple files
+
+IMPLEMENTATION DETAILS:
+Please find the current auth / admin / me / onboarding / billing sync code and refactor carefully.
+
+Create or update a shared helper with functions similar to:
+- normalizeEmail(email)
+- isPermanentAdminEmail(email)
+- resolveIsAdmin(user)
+- repairPermanentAdminAccount(...)
+
+Expected behavior:
+- normalizeEmail trims and lowercases
+- isPermanentAdminEmail only returns true for the owner email
+- resolveIsAdmin returns true if DB role is admin OR email is permanent admin
+- repairPermanentAdminAccount ensures the owner account always has the correct DB values
+
+IMPORTANT:
+- Search the codebase first and identify ALL places where role, plan, or accessSource are set or overwritten
+- Search for ALL admin checks
+- Search for ALL raw email === comparisons and replace with normalized helper usage
+- Search seed scripts / repair scripts / startup scripts too
+
+WHAT TO CHANGE:
+1. Add a single shared admin/auth utility file if one does not already exist
+2. Replace scattered hardcoded checks with shared helpers
+3. Patch login/sync/me bootstrap flow so permanent admin is repaired automatically
+4. Patch server startup with a repairPermanentAdmin() check
+5. Patch admin update routes so permanent admin cannot be demoted
+6. Patch frontend admin visibility to use resolved backend auth result only
+7. Remove any legacy logic that conflicts with this approach
+
+DB / ACCOUNT RULES:
+For permanent admin account:
+- role must be "admin"
+- if plan is used for UI gating, ensure it is set to the correct paid/pro plan expected by current app logic
+- if accessSource exists and matters for admin behavior, set it to a stable internal/system value
+- do NOT let Stripe or pricing sync overwrite admin permissions
+
+IMPORTANT GUARDRAILS:
+- Billing plan is NOT the same as admin permission
+- Admin is a permission role, not a subscription tier
+- A user can be admin regardless of billing plan logic
+- Never infer admin from frontend state
+- Never allow permanent admin to lose admin due to case mismatch
+
+ALSO DO THIS:
+- Add clear logs around:
+  - permanent admin detection
+  - repair events
+  - blocked demotion attempts
+  - final resolved auth state on /me or equivalent bootstrap endpoint
+- Keep logs concise but useful
+
+VALIDATION:
+After changes:
+1. run typecheck
+2. run tests if present
+3. run build
+4. confirm the owner email resolves as admin even if DB role is temporarily changed
+5. confirm non-admin users cannot access admin routes
+6. confirm admin panel still works for managing other users
+7. confirm permanent admin cannot be demoted
+
+OUTPUT I WANT FROM YOU:
+At the end, give me:
+1. files changed
+2. exact summary of what was wrong
+3. exact summary of what was fixed
+4. any remaining risks
+5. any manual step I need to do
+
+Be careful not to break existing auth/session flow. Make minimal safe changes, but make the admin protection permanent and robust.
+```

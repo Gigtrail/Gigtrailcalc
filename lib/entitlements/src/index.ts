@@ -26,10 +26,27 @@ export const VALID_ACCESS_SOURCES: readonly AccessSource[] = ["default", "stripe
 
 export const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 
+/** Trim + lowercase an email for safe comparison. Returns "" for null/undefined. */
+export function normalizeEmail(email?: string | null): string {
+  if (!email) return "";
+  return email.trim().toLowerCase();
+}
+
 /** Case-insensitive, whitespace-trimmed permanent admin check. */
 export function isPermanentAdminEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return email.trim().toLowerCase() === PERMANENT_ADMIN_EMAIL.toLowerCase();
+  const e = normalizeEmail(email);
+  return e !== "" && e === normalizeEmail(PERMANENT_ADMIN_EMAIL);
+}
+
+/**
+ * Single source of truth for "is this user an admin?"
+ * True if the DB role is "admin" OR the email is the permanent admin.
+ * Use this everywhere instead of mixing `role === "admin"` and email checks.
+ */
+export function resolveIsAdmin(user: { role?: string | null; email?: string | null } | null | undefined): boolean {
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return isPermanentAdminEmail(user.email);
 }
 
 // ─── Role normalisation & plan derivation ────────────────────────────────────
