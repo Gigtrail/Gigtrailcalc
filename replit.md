@@ -2,220 +2,60 @@
 
 ## Overview
 
-A full-stack web app for touring musicians to calculate whether a single show or multi-show tour is financially worth doing. Built with The Gig Trail branding: warm, road-worn, practical, musician-first.
+The Gig Trail Tour Calculator is a full-stack web application designed for touring musicians to assess the financial viability of single shows or multi-show tours. It provides tools for calculating potential earnings, managing profiles and vehicles, and planning tours, all within a musician-first, road-worn, and practical brand aesthetic. The project aims to empower musicians with financial clarity for their touring decisions, offering a blend of free and premium features to cater to different needs.
 
-## Stack
+## User Preferences
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **Frontend**: React + Vite (artifacts/gig-trail)
-- **API framework**: Express 5 (artifacts/api-server)
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-- **Routing**: wouter
-- **Forms**: react-hook-form + shadcn
-- **Auth**: Clerk (`@clerk/react`, `@clerk/express`)
-- **Payments**: Stripe via Replit Connector + `stripe-replit-sync`
+- The agent should prioritize high-level architectural decisions and system design choices over minute implementation details.
+- When making changes, the agent should ask for confirmation before implementing major alterations to the codebase or architectural patterns.
+- The agent should always ensure that any new features or modifications align with The Gig Trail's branding (warm, road-worn, practical, musician-first).
+- The agent should focus on consolidating redundant information and removing changelogs or update logs.
 
-## Key Commands
+## System Architecture
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/scripts run seed-stripe` — seed Stripe products (run once after connecting Stripe)
+The application is built as a pnpm monorepo using Node.js 24 and TypeScript 5.9.
 
-## App Features
+**Frontend:**
+- Developed with React and Vite.
+- Employs `wouter` for routing and `react-hook-form` with `shadcn` for forms.
+- **UI/UX Decisions:**
+    - The main application UI uses a warm beige color scheme.
+    - The public landing page (`/`) features a distinct dark theme (`#0F0F0F` background, amber `#B8651E` accent) to differentiate from the app's internal UI.
+    - Product screenshots are used on the landing page for visual context.
+    - Dashboard is designed as a command-center UI with hero section, cards for profit health, cost pressure, and show performance, insights, tour status, and recent show cards.
 
-### Authentication (Clerk)
-- Sign Up / Sign In via Clerk (email + Google OAuth)
-- Session cookies (NOT bearer tokens) — no `setAuthTokenGetter` needed
-- Landing page (`/`) for unauthenticated users; signed-in users with no profiles go to `/onboarding`, others to `/dashboard`
-- `requireAuth` middleware on all API routes
-- All data filtered by `userId` — users only see their own data
+**Backend:**
+- An Express 5 API server handles business logic.
+- PostgreSQL is used as the database, interfaced via Drizzle ORM.
+- Zod with `drizzle-zod` is used for validation.
+- Orval generates API hooks and Zod schemas from OpenAPI specifications.
+- Authentication is handled by Clerk, providing sign-up/sign-in with email and Google OAuth. All API routes require authentication, and data is filtered by `userId`.
+- The system supports a role-based access control (`free`, `pro`, `tester`, `admin`) to manage feature availability.
 
-### Onboarding Flow
-- Route: `/onboarding` — full-screen (no sidebar), protected, shown automatically to new users with 0 profiles
-- Fields: Act Name, Act Type (Solo/Duo/Band card buttons), Number of People (auto-filled from type), Home Base, Vehicle (4 standard cards: Small Car/SUV/Van/Bus), Fuel Price
-- On submit: creates profile via `POST /profiles` with vehicleType + fuelConsumption + defaultFuelPrice (no separate vehicle record created)
-- Redirects to `/runs/new?profileId=X&origin=...&fuelPrice=...` for prefilled calculator
-- Run form reads URL params and prefills form fields after profiles load
-- `HomeRedirect` uses `SignedInRedirect` component that calls `useGetProfiles` to detect new users
+**Core Features & Implementations:**
+- **Onboarding Flow:** Guides new users to create an act profile, including act name, type, number of people, home base, vehicle type, and fuel price.
+- **User Role System:** Differentiates user access based on subscription status or administrative assignment.
+- **Public Landing Page:** Provides information about the app, problem statement, features, early access signup, and founder information.
+- **Promo Codes:** Allows for activation of special roles or access tiers via promo codes with backend validation and redemption.
+- **Subscription Plans:** Integrates Stripe for managing free and paid subscriptions, handling upgrades and customer portals.
+- **Artist/Band Profiles:** Allows creation and management of individual or band profiles with associated vehicles, accommodation, and food averages.
+- **Garage:** Manages standard and custom vehicle types, allowing Pro users to add detailed vehicle information.
+- **Single Show Calculator:**
+    - Supports Flat Fee, Ticketed, and Hybrid show types.
+    - Computes route details (via Google Maps), generates a financial verdict, per-person take-home, cost breakdown, and insights.
+    - Stores `calculationSnapshot` as JSONB for historical viewing.
+    - Accomodation recommendations are derived from profile settings and drive time.
+- **Tour Builder (Pro+):** Provides a multi-stop tour planner with running totals and financial summaries.
+- **Feedback Board:** Allows users to submit and upvote feedback, with admin capabilities for status updates.
+- **Analytics:** PostHog integration (`posthog-js`) is used for tracking user interactions and key events, with a focus on login, signup, calculation, and upgrade workflows.
 
-### User Role System
-- **4 roles**: `free` | `pro` | `tester` | `admin`
-  - `free` — default for all new users, limited access
-  - `pro` — paid subscribers (Stripe-managed) or manually assigned by admin
-  - `tester` — full Pro access without payment, permanent until changed
-  - `admin` — full Pro access plus admin panel; permanent admin = `thegigtrail@gmail.com`
-- `hasProAccess(role)` returns true for `pro`, `tester`, `admin`
-- `access_source` on users: `default` | `stripe` | `promo` | `admin` — prevents Stripe sync from downgrading promo/admin users
+## External Dependencies
 
-### Promo Codes
-- `promo_codes` table: code, isActive, grantsRole, maxUses, timesUsed, expiresAt, notes
-- `promo_code_redemptions` table: audit trail of who redeemed what
-- `GET /api/promo-codes/validate?code=XXX` — public validation (no auth)
-- `POST /api/me/redeem-promo` — authenticated redemption
-- Admin can manage all codes from billing page admin panel (Users / Promo Codes tabs)
-- Default seed: `TESTER101` (grants tester role, unlimited uses, never expires)
-- Signup page has optional "Promo Code" field; stored in sessionStorage; auto-redeemed on onboarding page
-
-### Subscription Plans (Stripe)
-- **Free** (AU$0): 1 profile, 1 vehicle, 5 saved runs, no tours
-- **Paid** (AU$12/mo or AU$79/yr): everything — tours, unlimited runs, multi-vehicle garage, etc.
-- Stripe Checkout for upgrades, Customer Portal for management
-- `stripe-replit-sync` syncs Stripe data (products, prices, subscriptions) to PostgreSQL `stripe.*` tables
-- Stripe product metadata uses `plan: "pro"` (legacy); normalized to role `"pro"` on sync
-- Stripe sync respects `access_source` — never downgrades `tester` or `admin` users
-- `/api/me` returns: userId, email, role, accessSource, plan, limits, hasStripeCustomer
-- `/api/me/sync-plan` — POST to resync role from Stripe after checkout
-
-### Artist/Band Profiles
-- Create and save Solo, Duo, and Band profiles
-- Store people count, home base, vehicle, accommodation and food averages
-
-### Garage
-- **Standard vehicle types** (all plans): Small Car (7.5 L/100km), SUV/Wagon (10 L/100km), Van (11.5 L/100km), Bus (16 L/100km)
-- **Key constants**: `STANDARD_VEHICLES` and helpers (`normaliseVehicleKey`, `getStandardVehicle`) in `artifacts/gig-trail/src/lib/garage-constants.ts`
-- **Profile Garage section**: 2×2 card grid for free users (read-only presets); Pro users get same 4 cards + nickname field + custom fuel consumption input + "Manage garage" link
-- **Legacy vehicle type normalisation**: Old values ("Car" → "small_car", "Van" → "van", "Bus" → "bus") handled by `normaliseVehicleKey()`
-- **Custom garage vehicles** (Pro only): `/garage` page + `/garage/new` + `/garage/:id/edit` — stored in `vehiclesTable` with new fields: `vehicleType`, `tankSizeLitres`, `isDefault`, `assignedMemberIds`
-- **vehicleType field in profiles** uses new lowercase keys: "small_car", "suv_wagon", "van", "bus"
-
-### Single Show Calculator
-- Flat Fee, Ticketed Show (with deal types), and Hybrid show types
-- Two-step flow: input form → dedicated results screen (`/runs/results`)
-- `handleCalculate` computes route (Google Maps), then navigates to `/runs/results` with result stored in `sessionStorage` as `gigtrail_result`
-- On save, a `calculationSnapshot` (all computed result data minus session-specific fields) is stored as JSONB on the run record
-- `run-results.tsx` shows: verdict banner, per-person take-home, route summary, accommodation recommendation, cost breakdown, smart insights, Save/Edit/New actions
-- **Historical snapshot mode**: `/runs/results?runId=X` loads the stored `calculationSnapshot` from the DB and renders the exact same result page with a "Saved result" badge; back button goes to `/runs`; shows "Run again with current settings" button instead of "Calculate Another Run"
-- Old runs without a snapshot redirect to `/runs/:id` (run-detail.tsx) for the legacy detail view
-- **Accommodation comes from profile** — no manual accommodation controls on form; nights estimated from drive time ÷ max daily driving hours
-- **Constants centralized** in `artifacts/gig-trail/src/lib/gig-constants.ts`: `ACCOM_RATES` (Single=$120, Queen=$180, Twin=$200, Double Room=$180, Multiple Rooms=$300), `DEFAULT_MAX_DRIVE_HOURS_PER_DAY=8`
-- Status: "Worth the Drive", "Tight Margins", "Probably Not Worth It"
-- Free users: read-only home base (locked from profile), Pro users: editable origin
-- `maxDriveHoursPerDay` in profiles (Pro-only field) used for accommodation night recommendation
-
-### Tour Builder (Pro+ only)
-- Multi-stop tour planner with running totals
-- Per-stop income and cost breakdown
-- Full tour financial summary (per show, per day, per member)
-- Free users see a locked gate with upgrade CTA
-
-### Dashboard
-- Summary stats: total income, net profit, km driven, shows/tours
-- Recent runs and tours with profitability status
-
-## Design System
-
-- **Background**: #121212 (deep charcoal)
-- **Card**: #1F1F1F (soft dark)
-- **Foreground**: #F5F3EF (warm white)
-- **Primary**: #D2691E (burnt orange)
-- **Accent**: #C2A14D (dusty gold)
-- **Muted**: #7A7A7A (muted grey)
-
-## Database Schema
-
-### App tables (lib/db/src/schema/)
-- `users` — user accounts linked to Clerk (id = Clerk userId, email, role, accessSource, stripeCustomerId, stripeSubscriptionId, plan)
-- `promo_codes` — admin-managed promo codes (code unique, grantsRole, isActive, maxUses, timesUsed, expiresAt, notes)
-- `promo_code_redemptions` — audit trail of promo code redemptions (promoCodeId, userId, grantedRole, signupEmail, redeemedAt)
-- `profiles` — artist/band profiles (has userId); `defaultVehicleId` = per-act default garage vehicle
-- `vehicles` — vehicles with fuel consumption (has userId); `isDefault` = legacy global default (replaced by per-act via profiles.defaultVehicleId)
-- `vehicle_act_assignments` — many-to-many: vehicles ↔ profiles (acts); composite PK (vehicleId, actId)
-- `runs` — single show calculations (has userId); includes `calculation_snapshot jsonb` storing the full result at time of calculation
-- `tours` — multi-stop tour headers (has userId)
-- `tour_stops` — individual stops within a tour
-
-### Stripe sync tables (stripe.*)
-- Auto-managed by `stripe-replit-sync` — never insert manually
-- Includes: accounts, products, prices, subscriptions, customers, invoices, etc.
-
-### Feedback Board
-- Route: `/feedback` — authenticated, in sidebar
-- Any user can create a feedback post (title, description, category) and upvote any post
-- 1 vote per user (toggle — clicking again removes vote)
-- Posts sorted by upvotes desc, then newest first
-- Search bar filters by title/description/category in real time
-- Categories: Bug | Feature Request | Improvement | UX Issue
-- Statuses: Planned | In Progress | Released — admin users can update status inline
-- Beta banner at top: "You're part of the early beta — vote on what we build next."
-
-## API Routes (artifacts/api-server/src/routes/)
-
-- `/api/me` — current user + plan + limits
-- `/api/me/sync-plan` — POST to resync plan from Stripe (called after checkout success)
-- `/api/profiles` — CRUD for profiles (filtered by userId)
-- `/api/vehicles` — CRUD for vehicles (filtered by userId); GET returns `assignedActIds[]` per vehicle; POST/PATCH accept `actIds[]` + `defaultForActIds[]`
-- `/api/vehicles/:id/act-assignments` — PUT to replace act assignments for a vehicle
-- `/api/runs` — CRUD for single show runs (filtered by userId)
-- `/api/tours` — CRUD for tours + stops (filtered by userId)
-- `/api/dashboard/summary` — aggregated stats (for userId)
-- `/api/dashboard/recent` — recent runs and tours (for userId)
-- `/api/stripe/plans` — list Stripe products/prices from DB
-- `/api/stripe/checkout` — create Stripe Checkout session
-- `/api/stripe/portal` — create Stripe Customer Portal session
-- `/api/stripe/webhook` — Stripe webhook handler (managed by stripe-replit-sync)
-- `/api/feedback` — GET all posts (sorted by votes), POST create post
-- `/api/feedback/:id/vote` — POST to toggle upvote (1 per user)
-- `/api/feedback/:id` — PATCH to update status/category (owner or admin only)
-
-## Frontend Routes
-
-- `/` — Landing page (signed-out) or redirect to `/dashboard` (signed-in)
-- `/sign-in/*?` — Clerk Sign In
-- `/sign-up/*?` — Clerk Sign Up
-- `/dashboard` — Main dashboard
-- `/billing` — Billing & plan management
-- `/runs/*` — Single Show Calculator
-- `/tours/*` — Tour Builder (7-step guided wizard on create; sectioned form on edit)
-- `/profiles/*` — Profile management
-- `/garage` — Garage (custom vehicle management, Pro)
-- `/garage/new` — Add custom vehicle
-- `/garage/:id/edit` — Edit custom vehicle
-- `/feedback` — Feedback board (all users)
-
-## Analytics (PostHog)
-
-- Package: `posthog-js` in `@workspace/gig-trail`
-- Central helper: `artifacts/gig-trail/src/lib/analytics.ts`
-  - `initAnalytics()` — called once in App.tsx `AnalyticsIdentifier` on mount
-  - `identifyUser(id, props)` — called after Clerk user loads; sends role, email, access_source
-  - `resetAnalytics()` — called on sign-out
-  - `trackEvent(name, props?)` — safe wrapper around `posthog.capture()`
-- Env vars required: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`
-- Events tracked: `login_completed`, `signup_completed`, `show_calc_started`, `show_calc_completed`, `calc_error`, `save_failed`, `tour_calc_started`, `tour_calc_completed`, `tour_saved`, `vehicle_added`, `member_added`, `pro_feature_clicked`, `pricing_viewed`, `upgrade_started`, `upgrade_completed`
-- `login_completed` uses `sessionStorage` key `gt_login_tracked` to fire once per browser session (cleared on sign-out)
-- `upgrade_started`/`upgrade_completed` pass plan name via `sessionStorage` key `gt_pending_plan` to survive the Stripe redirect
-- All calls are wrapped in try/catch — analytics never crashes the app
-
-## Dashboard
-
-- `artifacts/gig-trail/src/pages/dashboard.tsx` — fully rebuilt as command-center UI
-- Sections: Hero (profit headline) → 3 cards (Profit Health / Cost Pressure / Show Performance) → Insights + Tour Status → Recent Shows cards
-- `artifacts/api-server/src/routes/dashboard.ts` — summary now returns: `worstRunProfit`, `profitableRunCount`, `totalAccommodationCost`, `totalFoodCost`, `totalMarketingCost`
-- **Limitation**: fuel cost is NOT stored as a DB column — shown as "Fuel & Other" approximation (totalExpenses − accommodation − food − marketing). A `fuelCost` column on runs would unlock accurate breakdowns.
-
-## Important Notes
-
-- Stripe client (`stripeClient.ts`) uses Replit Connector — NEVER cache it, always call `getUncachableStripeClient()` fresh
-- `VITE_CLERK_PUBLISHABLE_KEY` is auto-provisioned by Replit Clerk integration
-- Stripe products have `metadata.plan` = "pro" or "unlimited" for plan tier mapping
-- After connecting Stripe, run `pnpm --filter @workspace/scripts run seed-stripe` once to create products
-- `stripe-replit-sync` manages a webhook automatically via `findOrCreateManagedWebhook`
-
-## Seed Data
-
-Initially seeded with:
-- 2 vehicles: Toyota HiAce Van, Coaster Bus
-- 2 profiles: Julian & Beci Duo, The Wayward Sons Band
-- 1 single show run: Melbourne → Geelong
-- 1 multi-stop tour: East Coast Spring Run 2025 (4 stops)
-
-(Seed data has no userId, so won't appear for logged-in users)
+- **Authentication:** Clerk (`@clerk/react`, `@clerk/express`)
+- **Payments:** Stripe via Replit Connector (`stripe-replit-sync`)
+- **Database:** PostgreSQL
+- **ORM:** Drizzle ORM
+- **Validation:** Zod (`zod/v4`), `drizzle-zod`
+- **API Codegen:** Orval (from OpenAPI spec)
+- **Analytics:** PostHog (`posthog-js`)
+- **Mapping/Routing:** Google Maps (for route calculations)

@@ -11,6 +11,7 @@ import meRouter from "./me";
 import adminRouter from "./admin";
 import promoRouter from "./promo";
 import feedbackRouter from "./feedback";
+import earlyAccessRouter from "./early-access";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ router.use(meRouter);
 router.use(adminRouter);
 router.use(promoRouter);
 router.use(feedbackRouter);
+router.use(earlyAccessRouter);
 router.use(stripeRouter);
 router.use(profilesRouter);
 router.use(vehiclesRouter);

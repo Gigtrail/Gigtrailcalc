@@ -1,0 +1,316 @@
+Build a public landing page for "Gig Trail" inside the existing app, and automatically generate real product screenshots from the Tour Calculator to use in the page.
+
+GOAL:
+Create a clean, modern, musician-focused landing page that:
+
+1. explains the product clearly
+2. drives users into the Tour Calculator
+3. promotes the Payhip eBook
+4. captures early access signups
+5. uses REAL screenshots from the app instead of fake UI
+
+IMPORTANT:
+
+* do not break existing calculator, auth, or pricing logic
+* integrate into current routing structure
+* this should feel like part of the product, not a separate site
+
+---
+
+BRAND / STYLE:
+
+Use a dark, rugged but clean style:
+
+COLORS:
+
+* Background: #0F0F0F
+* Section background: #1A1A1A
+* Card background: #141414
+* Border: #2A2A2A
+* Primary accent: #B8651E
+* Primary hover: #D27A2C
+* Highlight: #C58A2B
+* Heading text: #E8E1D9
+* Body text: #CFC7BE
+* Muted text: #6E6A63
+
+STYLE:
+
+* dark theme
+* strong typography
+* clean spacing
+* subtle shadows
+* slightly rugged / road-inspired
+* NOT corporate or startup-looking
+
+---
+
+PAGE STRUCTURE:
+
+1. HERO
+
+Headline:
+“Know if your gigs are worth it before you lock them in”
+
+Subheadline:
+“Fuel, fees, accommodation… it adds up fast. Gig Trail helps musicians work out if a show or tour actually makes sense before they commit.”
+
+Buttons:
+
+* Primary: “Try the Tour Calculator”
+* Secondary: “Get the Touring Guide”
+
+Small line:
+“Built by a working touring musician”
+
+Right side (or below on mobile):
+Use REAL screenshot (generated below) inside a styled card.
+
+---
+
+2. PROBLEM
+
+Title:
+“Most tours feel like guesswork”
+
+Cards:
+
+* Fuel, accommodation and fees add up quickly
+* Hard to know if a show is actually worth doing
+* Most tools aren’t built for independent musicians
+
+---
+
+3. TOUR CALCULATOR
+
+Title:
+“Start with the Tour Calculator”
+
+Text:
+“A simple tool to test your shows before you commit.”
+
+Bullets:
+
+* Calculate real touring costs
+* Track fuel, accommodation and fees
+* See break-even points clearly
+* Plan smarter runs
+
+CTA:
+“Try the Tour Calculator”
+
+Include screenshot showing results breakdown.
+
+---
+
+4. EBOOK
+
+Title:
+“The Musician’s Guide to Booking Gigs and Touring Australia”
+
+Subtitle:
+“A practical guide to booking gigs, planning tours, and making it work on the road.”
+
+Layout:
+
+* Left: book image placeholder
+* Right: text
+
+Bullets:
+
+* How to book gigs that actually pay
+* Touring strategies that work in regional areas
+* Avoid costly mistakes
+* Real-world advice from the road
+
+CTA:
+“Get the Touring Guide”
+
+Small text:
+“Instant download via Payhip”
+
+Make Payhip URL easy to update (config/env or constant).
+
+---
+
+5. EARLY ACCESS
+
+Title:
+“Help shape Gig Trail”
+
+Form:
+
+* Name
+* Email
+* Artist/Band Name
+
+Button:
+“Join Early Access”
+
+Store submissions in backend or existing database system.
+Do not fake submission — show real success/error states.
+
+---
+
+6. FUTURE
+
+Title:
+“Built for where touring is heading”
+
+Cards:
+
+* Venue database
+* Tour tracking
+* Band & crew planning
+* Booking workflows
+
+---
+
+7. FOUNDER
+
+Title:
+“Built on the road”
+
+Text:
+“Gig Trail is being built by a working musician trying to make touring more sustainable and less of a guessing game.”
+
+---
+
+8. FINAL CTA
+
+Headline:
+“Make better touring decisions before you lock it in”
+
+Buttons:
+
+* Try the Tour Calculator
+* Get the Touring Guide
+
+---
+
+NAVIGATION:
+
+Sticky nav:
+
+* Home
+* Calculator
+* Touring Guide
+* Join Beta
+* Login / Dashboard (based on auth state)
+
+---
+
+FOOTER:
+
+“Helping musicians make smarter decisions on the road.”
+
+---
+
+PRODUCT SCREENSHOTS (CRITICAL FEATURE):
+
+After building the page, automatically generate real screenshots from the Tour Calculator and use them in the landing page.
+
+STEP 1 — SET UP SCREENSHOT TOOL
+
+* Use Playwright (install if not present)
+* Ensure app runs locally before capturing
+
+---
+
+STEP 2 — LOAD CALCULATOR WITH SAMPLE DATA
+
+If calculator is empty or requires input:
+
+* seed or simulate a realistic demo scenario:
+
+  * tour with multiple shows
+  * fuel cost
+  * accommodation
+  * member fees
+  * final profit or loss
+
+Ensure UI shows meaningful results.
+
+---
+
+STEP 3 — CAPTURE SCREENSHOTS
+
+Capture:
+
+1. calculator-overview.png (main calculator UI)
+2. calculator-results.png (profit / breakdown visible)
+3. calculator-mobile.png (mobile layout)
+
+VIEWPORTS:
+
+* Desktop: ~1440px width
+* Mobile: 390px width
+
+Wait for layout and data to fully render before capturing.
+
+---
+
+STEP 4 — SAVE FILES
+
+Save to:
+/public/images/product/
+
+File names:
+
+* calculator-overview.png
+* calculator-results.png
+* calculator-mobile.png
+
+---
+
+STEP 5 — USE IN LANDING PAGE
+
+Replace all placeholder visuals with these screenshots:
+
+HERO:
+
+* use calculator-overview.png
+
+CALCULATOR SECTION:
+
+* use calculator-results.png
+
+OPTIONAL:
+
+* use calculator-mobile.png in a phone-style frame
+
+Add:
+
+* rounded corners
+* subtle shadow
+* clean framing
+
+---
+
+IMPORTANT:
+
+* use real screenshots only (no fake UI)
+* ensure screenshots show meaningful data
+* do not break existing app functionality
+* ensure images load correctly in production
+
+---
+
+ROUTING:
+
+* make this the public homepage
+* preserve existing routes
+* ensure calculator link works correctly
+
+---
+
+DELIVERABLE:
+
+After building, report:
+
+1. where screenshots are saved
+2. how screenshots were generated
+3. where they are used in the landing page
+4. where to update Payhip link
+5. where beta signups are stored
+6. any remaining manual setup required

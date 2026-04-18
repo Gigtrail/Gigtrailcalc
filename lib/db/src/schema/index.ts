@@ -11,3 +11,4 @@ export * from "./promo_codes";
 export * from "./promo_code_redemptions";
 export * from "./feedback_posts";
 export * from "./feedback_votes";
+export * from "./early_access_signups";
