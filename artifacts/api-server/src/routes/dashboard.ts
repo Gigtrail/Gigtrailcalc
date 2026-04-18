@@ -67,9 +67,15 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   let totalExpenses = 0;
   let runProfitSum = 0;
   let bestRunProfit = 0;
+  let worstRunProfit = 0;
+  let profitableRunCount = 0;
   let worthTheDrive = 0;
   let tightMargins = 0;
   let notWorthIt = 0;
+  let totalAccommodationCost = 0;
+  let totalFoodCost = 0;
+  let totalMarketingCost = 0;
+  let firstRun = true;
 
   for (const run of runs) {
     const km = Number(run.distanceKm) * (run.returnTrip ? 2 : 1);
@@ -81,7 +87,14 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalProfit += profit;
     totalExpenses += cost;
     runProfitSum += profit;
+
     if (profit > bestRunProfit) bestRunProfit = profit;
+    if (firstRun || profit < worstRunProfit) { worstRunProfit = profit; firstRun = false; }
+    if (profit >= 0) profitableRunCount++;
+
+    totalAccommodationCost += run.accommodationCost != null ? Number(run.accommodationCost) : 0;
+    totalFoodCost += run.foodCost != null ? Number(run.foodCost) : 0;
+    totalMarketingCost += run.marketingCost != null ? Number(run.marketingCost) : 0;
 
     if (income > 0) {
       const margin = profit / income;
@@ -113,6 +126,11 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalExpenses,
     avgRunProfit,
     bestRunProfit,
+    worstRunProfit: runs.length > 0 ? worstRunProfit : 0,
+    profitableRunCount,
+    totalAccommodationCost,
+    totalFoodCost,
+    totalMarketingCost,
     worthTheDrive,
     tightMargins,
     notWorthIt,
@@ -122,7 +140,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const [recentRuns, recentTours] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(5),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(6),
     db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(5),
   ]);
 

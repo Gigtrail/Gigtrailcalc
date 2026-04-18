@@ -1,0 +1,242 @@
+Redesign the Gig Trail dashboard to feel like a premium musician tour command center, based on the attached mockup and the following product/UI goals.
+
+GOAL
+Replace the current plain admin-style dashboard with a cleaner, warmer, more informative dashboard that immediately tells the user:
+1. Am I making money?
+2. What is costing me the most?
+3. Which shows are performing best?
+4. What does this actually mean for my tour?
+
+OVERALL DESIGN DIRECTION
+- Keep the existing Gig Trail warm beige / brown / earthy brand direction
+- Use a premium, clean, modern UI
+- Add stronger hierarchy, more spacing, softer shadows, and better card separation
+- Make it feel less like accounting software and more like a touring musician’s command center
+- Keep it responsive and readable on desktop first, but ensure it collapses well on tablet/mobile
+- Use the current app styling system and component library where possible
+- Do not make it overly flashy — clear, warm, simple, and polished
+
+PAGE STRUCTURE
+Rebuild the dashboard into these sections in this order:
+
+1. HERO SUMMARY
+At the top of the dashboard, create a large summary block with:
+- Headline:
+  "You're up $X on this tour"
+  where X is net profit across included dashboard data
+- Sub-line:
+  "Y / Z shows profitable · N km travelled"
+- To the right, keep action buttons:
+  - New Show
+  - New Tour
+
+Headline rules:
+- Profit positive = green emphasis on amount
+- Profit negative = red emphasis on amount
+- Break-even / near zero = amber or muted tone
+- This should be the strongest visual element on the page
+
+2. THREE CORE INSIGHT CARDS
+Under the hero, show 3 primary cards in a 3-column desktop grid, stacked on smaller screens.
+
+CARD 1: PROFIT HEALTH
+Display:
+- Net Profit
+- Profit Margin %
+- Break-even tickets average (if ticketed data exists)
+Fallbacks:
+- If break-even ticket data cannot be calculated, show:
+  "Break-even ticket estimate unavailable"
+Visual:
+- Large net number
+- Smaller secondary stats below
+- Divider line if useful
+
+CARD 2: COST PRESSURE
+Display:
+- Fuel total
+- Accommodation total
+- Biggest cost category
+Optional:
+- If other category is higher, show that instead
+- Add small warning badge/icon if one cost category is unusually dominant
+Goal:
+- Help user instantly see what is eating profit
+
+CARD 3: SHOW PERFORMANCE
+Display:
+- Best show net
+- Worst show net
+- Average net per show
+Optional:
+- Label best show / worst show by name if easy
+Goal:
+- Show performance quality, not just count
+
+3. WHAT THIS MEANS SECTION
+Below the top cards, create a wider insight panel titled:
+- "What This Means"
+
+This section should generate plain-English bullet insights from the dashboard data.
+
+Examples of insight logic:
+- If all shows profitable:
+  "You're profitable — this routing is working"
+- If accommodation is highest cost:
+  "Accommodation is eating 27% of your costs"
+- If ticket info exists:
+  "You need around 52 tickets per show to stay safe"
+- If door deals outperform guarantees:
+  "Your door deal performed better than guarantee"
+- If the tour is losing money:
+  "This run is currently under water — review costs and fee structure"
+- If average show profit is strong:
+  "Your average show return is healthy"
+
+Requirements:
+- Generate 3 to 5 insights max
+- Keep them short, useful, and human
+- No robotic AI waffle
+- No fake precision if underlying data is incomplete
+- If not enough data, show fewer insights rather than filler
+
+4. TOUR STATUS CARD
+Place a smaller card on the right side of the insights area on desktop, or beneath it on smaller screens.
+
+Title:
+- "Tour Status"
+
+Status values:
+- HEALTHY
+- STEADY
+- AT RISK
+- LOSING MONEY
+
+This status should be derived from logic such as:
+- Positive net + majority profitable shows = HEALTHY
+- Small positive / mixed show performance = STEADY
+- Negative or near-break-even with high cost pressure = AT RISK
+- Clear negative = LOSING MONEY
+
+Card content should include:
+- status label
+- projected profit or current trend text if enough data exists
+Examples:
+- "Projected Profit: +$6,200"
+- "You're on track — keep booking similar shows."
+- "You need more strong shows to offset current cost load."
+
+Do not invent projections if they cannot be justified from data. If no projection logic exists yet, show a simpler status summary and leave room for future projection support.
+
+5. RECENT SHOWS SECTION
+Below the insights area, redesign Recent Shows into visual cards instead of a plain text list.
+
+Each recent show card should include:
+- Show name
+- Net result in large text
+- Deal type badge
+- Profitability badge
+Examples:
+- "Guarantee vs Door"
+- "100% Door Deal"
+- "Profitable"
+- "Best Performer"
+- "Loss"
+
+Layout:
+- 2 or 3 cards across on desktop depending on width
+- clean stacked cards on smaller screens
+- cards should feel clearly clickable if show detail pages exist
+
+If available, also include:
+- date in smaller muted text
+- venue name if relevant
+- a subtle icon or visual accent, but not cluttered
+
+DATA REQUIREMENTS / LOGIC
+Use real existing dashboard data where available. Do not hardcode demo values except as temporary development placeholders clearly marked in code comments.
+
+Please audit the current dashboard data sources and calculate as much of the following as possible:
+- total net profit
+- total income
+- total expenses
+- profitable show count
+- total show count
+- total distance
+- average net per show
+- best show net
+- worst show net
+- cost category totals
+- biggest cost category
+- profit margin %
+- ticket break-even average where possible
+
+If some values are not currently exposed in the dashboard data layer:
+- add the required selectors / transformation helpers
+- keep logic centralized in a dashboard formatter or utility file
+- avoid stuffing all calculations directly into the JSX/component render
+
+IMPLEMENTATION REQUIREMENTS
+Please:
+1. Inspect current dashboard page/component structure
+2. Refactor into reusable sections/components where sensible, for example:
+   - DashboardHero
+   - ProfitHealthCard
+   - CostPressureCard
+   - ShowPerformanceCard
+   - DashboardInsights
+   - TourStatusCard
+   - RecentShowCard
+3. Keep the code clean and maintainable
+4. Reuse current UI primitives where possible
+5. Preserve existing navigation/sidebar layout
+6. Keep current buttons functional
+7. Ensure styling is consistent with the rest of the app, but more polished
+
+STYLING NOTES
+Use:
+- generous padding
+- rounded cards
+- subtle shadows
+- warm light surfaces on beige background
+- dark brown/charcoal headings
+- green for positive values
+- red for losses
+- amber for warnings/break-even
+- muted secondary text for supporting info
+
+Avoid:
+- clutter
+- too many borders
+- tiny low-contrast text
+- generic admin-dashboard feel
+- dense spreadsheet-like presentation
+
+RESPONSIVENESS
+Desktop:
+- hero top
+- 3-card row
+- insight section with status card on side
+- recent show cards grid below
+
+Tablet/mobile:
+- stack sections cleanly
+- preserve hero readability
+- no overflow
+- buttons remain accessible
+
+ACCESSIBILITY
+- Ensure readable contrast
+- Semantic headings
+- Good spacing
+- Avoid color being the only signal for positive/negative status
+- Include labels/icons/text states together
+
+DELIVERABLE
+Please fully implement the redesigned dashboard UI using the current app stack and data architecture.
+At the end, provide:
+1. a short summary of what changed
+2. any assumptions made
+3. any missing data points that need backend support for full functionality
+
+If needed, first inspect the current dashboard code, data models, and derived metrics before refactoring, then implement the full redesign.

@@ -195,6 +195,13 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `upgrade_started`/`upgrade_completed` pass plan name via `sessionStorage` key `gt_pending_plan` to survive the Stripe redirect
 - All calls are wrapped in try/catch — analytics never crashes the app
 
+## Dashboard
+
+- `artifacts/gig-trail/src/pages/dashboard.tsx` — fully rebuilt as command-center UI
+- Sections: Hero (profit headline) → 3 cards (Profit Health / Cost Pressure / Show Performance) → Insights + Tour Status → Recent Shows cards
+- `artifacts/api-server/src/routes/dashboard.ts` — summary now returns: `worstRunProfit`, `profitableRunCount`, `totalAccommodationCost`, `totalFoodCost`, `totalMarketingCost`
+- **Limitation**: fuel cost is NOT stored as a DB column — shown as "Fuel & Other" approximation (totalExpenses − accommodation − food − marketing). A `fuelCost` column on runs would unlock accurate breakdowns.
+
 ## Important Notes
 
 - Stripe client (`stripeClient.ts`) uses Replit Connector — NEVER cache it, always call `getUncachableStripeClient()` fresh
