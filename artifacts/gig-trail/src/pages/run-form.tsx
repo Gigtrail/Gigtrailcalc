@@ -187,8 +187,7 @@ export default function RunForm() {
   });
 
   const formValues = useWatch({ control: form.control });
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
 
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);

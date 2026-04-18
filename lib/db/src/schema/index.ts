@@ -7,3 +7,5 @@ export * from "./tours";
 export * from "./tourStops";
 export * from "./tourVehicles";
 export * from "./users";
+export * from "./promo_codes";
+export * from "./promo_code_redemptions";

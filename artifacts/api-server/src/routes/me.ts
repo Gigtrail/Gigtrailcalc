@@ -1,20 +1,30 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, getPlanLimits, normalizePlan, type AuthenticatedRequest } from "../middlewares/auth";
+import {
+  requireAuth,
+  getPlanLimits,
+  normalizePlan,
+  normalizeRole,
+  hasProAccess,
+  type AuthenticatedRequest,
+  type UserRole,
+  type AccessSource,
+} from "../middlewares/auth";
 import { storage } from "../storage";
 import { db, usersTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/me", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userPlan, userRole } = req as AuthenticatedRequest;
+  const { userId, userRole, accessSource, userPlan } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
-  const limits = getPlanLimits(userPlan);
+  const limits = getPlanLimits(userRole);
   res.json({
     userId,
     email: user?.email ?? null,
+    role: userRole,
+    accessSource,
     plan: userPlan,
-    role: userRole ?? "user",
     limits,
     hasStripeCustomer: !!user?.stripeCustomerId,
   });
@@ -23,24 +33,51 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
 router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const user = await storage.getUser(userId);
-  if (!user?.stripeSubscriptionId) {
-    res.json({ plan: "free" });
+
+  const currentRole = normalizeRole(user?.role ?? "free", user?.plan);
+  const currentAccessSource = (user?.accessSource as AccessSource) ?? "default";
+
+  // Never override tester or admin roles via Stripe
+  if (currentRole === "tester" || currentRole === "admin") {
+    res.json({ role: currentRole, plan: hasProAccess(currentRole) ? "paid" : "free" });
     return;
   }
+
+  // Non-Stripe managed access sources should not be downgraded by Stripe sync
+  if (currentAccessSource === "promo" || currentAccessSource === "admin") {
+    res.json({ role: currentRole, plan: hasProAccess(currentRole) ? "paid" : "free" });
+    return;
+  }
+
+  if (!user?.stripeSubscriptionId) {
+    res.json({ role: "free", plan: "free" });
+    return;
+  }
+
   try {
     const subscription = await storage.getSubscription(user.stripeSubscriptionId);
     if (!subscription || (subscription.status !== "active" && subscription.status !== "trialing")) {
-      await storage.updateUserStripeInfo(userId, { plan: "free" });
-      res.json({ plan: "free" });
+      await db
+        .update(usersTable)
+        .set({ role: "free", plan: "free", accessSource: "default" })
+        .where(eq(usersTable.id, userId));
+      res.json({ role: "free", plan: "free" });
       return;
     }
-    // Always normalize to canonical plan value — "pro" metadata in Stripe → "paid" in our system
-    const rawPlan = (await storage.getProductBySubscriptionId(user.stripeSubscriptionId) as any)?.metadata?.plan ?? "paid";
-    const plan = normalizePlan(rawPlan);
-    await storage.updateUserStripeInfo(userId, { plan });
-    res.json({ plan });
+
+    const rawPlan =
+      (await storage.getProductBySubscriptionId(user.stripeSubscriptionId) as any)?.metadata?.plan ?? "paid";
+    const normalizedPlan = normalizePlan(rawPlan);
+    const newRole: UserRole = normalizedPlan === "paid" ? "pro" : "free";
+
+    await db
+      .update(usersTable)
+      .set({ role: newRole, plan: normalizedPlan, accessSource: "stripe" })
+      .where(eq(usersTable.id, userId));
+
+    res.json({ role: newRole, plan: normalizedPlan });
   } catch {
-    res.json({ plan: normalizePlan(user.plan) });
+    res.json({ role: currentRole, plan: hasProAccess(currentRole) ? "paid" : "free" });
   }
 });
 

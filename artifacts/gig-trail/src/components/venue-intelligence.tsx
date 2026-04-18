@@ -107,8 +107,7 @@ function ShowRow({ show }: { show: VenueShow }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function VenueIntelligence({ venueId, venueName, onUseDeal }: VenueIntelligenceProps) {
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { isPro } = usePlan();
 
   // Fetch full venue detail only for Pro users with a known venueId
   const { data: venue, isLoading } = useGetVenue(venueId ?? 0, {

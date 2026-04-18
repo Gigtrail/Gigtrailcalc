@@ -46,8 +46,7 @@ export default function GarageVehicleForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
   const [showEstimator, setShowEstimator] = useState(false);
   const queryClient = useQueryClient();
 

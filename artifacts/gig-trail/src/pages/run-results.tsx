@@ -188,8 +188,7 @@ export default function RunResults() {
   const [accomOn, setAccomOn] = useState(true);
   const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
   const { toast } = useToast();
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
   const { data: profiles } = useGetProfiles();
 
   const { data: snapshotRun, isLoading: isLoadingSnapshot } = useGetRun(snapshotRunId || 0, {

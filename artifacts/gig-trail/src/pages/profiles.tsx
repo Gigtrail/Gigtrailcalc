@@ -44,9 +44,7 @@ export default function Profiles() {
   const deleteProfile = useDeleteProfile();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { plan, limits } = usePlan();
-
-  const isPro = plan === "paid";
+  const { plan, isPro, limits } = usePlan();
 
   const [defaultProfileId, setDefaultProfileId] = useState<number | null>(() => {
     const stored = localStorage.getItem(DEFAULT_PROFILE_KEY);

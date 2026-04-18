@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useCreateProfile } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { usePlan } from "@/hooks/use-plan";
+import { usePlan, useRedeemPromo, PROMO_SESSION_KEY } from "@/hooks/use-plan";
 import { Input } from "@/components/ui/input";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { Button } from "@/components/ui/button";
@@ -54,8 +54,7 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
 
   const [actName, setActName] = useState("");
   const [actType, setActType] = useState("Solo");
@@ -69,9 +68,31 @@ export default function Onboarding() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const actNameRef = useRef<HTMLInputElement>(null);
+  const redeemPromo = useRedeemPromo();
 
   useEffect(() => {
     actNameRef.current?.focus();
+  }, []);
+
+  // Auto-redeem any promo code stored from the signup page
+  useEffect(() => {
+    const pending = sessionStorage.getItem(PROMO_SESSION_KEY);
+    if (!pending) return;
+    sessionStorage.removeItem(PROMO_SESSION_KEY);
+    redeemPromo.mutateAsync(pending).then(result => {
+      const roleLabel = result.role === "tester" ? "Tester access" : result.role === "pro" ? "Pro access" : result.role;
+      toast({
+        title: `Promo code applied — ${roleLabel} unlocked!`,
+        description: `Welcome to Gig Trail. Code: ${pending}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+    }).catch((e: any) => {
+      toast({
+        title: "Promo code could not be applied",
+        description: e.message,
+        variant: "destructive",
+      });
+    });
   }, []);
 
   const createProfile = useCreateProfile();

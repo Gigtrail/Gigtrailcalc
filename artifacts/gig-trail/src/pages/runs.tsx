@@ -104,8 +104,7 @@ export default function Runs() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { plan, limits } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro, limits } = usePlan();
 
   const [search, setSearch] = useState("");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");

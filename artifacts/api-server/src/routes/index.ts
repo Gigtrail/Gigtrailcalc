@@ -9,12 +9,14 @@ import dashboardRouter from "./dashboard";
 import stripeRouter from "./stripe";
 import meRouter from "./me";
 import adminRouter from "./admin";
+import promoRouter from "./promo";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(meRouter);
 router.use(adminRouter);
+router.use(promoRouter);
 router.use(stripeRouter);
 router.use(profilesRouter);
 router.use(vehiclesRouter);

@@ -1,12 +1,36 @@
 import { useEffect, useState } from "react";
-import { CreditCard, Zap, CheckCircle2, XCircle, Loader2, Star, ShieldCheck, Search } from "lucide-react";
+import {
+  CreditCard, Zap, CheckCircle2, XCircle, Loader2, Star, ShieldCheck,
+  Search, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Eye, Tag,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { usePlan, useStripePlans, useCreateCheckout, useCustomerPortal, useAdminUsers, useUpdateUserPlan, type AdminUser } from "@/hooks/use-plan";
+import {
+  usePlan,
+  useStripePlans,
+  useCreateCheckout,
+  useCustomerPortal,
+  useAdminUsers,
+  useUpdateUserRole,
+  useAdminPromoCodes,
+  useCreatePromoCode,
+  useUpdatePromoCode,
+  useDeletePromoCode,
+  usePromoCodeRedemptions,
+  type AdminUser,
+  type PromoCode,
+} from "@/hooks/use-plan";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +38,6 @@ type Period = "monthly" | "yearly";
 
 interface StaticPlan {
   key: string;
-  /** Stripe product metadata.plan value used for price lookup */
   stripePlanKey: string;
   name: string;
   tagline: string;
@@ -47,7 +70,7 @@ const STATIC_PLANS: StaticPlan[] = [
   },
   {
     key: "paid",
-    stripePlanKey: "pro", // Stripe product metadata still uses "pro" — normalized to "paid" on sync
+    stripePlanKey: "pro",
     name: "Paid",
     tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
@@ -69,35 +92,469 @@ const STATIC_PLANS: StaticPlan[] = [
   },
 ];
 
-const PLAN_LABEL: Record<string, string> = { free: "Free", paid: "Paid" };
-const PLAN_COLOR: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = { free: "Free", pro: "Pro", tester: "Tester", admin: "Admin" };
+const ROLE_COLORS: Record<string, string> = {
   free: "bg-muted text-muted-foreground",
-  paid: "bg-primary/10 text-primary border border-primary/30",
+  pro: "bg-primary/10 text-primary border border-primary/30",
+  tester: "bg-violet-100 text-violet-700 border border-violet-300",
+  admin: "bg-amber-100 text-amber-700 border border-amber-300",
+};
+const ACCESS_LABELS: Record<string, string> = {
+  default: "Default",
+  stripe: "Stripe",
+  promo: "Promo",
+  admin: "Admin",
 };
 
-function AdminPanel() {
+// ─── Promo Code Form Dialog ─────────────────────────────────────────────────
+
+interface PromoCodeDialogProps {
+  open: boolean;
+  onClose: () => void;
+  code: PromoCode | null;
+}
+
+function PromoCodeDialog({ open, onClose, code }: PromoCodeDialogProps) {
+  const isEditing = code !== null;
+  const [formCode, setFormCode] = useState(code?.code ?? "");
+  const [grantsRole, setGrantsRole] = useState(code?.grantsRole ?? "pro");
+  const [isActive, setIsActive] = useState(code?.isActive ?? true);
+  const [maxUses, setMaxUses] = useState(code?.maxUses !== null ? String(code?.maxUses ?? "") : "");
+  const [expiresAt, setExpiresAt] = useState(
+    code?.expiresAt ? new Date(code.expiresAt).toISOString().split("T")[0] : ""
+  );
+  const [notes, setNotes] = useState(code?.notes ?? "");
+  const createCode = useCreatePromoCode();
+  const updateCode = useUpdatePromoCode();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      grantsRole,
+      isActive,
+      maxUses: maxUses.trim() ? Number(maxUses) : null,
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      notes: notes.trim() || null,
+    };
+    try {
+      if (isEditing) {
+        await updateCode.mutateAsync({ id: code!.id, ...payload });
+        toast({ title: "Promo code updated" });
+      } else {
+        await createCode.mutateAsync({ code: formCode.trim().toUpperCase(), ...payload });
+        toast({ title: "Promo code created" });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Failed to save promo code", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const isPending = createCode.isPending || updateCode.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Edit Promo Code" : "Create Promo Code"}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {!isEditing && (
+            <div className="space-y-1">
+              <Label>Code</Label>
+              <Input
+                placeholder="e.g. TESTER101"
+                value={formCode}
+                onChange={e => setFormCode(e.target.value.toUpperCase())}
+                required
+              />
+            </div>
+          )}
+          {isEditing && (
+            <div className="space-y-1">
+              <Label>Code</Label>
+              <Input value={code!.code} disabled className="font-mono" />
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label>Grants Role</Label>
+            <Select value={grantsRole} onValueChange={setGrantsRole}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pro">Pro</SelectItem>
+                <SelectItem value="tester">Tester</SelectItem>
+                <SelectItem value="free">Free</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Max Uses</Label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Unlimited"
+                value={maxUses}
+                onChange={e => setMaxUses(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Expires</Label>
+              <Input
+                type="date"
+                value={expiresAt}
+                onChange={e => setExpiresAt(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Notes</Label>
+            <Input
+              placeholder="Internal notes (optional)"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsActive(v => !v)}
+              className="flex items-center gap-1.5 text-sm"
+            >
+              {isActive
+                ? <ToggleRight className="w-5 h-5 text-accent" />
+                : <ToggleLeft className="w-5 h-5 text-muted-foreground" />
+              }
+              <span className={isActive ? "text-accent font-medium" : "text-muted-foreground"}>
+                {isActive ? "Active" : "Inactive"}
+              </span>
+            </button>
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              {isEditing ? "Save Changes" : "Create Code"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Redemption History Dialog ──────────────────────────────────────────────
+
+function RedemptionsDialog({ code, onClose }: { code: PromoCode; onClose: () => void }) {
+  const { data, isLoading } = usePromoCodeRedemptions(code.id);
+
+  return (
+    <Dialog open onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            Redemptions — <span className="font-mono text-primary">{code.code}</span>
+          </DialogTitle>
+        </DialogHeader>
+        {isLoading && <Loader2 className="w-4 h-4 animate-spin mx-auto my-4" />}
+        {!isLoading && (!data?.redemptions || data.redemptions.length === 0) && (
+          <p className="text-sm text-muted-foreground text-center py-4">No redemptions yet.</p>
+        )}
+        {data?.redemptions && data.redemptions.length > 0 && (
+          <div className="rounded-md border border-border/50 overflow-hidden max-h-80 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Email</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Role granted</th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {data.redemptions.map(r => (
+                  <tr key={r.id} className="bg-card">
+                    <td className="px-3 py-2 truncate max-w-[160px] text-foreground">
+                      {r.signupEmail ?? <span className="text-muted-foreground italic">—</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge className={`text-xs ${ROLE_COLORS[r.grantedRole] || ""}`}>
+                        {ROLE_LABELS[r.grantedRole] || r.grantedRole}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {new Date(r.redeemedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Promo Codes Admin Panel ─────────────────────────────────────────────────
+
+function PromoCodesPanel() {
+  const [editCode, setEditCode] = useState<PromoCode | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [viewRedemptions, setViewRedemptions] = useState<PromoCode | null>(null);
+  const { data, isLoading } = useAdminPromoCodes();
+  const updateCode = useUpdatePromoCode();
+  const deleteCode = useDeletePromoCode();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleToggle = async (code: PromoCode) => {
+    try {
+      await updateCode.mutateAsync({ id: code.id, isActive: !code.isActive });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+    } catch (e: any) {
+      toast({ title: "Failed to update code", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (code: PromoCode) => {
+    if (!confirm(`Delete promo code "${code.code}"? This cannot be undone.`)) return;
+    try {
+      await deleteCode.mutateAsync(code.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/promo-codes"] });
+      toast({ title: `Deleted ${code.code}` });
+    } catch (e: any) {
+      toast({ title: "Failed to delete code", description: e.message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Tag className="w-4 h-4" />
+          Promo Codes
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setShowCreate(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1" /> New Code
+        </Button>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading codes…
+        </div>
+      )}
+
+      {data?.codes && data.codes.length === 0 && (
+        <p className="text-sm text-muted-foreground">No promo codes yet.</p>
+      )}
+
+      {data?.codes && data.codes.length > 0 && (
+        <div className="rounded-md border border-border/50 overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Code</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Grants</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Uses</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Expires</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Notes</th>
+                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {data.codes.map(code => (
+                <tr key={code.id} className="bg-card hover:bg-muted/20 transition-colors">
+                  <td className="px-3 py-2 font-mono font-medium text-foreground">{code.code}</td>
+                  <td className="px-3 py-2">
+                    <Badge className={`text-xs ${ROLE_COLORS[code.grantsRole] || ""}`}>
+                      {ROLE_LABELS[code.grantsRole] || code.grantsRole}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    {code.isActive
+                      ? <span className="text-xs text-accent font-medium">Active</span>
+                      : <span className="text-xs text-muted-foreground">Inactive</span>
+                    }
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground text-xs">
+                    {code.timesUsed}{code.maxUses !== null ? ` / ${code.maxUses}` : ""}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground text-xs">
+                    {code.expiresAt ? new Date(code.expiresAt).toLocaleDateString() : "Never"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground text-xs truncate max-w-[120px]">
+                    {code.notes ?? "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        title="View redemptions"
+                        onClick={() => setViewRedemptions(code)}
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        title="Edit"
+                        onClick={() => setEditCode(code)}
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        title={code.isActive ? "Disable" : "Enable"}
+                        onClick={() => handleToggle(code)}
+                        disabled={updateCode.isPending}
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {code.isActive
+                          ? <ToggleRight className="w-3.5 h-3.5 text-accent" />
+                          : <ToggleLeft className="w-3.5 h-3.5" />
+                        }
+                      </button>
+                      <button
+                        title="Delete"
+                        onClick={() => handleDelete(code)}
+                        disabled={deleteCode.isPending}
+                        className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {(showCreate || editCode) && (
+        <PromoCodeDialog
+          open
+          code={editCode}
+          onClose={() => { setShowCreate(false); setEditCode(null); }}
+        />
+      )}
+      {viewRedemptions && (
+        <RedemptionsDialog code={viewRedemptions} onClose={() => setViewRedemptions(null)} />
+      )}
+    </div>
+  );
+}
+
+// ─── Users Admin Panel ───────────────────────────────────────────────────────
+
+function AdminUsersPanel() {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data, isLoading, error } = useAdminUsers(query);
-  const updatePlan = useUpdateUserPlan();
+  const updateRole = useUpdateUserRole();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setQuery(search.trim());
   };
 
-  const handlePlanChange = async (user: AdminUser, newPlan: string) => {
-    if (newPlan === user.plan) return;
+  const handleRoleChange = async (user: AdminUser, newRole: string) => {
+    if (newRole === user.role) return;
     try {
-      await updatePlan.mutateAsync({ userId: user.id, plan: newPlan });
+      await updateRole.mutateAsync({ userId: user.id, role: newRole });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Plan updated", description: `${user.email ?? user.id} → ${PLAN_LABEL[newPlan] ?? newPlan}` });
+      toast({ title: "Role updated", description: `${user.email ?? user.id} → ${ROLE_LABELS[newRole] ?? newRole}` });
     } catch (e: any) {
-      toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to update role", description: e.message, variant: "destructive" });
     }
   };
+
+  return (
+    <div className="space-y-3">
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-8"
+            placeholder="Search by email…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="outline" size="sm">Search</Button>
+      </form>
+
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
+        </div>
+      )}
+      {error && <p className="text-sm text-destructive">Failed to load users.</p>}
+      {data && data.users.length === 0 && (
+        <p className="text-sm text-muted-foreground">No users found.</p>
+      )}
+
+      {data && data.users.length > 0 && (
+        <div className="rounded-md border border-border/50 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Email</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground w-28">Access</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground w-36">Role</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {data.users.map(user => (
+                <tr key={user.id} className="bg-card hover:bg-muted/20 transition-colors">
+                  <td className="px-3 py-2 text-foreground truncate max-w-[200px]">
+                    {user.email ?? <span className="text-muted-foreground italic">no email</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="text-xs text-muted-foreground">
+                      {ACCESS_LABELS[user.accessSource] || user.accessSource || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <Select
+                      value={user.role || "free"}
+                      onValueChange={val => handleRoleChange(user, val)}
+                      disabled={updateRole.isPending}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free">Free</SelectItem>
+                        <SelectItem value="pro">Pro</SelectItem>
+                        <SelectItem value="tester">Tester</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Combined Admin Panel ────────────────────────────────────────────────────
+
+function AdminPanel() {
+  const [tab, setTab] = useState<"users" | "promos">("users");
 
   return (
     <Card className="border-amber-300/60 bg-amber-50/30">
@@ -106,101 +563,60 @@ function AdminPanel() {
           <ShieldCheck className="w-4 h-4 text-amber-600" />
           Admin Panel
         </CardTitle>
+        <div className="flex gap-1 mt-2">
+          <button
+            onClick={() => setTab("users")}
+            className={cn(
+              "px-3 py-1 text-xs rounded-full border transition-colors",
+              tab === "users"
+                ? "bg-amber-600 text-white border-amber-600"
+                : "border-amber-300 text-amber-700 hover:bg-amber-100"
+            )}
+          >
+            Users
+          </button>
+          <button
+            onClick={() => setTab("promos")}
+            className={cn(
+              "px-3 py-1 text-xs rounded-full border transition-colors",
+              tab === "promos"
+                ? "bg-amber-600 text-white border-amber-600"
+                : "border-amber-300 text-amber-700 hover:bg-amber-100"
+            )}
+          >
+            Promo Codes
+          </button>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-8"
-              placeholder="Search by email…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
-          <Button type="submit" variant="outline" size="sm">Search</Button>
-        </form>
-
-        {isLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading users…
-          </div>
-        )}
-        {error && (
-          <p className="text-sm text-destructive">Failed to load users.</p>
-        )}
-
-        {data && data.users.length === 0 && (
-          <p className="text-sm text-muted-foreground">No users found.</p>
-        )}
-
-        {data && data.users.length > 0 && (
-          <div className="rounded-md border border-border/50 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Email</th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground w-24">Role</th>
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground w-36">Plan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/30">
-                {data.users.map(user => (
-                  <tr key={user.id} className="bg-card hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 text-foreground truncate max-w-[200px]">
-                      {user.email ?? <span className="text-muted-foreground italic">no email</span>}
-                    </td>
-                    <td className="px-3 py-2">
-                      {user.role === "admin"
-                        ? <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">admin</Badge>
-                        : <span className="text-muted-foreground text-xs">user</span>
-                      }
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        value={user.plan === "pro" || user.plan === "unlimited" ? "paid" : user.plan}
-                        onValueChange={val => handlePlanChange(user, val)}
-                        disabled={updatePlan.isPending}
-                      >
-                        <SelectTrigger className="h-7 text-xs w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="free">Free</SelectItem>
-                          <SelectItem value="paid">Paid</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <CardContent>
+        {tab === "users" && <AdminUsersPanel />}
+        {tab === "promos" && <PromoCodesPanel />}
       </CardContent>
     </Card>
   );
 }
 
+// ─── Main Billing Page ───────────────────────────────────────────────────────
+
 export default function Billing() {
   const [period, setPeriod] = useState<Period>("yearly");
-  const { plan, role, me, isLoading, refetch } = usePlan();
+  const { plan, role, accessSource, isPro, me, isLoading, refetch } = usePlan();
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
-  const updatePlan = useUpdateUserPlan();
+  const updateRole = useUpdateUserRole();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleAdminSelfPlanChange = async (newPlan: string) => {
-    if (!me?.userId || newPlan === plan) return;
+  const handleAdminSelfRoleChange = async (newRole: string) => {
+    if (!me?.userId || newRole === role) return;
     try {
-      await updatePlan.mutateAsync({ userId: me.userId, plan: newPlan });
+      await updateRole.mutateAsync({ userId: me.userId, role: newRole });
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       refetch();
-      toast({ title: "Plan updated", description: `Your plan is now ${PLAN_LABEL[newPlan] ?? newPlan}.` });
+      toast({ title: "Role updated", description: `Your role is now ${ROLE_LABELS[newRole] ?? newRole}.` });
     } catch (e: any) {
-      toast({ title: "Failed to update plan", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to update role", description: e.message, variant: "destructive" });
     }
   };
 
@@ -225,7 +641,6 @@ export default function Billing() {
 
   const handleUpgrade = async (staticPlan: StaticPlan) => {
     const products = plansData?.data ?? [];
-    // Use stripePlanKey for Stripe metadata matching ("pro" maps to our "paid" tier)
     const matching = products.filter((p) => p.metadata?.plan === staticPlan.stripePlanKey);
     const targetInterval = period === "yearly" ? "year" : "month";
     const fallbackInterval = period === "yearly" ? "month" : "year";
@@ -272,8 +687,7 @@ export default function Billing() {
     );
   }
 
-  // Normalize any legacy plan values for UI display
-  const displayPlan = (plan === "paid") ? "paid" : "free";
+  const displayPlanKey = isPro ? "paid" : "free";
 
   return (
     <div className="space-y-6">
@@ -292,30 +706,39 @@ export default function Billing() {
         </CardHeader>
         <CardContent className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            {displayPlan === "paid"
+            {isPro
               ? <Star className="w-5 h-5 text-primary" />
               : <Zap className="w-5 h-5 text-muted-foreground" />
             }
             <div>
-              <div className="font-semibold text-foreground">{PLAN_LABEL[displayPlan]}</div>
+              <div className="font-semibold text-foreground">{ROLE_LABELS[role] ?? role}</div>
               {me?.email && <div className="text-sm text-muted-foreground">{me.email}</div>}
             </div>
-            <Badge className={PLAN_COLOR[displayPlan] || PLAN_COLOR.free}>{PLAN_LABEL[displayPlan]}</Badge>
+            <Badge className={ROLE_COLORS[role] || ROLE_COLORS.free}>
+              {ROLE_LABELS[role] ?? role}
+            </Badge>
+            {accessSource !== "default" && accessSource !== "stripe" && (
+              <span className="text-xs text-muted-foreground">
+                via {ACCESS_LABELS[accessSource] ?? accessSource}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {role === "admin" && me?.userId && (
               <Select
-                value={displayPlan}
-                onValueChange={handleAdminSelfPlanChange}
-                disabled={updatePlan.isPending}
+                value={role}
+                onValueChange={handleAdminSelfRoleChange}
+                disabled={updateRole.isPending}
               >
                 <SelectTrigger className="h-8 text-xs w-28">
-                  {updatePlan.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                  {updateRole.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
+                  <SelectItem value="tester">Tester</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -334,50 +757,66 @@ export default function Billing() {
         </CardContent>
       </Card>
 
-      {/* Billing period toggle */}
-      <div className="flex items-center justify-center gap-1">
-        <div className="flex items-center rounded-full border border-border/60 overflow-hidden text-sm bg-card">
-          <button
-            type="button"
-            onClick={() => setPeriod("monthly")}
-            className={cn(
-              "px-5 py-2 transition-colors",
-              period === "monthly"
-                ? "bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            Monthly
-          </button>
-          <button
-            type="button"
-            onClick={() => setPeriod("yearly")}
-            className={cn(
-              "px-5 py-2 transition-colors flex items-center gap-2",
-              period === "yearly"
-                ? "bg-primary text-primary-foreground font-medium"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            Yearly
-            <span className={cn(
-              "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full",
-              period === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
-            )}>
-              Save 45%
-            </span>
-          </button>
+      {/* Tester / Admin notice — no payment needed */}
+      {(role === "tester" || role === "admin") && (
+        <Card className="bg-violet-50/50 border-violet-200">
+          <CardContent className="p-4 flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-violet-600 shrink-0" />
+            <p className="text-sm text-violet-700">
+              {role === "tester"
+                ? "You have Tester access — all features are unlocked without a subscription."
+                : "You have Admin access — all features are unlocked."}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Billing period toggle — only show if they could upgrade */}
+      {!isPro || plan === "free" ? (
+        <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center rounded-full border border-border/60 overflow-hidden text-sm bg-card">
+            <button
+              type="button"
+              onClick={() => setPeriod("monthly")}
+              className={cn(
+                "px-5 py-2 transition-colors",
+                period === "monthly"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod("yearly")}
+              className={cn(
+                "px-5 py-2 transition-colors flex items-center gap-2",
+                period === "yearly"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              Yearly
+              <span className={cn(
+                "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full",
+                period === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
+              )}>
+                Save 45%
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Plan cards */}
       <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto w-full">
         {STATIC_PLANS.map((staticPlan) => {
-          const isCurrentPlan = displayPlan === staticPlan.key;
-          const isUpgrade = staticPlan.key === "paid" && displayPlan === "free";
+          const isCurrentPlan = displayPlanKey === staticPlan.key;
+          const isUpgrade = staticPlan.key === "paid" && !isPro;
           const isPaidCard = staticPlan.key !== "free";
           const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
-          const displayPeriod = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
+          const displayPeriodLabel = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
           const showBestValue = period === "yearly" && isPaidCard;
 
           return (
@@ -417,7 +856,7 @@ export default function Billing() {
                   <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{staticPlan.tagline}</div>
                   <div className="mt-2">
                     <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
-                    <span className="text-xs text-muted-foreground ml-1">{displayPeriod}</span>
+                    <span className="text-xs text-muted-foreground ml-1">{displayPeriodLabel}</span>
                   </div>
                   {period === "yearly" && staticPlan.yearlyNote && (
                     <div className="text-xs text-green-600 font-medium mt-0.5">{staticPlan.yearlyNote}</div>
@@ -485,7 +924,7 @@ export default function Billing() {
             </li>
             <li className="flex items-start gap-2">
               <XCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
-              Over-limit items are locked until you upgrade again (e.g. if Free allows 5 saved shows and you have 12, you can see all 12 but can't add new ones).
+              Over-limit items are locked until you upgrade again.
             </li>
             <li className="flex items-start gap-2">
               <XCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />

@@ -46,8 +46,7 @@ export default function Garage() {
   const setActAssignments = useSetVehicleActAssignments();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
   const [, setLocation] = useLocation();
 
   // Build a map: profileId -> profile name

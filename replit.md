@@ -47,15 +47,33 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - Run form reads URL params and prefills form fields after profiles load
 - `HomeRedirect` uses `SignedInRedirect` component that calls `useGetProfiles` to detect new users
 
+### User Role System
+- **4 roles**: `free` | `pro` | `tester` | `admin`
+  - `free` — default for all new users, limited access
+  - `pro` — paid subscribers (Stripe-managed) or manually assigned by admin
+  - `tester` — full Pro access without payment, permanent until changed
+  - `admin` — full Pro access plus admin panel; permanent admin = `thegigtrail@gmail.com`
+- `hasProAccess(role)` returns true for `pro`, `tester`, `admin`
+- `access_source` on users: `default` | `stripe` | `promo` | `admin` — prevents Stripe sync from downgrading promo/admin users
+
+### Promo Codes
+- `promo_codes` table: code, isActive, grantsRole, maxUses, timesUsed, expiresAt, notes
+- `promo_code_redemptions` table: audit trail of who redeemed what
+- `GET /api/promo-codes/validate?code=XXX` — public validation (no auth)
+- `POST /api/me/redeem-promo` — authenticated redemption
+- Admin can manage all codes from billing page admin panel (Users / Promo Codes tabs)
+- Default seed: `TESTER101` (grants tester role, unlimited uses, never expires)
+- Signup page has optional "Promo Code" field; stored in sessionStorage; auto-redeemed on onboarding page
+
 ### Subscription Plans (Stripe)
 - **Free** (AU$0): 1 profile, 1 vehicle, 5 saved runs, no tours
-- **Pro** (AU$5/mo): 1 profile, unlimited runs, full tour builder
-- **Unlimited** (AU$7.99/mo): unlimited profiles, vehicles, runs, tours
+- **Paid** (AU$12/mo or AU$79/yr): everything — tours, unlimited runs, multi-vehicle garage, etc.
 - Stripe Checkout for upgrades, Customer Portal for management
 - `stripe-replit-sync` syncs Stripe data (products, prices, subscriptions) to PostgreSQL `stripe.*` tables
-- Plan enforcement via `requirePlan` middleware on create routes
-- `/api/me` returns current user + plan + limits
-- `/api/stripe/*` routes: plans, checkout, portal
+- Stripe product metadata uses `plan: "pro"` (legacy); normalized to role `"pro"` on sync
+- Stripe sync respects `access_source` — never downgrades `tester` or `admin` users
+- `/api/me` returns: userId, email, role, accessSource, plan, limits, hasStripeCustomer
+- `/api/me/sync-plan` — POST to resync role from Stripe after checkout
 
 ### Artist/Band Profiles
 - Create and save Solo, Duo, and Band profiles
@@ -105,7 +123,9 @@ A full-stack web app for touring musicians to calculate whether a single show or
 ## Database Schema
 
 ### App tables (lib/db/src/schema/)
-- `users` — user accounts linked to Clerk (id = Clerk userId, email, stripeCustomerId, stripeSubscriptionId, plan)
+- `users` — user accounts linked to Clerk (id = Clerk userId, email, role, accessSource, stripeCustomerId, stripeSubscriptionId, plan)
+- `promo_codes` — admin-managed promo codes (code unique, grantsRole, isActive, maxUses, timesUsed, expiresAt, notes)
+- `promo_code_redemptions` — audit trail of promo code redemptions (promoCodeId, userId, grantedRole, signupEmail, redeemedAt)
 - `profiles` — artist/band profiles (has userId); `defaultVehicleId` = per-act default garage vehicle
 - `vehicles` — vehicles with fuel consumption (has userId); `isDefault` = legacy global default (replaced by per-act via profiles.defaultVehicleId)
 - `vehicle_act_assignments` — many-to-many: vehicles ↔ profiles (acts); composite PK (vehicleId, actId)

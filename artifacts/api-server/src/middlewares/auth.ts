@@ -5,21 +5,103 @@ import type { Request, Response, NextFunction } from "express";
 
 const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
 
+export type UserRole = "free" | "pro" | "tester" | "admin";
+export type AccessSource = "default" | "stripe" | "promo" | "admin";
+
 export interface AuthenticatedRequest extends Request {
   userId: string;
+  userRole: UserRole;
+  accessSource: AccessSource;
+  /** Derived from role for backward compat — "paid" if hasProAccess(userRole) */
   userPlan: "free" | "paid";
-  userRole: "user" | "admin";
+}
+
+// ─── Role helpers ────────────────────────────────────────────────────────────
+
+export function hasProAccess(role: string): boolean {
+  return role === "pro" || role === "tester" || role === "admin";
+}
+
+export function isFreeRole(role: string): boolean {
+  return role === "free";
+}
+
+export function isProRole(role: string): boolean {
+  return role === "pro";
+}
+
+export function isTesterRole(role: string): boolean {
+  return role === "tester";
+}
+
+export function isAdminRole(role: string): boolean {
+  return role === "admin";
 }
 
 /**
- * Normalize any legacy plan value to the canonical 2-tier set.
- * Old "pro" and "unlimited" both map to "paid".
+ * Migrate a legacy role value from the old 2-tier system to the 4-tier system.
+ * Old values: "user" → "free", "admin" → "admin"
+ * Also handles any stray plan-encoded values.
+ */
+export function normalizeRole(raw: string | null | undefined, plan?: string | null): UserRole {
+  if (!raw) return "free";
+  // Already valid 4-tier values
+  if (raw === "free" || raw === "pro" || raw === "tester" || raw === "admin") return raw;
+  // Legacy 2-tier
+  if (raw === "admin") return "admin";
+  if (raw === "user") {
+    // Migrate based on plan if we can
+    if (plan === "paid" || plan === "pro" || plan === "unlimited") return "pro";
+    return "free";
+  }
+  return "free";
+}
+
+/**
+ * Kept for backward compatibility with Stripe sync logic.
  */
 export function normalizePlan(raw: string | null | undefined): "free" | "paid" {
   if (!raw) return "free";
   if (raw === "pro" || raw === "unlimited" || raw === "paid") return "paid";
   return "free";
 }
+
+// ─── Plan limits ─────────────────────────────────────────────────────────────
+
+export interface PlanLimits {
+  maxProfiles: number;
+  maxVehicles: number;
+  maxRuns: number;
+  toursEnabled: boolean;
+  ticketedShowEnabled: boolean;
+  marketingCostEnabled: boolean;
+  routingEnabled: boolean;
+}
+
+export function getPlanLimits(roleOrPlan: string): PlanLimits {
+  if (hasProAccess(roleOrPlan) || normalizePlan(roleOrPlan) === "paid") {
+    return {
+      maxProfiles: 10,
+      maxVehicles: Infinity,
+      maxRuns: Infinity,
+      toursEnabled: true,
+      ticketedShowEnabled: true,
+      marketingCostEnabled: true,
+      routingEnabled: true,
+    };
+  }
+  return {
+    maxProfiles: 1,
+    maxVehicles: 1,
+    maxRuns: 5,
+    toursEnabled: false,
+    ticketedShowEnabled: false,
+    marketingCostEnabled: false,
+    routingEnabled: false,
+  };
+}
+
+// ─── User resolution ─────────────────────────────────────────────────────────
 
 async function resolveEmail(userId: string, claimEmail?: string): Promise<string | undefined> {
   if (claimEmail) return claimEmail;
@@ -42,14 +124,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const email = await resolveEmail(userId, auth?.sessionClaims?.email as string | undefined);
   const user = await ensureUser(userId, email);
-  (req as AuthenticatedRequest).userPlan = normalizePlan(user.plan);
-  (req as AuthenticatedRequest).userRole = (user.role as "user" | "admin") ?? "user";
+
+  const role = normalizeRole(user.role, user.plan);
+  const accessSource = (user.accessSource as AccessSource) ?? "default";
+
+  (req as AuthenticatedRequest).userRole = role;
+  (req as AuthenticatedRequest).accessSource = accessSource;
+  (req as AuthenticatedRequest).userPlan = hasProAccess(role) ? "paid" : "free";
   next();
 }
 
 export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authReq = req as AuthenticatedRequest;
-  if (authReq.userRole !== "admin") {
+  if (!isAdminRole(authReq.userRole)) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
@@ -64,9 +151,21 @@ async function ensureUser(userId: string, email?: string) {
   if (existing) {
     const updates: Record<string, string> = {};
     if (email && existing.email !== email) updates.email = email;
-    if (isPermanentAdmin && existing.role !== "admin") updates.role = "admin";
-    // Ensure permanent admin always has paid plan (normalize legacy values too)
-    if (isPermanentAdmin && normalizePlan(existing.plan) !== "paid") updates.plan = "paid";
+
+    // Permanent admin always gets admin role
+    if (isPermanentAdmin && normalizeRole(existing.role, existing.plan) !== "admin") {
+      updates.role = "admin";
+      updates.accessSource = "admin";
+    }
+
+    // One-time migration: if role is legacy "user" → migrate to 4-tier
+    if (existing.role === "user") {
+      const migratedRole = normalizeRole("user", existing.plan);
+      updates.role = migratedRole;
+      if (!updates.accessSource) {
+        updates.accessSource = migratedRole === "pro" ? "stripe" : "default";
+      }
+    }
 
     if (Object.keys(updates).length > 0) {
       const [updated] = await db
@@ -79,11 +178,13 @@ async function ensureUser(userId: string, email?: string) {
     return existing;
   }
 
+  const newRole: UserRole = isPermanentAdmin ? "admin" : "free";
   const newValues = {
     id: userId,
     email: email ?? null,
-    role: isPermanentAdmin ? "admin" : "user",
+    role: newRole,
     plan: isPermanentAdmin ? "paid" : "free",
+    accessSource: isPermanentAdmin ? "admin" : "default",
   };
 
   const [created] = await db
@@ -96,41 +197,7 @@ async function ensureUser(userId: string, email?: string) {
   return found!;
 }
 
-export interface PlanLimits {
-  maxProfiles: number;
-  maxVehicles: number;
-  maxRuns: number;
-  toursEnabled: boolean;
-  ticketedShowEnabled: boolean;
-  marketingCostEnabled: boolean;
-  routingEnabled: boolean;
-}
-
-export function getPlanLimits(plan: string): PlanLimits {
-  // Normalize for any legacy values still in DB before migration settles
-  const normalized = normalizePlan(plan);
-  if (normalized === "paid") {
-    return {
-      maxProfiles: 10,
-      maxVehicles: Infinity,
-      maxRuns: Infinity,
-      toursEnabled: true,
-      ticketedShowEnabled: true,
-      marketingCostEnabled: true,
-      routingEnabled: true,
-    };
-  }
-  // free
-  return {
-    maxProfiles: 1,
-    maxVehicles: 1,
-    maxRuns: 5,
-    toursEnabled: false,
-    ticketedShowEnabled: false,
-    marketingCostEnabled: false,
-    routingEnabled: false,
-  };
-}
+// ─── Misc helpers ─────────────────────────────────────────────────────────────
 
 export async function countUserRecords(table: any, userId: string): Promise<number> {
   const result = await db

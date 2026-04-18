@@ -48,7 +48,34 @@ async function initStripe() {
   }
 }
 
+async function seedPromoCodes() {
+  try {
+    const { db, promoCodesTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+
+    const [existing] = await db
+      .select({ id: promoCodesTable.id })
+      .from(promoCodesTable)
+      .where(eq(promoCodesTable.code, "TESTER101"));
+
+    if (!existing) {
+      await db.insert(promoCodesTable).values({
+        code: "TESTER101",
+        isActive: true,
+        grantsRole: "tester",
+        maxUses: null,
+        expiresAt: null,
+        notes: "Internal tester access",
+      });
+      logger.info("Seeded TESTER101 promo code");
+    }
+  } catch (err) {
+    logger.error({ err }, "Promo code seed error (non-fatal)");
+  }
+}
+
 await initStripe();
+await seedPromoCodes();
 
 app.listen(port, (err) => {
   if (err) {

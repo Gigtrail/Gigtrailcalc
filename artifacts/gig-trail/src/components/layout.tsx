@@ -46,18 +46,24 @@ function isNavActive(itemUrl: string, location: string): boolean {
   return location === itemUrl || location.startsWith(itemUrl + "/");
 }
 
-const PLAN_LABELS: Record<string, string> = { free: "Free", pro: "Pro", unlimited: "Unlimited" };
-const PLAN_COLORS: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  tester: "Tester",
+  admin: "Admin",
+};
+const ROLE_COLORS: Record<string, string> = {
   free: "bg-muted text-muted-foreground text-xs",
   pro: "bg-primary/15 text-primary border border-primary/30 text-xs",
-  unlimited: "bg-accent/15 text-accent border border-accent/30 text-xs",
+  tester: "bg-violet-100 text-violet-700 border border-violet-300 text-xs",
+  admin: "bg-amber-100 text-amber-700 border border-amber-300 text-xs",
 };
 
 export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { plan } = usePlan();
+  const { plan, role, isPro } = usePlan();
 
   return (
     <Sidebar>
@@ -84,7 +90,7 @@ export function AppSidebar() {
                     <Link href={item.url} className="flex items-center gap-3 w-full">
                       <item.icon className="w-5 h-5" />
                       <span>{item.title}</span>
-                      {item.url === "/tours" && plan === "free" && (
+                      {item.url === "/tours" && !isPro && (
                         <Crown className="w-3.5 h-3.5 text-accent ml-auto" />
                       )}
                     </Link>
@@ -104,8 +110,8 @@ export function AppSidebar() {
                   <Link href="/billing" className="flex items-center gap-3 w-full">
                     <CreditCard className="w-5 h-5" />
                     <span>Billing</span>
-                    <Badge className={`ml-auto ${PLAN_COLORS[plan] || PLAN_COLORS.free}`}>
-                      {PLAN_LABELS[plan] || plan}
+                    <Badge className={`ml-auto ${ROLE_COLORS[role] || ROLE_COLORS.free}`}>
+                      {ROLE_LABELS[role] || role}
                     </Badge>
                   </Link>
                 </SidebarMenuButton>
@@ -124,7 +130,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-3 space-y-2">
-        {plan === "free" && (
+        {!isPro && (
           <Link href="/billing">
             <div className="w-full rounded-lg bg-primary/10 border border-primary/20 p-3 space-y-1 cursor-pointer hover:bg-primary/15 transition-colors">
               <div className="flex items-center gap-2">

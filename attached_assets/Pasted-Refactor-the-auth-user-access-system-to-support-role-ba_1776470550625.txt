@@ -1,0 +1,326 @@
+Refactor the auth / user access system to support role-based access plus promo-code-based role assignment.
+
+## GOAL
+
+Support 4 user roles:
+- free
+- pro
+- tester
+- admin
+
+Also add promo codes at signup so a user can enter a code like:
+
+TESTER101
+
+and automatically be assigned a special role such as:
+- tester
+- pro
+
+This must be admin-manageable, scalable, and safe.
+
+---
+
+## 1. USER ROLE SYSTEM
+
+Update the user model to use a single role field:
+
+role: "free" | "pro" | "tester" | "admin"
+
+Rules:
+- default for all new users = "free"
+- tester and admin always have Pro-level access
+- pro is controlled by Stripe unless assigned manually/admin logic says otherwise
+
+Create helper functions:
+
+isFree(user)
+isPro(user)
+isTester(user)
+isAdmin(user)
+hasProAccess(user)
+
+hasProAccess(user) should return true for:
+- pro
+- tester
+- admin
+
+Replace all existing Pro-gating checks with:
+hasProAccess(user)
+
+---
+
+## 2. SIGNUP PROMO CODE FIELD
+
+Add an optional promo code field to the signup flow.
+
+Requirements:
+- field label: Promo Code (optional)
+- normalize input before checking:
+  - trim spaces
+  - uppercase
+- invalid promo codes should not break signup
+- if code is invalid, show friendly error:
+  "Promo code not recognised"
+- if code is valid and active, apply its benefit during account creation
+
+---
+
+## 3. PROMO CODE DATA MODEL
+
+Create a promo_codes table / collection with fields like:
+
+id
+code (unique, uppercase)
+is_active (boolean)
+grants_role: "free" | "pro" | "tester" | "admin"
+max_uses: number | null
+times_used: number
+expires_at: datetime | null
+notes: string | null
+created_at
+updated_at
+
+Optional but recommended:
+created_by_admin_id
+
+Rules:
+- code must be unique
+- store code uppercase
+- inactive codes cannot be redeemed
+- expired codes cannot be redeemed
+- if max_uses is set and times_used >= max_uses, code cannot be redeemed
+
+---
+
+## 4. SIGNUP REDEMPTION LOGIC
+
+During signup:
+1. create the user as free by default
+2. if promo code entered:
+   - look up matching code (case-insensitive after normalization)
+   - verify code is active
+   - verify not expired
+   - verify under usage cap
+3. if valid:
+   - assign role based on promo code.grants_role
+   - increment times_used
+   - log redemption
+
+Examples:
+- TESTER101 → grants_role = "tester"
+- PRO30 → grants_role = "pro"
+
+Important:
+- promo-code role assignment happens at signup
+- do not silently ignore invalid code
+- do not allow public signup to become admin unless explicitly created by admin for internal use
+- safest rule: block promo codes from granting admin via public signup unless explicitly allowed in backend config
+
+Recommended:
+- allow promo codes to grant only "pro" or "tester" in normal public flow
+- admin role should stay manual/admin-only
+
+---
+
+## 5. PROMO CODE REDEMPTION LOG
+
+Create a promo_code_redemptions table / collection:
+
+id
+promo_code_id
+user_id
+redeemed_at
+granted_role
+signup_email (optional snapshot)
+
+Use this for audit trail and future reporting.
+
+---
+
+## 6. DEFAULT TESTER CODE
+
+Seed one promo code in development / production setup:
+
+code: TESTER101
+is_active: true
+grants_role: tester
+max_uses: null
+expires_at: null
+notes: Internal tester access
+
+Make sure this can be toggled off later in admin.
+
+---
+
+## 7. ADMIN PROMO CODE MANAGEMENT
+
+Create a basic admin screen or admin endpoints to manage promo codes.
+
+Admin must be able to:
+- create a new promo code
+- edit existing promo codes
+- toggle active/inactive
+- set granted role
+- set max uses
+- set expiry date
+- delete or archive codes
+- view usage count
+- view redemption history
+
+Validation:
+- only admins can access this
+- code names should auto-save uppercase
+- prevent duplicate codes
+
+Suggested admin table columns:
+- Code
+- Grants Role
+- Active
+- Times Used
+- Max Uses
+- Expiry
+- Notes
+- Actions
+
+Actions:
+- Edit
+- Disable / Enable
+- Archive / Delete
+
+---
+
+## 8. STRIPE ROLE LOGIC
+
+Stripe should still manage paid Pro users.
+
+Rules:
+- if Stripe subscription is active:
+  set role = "pro"
+- if Stripe subscription is inactive/cancelled:
+  revert role to "free"
+
+BUT:
+Do not override users whose role is:
+- tester
+- admin
+
+Logic example:
+if (user.role !== "tester" && user.role !== "admin") {
+  sync role from Stripe status
+}
+
+Important:
+If a user became pro via promo code and not via Stripe, decide on app logic clearly.
+
+Preferred approach:
+- tester role remains tester until manually changed
+- pro via promo code behaves as pro access
+- store access_source so future Stripe sync does not incorrectly remove promo-based pro access
+
+---
+
+## 9. ACCESS SOURCE (IMPORTANT)
+
+Add an optional field to user model:
+
+access_source: "default" | "stripe" | "promo" | "admin"
+
+Examples:
+- normal signup = default
+- paid subscription = stripe
+- tester/pro via promo = promo
+- manually assigned by admin = admin
+
+Why:
+This prevents Stripe sync from accidentally downgrading promo-based users.
+
+Recommended Stripe sync logic:
+- if access_source === "stripe", Stripe controls pro/free status
+- if access_source === "promo" and role === "tester", Stripe does not override
+- if access_source === "admin", Stripe does not override
+
+---
+
+## 10. ROLE ASSIGNMENT RULES
+
+Priority rules:
+- admin override is highest
+- tester override is next
+- Stripe-managed pro applies to Stripe users
+- free is fallback
+
+Suggested interpretation:
+- admin = permanent until manually changed
+- tester = permanent until manually changed
+- promo-based pro = remains pro until expiry/manual change OR based on future promo rules
+- Stripe pro = tied to active subscription
+- free = default
+
+---
+
+## 11. OPTIONAL FUTURE-PROOFING
+
+Structure promo codes so they can later support:
+- free trial months
+- discount codes for Stripe checkout
+- extra profile limits
+- temporary pro access
+- invite-only beta users
+
+Not required yet, but architecture should not block this later.
+
+---
+
+## 12. UI LABELS
+
+Show user role somewhere subtle in account/settings:
+- Free
+- Pro
+- Tester
+- Admin
+
+Optional:
+show access source too in admin/user detail:
+- Access: Promo
+- Access: Stripe
+- Access: Admin
+
+Optional front-end badge:
+- Tester Mode
+
+---
+
+## 13. SAFETY RULES
+
+Important:
+- never trust front-end role assignment
+- promo code validation and role assignment must happen server-side
+- protect admin routes properly
+- do not allow signup promo codes to create admin accounts unless explicitly hard-enabled for internal development only
+
+---
+
+## 14. BACKWARD COMPATIBILITY
+
+Migrate old users:
+- old paid/isPro users → role = "pro", access_source = "stripe" if applicable
+- everyone else → role = "free", access_source = "default"
+
+---
+
+## 15. RESULT
+
+Build a clean access system where:
+- free = default limited access
+- pro = paid or promo-based pro access
+- tester = full access without payment
+- admin = full access plus management controls
+
+Promo code flow:
+- optional promo code on signup
+- TESTER101 grants tester role
+- admin can create and toggle codes
+- all promo logic runs securely on backend
+- role/access logic remains compatible with Stripe
+
+Use reusable helper functions and make the whole system easy to extend later.

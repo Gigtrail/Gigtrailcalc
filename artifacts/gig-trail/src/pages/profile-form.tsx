@@ -460,8 +460,7 @@ export default function ProfileForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
-  const { plan } = usePlan();
-  const isPro = plan === "paid";
+  const { plan, isPro } = usePlan();
 
   const isEditing = !!id;
   const profileId = isEditing ? parseInt(id) : 0;
