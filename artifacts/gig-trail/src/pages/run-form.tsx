@@ -1684,7 +1684,7 @@ export default function RunForm() {
               Come back next week
             </Button>
             <Button onClick={() => { setShowLimitModal(false); window.location.href = "/billing"; }} className="w-full sm:w-auto">
-              See paid plans
+              See Pro plan
             </Button>
           </DialogFooter>
         </DialogContent>
