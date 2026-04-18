@@ -181,6 +181,18 @@ A full-stack web app for touring musicians to calculate whether a single show or
 - `/garage/:id/edit` — Edit custom vehicle
 - `/feedback` — Feedback board (all users)
 
+## Analytics (PostHog)
+
+- Package: `posthog-js` in `@workspace/gig-trail`
+- Central helper: `artifacts/gig-trail/src/lib/analytics.ts`
+  - `initAnalytics()` — called once in App.tsx `AnalyticsIdentifier` on mount
+  - `identifyUser(id, props)` — called after Clerk user loads; sends role, email, access_source
+  - `resetAnalytics()` — called on sign-out
+  - `trackEvent(name, props?)` — safe wrapper around `posthog.capture()`
+- Env vars required: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`
+- Events tracked: `signup_completed`, `profile_created`, `calc_started`, `calc_completed`, `calc_error`, `save_failed`, `tour_saved`, `vehicle_added`, `member_added`, `pricing_viewed`, `upgrade_started`, `upgrade_completed`, `pro_feature_clicked`
+- All calls are wrapped in try/catch — analytics never crashes the app
+
 ## Important Notes
 
 - Stripe client (`stripeClient.ts`) uses Replit Connector — NEVER cache it, always call `getUncachableStripeClient()` fresh

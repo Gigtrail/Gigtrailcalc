@@ -18,6 +18,7 @@ import {
 import { User, Users, Music2, Loader2, Lock, Zap } from "lucide-react";
 import { STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { Link } from "wouter";
+import { trackEvent } from "@/lib/analytics";
 
 const ACT_TYPES = [
   { type: "Solo", icon: User, people: 1, desc: "Just you", locked: false },
@@ -151,6 +152,9 @@ export default function Onboarding() {
       });
 
       await queryClient.invalidateQueries();
+
+      trackEvent("signup_completed", { act_type: actType });
+      trackEvent("profile_created", { act_type: actType, people_count: peopleCount, source: "onboarding" });
 
       const params = new URLSearchParams({
         profileId: String(profile.id),

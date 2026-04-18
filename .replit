@@ -67,3 +67,5 @@ channel = "stable-25_05"
 
 [userenv.shared]
 VITE_GOOGLE_MAPS_API_KEY = "AIzaSyAhU3Qx65SMtpzCJuT91REmxLW8aqTXaVs"
+VITE_POSTHOG_KEY = "phc_x4pZescCsV5BhYkWLvLm6Je6NzrHvMfEmgvkwg8s83sn"
+VITE_POSTHOG_HOST = "https://us.posthog.com/project/sTMFPsFhdP1Ssg/replay/019d9dfc-f341-7852-8d04-a6f282854f4a?t=422"

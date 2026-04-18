@@ -33,6 +33,7 @@ import {
 } from "@/hooks/use-plan";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { trackEvent } from "@/lib/analytics";
 
 type Period = "monthly" | "yearly";
 
@@ -625,7 +626,9 @@ export default function Billing() {
   const isCanceled = searchParams.get("canceled") === "1";
 
   useEffect(() => {
+    trackEvent("pricing_viewed");
     if (isSuccess) {
+      trackEvent("upgrade_completed");
       toast({ title: "Subscription activated!", description: "Your plan has been upgraded. It may take a moment to reflect." });
       setTimeout(() => {
         fetch("/api/me/sync-plan", { method: "POST", credentials: "include" })
@@ -663,6 +666,7 @@ export default function Billing() {
       return;
     }
     try {
+      trackEvent("upgrade_started", { plan: staticPlan.name, interval: period });
       const { url } = await createCheckout.mutateAsync(price.id);
       window.location.href = url;
     } catch (e: any) {

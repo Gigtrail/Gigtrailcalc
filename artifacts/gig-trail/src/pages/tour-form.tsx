@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { SYSTEM_FUEL_DEFAULTS, normalizeFuelType } from "@/lib/fuel-price-provider";
+import { trackEvent } from "@/lib/analytics";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, parseISO, format } from "date-fns";
 
@@ -516,6 +517,7 @@ export default function TourForm() {
         { data },
         {
           onSuccess: (newTour) => {
+            trackEvent("tour_saved", { tour_id: newTour.id });
             clearTourDraft();
             toast({ title: "Tour created! Now add your stops." });
             setLocation(`/tours/${newTour.id}`);

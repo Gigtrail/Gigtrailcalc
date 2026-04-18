@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, useUser } from "@clerk/react";
+import { initAnalytics, identifyUser, resetAnalytics } from "@/lib/analytics";
+import { usePlan } from "@/hooks/use-plan";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/layout";
@@ -80,6 +82,32 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function AnalyticsIdentifier() {
+  const { user, isSignedIn } = useUser();
+  const { role, accessSource } = usePlan();
+  const prevUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    if (isSignedIn && user?.id) {
+      identifyUser(user.id, {
+        email: user.primaryEmailAddress?.emailAddress,
+        role,
+        access_source: accessSource,
+      });
+      prevUserIdRef.current = user.id;
+    } else if (!isSignedIn && prevUserIdRef.current) {
+      resetAnalytics();
+      prevUserIdRef.current = null;
+    }
+  }, [isSignedIn, user?.id, role, accessSource]);
+
+  return null;
+}
+
 function SignedInRedirect() {
   const { data: profiles, isLoading } = useGetProfiles();
 
@@ -148,6 +176,7 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkTokenProvider />
         <ClerkQueryClientCacheInvalidator />
+        <AnalyticsIdentifier />
         <TooltipProvider>
           <Switch>
             <Route path="/" component={HomeRedirect} />

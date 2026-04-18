@@ -39,6 +39,7 @@ import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeT
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
+import { trackEvent } from "@/lib/analytics";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import {
@@ -322,6 +323,7 @@ export default function RunForm() {
     const profileId = vals.profileId;
     setIsCalculating(true);
     setRouteCalcFailed(false);
+    trackEvent("show_calc_started", { deal_type: vals.dealType ?? "flat_fee" });
 
     let routeOverride: { distanceKm?: number; driveTimeMinutes?: number | null } = {};
 
@@ -417,6 +419,15 @@ export default function RunForm() {
       };
 
       setCalculationResult(computed);
+      trackEvent("show_calc_completed", {
+        deal_type: vals.dealType ?? "flat_fee",
+        profit: computed.netProfit,
+        distance: typeof vals.distanceKm === "string" ? parseFloat(vals.distanceKm) : (vals.distanceKm ?? 0),
+        fuel_cost: computed.fuelCost,
+        break_even_point: computed.breakEvenTickets ?? null,
+        is_profitable: computed.netProfit > 0,
+        status: computed.status,
+      });
 
       // Auto-save: upsert venue then create/update run
       let savedRunId: number | null = isEditing ? runId : null;
@@ -613,6 +624,7 @@ export default function RunForm() {
       } catch (saveErr: unknown) {
         saveFailed = true;
         console.error("[GigTrail] Auto-save failed:", saveErr);
+        trackEvent("save_failed", { context: "run_auto_save" });
       }
 
       sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...resultData, savedRunId, saveFailed }));
@@ -623,6 +635,7 @@ export default function RunForm() {
         setShowLimitModal(true);
       } else {
         toast({ title: "Calculation failed", variant: "destructive" });
+        trackEvent("calc_error", { error_status: status ?? "unknown" });
       }
     } finally {
       setIsCalculating(false);

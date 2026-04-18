@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FEATURE_REGISTRY, type PlanFeature } from "@/lib/plan-limits";
+import { trackEvent } from "@/lib/analytics";
 
 interface UpgradeCTAProps {
   feature: PlanFeature;
@@ -17,6 +18,10 @@ export function UpgradeCTA({
 }: UpgradeCTAProps) {
   const info = FEATURE_REGISTRY[feature];
 
+  const handleClick = () => {
+    trackEvent("pro_feature_clicked", { feature_name: feature });
+  };
+
   if (variant === "inline") {
     return (
       <span
@@ -27,7 +32,7 @@ export function UpgradeCTA({
       >
         <Lock className="w-3 h-3 flex-shrink-0 opacity-60" />
         <span>{info.paidUnlock}</span>
-        <Link href="/billing">
+        <Link href="/billing" onClick={handleClick}>
           <button className="text-primary font-medium hover:underline underline-offset-2 focus:outline-none">
             Upgrade
           </button>
@@ -54,7 +59,7 @@ export function UpgradeCTA({
           </p>
         </div>
         <Button asChild size="sm" className="flex-shrink-0 h-8 text-xs px-3">
-          <Link href="/billing">Upgrade</Link>
+          <Link href="/billing" onClick={handleClick}>Upgrade</Link>
         </Button>
       </div>
     );
@@ -62,7 +67,7 @@ export function UpgradeCTA({
 
   if (variant === "card") {
     return (
-      <Link href="/billing">
+      <Link href="/billing" onClick={handleClick}>
         <div
           className={cn(
             "group h-full min-h-[180px] flex flex-col items-center justify-center rounded-xl",

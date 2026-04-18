@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ChevronLeft, Save, Truck, Info, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
+import { trackEvent } from "@/lib/analytics";
 import { useQueryClient } from "@tanstack/react-query";
 
 const garageVehicleSchema = z.object({
@@ -153,6 +154,7 @@ export default function GarageVehicleForm() {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            trackEvent("vehicle_added");
             toast({ title: "Vehicle added to garage" });
             setLocation("/garage");
           },

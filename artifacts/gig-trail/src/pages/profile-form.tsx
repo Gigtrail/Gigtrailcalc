@@ -63,6 +63,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
 import { canUseAdvancedDriving } from "@/lib/plan-limits";
+import { trackEvent } from "@/lib/analytics";
 import type { Plan } from "@/lib/plan-limits";
 import type { Member } from "@/types/member";
 import {
@@ -654,6 +655,7 @@ export default function ProfileForm() {
     const newMember: Member = { id: generateMemberId(), name: "", role: "", expectedGigFee: 0 };
     form.setValue("memberLibrary", [...memberLibraryArr, newMember]);
     form.setValue("activeMemberIds", [...activeMemberIdsArr, newMember.id]);
+    trackEvent("member_added", { total_members: memberLibraryArr.length + 1 });
   }, [memberLibraryArr, activeMemberIdsArr, form]);
 
   const removeMember = useCallback((memberId: string) => {
@@ -690,7 +692,7 @@ export default function ProfileForm() {
       createProfile.mutate(
         { data: payload as Parameters<typeof createProfile.mutate>[0]["data"] },
         {
-          onSuccess: () => { clearProfileDraft(); toast({ title: "Profile created" }); setLocation("/profiles"); },
+          onSuccess: (created: { actType?: string; peopleCount?: number }) => { clearProfileDraft(); trackEvent("profile_created", { act_type: created.actType, people_count: created.peopleCount }); toast({ title: "Profile created" }); setLocation("/profiles"); },
           onError: () => toast({ title: "Failed to create profile", variant: "destructive" }),
         }
       );
