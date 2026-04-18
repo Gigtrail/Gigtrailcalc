@@ -13,7 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2, Shield, MessageSquare } from "lucide-react";
+import { Home, User, Navigation, Guitar, CreditCard, LogOut, Crown, Zap, Calculator, Clock, Building2, Shield, MessageSquare, ShieldCheck } from "lucide-react";
 import { ReactNode } from "react";
 import { useUser, useClerk } from "@clerk/react";
 import { usePlan } from "@/hooks/use-plan";
@@ -64,7 +64,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { plan, role, isPro } = usePlan();
+  const { plan, role, isPro, isAdmin } = usePlan();
 
   return (
     <Sidebar>
@@ -101,6 +101,24 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>System</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/admin"}>
+                    <Link href="/admin" className="flex items-center gap-3 w-full">
+                      <ShieldCheck className="w-5 h-5" />
+                      <span>Admin</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel>Account</SidebarGroupLabel>

@@ -1,0 +1,157 @@
+Fix the Gig Trail auth/role system so the account thegigtrail@gmail.com is always recognised as an admin again, and make the admin role resilient so UI/dashboard refactors cannot accidentally remove it.
+
+PROBLEM
+The recent dashboard/auth refactor appears to have removed admin access from:
+- thegigtrail@gmail.com
+
+I need this fixed immediately and safely.
+
+PRIMARY GOALS
+1. Restore admin access for the user with email:
+   thegigtrail@gmail.com
+2. Ensure future refactors, seed scripts, login flows, or dashboard changes do NOT accidentally downgrade or remove this admin status
+3. Audit the current auth/user-role logic and fix the root cause, not just the symptom
+
+IMPLEMENTATION TASKS
+
+1. AUDIT CURRENT ROLE FLOW
+Inspect the current codebase and find:
+- where user records are created
+- where default roles are assigned
+- where session/user role is loaded
+- where admin checks are performed
+- whether any seed, migration, sync, or profile update flow is overwriting role values
+
+Look specifically for logic that may be doing things like:
+- setting every user role to "user" by default on login or sync
+- replacing the full user record without preserving role
+- seeding users without retaining existing admin state
+- relying only on frontend state for admin checks
+
+2. RESTORE ADMIN ACCESS
+Ensure that the user with email:
+- thegigtrail@gmail.com
+has role:
+- admin
+
+Do this in the real persistence layer used by the app.
+
+If the app uses a database, update the actual stored user record.
+If needed, add a one-time repair migration or startup repair routine to restore the admin role for this email.
+
+3. ADD A SAFE ADMIN GUARANTEE
+Implement a safe guard so this email can never silently lose admin access again.
+
+Preferred approach:
+- maintain normal DB-backed roles
+- but also protect the known owner/admin email with a server-side admin guarantee
+
+Example behavior:
+- if authenticated user email === "thegigtrail@gmail.com", treat them as admin
+- do this server-side or in trusted auth/session logic
+- do NOT rely only on frontend UI checks
+
+This should act as a safety net, not a replacement for proper role persistence.
+
+4. ROLE MODEL CLEANUP
+Audit and standardize the role model if needed.
+
+Expected role set should support:
+- user
+- pro
+- tester
+- admin
+
+If the app currently uses a different structure, keep compatibility where possible, but normalize role handling.
+
+5. FIX DEFAULT USER CREATION LOGIC
+When new users sign up:
+- default role should only be "user" unless explicitly upgraded
+- existing users must NEVER be downgraded on login, profile sync, or dashboard load
+- role should not be overwritten accidentally during profile updates
+
+6. FIX ADMIN CHECKS
+Refactor admin checks so they consistently use a trusted source of truth.
+
+Examples of acceptable admin logic:
+- database role === "admin"
+- OR trusted owner email fallback for thegigtrail@gmail.com
+
+Update any affected:
+- middleware
+- protected routes
+- admin UI rendering
+- server actions
+- dashboard/account pages
+
+7. ADD DEFENSIVE LOGGING
+Add lightweight debug logging around role resolution so it is easier to detect future issues.
+For example:
+- user email
+- stored role
+- effective resolved role
+Do not expose sensitive info to the frontend unnecessarily.
+Server logs only.
+
+8. PREVENT FUTURE REGRESSION
+Search for any code that could reassign roles unexpectedly, including:
+- seed scripts
+- onboarding/profile creation
+- auth callbacks
+- user sync functions
+- subscription upgrade handlers
+- tester promo code logic
+- admin dashboard edits
+
+Fix any unsafe assignment patterns such as:
+- unconditional role = "user"
+- replacing user object without preserving role
+- upsert logic missing role merge protection
+
+TECHNICAL REQUIREMENTS
+Please implement this carefully according to the current app stack.
+
+If using database access:
+- update the real stored user record for thegigtrail@gmail.com to admin
+- preserve all other user data
+
+If using auth/session callbacks:
+- ensure role is included in session/user payload correctly
+- ensure the effective role is stable across refresh/login/logout
+
+If using Prisma/SQL/Supabase/etc:
+- apply the fix using the project’s actual stack and patterns
+- do not introduce a fake/mock role layer
+
+SAFEGUARD RULE
+Implement this exact protection concept:
+- thegigtrail@gmail.com must always resolve to admin access, even if the stored role is temporarily missing or incorrect
+- but also repair the stored role so the database remains correct
+
+UI REQUIREMENTS
+After the fix:
+- admin badge should show again for thegigtrail@gmail.com
+- admin-only routes/features should be accessible again
+- billing/admin management areas should reflect correct access
+- non-admin users should not gain admin accidentally
+
+VERIFICATION
+After implementing, verify all of the following:
+1. thegigtrail@gmail.com resolves as admin
+2. admin UI appears correctly after login
+3. admin access persists after refresh
+4. admin access persists after logout/login
+5. normal users remain non-admin
+6. no seed or sync flow downgrades admin
+7. no frontend-only hack is masking a broken backend role state
+
+DELIVERABLE
+Please:
+1. fix the issue
+2. explain the root cause found
+3. list what was changed
+4. confirm how admin is now protected from being lost again
+
+IMPORTANT
+Do not just patch the UI.
+Fix the actual role persistence and role resolution system properly.

@@ -127,6 +127,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const role = normalizeRole(user.role, user.plan);
   const accessSource = (user.accessSource as AccessSource) ?? "default";
+  const effectiveEmail = email ?? user.email ?? "(unknown)";
+
+  // [Auth] Defensive log: trace resolved role for every authenticated request
+  console.log(`[Auth] userId=${userId} email=${effectiveEmail} stored_role=${user.role} resolved_role=${role} access_source=${accessSource}`);
 
   (req as AuthenticatedRequest).userRole = role;
   (req as AuthenticatedRequest).accessSource = accessSource;
@@ -152,10 +156,12 @@ async function ensureUser(userId: string, email?: string) {
     const updates: Record<string, string> = {};
     if (email && existing.email !== email) updates.email = email;
 
-    // Permanent admin always gets admin role
-    if (isPermanentAdmin && normalizeRole(existing.role, existing.plan) !== "admin") {
+    // Permanent admin always gets admin role AND correct access_source
+    const existingRole = normalizeRole(existing.role, existing.plan);
+    if (isPermanentAdmin && (existingRole !== "admin" || existing.accessSource !== "admin")) {
       updates.role = "admin";
       updates.accessSource = "admin";
+      console.log(`[Auth] Repairing permanent admin role/access_source for ${email} (was: role=${existing.role}, access_source=${existing.accessSource})`);
     }
 
     // One-time migration: if role is legacy "user" → migrate to 4-tier
