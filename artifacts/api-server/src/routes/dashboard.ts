@@ -66,8 +66,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   let totalProfit = 0;
   let totalExpenses = 0;
   let runProfitSum = 0;
-  let bestRunProfit = 0;
-  let worstRunProfit = 0;
+  let bestRunProfit: number | null = null;
+  let worstRunProfit: number | null = null;
   let profitableRunCount = 0;
   let worthTheDrive = 0;
   let tightMargins = 0;
@@ -75,8 +75,6 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   let totalAccommodationCost = 0;
   let totalFoodCost = 0;
   let totalMarketingCost = 0;
-  let firstRun = true;
-
   for (const run of runs) {
     const km = Number(run.distanceKm) * (run.returnTrip ? 2 : 1);
     totalKmDriven += km;
@@ -88,8 +86,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalExpenses += cost;
     runProfitSum += profit;
 
-    if (profit > bestRunProfit) bestRunProfit = profit;
-    if (firstRun || profit < worstRunProfit) { worstRunProfit = profit; firstRun = false; }
+    if (bestRunProfit === null || profit > bestRunProfit) bestRunProfit = profit;
+    if (worstRunProfit === null || profit < worstRunProfit) worstRunProfit = profit;
     if (profit >= 0) profitableRunCount++;
 
     totalAccommodationCost += run.accommodationCost != null ? Number(run.accommodationCost) : 0;
@@ -125,8 +123,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalProfit,
     totalExpenses,
     avgRunProfit,
-    bestRunProfit,
-    worstRunProfit: runs.length > 0 ? worstRunProfit : 0,
+    bestRunProfit: bestRunProfit ?? 0,
+    worstRunProfit: worstRunProfit ?? 0,
     profitableRunCount,
     totalAccommodationCost,
     totalFoodCost,

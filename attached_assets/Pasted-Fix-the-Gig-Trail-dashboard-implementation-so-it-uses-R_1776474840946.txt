@@ -1,0 +1,210 @@
+Fix the Gig Trail dashboard implementation so it uses REAL app data and not copied/static values from the reference image.
+
+IMPORTANT
+- The attached/reference image is ONLY for visual design direction
+- DO NOT hardcode any values from the image
+- DO NOT use placeholder profit, distance, income, expenses, or show numbers unless clearly marked as temporary development fallbacks
+- Every dashboard metric must come from actual stored app data, existing calculators, saved shows, saved tours, and current business logic
+- If a metric cannot yet be calculated from the real data model, show a graceful fallback such as:
+  - "Data unavailable"
+  - "Not enough ticket data yet"
+  - "No recent shows yet"
+- Never invent values
+
+PRIMARY GOAL
+Refactor the dashboard so the layout stays polished, but every displayed number is dynamically derived from the app’s real state/database.
+
+HEADLINE / HERO FIX
+This is the MAIN dashboard, not a single selected tour page.
+
+So:
+- remove text like "You're up $X on this tour"
+- replace the hero heading with something appropriate for an overall dashboard, such as:
+  - "Tour Snapshot"
+  - or "Your Tour Overview"
+Choose the option that best fits the current product tone
+
+Under that heading, show a dynamic summary line based on real data, for example:
+- "+$2,848 net profit"
+- "2 / 2 shows profitable · 11,359.8 km travelled"
+
+If there is no data yet, show something like:
+- "No touring data yet"
+- "Add your first show or tour to start tracking performance"
+
+CRITICAL DATA REQUIREMENT
+Create or refactor a single centralized dashboard formatter / selector / utility that builds one dashboard data object from real data sources.
+
+Example shape:
+{
+  heading,
+  summary,
+  totalProfit,
+  totalIncome,
+  totalExpenses,
+  totalDistance,
+  showCount,
+  profitableShowCount,
+  avgProfitPerShow,
+  profitMargin,
+  bestShow,
+  worstShow,
+  recentShows,
+  costBreakdown,
+  biggestCostCategory,
+  breakEvenTicketAverage,
+  insights,
+  status
+}
+
+REFACTOR REQUIREMENTS
+1. Audit where the dashboard is currently getting its values from
+2. Remove any hardcoded numbers copied from the image
+3. Build all displayed metrics from actual persisted or derived app data
+4. Centralize all calculations in one place, not inside JSX/UI components
+5. Make the UI components consume the centralized dashboard data object
+6. Preserve the current improved layout and styling as much as possible
+
+DATA SOURCES TO CHECK
+Inspect and use the real app sources for:
+- saved shows
+- saved tours
+- tour builder data
+- calculator outputs that are stored
+- expense breakdowns
+- venue/show performance data
+- any profile-linked defaults if relevant
+- any existing dashboard selectors/utilities
+
+METRICS TO DERIVE FROM REAL DATA
+Calculate as many of these as the current app model allows:
+
+TOP-LEVEL
+- total net profit
+- total income
+- total expenses
+- total distance
+- total shows
+- profitable show count
+- average profit per show
+- profit margin %
+
+SHOW PERFORMANCE
+- best show by net outcome
+- worst show by net outcome
+- recent shows list
+- profitability badge per show
+- deal type badge if stored or derivable
+
+COST PRESSURE
+- category totals for fuel, accommodation, food, other major expenses
+- biggest cost category
+- percentage share of biggest category if possible
+
+BREAK-EVEN
+- average break-even tickets if enough ticketed show data exists
+- if not available, show a fallback message instead of fake data
+
+INSIGHTS
+Generate 2–5 short plain-English insights using REAL derived data only.
+Examples:
+- "You're profitable — this routing is working"
+- "Accommodation is your biggest cost category"
+- "Your average show return is healthy"
+- "Most of your recent shows are profitable"
+- "Not enough ticket data yet for break-even insights"
+
+Do not generate insights if underlying data is missing.
+
+STATUS LOGIC
+Derive a real dashboard status from actual metrics:
+- HEALTHY
+- STEADY
+- AT RISK
+- LOSING MONEY
+
+Example logic:
+- Positive net profit + majority profitable shows = HEALTHY
+- Slight positive or mixed performance = STEADY
+- Near break-even or heavy cost load = AT RISK
+- Negative overall = LOSING MONEY
+
+If projections are not truly supported yet, do NOT invent projected profit.
+Instead show simpler real text like:
+- "You're tracking profitably"
+- "Performance is mixed"
+- "Costs are outweighing returns"
+
+RECENT SHOWS
+Recent show cards must use real recent saved shows.
+For each card, use real:
+- show name
+- date
+- net result
+- deal structure label if available
+- profitability/best/worst badge if appropriate
+
+If there are no saved shows:
+- show an empty state instead of fake cards
+
+UI COPY RULES
+Because this is the main dashboard:
+- do not use "this tour" unless a specific selected tour context actually exists
+- keep copy general and data-aware
+- use wording that matches context
+
+Examples:
+For overall dashboard:
+- "Tour Snapshot"
+- "Your Tour Overview"
+
+For empty state:
+- "No touring data yet"
+- "Start by adding a show or building a tour"
+
+TECHNICAL IMPLEMENTATION
+Please inspect the current code and do the following:
+
+1. Find all hardcoded/mock dashboard values
+2. Remove them
+3. Create a centralized helper such as:
+   - getDashboardData()
+   - buildDashboardMetrics()
+   - selectDashboardSummary()
+4. Move all dashboard calculations there
+5. Keep component rendering dumb/presentational where possible
+6. Ensure all cards consume real data props
+7. Add null/empty-state handling for every card/section
+8. Keep current design improvements and layout polish
+
+FALLBACK BEHAVIOR
+If data is partially available:
+- show what is real
+- hide or soften unavailable fields
+- never fake completeness
+
+Examples:
+- Best show available, but no break-even data → show best show and a break-even fallback line
+- Some shows exist, but no stored distance → show "Distance unavailable"
+- No recent shows → show empty recent shows state
+
+DEBUG / VERIFICATION
+After implementing, verify by checking:
+- dashboard numbers match underlying saved show/tour data
+- profit = income - expenses consistently
+- recent show cards match real stored shows
+- best/worst show logic is correct
+- no literal copied values from the design reference remain
+
+DELIVERABLE
+Implement the fix and then provide:
+1. a short summary of what was changed
+2. which metrics are now fully real
+3. which metrics still need more backend/data support
+4. any places where fallback states were added because real data is not yet available
+
+MOST IMPORTANT RULE
+The dashboard should now be:
+- visually polished like the reference direction
+- but powered entirely by real Gig Trail data
+- with no fake stats copied from the mockup

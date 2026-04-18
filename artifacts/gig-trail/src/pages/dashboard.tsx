@@ -38,9 +38,98 @@ function dealLabel(dt: string | null | undefined): string {
   return dt ? (map[dt] ?? dt) : "Show";
 }
 
-// ─── Tour Status derivation ───────────────────────────────────────────────────
+// ─── Dashboard data shape ─────────────────────────────────────────────────────
 
 type TourStatus = "HEALTHY" | "STEADY" | "AT RISK" | "LOSING MONEY";
+
+interface DashboardMetrics {
+  totalShows: number;
+  netProfit: number;
+  totalIncome: number;
+  totalExpenses: number;
+  totalKm: number;
+  avgProfit: number;
+  bestProfit: number;
+  worstProfit: number;
+  profitableCount: number;
+  totalAccom: number;
+  totalFood: number;
+  totalMarketing: number;
+  fuelAndOther: number;
+  profitMargin: number | null;
+  biggestCostCategory: { label: string; amount: number; pct: number } | null;
+  status: TourStatus;
+  insights: Array<{ icon: string; text: string; tone: "green" | "amber" | "red" | "neutral" }>;
+}
+
+// ─── Centralized metrics builder ──────────────────────────────────────────────
+
+function buildDashboardMetrics(
+  summary: {
+    totalRuns: number;
+    totalProfit: number;
+    totalIncome: number;
+    totalExpenses: number;
+    totalKmDriven: number;
+    avgRunProfit: number;
+    bestRunProfit: number;
+    worstRunProfit: number;
+    profitableRunCount: number;
+    totalAccommodationCost: number;
+    totalFoodCost: number;
+    totalMarketingCost: number;
+  } | undefined
+): DashboardMetrics | null {
+  if (!summary) return null;
+
+  const totalShows = summary.totalRuns;
+  const netProfit = summary.totalProfit;
+  const totalIncome = summary.totalIncome;
+  const totalExpenses = summary.totalExpenses;
+  const totalKm = summary.totalKmDriven;
+  const avgProfit = summary.avgRunProfit;
+  const bestProfit = summary.bestRunProfit;
+  const worstProfit = summary.worstRunProfit;
+  const profitableCount = summary.profitableRunCount;
+  const totalAccom = summary.totalAccommodationCost;
+  const totalFood = summary.totalFoodCost;
+  const totalMarketing = summary.totalMarketingCost;
+  const fuelAndOther = Math.max(0, totalExpenses - totalAccom - totalFood - totalMarketing);
+  const profitMargin = totalIncome > 0 ? pct(netProfit, totalIncome) : null;
+
+  // Biggest cost category
+  const costCategories = [
+    { label: "Accommodation", amount: totalAccom },
+    { label: "Fuel & Other", amount: fuelAndOther },
+    { label: "Food", amount: totalFood },
+    { label: "Marketing", amount: totalMarketing },
+  ].filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
+
+  const biggestCostCategory = costCategories.length > 0
+    ? { ...costCategories[0], pct: pct(costCategories[0].amount, totalExpenses) }
+    : null;
+
+  // Status
+  const status = deriveTourStatus(netProfit, totalShows, profitableCount);
+
+  // Insights
+  const insights = totalShows > 0
+    ? generateInsights({
+        netProfit, totalShows, profitableCount, totalExpenses,
+        totalAccom, totalFood, totalMarketing, fuelAndOther,
+        avgProfit, bestProfit, worstProfit,
+      })
+    : [];
+
+  return {
+    totalShows, netProfit, totalIncome, totalExpenses, totalKm,
+    avgProfit, bestProfit, worstProfit, profitableCount,
+    totalAccom, totalFood, totalMarketing, fuelAndOther,
+    profitMargin, biggestCostCategory, status, insights,
+  };
+}
+
+// ─── Tour Status derivation ───────────────────────────────────────────────────
 
 function deriveTourStatus(
   netProfit: number,
@@ -117,7 +206,7 @@ function generateInsights(opts: {
   if (allProfitable) {
     insights.push({ icon: "✓", text: "You're profitable — this routing is working", tone: "green" });
   } else if (netProfit < 0) {
-    insights.push({ icon: "↓", text: "This run is currently under water — review your costs and fee structure", tone: "red" });
+    insights.push({ icon: "↓", text: "You're currently under water overall — review your costs and fee structure", tone: "red" });
   } else if (profitableCount < totalShows) {
     insights.push({ icon: "~", text: `${profitableCount} of ${totalShows} shows are profitable — mixed results`, tone: "amber" });
   }
@@ -185,55 +274,37 @@ function CardLabel({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardHero({
-  netProfit,
-  totalShows,
-  profitableCount,
-  totalKm,
+  metrics,
 }: {
-  netProfit: number;
-  totalShows: number;
-  profitableCount: number;
-  totalKm: number;
+  metrics: DashboardMetrics | null;
 }) {
+  const hasData = metrics != null && metrics.totalShows > 0;
+  const netProfit = metrics?.netProfit ?? 0;
   const profitPositive = netProfit > 0;
   const profitNegative = netProfit < 0;
-  const headlineColor = profitPositive
-    ? "text-emerald-600"
-    : profitNegative
-      ? "text-red-500"
-      : "text-amber-500";
-
-  const headlineVerb = profitPositive ? "up" : profitNegative ? "down" : "at";
-  const emoji = profitPositive ? "👍" : profitNegative ? "📉" : "⚖️";
+  const profitColor = profitPositive ? "text-emerald-600" : profitNegative ? "text-red-500" : "text-amber-500";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        {totalShows === 0 ? (
-          <>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              Welcome to your trail
-            </h1>
-            <p className="text-muted-foreground mt-1.5 text-sm">
-              Log your first show to start seeing insights here.
-            </p>
-          </>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Tour Snapshot
+        </h1>
+        {!hasData ? (
+          <p className="text-muted-foreground mt-1.5 text-sm">
+            No touring data yet — add your first show to start tracking performance.
+          </p>
         ) : (
-          <>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-              You're {headlineVerb}{" "}
-              <span className={headlineColor}>
-                ${fmtMoney(netProfit)}
-              </span>{" "}
-              on this tour {emoji}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1.5">
-              {profitableCount} / {totalShows} show{totalShows !== 1 ? "s" : ""} profitable
-              {totalKm > 0 && (
-                <> &middot; {totalKm.toLocaleString()} km travelled</>
-              )}
-            </p>
-          </>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            <span className={cn("font-semibold", profitColor)}>
+              {sign(netProfit)}${fmtMoney(netProfit)} net profit
+            </span>
+            {" · "}
+            {metrics.profitableCount} / {metrics.totalShows} show{metrics.totalShows !== 1 ? "s" : ""} profitable
+            {metrics.totalKm > 0 && (
+              <> &middot; {metrics.totalKm.toLocaleString()} km travelled</>
+            )}
+          </p>
         )}
       </div>
       <div className="flex gap-2 shrink-0 sm:mt-0.5">
@@ -446,7 +517,7 @@ function TourStatusCard({
       </div>
       {totalShows > 0 && (
         <>
-          <p className="text-xs text-muted-foreground mb-0.5">Projected Profit:</p>
+          <p className="text-xs text-muted-foreground mb-0.5">Net Profit:</p>
           <p className={cn("text-xl font-bold tabular-nums", netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
             {sign(netProfit)}${fmtMoney(netProfit)}
           </p>
@@ -604,94 +675,59 @@ export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
   const { data: recent, isLoading: loadingRecent } = useGetDashboardRecent();
 
-  // ── Derived values ──────────────────────────────────────────────────────────
-  const totalShows = summary?.totalRuns ?? 0;
-  const netProfit = summary?.totalProfit ?? 0;
-  const totalIncome = summary?.totalIncome ?? 0;
-  const totalExpenses = summary?.totalExpenses ?? 0;
-  const totalKm = summary?.totalKmDriven ?? 0;
-  const avgProfit = summary?.avgRunProfit ?? 0;
-  const bestProfit = summary?.bestRunProfit ?? 0;
-  const worstProfit = summary?.worstRunProfit ?? 0;
-  const profitableCount = summary?.profitableRunCount ?? 0;
-  const totalAccom = summary?.totalAccommodationCost ?? 0;
-  const totalFood = summary?.totalFoodCost ?? 0;
-  const totalMarketing = summary?.totalMarketingCost ?? 0;
-  const fuelAndOther = Math.max(0, totalExpenses - totalAccom - totalFood - totalMarketing);
-
-  const status = deriveTourStatus(netProfit, totalShows, profitableCount);
-
-  const insights = summary && totalShows > 0
-    ? generateInsights({
-        netProfit,
-        totalShows,
-        profitableCount,
-        totalExpenses,
-        totalAccom,
-        totalFood,
-        totalMarketing,
-        fuelAndOther,
-        avgProfit,
-        bestProfit,
-        worstProfit,
-      })
-    : [];
+  // ── Single centralised metrics object from real API data ────────────────────
+  const metrics = buildDashboardMetrics(summary as Parameters<typeof buildDashboardMetrics>[0]);
 
   const recentRuns = recent?.recentRuns ?? [];
 
-  // Find best/worst profit run IDs for badges
+  // Best/worst badges for the recent show cards (based on the displayed subset)
   const runProfits = recentRuns.map((r: { totalProfit?: number | null }) => r.totalProfit ?? 0);
   const maxProfit = recentRuns.length > 0 ? Math.max(...runProfits) : null;
   const minProfit = recentRuns.length > 1 ? Math.min(...runProfits) : null;
 
-  const isEmpty = !loadingSummary && !loadingRecent && totalShows === 0 && recentRuns.length === 0;
+  const isEmpty = !loadingSummary && !loadingRecent && (metrics?.totalShows ?? 0) === 0 && recentRuns.length === 0;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-8">
 
       {/* ── Hero ── */}
       {loadingSummary ? <SkeletonHero /> : (
-        <DashboardHero
-          netProfit={netProfit}
-          totalShows={totalShows}
-          profitableCount={profitableCount}
-          totalKm={totalKm}
-        />
+        <DashboardHero metrics={metrics} />
       )}
 
       {isEmpty ? <EmptyDashboard /> : (
         <>
           {/* ── 3 Core Cards ── */}
-          {loadingSummary ? <SkeletonCards /> : (
+          {loadingSummary ? <SkeletonCards /> : metrics && (
             <div className="grid gap-4 sm:grid-cols-3">
               <ProfitHealthCard
-                netProfit={netProfit}
-                totalIncome={totalIncome}
-                totalExpenses={totalExpenses}
+                netProfit={metrics.netProfit}
+                totalIncome={metrics.totalIncome}
+                totalExpenses={metrics.totalExpenses}
               />
               <CostPressureCard
-                totalExpenses={totalExpenses}
-                totalAccom={totalAccom}
-                totalFood={totalFood}
-                totalMarketing={totalMarketing}
+                totalExpenses={metrics.totalExpenses}
+                totalAccom={metrics.totalAccom}
+                totalFood={metrics.totalFood}
+                totalMarketing={metrics.totalMarketing}
               />
               <ShowPerformanceCard
-                totalShows={totalShows}
-                avgProfit={avgProfit}
-                bestProfit={bestProfit}
-                worstProfit={worstProfit}
+                totalShows={metrics.totalShows}
+                avgProfit={metrics.avgProfit}
+                bestProfit={metrics.bestProfit}
+                worstProfit={metrics.worstProfit}
               />
             </div>
           )}
 
           {/* ── Insights + Tour Status ── */}
-          {loadingSummary ? <SkeletonInsights /> : insights.length > 0 && (
+          {loadingSummary ? <SkeletonInsights /> : metrics && metrics.insights.length > 0 && (
             <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
-              <DashboardInsights insights={insights} />
+              <DashboardInsights insights={metrics.insights} />
               <TourStatusCard
-                status={status}
-                netProfit={netProfit}
-                totalShows={totalShows}
+                status={metrics.status}
+                netProfit={metrics.netProfit}
+                totalShows={metrics.totalShows}
               />
             </div>
           )}
