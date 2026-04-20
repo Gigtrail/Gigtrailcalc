@@ -2,7 +2,18 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateVehicle, useUpdateVehicle, useGetVehicle, useGetProfiles, useSetVehicleActAssignments, getGetVehiclesQueryKey, getGetProfilesQueryKey } from "@workspace/api-client-react";
+import {
+  useCreateVehicle,
+  useUpdateVehicle,
+  useGetVehicle,
+  useGetProfiles,
+  useSetVehicleActAssignments,
+  getGetVehiclesQueryKey,
+  getGetProfilesQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
@@ -139,6 +150,9 @@ export default function GarageVehicleForm() {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
             toast({ title: "Vehicle updated" });
             setLocation("/garage");
           },
@@ -154,6 +168,8 @@ export default function GarageVehicleForm() {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
             trackEvent("vehicle_added");
             toast({ title: "Vehicle added to garage" });
             setLocation("/garage");

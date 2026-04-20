@@ -45,6 +45,13 @@ import { SYSTEM_FUEL_DEFAULTS, normalizeFuelType } from "@/lib/fuel-price-provid
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, parseISO, format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getGetTourQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
 
 // ─── Tour draft persistence ──────────────────────────────────────────────────
 
@@ -291,6 +298,7 @@ export default function TourForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
 
   // Draft state
@@ -313,6 +321,14 @@ export default function TourForm() {
 
   const createTour = useCreateTour();
   const updateTour = useUpdateTour();
+
+  const invalidateTourSummaryQueries = (nextTourId: number) => {
+    queryClient.invalidateQueries({ queryKey: ["tour", nextTourId] });
+    queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(nextTourId) });
+    queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  };
 
   const form = useForm<TourFormValues>({
     resolver: zodResolver(tourSchema),
@@ -506,6 +522,7 @@ export default function TourForm() {
         { id: tourId, data },
         {
           onSuccess: () => {
+            invalidateTourSummaryQueries(tourId);
             toast({ title: "Tour updated" });
             setLocation(`/tours/${tourId}`);
           },
@@ -517,6 +534,7 @@ export default function TourForm() {
         { data },
         {
           onSuccess: (newTour) => {
+            invalidateTourSummaryQueries(newTour.id);
             trackEvent("tour_saved", { tour_id: newTour.id, total_shows: 0, total_profit: 0 });
             clearTourDraft();
             toast({ title: "Tour created! Now add your stops." });
@@ -1163,11 +1181,6 @@ export default function TourForm() {
                         <span className="font-medium">${selectedProfile.expectedGigFee ?? 0}</span>
                         <span className="text-muted-foreground"> expected fee per show</span>
                       </p>
-                      {(selectedProfile.avgMerchPerGig ?? 0) > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          + ${selectedProfile.avgMerchPerGig} merch per show
-                        </p>
-                      )}
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground px-0.5">

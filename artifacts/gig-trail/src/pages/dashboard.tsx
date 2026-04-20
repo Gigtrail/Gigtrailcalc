@@ -1,150 +1,144 @@
-import { useGetDashboardSummary, useGetDashboardRecent } from "@workspace/api-client-react";
+import type { ReactNode } from "react";
+import { format, parseISO } from "date-fns";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Map,
+  Minus,
+  Navigation,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Link } from "wouter";
-import { Map, Navigation, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, ChevronRight, Minus } from "lucide-react";
+import { useGetDashboardRecent, useGetDashboardSummary } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 
-// ─── Formatters ──────────────────────────────────────────────────────────────
+type ActualPerformance = {
+  label: string;
+  helperText: string;
+  totalsBasis: "past_shows";
+  totalsRule: "Past Shows only";
+  totalShows: number;
+  totalIncome: number;
+  totalProfit: number;
+  totalExpenses: number;
+  totalKmDriven: number;
+  avgShowProfit: number;
+  bestShowProfit: number;
+  worstShowProfit: number;
+  profitableShowCount: number;
+  totalAccommodationCost: number;
+  totalFoodCost: number;
+  totalMarketingCost: number;
+  worthTheDrive: number;
+  tightMargins: number;
+  notWorthIt: number;
+};
 
-function fmtMoney(n: number) {
-  return Math.abs(Math.round(n)).toLocaleString();
+type FuturePotential = {
+  label: string;
+  helperText: string;
+  totalsBasis: "upcoming_tours";
+  totalsRule: "Projected from upcoming tours only";
+  projectedTours: number;
+  projectedShows: number;
+  projectedIncome: number;
+  projectedProfit: number;
+  projectedExpenses: number;
+  projectedKm: number;
+  avgProjectedTourProfit: number;
+  bestProjectedTourProfit: number;
+  worstProjectedTourProfit: number;
+};
+
+type DashboardSummaryData = {
+  totalProfiles: number;
+  totalVehicles: number;
+  actualPerformance: ActualPerformance;
+  futurePotential: FuturePotential;
+};
+
+type RecentRun = {
+  id: number;
+  venueName?: string | null;
+  city?: string | null;
+  origin?: string | null;
+  destination?: string | null;
+  showDate?: string | null;
+  createdAt: string;
+  dealType?: string | null;
+  totalProfit?: number | null;
+  actualProfit?: number | null;
+};
+
+type UpcomingTour = {
+  id: number;
+  name: string;
+  nextStopDate: string;
+  endDate: string | null;
+  projectedShows: number;
+  projectedIncome: number;
+  projectedProfit: number;
+  projectedExpenses: number;
+  projectedKm: number;
+};
+
+type DashboardRecentData = {
+  recentRuns: RecentRun[];
+  upcomingTours: UpcomingTour[];
+};
+
+type ActualHealthStatus = "HEALTHY" | "STEADY" | "AT RISK" | "LOSING MONEY";
+
+function fmtMoney(value: number) {
+  return Math.abs(Math.round(value)).toLocaleString();
 }
 
-function sign(n: number) {
-  return n >= 0 ? "+" : "−";
+function sign(value: number) {
+  return value >= 0 ? "+" : "-";
 }
 
-function profitClass(n: number, opts?: { large?: boolean }) {
-  const base = opts?.large ? "text-4xl font-bold tabular-nums" : "font-semibold tabular-nums";
-  if (n > 0) return cn(base, "text-emerald-600");
-  if (n < 0) return cn(base, "text-red-500");
+function pct(value: number, total: number) {
+  if (!total) return 0;
+  return Math.round((value / total) * 100);
+}
+
+function formatDateLabel(value: string | null | undefined) {
+  if (!value) return "";
+  return format(parseISO(value), "MMM d");
+}
+
+function profitClass(value: number, large = false) {
+  const base = large ? "text-3xl font-bold tabular-nums" : "font-semibold tabular-nums";
+  if (value > 0) return cn(base, "text-emerald-600");
+  if (value < 0) return cn(base, "text-red-500");
   return cn(base, "text-amber-500");
 }
 
-function pct(n: number, total: number) {
-  if (!total) return 0;
-  return Math.round((n / total) * 100);
-}
-
-function dealLabel(dt: string | null | undefined): string {
-  const map: Record<string, string> = {
+function dealLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
     flat_fee: "Flat Fee",
-    door_split: "100% Door Deal",
+    door_split: "100% Door",
     guarantee_vs_door: "Guarantee vs Door",
     contra: "Contra",
   };
-  return dt ? (map[dt] ?? dt) : "Show";
+  return value ? (labels[value] ?? value) : "Show";
 }
 
-// ─── Dashboard data shape ─────────────────────────────────────────────────────
-
-type TourStatus = "HEALTHY" | "STEADY" | "AT RISK" | "LOSING MONEY";
-
-interface DashboardMetrics {
-  totalShows: number;
-  netProfit: number;
-  totalIncome: number;
-  totalExpenses: number;
-  totalKm: number;
-  avgProfit: number;
-  bestProfit: number;
-  worstProfit: number;
-  profitableCount: number;
-  totalAccom: number;
-  totalFood: number;
-  totalMarketing: number;
-  fuelAndOther: number;
-  profitMargin: number | null;
-  biggestCostCategory: { label: string; amount: number; pct: number } | null;
-  status: TourStatus;
-  insights: Array<{ icon: string; text: string; tone: "green" | "amber" | "red" | "neutral" }>;
-}
-
-// ─── Centralized metrics builder ──────────────────────────────────────────────
-
-function buildDashboardMetrics(
-  summary: {
-    totalRuns: number;
-    totalProfit: number;
-    totalIncome: number;
-    totalExpenses: number;
-    totalKmDriven: number;
-    avgRunProfit: number;
-    bestRunProfit: number;
-    worstRunProfit: number;
-    profitableRunCount: number;
-    totalAccommodationCost: number;
-    totalFoodCost: number;
-    totalMarketingCost: number;
-  } | undefined
-): DashboardMetrics | null {
-  if (!summary) return null;
-
-  const totalShows = summary.totalRuns;
-  const netProfit = summary.totalProfit;
-  const totalIncome = summary.totalIncome;
-  const totalExpenses = summary.totalExpenses;
-  const totalKm = summary.totalKmDriven;
-  const avgProfit = summary.avgRunProfit;
-  const bestProfit = summary.bestRunProfit;
-  const worstProfit = summary.worstRunProfit;
-  const profitableCount = summary.profitableRunCount;
-  const totalAccom = summary.totalAccommodationCost;
-  const totalFood = summary.totalFoodCost;
-  const totalMarketing = summary.totalMarketingCost;
-  const fuelAndOther = Math.max(0, totalExpenses - totalAccom - totalFood - totalMarketing);
-  const profitMargin = totalIncome > 0 ? pct(netProfit, totalIncome) : null;
-
-  // Biggest cost category
-  const costCategories = [
-    { label: "Accommodation", amount: totalAccom },
-    { label: "Fuel & Other", amount: fuelAndOther },
-    { label: "Food", amount: totalFood },
-    { label: "Marketing", amount: totalMarketing },
-  ].filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
-
-  const biggestCostCategory = costCategories.length > 0
-    ? { ...costCategories[0], pct: pct(costCategories[0].amount, totalExpenses) }
-    : null;
-
-  // Status
-  const status = deriveTourStatus(netProfit, totalShows, profitableCount);
-
-  // Insights
-  const insights = totalShows > 0
-    ? generateInsights({
-        netProfit, totalShows, profitableCount, totalExpenses,
-        totalAccom, totalFood, totalMarketing, fuelAndOther,
-        avgProfit, bestProfit, worstProfit,
-      })
-    : [];
-
-  return {
-    totalShows, netProfit, totalIncome, totalExpenses, totalKm,
-    avgProfit, bestProfit, worstProfit, profitableCount,
-    totalAccom, totalFood, totalMarketing, fuelAndOther,
-    profitMargin, biggestCostCategory, status, insights,
-  };
-}
-
-// ─── Tour Status derivation ───────────────────────────────────────────────────
-
-function deriveTourStatus(
-  netProfit: number,
-  totalShows: number,
-  profitableCount: number,
-): TourStatus {
-  if (totalShows === 0) return "STEADY";
-  const profitRatio = profitableCount / totalShows;
-  if (netProfit > 0 && profitRatio >= 0.6) return "HEALTHY";
-  if (netProfit > 0 && profitRatio >= 0.4) return "STEADY";
-  if (netProfit >= 0 || profitRatio >= 0.4) return "AT RISK";
+function deriveActualHealthStatus(actual: ActualPerformance): ActualHealthStatus {
+  if (actual.totalShows === 0) return "STEADY";
+  const profitRatio = actual.profitableShowCount / actual.totalShows;
+  if (actual.totalProfit > 0 && profitRatio >= 0.6) return "HEALTHY";
+  if (actual.totalProfit > 0 && profitRatio >= 0.4) return "STEADY";
+  if (actual.totalProfit >= 0 || profitRatio >= 0.4) return "AT RISK";
   return "LOSING MONEY";
 }
 
-function tourStatusMeta(status: TourStatus, netProfit: number) {
+function healthMeta(status: ActualHealthStatus, totalProfit: number) {
   switch (status) {
     case "HEALTHY":
       return {
@@ -152,7 +146,7 @@ function tourStatusMeta(status: TourStatus, netProfit: number) {
         bgColor: "bg-emerald-50",
         borderColor: "border-emerald-200",
         icon: CheckCircle2,
-        tagline: "You're on track — keep booking similar shows.",
+        message: "Completed shows are landing profitably overall.",
       };
     case "STEADY":
       return {
@@ -160,7 +154,7 @@ function tourStatusMeta(status: TourStatus, netProfit: number) {
         bgColor: "bg-amber-50",
         borderColor: "border-amber-200",
         icon: Minus,
-        tagline: netProfit > 0 ? "Solid progress — room to optimise." : "Mixed results — review your deal structure.",
+        message: totalProfit > 0 ? "You are profitable, but margins still look mixed." : "Results are mixed and need closer review.",
       };
     case "AT RISK":
       return {
@@ -168,7 +162,7 @@ function tourStatusMeta(status: TourStatus, netProfit: number) {
         bgColor: "bg-orange-50",
         borderColor: "border-orange-200",
         icon: AlertTriangle,
-        tagline: "You need more strong shows to offset current cost load.",
+        message: "A few more weak shows could flip the snapshot negative.",
       };
     case "LOSING MONEY":
       return {
@@ -176,151 +170,160 @@ function tourStatusMeta(status: TourStatus, netProfit: number) {
         bgColor: "bg-red-50",
         borderColor: "border-red-200",
         icon: TrendingDown,
-        tagline: "Review your costs and fee structure before the next run.",
+        message: "Completed show results are currently underwater overall.",
       };
   }
 }
 
-// ─── Insight generation ───────────────────────────────────────────────────────
+function buildActualInsights(actual: ActualPerformance) {
+  const insights: Array<{ icon: string; tone: "green" | "amber" | "red" | "neutral"; text: string }> = [];
 
-function generateInsights(opts: {
-  netProfit: number;
-  totalShows: number;
-  profitableCount: number;
-  totalExpenses: number;
-  totalAccom: number;
-  totalFood: number;
-  totalMarketing: number;
-  fuelAndOther: number;
-  avgProfit: number;
-  bestProfit: number;
-  worstProfit: number;
-}): Array<{ icon: string; text: string; tone: "green" | "amber" | "red" | "neutral" }> {
-  const insights: Array<{ icon: string; text: string; tone: "green" | "amber" | "red" | "neutral" }> = [];
-  const { netProfit, totalShows, profitableCount, totalExpenses, totalAccom, totalFood, fuelAndOther, avgProfit, worstProfit } = opts;
+  if (actual.totalShows === 0) return insights;
 
-  if (totalShows === 0) return [];
-
-  // Profitability
-  const allProfitable = profitableCount === totalShows && netProfit > 0;
-  if (allProfitable) {
-    insights.push({ icon: "✓", text: "You're profitable — this routing is working", tone: "green" });
-  } else if (netProfit < 0) {
-    insights.push({ icon: "↓", text: "You're currently under water overall — review your costs and fee structure", tone: "red" });
-  } else if (profitableCount < totalShows) {
-    insights.push({ icon: "~", text: `${profitableCount} of ${totalShows} shows are profitable — mixed results`, tone: "amber" });
+  if (actual.totalProfit > 0 && actual.profitableShowCount === actual.totalShows) {
+    insights.push({
+      icon: "✓",
+      tone: "green",
+      text: "Every completed past show in this snapshot is profitable.",
+    });
+  } else if (actual.totalProfit < 0) {
+    insights.push({
+      icon: "↓",
+      tone: "red",
+      text: "Completed shows are losing money overall - review fees, travel, and cost load.",
+    });
+  } else if (actual.profitableShowCount < actual.totalShows) {
+    insights.push({
+      icon: "~",
+      tone: "amber",
+      text: `${actual.profitableShowCount} of ${actual.totalShows} completed shows are profitable.`,
+    });
   }
 
-  // Biggest cost pressure
-  if (totalExpenses > 0) {
-    const accomPct = pct(totalAccom, totalExpenses);
-    const foodPct = pct(totalFood, totalExpenses);
-    const fuelPct = pct(fuelAndOther, totalExpenses);
-    const biggestCost = [
-      { label: "Accommodation", pct: accomPct },
-      { label: "Food", pct: foodPct },
-      { label: "Fuel & Other", pct: fuelPct },
-    ].sort((a, b) => b.pct - a.pct)[0];
+  const fuelAndOther = Math.max(
+    0,
+    actual.totalExpenses - actual.totalAccommodationCost - actual.totalFoodCost - actual.totalMarketingCost,
+  );
 
-    if (biggestCost && biggestCost.pct > 25) {
-      const tone = biggestCost.pct > 35 ? "amber" : "neutral";
+  if (actual.totalExpenses > 0) {
+    const categories = [
+      { label: "Accommodation", amount: actual.totalAccommodationCost },
+      { label: "Food", amount: actual.totalFoodCost },
+      { label: "Marketing", amount: actual.totalMarketingCost },
+      { label: "Fuel and other", amount: fuelAndOther },
+    ].sort((left, right) => right.amount - left.amount);
+
+    const biggest = categories[0];
+    if (biggest && biggest.amount > 0) {
       insights.push({
         icon: "$",
-        text: `${biggestCost.label} is eating ${biggestCost.pct}% of your costs`,
-        tone,
+        tone: biggest.amount / actual.totalExpenses > 0.35 ? "amber" : "neutral",
+        text: `${biggest.label} is your biggest cost pressure at ${pct(biggest.amount, actual.totalExpenses)}% of expenses.`,
       });
     }
   }
 
-  // Average show return
-  if (totalShows > 0 && avgProfit !== 0) {
-    if (avgProfit > 500) {
-      insights.push({ icon: "↑", text: `Your average show return of $${fmtMoney(avgProfit)} is looking healthy`, tone: "green" });
-    } else if (avgProfit > 0) {
-      insights.push({ icon: "→", text: `Average $${fmtMoney(avgProfit)} per show — room to grow your fees`, tone: "neutral" });
-    } else {
-      insights.push({ icon: "↓", text: `Average show is at $${sign(avgProfit)}${fmtMoney(avgProfit)} — needs attention`, tone: "red" });
+  if (actual.totalShows > 0) {
+    const avg = actual.avgShowProfit;
+    if (avg > 500) {
+      insights.push({
+        icon: "↑",
+        tone: "green",
+        text: `Average completed show profit is $${fmtMoney(avg)}.`,
+      });
+    } else if (avg > 0) {
+      insights.push({
+        icon: "→",
+        tone: "neutral",
+        text: `Average completed show profit is $${fmtMoney(avg)} with room to improve.`,
+      });
+    } else if (avg < 0) {
+      insights.push({
+        icon: "↓",
+        tone: "red",
+        text: `Average completed show profit is ${sign(avg)}$${fmtMoney(avg)}.`,
+      });
     }
   }
 
-  // Show consistency
-  if (totalShows > 1 && worstProfit < 0 && netProfit > 0) {
+  if (actual.totalShows > 1 && actual.worstShowProfit < 0 && actual.totalProfit > 0) {
     insights.push({
       icon: "!",
-      text: `One or more shows are dragging the average down — check your worst performers`,
       tone: "amber",
+      text: "One or more weak shows are dragging down otherwise positive results.",
     });
   }
 
-  return insights.slice(0, 5);
+  return insights.slice(0, 4);
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-2xl border border-border/60 bg-card shadow-[0_2px_12px_rgba(58,47,38,0.10)] px-5 py-5", className)}>
+    <div className={cn("rounded-2xl border border-border/60 bg-card px-5 py-5 shadow-[0_2px_12px_rgba(58,47,38,0.10)]", className)}>
       {children}
     </div>
   );
 }
 
-function CardLabel({ children }: { children: React.ReactNode }) {
+function CardLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60 mb-4">
+    <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/60">
       {children}
     </p>
   );
 }
 
-function DashboardHero({
-  metrics,
+function SectionHeader({
+  title,
+  helper,
+  rule,
 }: {
-  metrics: DashboardMetrics | null;
+  title: string;
+  helper: string;
+  rule: string;
 }) {
-  const hasData = metrics != null && metrics.totalShows > 0;
-  const netProfit = metrics?.netProfit ?? 0;
-  const profitPositive = netProfit > 0;
-  const profitNegative = netProfit < 0;
-  const profitColor = profitPositive ? "text-emerald-600" : profitNegative ? "text-red-500" : "text-amber-500";
+  return (
+    <div className="space-y-1">
+      <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+      <p className="text-sm text-muted-foreground">{helper}</p>
+      <p className="text-xs text-muted-foreground/75">{rule}</p>
+    </div>
+  );
+}
+
+function DashboardHero({
+  actual,
+  future,
+}: {
+  actual: ActualPerformance | null;
+  future: FuturePotential | null;
+}) {
+  const actualShows = actual?.totalShows ?? 0;
+  const projectedTours = future?.projectedTours ?? 0;
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
+      <div className="space-y-2">
         <h1 className="text-4xl font-bold tracking-tight text-foreground" style={{ fontFamily: "var(--app-font-serif)" }}>
-          Tour Snapshot
+          Past Show Snapshot
         </h1>
-        {!hasData ? (
-          <p className="text-muted-foreground mt-2 text-sm">
-            No touring data yet — add your first show to start tracking performance.
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-2">
-            <span className={cn("text-base font-bold", profitColor)}>
-              {sign(netProfit)}${fmtMoney(netProfit)} net profit
-            </span>
-            <span className="text-muted-foreground/50">·</span>
-            <span className="text-sm text-muted-foreground">
-              {metrics.profitableCount}/{metrics.totalShows} show{metrics.totalShows !== 1 ? "s" : ""} profitable
-            </span>
-            {metrics.totalKm > 0 && (
-              <>
-                <span className="text-muted-foreground/50">·</span>
-                <span className="text-sm text-muted-foreground/70">{metrics.totalKm.toLocaleString()} km</span>
-              </>
-            )}
-          </div>
-        )}
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Real numbers from completed past shows only. Future Potential is shown separately below so actual results and projected plans never blend together.
+        </p>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
+          <span>{actualShows} completed past show{actualShows !== 1 ? "s" : ""}</span>
+          <span>{projectedTours} upcoming tour{projectedTours !== 1 ? "s" : ""} projected separately</span>
+        </div>
       </div>
       <div className="flex gap-2 shrink-0 sm:mt-1">
         <Button asChild size="sm" className="bg-primary text-primary-foreground shadow-sm">
           <Link href="/runs/new">
-            <Map className="w-4 h-4 mr-1.5" /> New Show
+            <Map className="mr-1.5 h-4 w-4" /> New Show
           </Link>
         </Button>
         <Button asChild size="sm" variant="outline">
           <Link href="/tours/new">
-            <Navigation className="w-4 h-4 mr-1.5" /> New Tour
+            <Navigation className="mr-1.5 h-4 w-4" /> New Tour
           </Link>
         </Button>
       </div>
@@ -328,209 +331,120 @@ function DashboardHero({
   );
 }
 
-function ProfitHealthCard({
-  netProfit,
-  totalIncome,
-  totalExpenses,
+function StatCard({
+  label,
+  value,
+  subtext,
+  tone,
 }: {
-  netProfit: number;
-  totalIncome: number;
-  totalExpenses: number;
+  label: string;
+  value: string;
+  subtext?: string;
+  tone?: "positive" | "negative" | "neutral";
 }) {
-  const margin = totalIncome > 0 ? pct(netProfit, totalIncome) : null;
-
   return (
     <Card>
-      <CardLabel>💰 Profit Health</CardLabel>
-      <div className="flex items-baseline gap-1.5 mb-1">
-        <span className={cn("text-4xl font-bold tabular-nums", netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
-          {sign(netProfit)}${fmtMoney(netProfit)}
-        </span>
-        <span className="text-sm text-muted-foreground font-medium">Net Profit</span>
+      <CardLabel>{label}</CardLabel>
+      <div
+        className={cn(
+          "text-3xl font-bold tabular-nums",
+          tone === "positive" && "text-emerald-600",
+          tone === "negative" && "text-red-500",
+        )}
+      >
+        {value}
       </div>
-      {margin !== null && (
-        <p className={cn("text-sm font-medium", margin >= 0 ? "text-muted-foreground" : "text-red-500")}>
-          {margin}% Margin
-        </p>
-      )}
-      <div className="border-t border-border/30 mt-3 pt-3">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Income: <span className="font-medium text-foreground">${fmtMoney(totalIncome)}</span></span>
-          <span>Expenses: <span className="font-medium text-foreground">${fmtMoney(totalExpenses)}</span></span>
-        </div>
-        <p className="text-xs text-muted-foreground/60 mt-2 italic">
-          Break-even ticket data not yet aggregated
-        </p>
-      </div>
+      {subtext && <p className="mt-2 text-sm text-muted-foreground">{subtext}</p>}
     </Card>
   );
 }
 
-function CostPressureCard({
-  totalExpenses,
-  totalAccom,
-  totalFood,
-  totalMarketing,
-}: {
-  totalExpenses: number;
-  totalAccom: number;
-  totalFood: number;
-  totalMarketing: number;
-}) {
-  const fuelAndOther = Math.max(0, totalExpenses - totalAccom - totalFood - totalMarketing);
+function CostPressureCard({ actual }: { actual: ActualPerformance }) {
+  const fuelAndOther = Math.max(
+    0,
+    actual.totalExpenses - actual.totalAccommodationCost - actual.totalFoodCost - actual.totalMarketingCost,
+  );
 
   const categories = [
-    { label: "Accommodation", amount: totalAccom },
-    { label: "Fuel & Other", amount: fuelAndOther },
-    { label: "Food", amount: totalFood },
-    { label: "Marketing", amount: totalMarketing },
-  ].filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
-
-  const biggest = categories[0] ?? null;
-  const biggestPct = biggest ? pct(biggest.amount, totalExpenses) : 0;
+    { label: "Accommodation", amount: actual.totalAccommodationCost },
+    { label: "Fuel and other", amount: fuelAndOther },
+    { label: "Food", amount: actual.totalFoodCost },
+    { label: "Marketing", amount: actual.totalMarketingCost },
+  ]
+    .filter(category => category.amount > 0)
+    .sort((left, right) => right.amount - left.amount);
 
   return (
     <Card>
-      <CardLabel>🚗 Cost Pressure</CardLabel>
+      <CardLabel>Cost Pressure</CardLabel>
       {categories.length === 0 ? (
-        <p className="text-sm text-muted-foreground italic">No cost data yet</p>
+        <p className="text-sm italic text-muted-foreground">No cost data from completed past shows yet.</p>
       ) : (
         <div className="space-y-2">
-          {categories.slice(0, 3).map((c) => (
-            <div key={c.label} className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">{c.label}:</span>
-              <span className="font-semibold tabular-nums">${fmtMoney(c.amount)}</span>
+          {categories.slice(0, 4).map(category => (
+            <div key={category.label} className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{category.label}</span>
+              <span className="font-semibold tabular-nums">${fmtMoney(category.amount)}</span>
             </div>
           ))}
-          {biggest && (
-            <div className="border-t border-border/30 pt-2 mt-2 flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Biggest cost:</span>
-              <span className={cn(
-                "text-xs font-semibold",
-                biggestPct > 40 ? "text-amber-600" : "text-foreground"
-              )}>
-                {biggest.label}
-              </span>
-              {biggestPct > 40 && <AlertTriangle className="w-3 h-3 text-amber-500" />}
-            </div>
-          )}
         </div>
       )}
     </Card>
   );
 }
 
-function ShowPerformanceCard({
-  totalShows,
-  avgProfit,
-  bestProfit,
-  worstProfit,
-}: {
-  totalShows: number;
-  avgProfit: number;
-  bestProfit: number;
-  worstProfit: number;
-}) {
+function ActualHealthCard({ actual }: { actual: ActualPerformance }) {
+  const status = deriveActualHealthStatus(actual);
+  const meta = healthMeta(status, actual.totalProfit);
+  const Icon = meta.icon;
+
   return (
-    <Card>
-      <CardLabel>🎸 Show Performance</CardLabel>
-      {totalShows === 0 ? (
-        <p className="text-sm text-muted-foreground italic">No shows yet</p>
-      ) : (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Best:</span>
-            <span className={cn("text-sm", profitClass(bestProfit))}>
-              {sign(bestProfit)}${fmtMoney(bestProfit)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Worst:</span>
-            <span className={cn("text-sm", profitClass(worstProfit))}>
-              {sign(worstProfit)}${fmtMoney(worstProfit)}
-            </span>
-          </div>
-          <div className="border-t border-border/30 pt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Avg:</span>
-              <div className="text-right">
-                <span className={cn("text-2xl font-bold", avgProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
-                  {sign(avgProfit)}${fmtMoney(avgProfit)}
-                </span>
-                <span className="text-xs text-muted-foreground ml-1">per show</span>
-              </div>
-            </div>
-          </div>
+    <Card className={cn("border-2", meta.borderColor)}>
+      <div className="mb-4 flex items-center gap-2.5">
+        <div className={cn("flex h-8 w-8 items-center justify-center rounded-full", meta.bgColor)}>
+          <Icon className={cn("h-4 w-4", meta.color)} />
         </div>
-      )}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Past Show Health</p>
+          <p className={cn("text-sm font-bold tracking-wide", meta.color)}>{status}</p>
+        </div>
+      </div>
+      <p className="text-2xl font-bold tabular-nums text-foreground">
+        {sign(actual.totalProfit)}${fmtMoney(actual.totalProfit)}
+      </p>
+      <p className="mt-3 border-t border-border/30 pt-3 text-xs leading-relaxed text-muted-foreground">
+        {meta.message}
+      </p>
     </Card>
   );
 }
 
-function InsightIcon({ icon, tone }: { icon: string; tone: "green" | "amber" | "red" | "neutral" }) {
-  const cls = {
+function InsightIcon({ tone, icon }: { tone: "green" | "amber" | "red" | "neutral"; icon: string }) {
+  const className = {
     green: "text-emerald-600",
     amber: "text-amber-500",
     red: "text-red-500",
     neutral: "text-muted-foreground",
   }[tone];
-  return <span className={cn("text-sm shrink-0 mt-0.5 w-4 text-center", cls)}>{icon}</span>;
+
+  return <span className={cn("mt-0.5 w-4 shrink-0 text-center text-sm", className)}>{icon}</span>;
 }
 
-function DashboardInsights({
-  insights,
-}: {
-  insights: Array<{ icon: string; text: string; tone: "green" | "amber" | "red" | "neutral" }>;
-}) {
+function ActualInsightsCard({ actual }: { actual: ActualPerformance }) {
+  const insights = buildActualInsights(actual);
   if (insights.length === 0) return null;
+
   return (
-    <Card className="h-full border-l-4 border-l-primary/30 bg-card">
-      <CardLabel>💡 What This Means</CardLabel>
+    <Card className="h-full border-l-4 border-l-primary/30">
+      <CardLabel>What This Means</CardLabel>
       <ul className="space-y-4">
-        {insights.map((ins, i) => (
-          <li key={i} className="flex gap-3 items-start py-1">
-            <InsightIcon icon={ins.icon} tone={ins.tone} />
-            <span className="text-sm text-foreground leading-relaxed">{ins.text}</span>
+        {insights.map((insight, index) => (
+          <li key={index} className="flex items-start gap-3">
+            <InsightIcon tone={insight.tone} icon={insight.icon} />
+            <span className="text-sm leading-relaxed text-foreground">{insight.text}</span>
           </li>
         ))}
       </ul>
-    </Card>
-  );
-}
-
-function TourStatusCard({
-  status,
-  netProfit,
-  totalShows,
-}: {
-  status: TourStatus;
-  netProfit: number;
-  totalShows: number;
-}) {
-  const meta = tourStatusMeta(status, netProfit);
-  const Icon = meta.icon;
-  return (
-    <Card className={cn("border-2", meta.borderColor, "shadow-[0_4px_16px_rgba(58,47,38,0.12)]")}>
-      <div className="flex items-center gap-2.5 mb-4">
-        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shadow-sm", meta.bgColor)}>
-          <Icon className={cn("w-4 h-4", meta.color)} />
-        </div>
-        <div>
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Tour Status</p>
-          <p className={cn("text-sm font-bold tracking-wide", meta.color)}>{status}</p>
-        </div>
-      </div>
-      {totalShows > 0 && (
-        <>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Net Profit</p>
-          <p className={cn("text-2xl font-bold tabular-nums", netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
-            {sign(netProfit)}${fmtMoney(netProfit)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-3 leading-relaxed border-t border-border/30 pt-3">
-            {meta.tagline}
-          </p>
-        </>
-      )}
     </Card>
   );
 }
@@ -540,67 +454,45 @@ function RecentShowCard({
   isBest,
   isWorst,
 }: {
-  run: {
-    id: number;
-    venueName?: string | null;
-    city?: string | null;
-    origin?: string | null;
-    destination?: string | null;
-    showDate?: string | null;
-    createdAt: string;
-    dealType?: string | null;
-    totalProfit?: number | null;
-    totalIncome?: number | null;
-  };
+  run: RecentRun;
   isBest: boolean;
   isWorst: boolean;
 }) {
-  const profit = run.totalProfit ?? 0;
-  const profitable = profit >= 0;
+  const profit = run.actualProfit ?? run.totalProfit ?? 0;
   const name =
     run.venueName ||
     run.city ||
-    (run.origin && run.destination ? `${run.origin} → ${run.destination}` : "Show");
-  const dateStr = run.showDate || run.createdAt;
-  const deal = dealLabel(run.dealType);
+    (run.origin && run.destination ? `${run.origin} -> ${run.destination}` : "Past Show");
 
   return (
     <Link href={`/runs/${run.id}`}>
-      <div className="group rounded-2xl border border-border/60 bg-card shadow-[0_2px_10px_rgba(58,47,38,0.09)] px-4 py-4 hover:shadow-[0_4px_16px_rgba(58,47,38,0.14)] hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-150 cursor-pointer h-full flex flex-col justify-between gap-3">
-        <div className="flex items-start gap-2 justify-between">
-          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">{name}</p>
-          <span className="text-[10px] text-muted-foreground/50 shrink-0 pt-0.5 font-medium">
-            {dateStr ? format(new Date(dateStr), "MMM d") : ""}
+      <div className="group flex h-full cursor-pointer flex-col justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-4 shadow-[0_2px_10px_rgba(58,47,38,0.09)] transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(58,47,38,0.14)]">
+        <div className="flex items-start justify-between gap-2">
+          <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
+            {name}
+          </p>
+          <span className="shrink-0 pt-0.5 text-[10px] font-medium text-muted-foreground/50">
+            {formatDateLabel(run.showDate ?? run.createdAt)}
           </span>
         </div>
 
-        <div className={cn("text-2xl font-bold tabular-nums", profitable ? "text-emerald-600" : "text-red-500")}>
+        <div className={profitClass(profit, false)}>
           {sign(profit)}${fmtMoney(profit)}
-          <span className="text-xs font-normal text-muted-foreground ml-1">profit</span>
+          <span className="ml-1 text-xs font-normal text-muted-foreground">profit</span>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
           <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {deal}
+            {dealLabel(run.dealType)}
           </span>
           {isBest && (
             <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <TrendingUp className="w-2.5 h-2.5" /> Best
+              <TrendingUp className="h-2.5 w-2.5" /> Best
             </span>
           )}
           {isWorst && !isBest && (
             <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-              <TrendingDown className="w-2.5 h-2.5" /> Worst
-            </span>
-          )}
-          {!isBest && !isWorst && profitable && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <CheckCircle2 className="w-2.5 h-2.5" /> Profitable
-            </span>
-          )}
-          {!profitable && (
-            <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-600">
-              Loss
+              <TrendingDown className="h-2.5 w-2.5" /> Toughest
             </span>
           )}
         </div>
@@ -609,168 +501,294 @@ function RecentShowCard({
   );
 }
 
-// ─── Loading skeletons ────────────────────────────────────────────────────────
-
-function SkeletonHero() {
+function UpcomingTourCard({ tour }: { tour: UpcomingTour }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="space-y-2">
-        <Skeleton className="h-9 w-72 rounded-xl" />
-        <Skeleton className="h-4 w-48 rounded" />
+    <Link href={`/tours/${tour.id}`}>
+      <div className="group flex h-full cursor-pointer flex-col justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-4 shadow-[0_2px_10px_rgba(58,47,38,0.09)] transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(58,47,38,0.14)]">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary">
+              {tour.name}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Next stop {formatDateLabel(tour.nextStopDate)}
+              {tour.endDate ? ` · ends ${formatDateLabel(tour.endDate)}` : ""}
+            </p>
+          </div>
+          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
+        </div>
+
+        <div>
+          <p className={profitClass(tour.projectedProfit, false)}>
+            {sign(tour.projectedProfit)}${fmtMoney(tour.projectedProfit)}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">projected</span>
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            ${fmtMoney(tour.projectedIncome)} income · ${fmtMoney(tour.projectedExpenses)} expenses
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {tour.projectedShows} planned show{tour.projectedShows !== 1 ? "s" : ""}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            {tour.projectedKm.toLocaleString()} km
+          </span>
+        </div>
       </div>
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-28 rounded-lg" />
-        <Skeleton className="h-8 w-28 rounded-lg" />
-      </div>
-    </div>
+    </Link>
   );
 }
 
-function SkeletonCards() {
+function EmptyBlock({
+  title,
+  description,
+  actionHref,
+  actionLabel,
+}: {
+  title: string;
+  description: string;
+  actionHref: string;
+  actionLabel: string;
+}) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {[0, 1, 2].map((i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}
-    </div>
-  );
-}
-
-function SkeletonInsights() {
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
-      <Skeleton className="h-48 rounded-2xl" />
-      <Skeleton className="h-48 rounded-2xl" />
-    </div>
-  );
-}
-
-function SkeletonRecentShows() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {[0, 1, 2].map((i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}
-    </div>
-  );
-}
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function EmptyDashboard() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-muted/40 flex items-center justify-center">
-        <Map className="w-8 h-8 text-muted-foreground/40" />
+    <Card className="border-dashed text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted/40">
+        <Map className="h-7 w-7 text-muted-foreground/40" />
       </div>
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">No shows logged yet</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Start by logging a show — you'll see your stats and insights here.
-        </p>
-      </div>
-      <Button asChild>
-        <Link href="/runs/new">
-          <Map className="w-4 h-4 mr-1.5" /> Log your first show
-        </Link>
+      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
+      <Button asChild className="mt-5">
+        <Link href={actionHref}>{actionLabel}</Link>
       </Button>
+    </Card>
+  );
+}
+
+function SkeletonCards({ count = 3 }: { count?: number }) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: count }).map((_, index) => (
+        <Skeleton key={index} className="h-36 rounded-2xl" />
+      ))}
     </div>
   );
 }
 
-// ─── Main dashboard ───────────────────────────────────────────────────────────
+function SkeletonList() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {Array.from({ length: 2 }).map((_, index) => (
+        <Skeleton key={index} className="h-36 rounded-2xl" />
+      ))}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
   const { data: recent, isLoading: loadingRecent } = useGetDashboardRecent();
 
-  // ── Single centralised metrics object from real API data ────────────────────
-  const metrics = buildDashboardMetrics(summary as Parameters<typeof buildDashboardMetrics>[0]);
+  const dashboardSummary = (summary ?? null) as DashboardSummaryData | null;
+  const dashboardRecent = (recent ?? null) as DashboardRecentData | null;
 
-  const recentRuns = recent?.recentRuns ?? [];
+  const actual = dashboardSummary?.actualPerformance ?? null;
+  const future = dashboardSummary?.futurePotential ?? null;
+  const recentRuns = dashboardRecent?.recentRuns ?? [];
+  const upcomingTours = dashboardRecent?.upcomingTours ?? [];
 
-  // Best/worst badges for the recent show cards (based on the displayed subset)
-  const runProfits = recentRuns.map((r: { totalProfit?: number | null }) => r.totalProfit ?? 0);
-  const maxProfit = recentRuns.length > 0 ? Math.max(...runProfits) : null;
-  const minProfit = recentRuns.length > 1 ? Math.min(...runProfits) : null;
+  const hasActual = (actual?.totalShows ?? 0) > 0;
+  const hasFuture = (future?.projectedTours ?? 0) > 0;
+  const runProfits = recentRuns.map(run => run.actualProfit ?? run.totalProfit ?? 0);
+  const maxRecentProfit = runProfits.length > 0 ? Math.max(...runProfits) : null;
+  const minRecentProfit = runProfits.length > 1 ? Math.min(...runProfits) : null;
 
-  const isEmpty = !loadingSummary && !loadingRecent && (metrics?.totalShows ?? 0) === 0 && recentRuns.length === 0;
+  const isCompletelyEmpty =
+    !loadingSummary &&
+    !loadingRecent &&
+    !hasActual &&
+    !hasFuture &&
+    recentRuns.length === 0 &&
+    upcomingTours.length === 0;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-8">
-
-      {/* ── Hero ── */}
-      {loadingSummary ? <SkeletonHero /> : (
-        <DashboardHero metrics={metrics} />
+    <div className="space-y-10 pb-8">
+      {loadingSummary ? (
+        <Skeleton className="h-28 rounded-2xl" />
+      ) : (
+        <DashboardHero actual={actual} future={future} />
       )}
 
-      {isEmpty ? <EmptyDashboard /> : (
+      {isCompletelyEmpty ? (
+        <EmptyBlock
+          title="No dashboard data yet"
+          description="Past Show Snapshot only uses completed past shows, and Future Potential only uses upcoming tours with usable projected dates."
+          actionHref="/runs/new"
+          actionLabel="Log your first show"
+        />
+      ) : (
         <>
-          {/* ── 3 Core Cards ── */}
-          {loadingSummary ? <SkeletonCards /> : metrics && (
-            <div className="grid gap-4 sm:grid-cols-3">
-              <ProfitHealthCard
-                netProfit={metrics.netProfit}
-                totalIncome={metrics.totalIncome}
-                totalExpenses={metrics.totalExpenses}
+          <section className="space-y-4">
+            {actual && (
+              <SectionHeader
+                title={actual.label}
+                helper={actual.helperText}
+                rule={`${actual.totalsRule}. Headline totals in this section never include future tours or planned shows.`}
               />
-              <CostPressureCard
-                totalExpenses={metrics.totalExpenses}
-                totalAccom={metrics.totalAccom}
-                totalFood={metrics.totalFood}
-                totalMarketing={metrics.totalMarketing}
-              />
-              <ShowPerformanceCard
-                totalShows={metrics.totalShows}
-                avgProfit={metrics.avgProfit}
-                bestProfit={metrics.bestProfit}
-                worstProfit={metrics.worstProfit}
-              />
-            </div>
-          )}
+            )}
 
-          {/* ── Insights + Tour Status ── */}
-          {loadingSummary ? <SkeletonInsights /> : metrics && metrics.insights.length > 0 && (
-            <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
-              <DashboardInsights insights={metrics.insights} />
-              <TourStatusCard
-                status={metrics.status}
-                netProfit={metrics.netProfit}
-                totalShows={metrics.totalShows}
-              />
-            </div>
-          )}
-
-          {/* ── Recent Shows ── */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold">Recent Shows</h2>
-              <Button variant="ghost" size="sm" asChild className="h-7 text-xs px-2">
-                <Link href="/runs">
-                  View all <ChevronRight className="w-3 h-3 ml-0.5" />
-                </Link>
-              </Button>
-            </div>
-
-            {loadingRecent ? <SkeletonRecentShows /> : recentRuns.length === 0 ? (
-              <div className="py-8 text-center rounded-2xl border border-dashed border-border/40 text-muted-foreground">
-                <Map className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No shows logged yet</p>
+            {loadingSummary ? (
+              <SkeletonCards count={4} />
+            ) : actual && hasActual ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  label="Net Profit"
+                  value={`${sign(actual.totalProfit)}$${fmtMoney(actual.totalProfit)}`}
+                  subtext={`$${fmtMoney(actual.totalIncome)} income · $${fmtMoney(actual.totalExpenses)} expenses`}
+                  tone={actual.totalProfit >= 0 ? "positive" : "negative"}
+                />
+                <StatCard
+                  label="Completed Shows"
+                  value={actual.totalShows.toString()}
+                  subtext={`${actual.profitableShowCount} profitable · ${actual.totalKmDriven.toLocaleString()} km`}
+                />
+                <StatCard
+                  label="Average Show"
+                  value={`${sign(actual.avgShowProfit)}$${fmtMoney(actual.avgShowProfit)}`}
+                  subtext={`Best ${sign(actual.bestShowProfit)}$${fmtMoney(actual.bestShowProfit)} · Worst ${sign(actual.worstShowProfit)}$${fmtMoney(actual.worstShowProfit)}`}
+                  tone={actual.avgShowProfit >= 0 ? "positive" : "negative"}
+                />
+                <CostPressureCard actual={actual} />
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {recentRuns.slice(0, 6).map((run: { id: number; totalProfit?: number | null; venueName?: string | null; city?: string | null; origin?: string | null; destination?: string | null; showDate?: string | null; createdAt: string; dealType?: string | null; totalIncome?: number | null }) => {
-                  const p = run.totalProfit ?? 0;
-                  const isBest = maxProfit !== null && p === maxProfit;
-                  const isWorst = minProfit !== null && p === minProfit && !isBest;
-                  return (
-                    <RecentShowCard
-                      key={run.id}
-                      run={run}
-                      isBest={isBest}
-                      isWorst={isWorst}
-                    />
-                  );
-                })}
-              </div>
+              <EmptyBlock
+                title="No completed past shows yet"
+                description="Past Show Snapshot only counts runs dated today or earlier, so future plans do not affect actual performance."
+                actionHref="/runs/new"
+                actionLabel="Add a past show"
+              />
             )}
-          </div>
+
+            {loadingSummary ? (
+              <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+                <Skeleton className="h-48 rounded-2xl" />
+                <Skeleton className="h-48 rounded-2xl" />
+              </div>
+            ) : actual && hasActual ? (
+              <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+                <ActualInsightsCard actual={actual} />
+                <ActualHealthCard actual={actual} />
+              </div>
+            ) : null}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Recent Past Shows</h3>
+                <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
+                  <Link href="/runs">
+                    View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                  </Link>
+                </Button>
+              </div>
+
+              {loadingRecent ? (
+                <SkeletonList />
+              ) : recentRuns.length === 0 ? (
+                <Card className="border-dashed text-center">
+                  <p className="text-sm text-muted-foreground">No completed past shows are available yet.</p>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {recentRuns.map(run => {
+                    const profit = run.actualProfit ?? run.totalProfit ?? 0;
+                    const isBest = maxRecentProfit != null && profit === maxRecentProfit;
+                    const isWorst = minRecentProfit != null && profit === minRecentProfit && !isBest;
+                    return (
+                      <RecentShowCard
+                        key={run.id}
+                        run={run}
+                        isBest={isBest}
+                        isWorst={isWorst}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            {future && (
+              <SectionHeader
+                title={future.label}
+                helper={future.helperText}
+                rule={`${future.totalsRule}. Projected totals in this section never include synced past-show runs or standalone upcoming runs.`}
+              />
+            )}
+
+            {loadingSummary ? (
+              <SkeletonCards count={4} />
+            ) : future && hasFuture ? (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  label="Projected Profit"
+                  value={`${sign(future.projectedProfit)}$${fmtMoney(future.projectedProfit)}`}
+                  subtext="Estimated from upcoming tours only"
+                  tone={future.projectedProfit >= 0 ? "positive" : "negative"}
+                />
+                <StatCard
+                  label="Projected Income"
+                  value={`$${fmtMoney(future.projectedIncome)}`}
+                  subtext={`$${fmtMoney(future.projectedExpenses)} projected expenses`}
+                />
+                <StatCard
+                  label="Upcoming Tours"
+                  value={future.projectedTours.toString()}
+                  subtext={`${future.projectedShows} planned shows`}
+                />
+                <StatCard
+                  label="Projected Distance"
+                  value={`${future.projectedKm.toLocaleString()} km`}
+                  subtext={`Avg ${sign(future.avgProjectedTourProfit)}$${fmtMoney(future.avgProjectedTourProfit)} per tour`}
+                />
+              </div>
+            ) : (
+              <EmptyBlock
+                title="No upcoming tour projections yet"
+                description="Future Potential only uses tours where all usable planned stops are still in the future. Started tours, past stops, cancelled stops, and undated stops stay out of headline projected totals."
+                actionHref="/tours/new"
+                actionLabel="Plan a tour"
+              />
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Upcoming Tours</h3>
+                <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
+                  <Link href="/tours">
+                    View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                  </Link>
+                </Button>
+              </div>
+
+              {loadingRecent ? (
+                <SkeletonList />
+              ) : upcomingTours.length === 0 ? (
+                <Card className="border-dashed text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No fully upcoming tours with usable projected dates are available yet.
+                  </p>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {upcomingTours.map(tour => (
+                    <UpcomingTourCard key={tour.id} tour={tour} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </>
       )}
     </div>

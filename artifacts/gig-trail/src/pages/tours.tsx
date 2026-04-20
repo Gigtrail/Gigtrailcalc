@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { useGetTours, useDeleteTour, getGetToursQueryKey } from "@workspace/api-client-react";
+import {
+  useGetTours,
+  useDeleteTour,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Plus, Navigation, Trash2, MapPin, Mic2, ArrowRight, Route, LayoutGrid, Table2, ChevronUp, ChevronDown, ChevronsUpDown, Search, X } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
@@ -686,6 +692,8 @@ export default function Tours() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
           toast({ title: "Tour deleted" });
         },
         onError: () => {

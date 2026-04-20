@@ -4,6 +4,7 @@ import {
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
   useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
   getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey,
+  getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey,
   syncStopToPastShow as syncStopRaw,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -152,7 +153,7 @@ export default function TourDetail() {
           },
         },
         {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tour", tourId] }),
+          onSuccess: () => invalidateTourSummaryQueries(),
         }
       );
     }, 800);
@@ -205,13 +206,22 @@ export default function TourDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stops, tourId]);
 
+  const invalidateTourSummaryQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["tour", tourId] });
+    queryClient.invalidateQueries({ queryKey: ["tourStops", tourId] });
+    queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  };
+
   const handleDeleteStop = (stopId: number) => {
     deleteStop.mutate(
       { tourId, stopId },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
-          queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           toast({ title: "Stop deleted" });
         },
         onError: () => {
@@ -227,6 +237,7 @@ export default function TourDetail() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           toast({ title: `"${vehicleName}" added to tour fleet` });
         },
         onError: () => {
@@ -242,6 +253,7 @@ export default function TourDetail() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           toast({ title: `"${vehicleName}" removed from tour fleet` });
         },
         onError: () => {
@@ -305,7 +317,7 @@ export default function TourDetail() {
       },
       {
         onSuccess: (newStop) => {
-          queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           closePastShowModal();
           setImportingRunId(null);
           toast({ title: `"${run.venueName || run.destination || run.city}" added to trail` });
@@ -381,6 +393,7 @@ export default function TourDetail() {
   // that drive calc, so calc will not re-run after the write.
   const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    return;
     if (!calc || !tour) return;
     if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
     const netProfit  = Math.round((calc.netProfit    ?? 0) * 100) / 100;
@@ -394,10 +407,6 @@ export default function TourDetail() {
           id: tourId,
           data: {
             name: tour.name,
-            totalDistance: Math.round(calc.totalDistance ?? 0),
-            totalIncome: grossIncome,
-            totalCost: Math.round((calc.totalExpenses ?? 0) * 100) / 100,
-            totalProfit: netProfit,
           },
         },
         {
@@ -487,8 +496,9 @@ export default function TourDetail() {
   const accommodationNights = calc?.accommodationNights ?? (daysOnTour != null ? Math.max(0, daysOnTour - 1) : null);
   const daysWarning = daysOnTour != null && sortedStops.length > 0 && daysOnTour < sortedStops.length;
 
-  const netProfit = calc?.netProfit ?? 0;
-  const grossIncome = calc?.grossIncome ?? 0;
+  const totalDistanceKm = tour?.totalDistance ?? calc?.totalDistance ?? 0;
+  const grossIncome = tour?.totalIncome ?? calc?.grossIncome ?? 0;
+  const netProfit = tour?.totalProfit ?? calc?.netProfit ?? 0;
 
   const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
     ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
@@ -499,8 +509,10 @@ export default function TourDetail() {
     : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merchEstimate ?? 0) > 0).length;
   const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
   const totalMemberPayout = memberEarnings.totalPayout;
-  const totalExpensesWithPayouts = (calc?.totalExpenses ?? 0) + totalMemberPayout;
+  const totalExpenses = tour?.totalCost ?? calc?.totalExpenses ?? 0;
+  const totalExpensesWithPayouts = totalExpenses + totalMemberPayout;
   const profitAfterMemberFees = netProfit - totalMemberPayout;
+  const avgNetPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
 
   const biggestCost = (() => {
     if (!calc) return null;
@@ -1124,14 +1136,14 @@ export default function TourDetail() {
                     </div>
                   )}
 
-                  {calc && calc.totalDistance > 0 && (
+                  {calc && totalDistanceKm > 0 && (
                     <div className="bg-muted/10">
 
                       {/* Route summary */}
                       <div className="p-4 flex flex-wrap gap-x-6 gap-y-2 text-sm border-b border-border/30">
                         <div>
                           <span className="text-muted-foreground">Total Distance </span>
-                          <span className="font-semibold">{calc.totalDistance} km</span>
+                          <span className="font-semibold">{totalDistanceKm} km</span>
                         </div>
                         {calc.totalDriveTimeMinutes > 0 && (
                           <div>
@@ -1411,7 +1423,7 @@ export default function TourDetail() {
                       <span className="font-semibold text-sm group-hover:text-secondary transition-colors">Income</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-bold text-sm text-secondary">{fmt(calc.grossIncome)}</span>
+                      <span className="font-bold text-sm text-secondary">{fmt(grossIncome)}</span>
                       <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showIncomeBreakdown ? "rotate-180" : ""}`} />
                     </div>
                   </button>
@@ -1621,17 +1633,17 @@ export default function TourDetail() {
                 <div className="space-y-1.5 pt-4 border-t border-border/40 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Gross income</span>
-                    <span className="font-semibold text-secondary">{fmt(calc.grossIncome)}</span>
+                    <span className="font-semibold text-secondary">{fmt(grossIncome)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total expenses</span>
                     <span className="font-semibold text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
-                  {sortedStops.length > 0 && calc.avgPerShow !== 0 && (
+                  {sortedStops.length > 0 && avgNetPerShow !== 0 && (
                     <div className="flex justify-between border-t border-border/30 pt-1.5">
                       <span className="text-muted-foreground">Net per show</span>
-                      <span className={`font-semibold ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
-                        {fmt(calc.avgPerShow)}
+                      <span className={`font-semibold ${avgNetPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
+                        {fmt(avgNetPerShow)}
                       </span>
                     </div>
                   )}
@@ -1660,8 +1672,8 @@ export default function TourDetail() {
               {calc && (() => {
                 const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
                 const noRoute = hasVehicles && !calc.totalFuelCost && !(tour?.startLocation?.trim() || sortedStops.length > 1);
-                const showsNeeded = profitAfterMemberFees < 0 && calc.avgPerShow > 0
-                  ? Math.ceil(Math.abs(profitAfterMemberFees) / calc.avgPerShow)
+                const showsNeeded = profitAfterMemberFees < 0 && avgNetPerShow > 0
+                  ? Math.ceil(Math.abs(profitAfterMemberFees) / avgNetPerShow)
                   : null;
                 const noVehicle = (!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0;
                 return (

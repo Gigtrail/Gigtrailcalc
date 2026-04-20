@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, count, inArray } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable, runsTable, venuesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -26,20 +26,29 @@ import {
   AddTourVehicleResponse,
   DeleteTourVehicleParams,
 } from "@workspace/api-zod";
+import { loadTourDerivations } from "../lib/tour-derivations";
 
 const router: IRouter = Router();
 
-function serializeTour(t: typeof toursTable.$inferSelect) {
+function serializeTour(
+  t: typeof toursTable.$inferSelect,
+  derived?: {
+    totalDistance: number;
+    totalCost: number;
+    totalIncome: number;
+    totalProfit: number;
+  },
+) {
   return {
     ...t,
     startLocationLat: t.startLocationLat != null ? Number(t.startLocationLat) : null,
     startLocationLng: t.startLocationLng != null ? Number(t.startLocationLng) : null,
     endLocationLat: t.endLocationLat != null ? Number(t.endLocationLat) : null,
     endLocationLng: t.endLocationLng != null ? Number(t.endLocationLng) : null,
-    totalDistance: t.totalDistance != null ? Number(t.totalDistance) : null,
-    totalCost: t.totalCost != null ? Number(t.totalCost) : null,
-    totalIncome: t.totalIncome != null ? Number(t.totalIncome) : null,
-    totalProfit: t.totalProfit != null ? Number(t.totalProfit) : null,
+    totalDistance: derived?.totalDistance ?? (t.totalDistance != null ? Number(t.totalDistance) : null),
+    totalCost: derived?.totalCost ?? (t.totalCost != null ? Number(t.totalCost) : null),
+    totalIncome: derived?.totalIncome ?? (t.totalIncome != null ? Number(t.totalIncome) : null),
+    totalProfit: derived?.totalProfit ?? (t.totalProfit != null ? Number(t.totalProfit) : null),
     defaultFoodCost: t.defaultFoodCost != null ? Number(t.defaultFoodCost) : null,
     fuelPricePetrol: t.fuelPricePetrol != null ? Number(t.fuelPricePetrol) : null,
     fuelPriceDiesel: t.fuelPriceDiesel != null ? Number(t.fuelPriceDiesel) : null,
@@ -127,12 +136,18 @@ router.get("/tours", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const tours = await db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt));
-  const tourIds = tours.map(t => t.id);
-  const stopCounts = tourIds.length > 0
-    ? await db.select({ tourId: tourStopsTable.tourId, cnt: count() }).from(tourStopsTable).where(inArray(tourStopsTable.tourId, tourIds)).groupBy(tourStopsTable.tourId)
-    : [];
-  const stopCountMap = new Map(stopCounts.map(sc => [sc.tourId, sc.cnt]));
-  res.json(GetToursResponse.parse(tours.map(t => ({ ...serializeTour(t), stopCount: stopCountMap.get(t.id) ?? 0 }))));
+  const { metricsByTourId } = await loadTourDerivations(userId, tours);
+  res.json(
+    GetToursResponse.parse(
+      tours.map(tour => {
+        const derived = metricsByTourId.get(tour.id);
+        return {
+          ...serializeTour(tour, derived),
+          stopCount: derived?.stopCount ?? 0,
+        };
+      }),
+    ),
+  );
 });
 
 router.post("/tours", requireAuth, async (req, res): Promise<void> => {
@@ -168,8 +183,9 @@ router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Tour not found" });
     return;
   }
-  const stops = await db.select().from(tourStopsTable).where(eq(tourStopsTable.tourId, tour.id)).orderBy(tourStopsTable.stopOrder);
-  res.json(GetTourResponse.parse({ ...serializeTour(tour), stops: stops.map(serializeStop) }));
+  const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, [tour]);
+  const stops = stopsByTourId.get(tour.id) ?? [];
+  res.json(GetTourResponse.parse({ ...serializeTour(tour, metricsByTourId.get(tour.id)), stops: stops.map(serializeStop) }));
 });
 
 router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
@@ -184,12 +200,24 @@ router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [tour] = await db.update(toursTable).set(toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as Partial<typeof toursTable.$inferInsert>).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId))).returning();
+  const {
+    totalDistance: _ignoredTotalDistance,
+    totalCost: _ignoredTotalCost,
+    totalIncome: _ignoredTotalIncome,
+    totalProfit: _ignoredTotalProfit,
+    ...mutableTourFields
+  } = parsed.data;
+  const [tour] = await db
+    .update(toursTable)
+    .set(toDbNumeric(mutableTourFields as Record<string, unknown>, TOUR_NUMERIC) as Partial<typeof toursTable.$inferInsert>)
+    .where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId)))
+    .returning();
   if (!tour) {
     res.status(404).json({ error: "Tour not found" });
     return;
   }
-  res.json(UpdateTourResponse.parse(serializeTour(tour)));
+  const { metricsByTourId } = await loadTourDerivations(userId, [tour]);
+  res.json(UpdateTourResponse.parse(serializeTour(tour, metricsByTourId.get(tour.id))));
 });
 
 router.delete("/tours/:id", requireAuth, async (req, res): Promise<void> => {

@@ -112,6 +112,49 @@ export interface CreateProfileBody {
   notes?: string | null;
 }
 
+export interface UpdateProfileBody {
+  name?: string;
+  actType?: string;
+  /** @nullable */
+  homeBase?: string | null;
+  /** @nullable */
+  homeBaseLat?: number | null;
+  /** @nullable */
+  homeBaseLng?: number | null;
+  peopleCount?: number;
+  /** @nullable */
+  bandMembers?: string | null;
+  /** @nullable */
+  activeMemberIds?: string | null;
+  /** @nullable */
+  defaultVehicleId?: number | null;
+  vehicleType?: string;
+  /** @nullable */
+  vehicleName?: string | null;
+  fuelConsumption?: number;
+  expectedGigFee?: number;
+  minTakeHomePerPerson?: number;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  avgAccomPerNight?: number;
+  singleRoomsDefault?: number;
+  doubleRoomsDefault?: number;
+  avgFoodPerDay?: number;
+  /** @nullable */
+  maxDriveHoursPerDay?: number | null;
+  /** @nullable */
+  defaultFuelPrice?: number | null;
+  /** @nullable */
+  defaultPetrolPrice?: number | null;
+  /** @nullable */
+  defaultDieselPrice?: number | null;
+  /** @nullable */
+  defaultLpgPrice?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface Vehicle {
   id: number;
   name: string;
@@ -811,24 +854,59 @@ export interface TourWithStops {
 }
 
 export interface DashboardSummary {
-  totalRuns: number;
-  totalTours: number;
   totalProfiles: number;
   totalVehicles: number;
-  totalKmDriven: number;
-  totalIncome: number;
-  totalProfit: number;
-  totalExpenses: number;
-  avgRunProfit: number;
-  bestRunProfit: number;
-  worthTheDrive: number;
-  tightMargins: number;
-  notWorthIt: number;
+  actualPerformance: {
+    label: "Past Show Snapshot";
+    helperText: string;
+    totalsBasis: "past_shows";
+    totalsRule: "Past Shows only";
+    totalShows: number;
+    totalIncome: number;
+    totalProfit: number;
+    totalExpenses: number;
+    totalKmDriven: number;
+    avgShowProfit: number;
+    bestShowProfit: number;
+    worstShowProfit: number;
+    profitableShowCount: number;
+    totalAccommodationCost: number;
+    totalFoodCost: number;
+    totalMarketingCost: number;
+    worthTheDrive: number;
+    tightMargins: number;
+    notWorthIt: number;
+  };
+  futurePotential: {
+    label: "Future Potential";
+    helperText: string;
+    totalsBasis: "upcoming_tours";
+    totalsRule: "Projected from upcoming tours only";
+    projectedTours: number;
+    projectedShows: number;
+    projectedIncome: number;
+    projectedProfit: number;
+    projectedExpenses: number;
+    projectedKm: number;
+    avgProjectedTourProfit: number;
+    bestProjectedTourProfit: number;
+    worstProjectedTourProfit: number;
+  };
 }
 
 export interface DashboardRecent {
   recentRuns: Run[];
-  recentTours: Tour[];
+  upcomingTours: {
+    id: number;
+    name: string;
+    nextStopDate: string;
+    endDate: string | null;
+    projectedShows: number;
+    projectedIncome: number;
+    projectedProfit: number;
+    projectedExpenses: number;
+    projectedKm: number;
+  }[];
 }
 
 export type SearchVenuesParams = {

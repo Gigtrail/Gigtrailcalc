@@ -23,5 +23,6 @@ export * from "./tour";
 export * from "./tourStop";
 export * from "./tourWithStops";
 export * from "./trackCalculationResponse";
+export * from "./updateProfileBody";
 export * from "./vehicle";
 export * from "./venue";

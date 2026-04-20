@@ -29,6 +29,27 @@ function daysDiff(dateStr: string) {
 
 const router: IRouter = Router();
 
+function getWeeklyUsagePayload(
+  userRole: AuthenticatedRequest["userRole"],
+  profile?: typeof profilesTable.$inferSelect,
+) {
+  if (hasProAccess(userRole)) {
+    return { used: 0, limit: null, resetsIn: null, isPro: true };
+  }
+
+  if (!profile) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
+  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
+  const resetsIn = needsReset
+    ? 7
+    : Math.ceil(7 - daysDiff(profile.lastCalculationReset));
+
+  return { used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false };
+}
+
 function serializeProfile(p: typeof profilesTable.$inferSelect) {
   return {
     ...p,
@@ -90,27 +111,8 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
 // otherwise Express matches the wildcard first and treats "weekly-usage" as an id.
 router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole } = req as AuthenticatedRequest;
-
-  if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
-    return;
-  }
-
   const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
-
-  if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
-    return;
-  }
-
-  const profile = profiles[0];
-  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
-  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
-  const resetsIn = needsReset
-    ? 7
-    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
-
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
+  res.json(getWeeklyUsagePayload(userRole, profiles[0]));
 });
 
 router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -219,29 +221,4 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
 });
 
 // ─── GET weekly usage (read-only, no increment) ───────────────────────────────
-router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userRole } = req as AuthenticatedRequest;
-
-  if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
-    return;
-  }
-
-  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
-
-  if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
-    return;
-  }
-
-  const profile = profiles[0];
-  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
-  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
-  const resetsIn = needsReset
-    ? 7
-    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
-
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
-});
-
 export default router;

@@ -30,7 +30,13 @@ import { VenueSearch, type VenueSelection } from "@/components/venue-search";
 import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
 import { DealTypeInfo } from "@/components/deal-type-info";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
+import {
+  getGetTourStopsQueryKey,
+  getGetTourQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const stopSchema = z.object({
@@ -82,6 +88,16 @@ export default function TourStopForm() {
   const { data: profile } = useGetProfile(tour?.profileId || 0, {
     query: { enabled: !!tour?.profileId, queryKey: ["profile", tour?.profileId] },
   });
+
+  const invalidateTourSummaryQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["tour", tourId] });
+    queryClient.invalidateQueries({ queryKey: ["tourStops", tourId] });
+    queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  };
 
   const profileNightlyRate = profile
     ? (profile.singleRoomsDefault ?? 0) * SINGLE_ROOM_RATE + (profile.doubleRoomsDefault ?? 0) * DOUBLE_ROOM_RATE
@@ -228,8 +244,7 @@ export default function TourStopForm() {
         { tourId, stopId: parsedStopId, data: payload },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
-            queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+            invalidateTourSummaryQueries();
             toast({ title: "Stop updated" });
             setLocation(`/tours/${tourId}`);
           },
@@ -243,8 +258,7 @@ export default function TourStopForm() {
         { tourId, data: payload },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
-            queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+            invalidateTourSummaryQueries();
             toast({ title: "Stop added" });
             setLocation(`/tours/${tourId}`);
           },

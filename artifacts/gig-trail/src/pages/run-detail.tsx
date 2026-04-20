@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronLeft, Map, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users, Receipt, Calendar, History } from "lucide-react";
 import { format } from "date-fns";
+import type { CalcSnapshot } from "@/lib/snapshot-types";
 
 export default function RunDetail() {
   const [, setLocation] = useLocation();
@@ -29,6 +30,10 @@ export default function RunDetail() {
   if (!run) {
     return <div className="p-8 text-center text-muted-foreground">Run not found.</div>;
   }
+
+  const snapshotVehicle = (run.calculationSnapshot as CalcSnapshot | null | undefined)?.snapshotVehicle ?? null;
+  const displayVehicleName = vehicle?.name ?? snapshotVehicle?.name ?? "None";
+  const displayVehicleConsumption = vehicle?.avgConsumption ?? snapshotVehicle?.avgConsumption ?? null;
 
   const getStatusInfo = () => {
     const profit = run.totalProfit || 0;
@@ -99,8 +104,10 @@ export default function RunDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl font-bold">{vehicle?.name || "None"}</div>
-                {vehicle && <div className="text-sm text-muted-foreground mt-1">{vehicle.avgConsumption}L/100km</div>}
+                <div className="text-xl font-bold">{displayVehicleName}</div>
+                {displayVehicleConsumption != null && (
+                  <div className="text-sm text-muted-foreground mt-1">{displayVehicleConsumption}L/100km</div>
+                )}
               </CardContent>
             </Card>
           </div>

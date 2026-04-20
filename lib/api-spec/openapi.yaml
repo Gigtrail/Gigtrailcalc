@@ -60,7 +60,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateProfileBody"
+              $ref: "#/components/schemas/UpdateProfileBody"
       responses:
         "201":
           description: Created profile
@@ -772,6 +772,62 @@ components:
         - peopleCount
         - avgAccomPerNight
         - avgFoodPerDay
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        name:
+          type: string
+        actType:
+          type: string
+        homeBase:
+          type: ["string", "null"]
+        homeBaseLat:
+          type: ["number", "null"]
+        homeBaseLng:
+          type: ["number", "null"]
+        peopleCount:
+          type: integer
+        bandMembers:
+          type: ["string", "null"]
+        activeMemberIds:
+          type: ["string", "null"]
+        defaultVehicleId:
+          type: ["integer", "null"]
+        vehicleType:
+          type: string
+        vehicleName:
+          type: ["string", "null"]
+        fuelConsumption:
+          type: number
+        expectedGigFee:
+          type: number
+        minTakeHomePerPerson:
+          type: number
+        accommodationRequired:
+          type: boolean
+        accommodationType:
+          type: ["string", "null"]
+        avgAccomPerNight:
+          type: number
+        singleRoomsDefault:
+          type: integer
+        doubleRoomsDefault:
+          type: integer
+        avgFoodPerDay:
+          type: number
+        maxDriveHoursPerDay:
+          type: ["integer", "null"]
+        defaultFuelPrice:
+          type: ["number", "null"]
+        defaultPetrolPrice:
+          type: ["number", "null"]
+        defaultDieselPrice:
+          type: ["number", "null"]
+        defaultLpgPrice:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
 
     Vehicle:
       type: object

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useGetProfiles, useGetRun } from "@workspace/api-client-react";
+import { useGetProfiles, useGetRun, useUpdateRun } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Save,
   Edit,
+  Archive,
   Users,
   CheckCircle2,
   History,
@@ -37,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
 import type { SnapMember } from "@/lib/snapshot-types";
 import { getStandardVehicle } from "@/lib/garage-constants";
+import { getRunLifecycleState, type RunLifecycleState } from "@/lib/run-lifecycle";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -179,17 +181,20 @@ export interface GigTrailResultData {
   calculatedAt?: string;
   /** Frozen member list at calculation time. Used for the Member Payouts section in snapshot mode so payouts don't drift if the profile changes. */
   snapshotMembers?: SnapMember[];
+  runLifecycleStatus?: RunLifecycleState;
 }
 
 export default function RunResults() {
   const [, setLocation] = useLocation();
   const [result, setResult] = useState<GigTrailResultData | null>(null);
+  const [runLifecycleStatus, setRunLifecycleStatus] = useState<RunLifecycleState>("draft");
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const [accomOn, setAccomOn] = useState(true);
   const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
   const { toast } = useToast();
-  const { plan, isPro } = usePlan();
+  const { isPro } = usePlan();
   const { data: profiles } = useGetProfiles();
+  const updateRun = useUpdateRun();
 
   const { data: snapshotRun, isLoading: isLoadingSnapshot } = useGetRun(snapshotRunId || 0, {
     query: { enabled: !!snapshotRunId, queryKey: ["snapshot-run", snapshotRunId] },
@@ -204,7 +209,13 @@ export default function RunResults() {
     }
     const raw = sessionStorage.getItem("gigtrail_result");
     if (!raw) { setLocation("/runs/new"); return; }
-    try { setResult(JSON.parse(raw)); } catch { setLocation("/runs/new"); }
+    try {
+      const parsed = JSON.parse(raw) as GigTrailResultData;
+      setResult(parsed);
+      setRunLifecycleStatus(parsed.runLifecycleStatus ?? "draft");
+    } catch {
+      setLocation("/runs/new");
+    }
   }, []);
 
   useEffect(() => {
@@ -214,6 +225,7 @@ export default function RunResults() {
     const snap = snapshotRun.calculationSnapshot as GigTrailResultData | null | undefined;
     if (snap && snap.formData) {
       setResult({ ...snap, snapshotMode: true, savedRunId: snapshotRun.id, runId: snapshotRun.id, snapshotDate: snapshotRun.createdAt });
+      setRunLifecycleStatus(getRunLifecycleState(snapshotRun));
     } else {
       setLocation(`/runs/${snapshotRunId}`);
     }
@@ -241,8 +253,32 @@ export default function RunResults() {
   } = result;
 
   const effectiveRunId = savedRunId ?? runId;
+  const isDraftRun = runLifecycleStatus === "draft";
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
+
+  const handleAddToPastShows = async () => {
+    if (!effectiveRunId) return;
+
+    try {
+      await updateRun.mutateAsync({ id: effectiveRunId, data: { status: "completed" } });
+      setRunLifecycleStatus("completed");
+
+      const raw = sessionStorage.getItem("gigtrail_result");
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as GigTrailResultData;
+          sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...parsed, runLifecycleStatus: "completed" }));
+        } catch {
+          // Ignore stale session data.
+        }
+      }
+
+      toast({ title: "Moved to Past Shows" });
+    } catch {
+      toast({ title: "Failed to update show status", variant: "destructive" });
+    }
+  };
 
   // Derived income fields
   const merch = Number(formData.merchEstimate) || 0;
@@ -1076,9 +1112,14 @@ export default function RunResults() {
                 <Edit className="w-4 h-4 mr-2" />Edit Show
               </Button>
               <Button size="lg" variant="outline" className="w-full font-bold" onClick={() => setLocation("/runs")}>
-                <Save className="w-4 h-4 mr-2" />My Shows
+                <Save className="w-4 h-4 mr-2" />All Calculations
               </Button>
             </div>
+            {isDraftRun && (
+              <Button variant="outline" onClick={handleAddToPastShows} className="w-full">
+                <Archive className="w-4 h-4 mr-2" />Add to Past Shows
+              </Button>
+            )}
             <Button variant="outline" onClick={handleEdit} className="w-full">
               <RotateCcw className="w-4 h-4 mr-2" />Run again with current settings
             </Button>
@@ -1091,9 +1132,14 @@ export default function RunResults() {
               </Button>
               <Button size="lg" variant="outline" className="w-full font-bold"
                 onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}>
-                <Save className="w-4 h-4 mr-2" />My Shows
+                <Save className="w-4 h-4 mr-2" />All Calculations
               </Button>
             </div>
+            {isDraftRun && (
+              <Button variant="outline" onClick={handleAddToPastShows} className="w-full">
+                <Archive className="w-4 h-4 mr-2" />Add to Past Shows
+              </Button>
+            )}
             <Button variant="outline" onClick={handleAnother} className="w-full">
               <RotateCcw className="w-4 h-4 mr-2" />Calculate Another Run
             </Button>

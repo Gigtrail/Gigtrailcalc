@@ -1,11 +1,17 @@
 import { Router, type IRouter } from "express";
 import { db, runsTable, toursTable, profilesTable, vehiclesTable } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import {
+  buildDashboardSummary,
+  buildUpcomingTours,
+} from "./dashboardSummary";
+import { loadTourDerivations } from "../lib/tour-derivations";
+import { isCompletedRun } from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
 
@@ -40,20 +46,15 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
   };
 }
 
-function serializeTour(t: typeof toursTable.$inferSelect) {
-  return {
-    ...t,
-    totalDistance: t.totalDistance != null ? Number(t.totalDistance) : null,
-    totalCost: t.totalCost != null ? Number(t.totalCost) : null,
-    totalIncome: t.totalIncome != null ? Number(t.totalIncome) : null,
-    totalProfit: t.totalProfit != null ? Number(t.totalProfit) : null,
-    defaultFoodCost: t.defaultFoodCost != null ? Number(t.defaultFoodCost) : null,
-    createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
-  };
+function getIsoDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.split("T")[0] ?? null;
 }
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = new Date().toISOString().slice(0, 10);
+
   const [runs, tours, profiles, vehicles] = await Promise.all([
     db.select().from(runsTable).where(eq(runsTable.userId, userId)),
     db.select().from(toursTable).where(eq(toursTable.userId, userId)),
@@ -61,90 +62,57 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)),
   ]);
 
-  let totalKmDriven = 0;
-  let totalIncome = 0;
-  let totalProfit = 0;
-  let totalExpenses = 0;
-  let runProfitSum = 0;
-  let bestRunProfit: number | null = null;
-  let worstRunProfit: number | null = null;
-  let profitableRunCount = 0;
-  let worthTheDrive = 0;
-  let tightMargins = 0;
-  let notWorthIt = 0;
-  let totalAccommodationCost = 0;
-  let totalFoodCost = 0;
-  let totalMarketingCost = 0;
-  for (const run of runs) {
-    const km = Number(run.distanceKm) * (run.returnTrip ? 2 : 1);
-    totalKmDriven += km;
-    const income = run.totalIncome != null ? Number(run.totalIncome) : 0;
-    const profit = run.totalProfit != null ? Number(run.totalProfit) : 0;
-    const cost = run.totalCost != null ? Number(run.totalCost) : 0;
-    totalIncome += income;
-    totalProfit += profit;
-    totalExpenses += cost;
-    runProfitSum += profit;
-
-    if (bestRunProfit === null || profit > bestRunProfit) bestRunProfit = profit;
-    if (worstRunProfit === null || profit < worstRunProfit) worstRunProfit = profit;
-    if (profit >= 0) profitableRunCount++;
-
-    totalAccommodationCost += run.accommodationCost != null ? Number(run.accommodationCost) : 0;
-    totalFoodCost += run.foodCost != null ? Number(run.foodCost) : 0;
-    totalMarketingCost += run.marketingCost != null ? Number(run.marketingCost) : 0;
-
-    if (income > 0) {
-      const margin = profit / income;
-      if (margin > 0.2) worthTheDrive++;
-      else if (margin >= 0) tightMargins++;
-      else notWorthIt++;
-    } else if (profit < 0) {
-      notWorthIt++;
-    }
-  }
-
-  for (const tour of tours) {
-    totalKmDriven += tour.totalDistance != null ? Number(tour.totalDistance) : 0;
-    totalIncome += tour.totalIncome != null ? Number(tour.totalIncome) : 0;
-    totalProfit += tour.totalProfit != null ? Number(tour.totalProfit) : 0;
-    totalExpenses += tour.totalCost != null ? Number(tour.totalCost) : 0;
-  }
-
-  const avgRunProfit = runs.length > 0 ? runProfitSum / runs.length : 0;
-
-  res.json(GetDashboardSummaryResponse.parse({
-    totalRuns: runs.length,
-    totalTours: tours.length,
+  const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, tours);
+  const summary = buildDashboardSummary({
+    runs,
+    tours,
+    stopsByTourId,
+    metricsByTourId,
     totalProfiles: profiles.length,
     totalVehicles: vehicles.length,
-    totalKmDriven,
-    totalIncome,
-    totalProfit,
-    totalExpenses,
-    avgRunProfit,
-    bestRunProfit: bestRunProfit ?? 0,
-    worstRunProfit: worstRunProfit ?? 0,
-    profitableRunCount,
-    totalAccommodationCost,
-    totalFoodCost,
-    totalMarketingCost,
-    worthTheDrive,
-    tightMargins,
-    notWorthIt,
-  }));
+    todayIsoDate,
+  });
+
+  res.json(GetDashboardSummaryResponse.parse(summary));
 });
 
 router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const [recentRuns, recentTours] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(6),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(5),
+  const todayIsoDate = new Date().toISOString().slice(0, 10);
+
+  const [runs, tours] = await Promise.all([
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
   ]);
+
+  const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, tours);
+
+  const recentRuns = runs
+    .filter(run => isCompletedRun(run, todayIsoDate))
+    .sort((left, right) => {
+      const leftDate = getIsoDate(left.showDate) ?? "";
+      const rightDate = getIsoDate(right.showDate) ?? "";
+      if (leftDate !== rightDate) {
+        return leftDate < rightDate ? 1 : -1;
+      }
+
+      const leftCreated = left.createdAt instanceof Date ? left.createdAt.getTime() : new Date(left.createdAt).getTime();
+      const rightCreated = right.createdAt instanceof Date ? right.createdAt.getTime() : new Date(right.createdAt).getTime();
+      return rightCreated - leftCreated;
+    })
+    .slice(0, 6);
+
+  const upcomingTours = buildUpcomingTours(
+    tours,
+    stopsByTourId,
+    metricsByTourId,
+    todayIsoDate,
+    4,
+  );
 
   res.json(GetDashboardRecentResponse.parse({
     recentRuns: recentRuns.map(serializeRun),
-    recentTours: recentTours.map(serializeTour),
+    upcomingTours,
   }));
 });
 

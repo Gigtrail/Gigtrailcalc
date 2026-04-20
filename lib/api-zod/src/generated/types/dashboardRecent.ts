@@ -6,9 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Run } from "./run";
-import type { Tour } from "./tour";
+
+export interface DashboardUpcomingTour {
+  id: number;
+  name: string;
+  nextStopDate: string;
+  endDate: string | null;
+  projectedShows: number;
+  projectedIncome: number;
+  projectedProfit: number;
+  projectedExpenses: number;
+  projectedKm: number;
+}
 
 export interface DashboardRecent {
   recentRuns: Run[];
-  recentTours: Tour[];
+  upcomingTours: DashboardUpcomingTour[];
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -212,6 +212,7 @@ export default function RunForm() {
   // Track which vehicle is selected for this run (may differ from profile.defaultVehicleId locally)
   const [runVehicleId, setRunVehicleId] = useState<number | null>(null);
   const [runSelectedVenueId, setRunSelectedVenueId] = useState<number | null>(null);
+  const previousProfileIdRef = useRef<number | null | undefined>(undefined);
 
   const createOrUpdateVenue = useCreateOrUpdateVenue();
   const { data: vehicles } = useGetVehicles();
@@ -626,6 +627,7 @@ export default function RunForm() {
 
         const payload = {
           ...vals,
+          vehicleId: runVehicleId,
           originLat: toNumOrNull(vals.originLat),
           originLng: toNumOrNull(vals.originLng),
           destinationLat: toNumOrNull(vals.destinationLat),
@@ -673,7 +675,10 @@ export default function RunForm() {
         trackEvent("save_failed", { entity_type: "run", error_message: String(saveErr) });
       }
 
-      sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...resultData, savedRunId, saveFailed }));
+      sessionStorage.setItem(
+        "gigtrail_result",
+        JSON.stringify({ ...resultData, savedRunId, saveFailed, runLifecycleStatus: "draft" }),
+      );
       setLocation("/runs/results");
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
@@ -754,6 +759,8 @@ export default function RunForm() {
 
   useEffect(() => {
     if (run && profiles) {
+      const hydratedProfile = profiles.find(p => p.id === run.profileId);
+      previousProfileIdRef.current = run.profileId ?? null;
       form.reset({
         profileId: run.profileId,
         venueName: run.venueName ?? "",
@@ -790,6 +797,7 @@ export default function RunForm() {
         state: run.state ?? "",
         country: run.country ?? "",
       });
+      setRunVehicleId(run.vehicleId ?? hydratedProfile?.defaultVehicleId ?? null);
       // Convert stored % back to a headcount for the UI
       const cap = Number(run.capacity) || 0;
       const pct = Number(run.expectedAttendancePct) || 0;
@@ -829,6 +837,13 @@ export default function RunForm() {
 
   // Sync local vehicle selection when profile changes
   useEffect(() => {
+    const currentProfileId = formValues.profileId ?? null;
+    if (previousProfileIdRef.current === undefined) {
+      previousProfileIdRef.current = currentProfileId;
+      return;
+    }
+    if (currentProfileId === previousProfileIdRef.current) return;
+    previousProfileIdRef.current = currentProfileId;
     const profile = profiles?.find(p => p.id === formValues.profileId);
     setRunVehicleId(profile?.defaultVehicleId ?? null);
   }, [formValues.profileId, profiles]);
@@ -843,6 +858,7 @@ export default function RunForm() {
     const computed = calculationResult ?? computeGigResults(data);
     const payload = {
       ...data,
+      vehicleId: runVehicleId,
       accommodationCost: computed.accommodationCost,
       totalCost: computed.totalCost,
       totalIncome: computed.totalIncome,
@@ -1109,8 +1125,9 @@ export default function RunForm() {
                           const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
                           setRunVehicleId(vid);
                           if (vid !== null) {
+                            const profileVehiclePatch: UpdateProfileMutationBody = { defaultVehicleId: vid };
                             updateProfile.mutate(
-                              { id: selectedProfile.id, data: { defaultVehicleId: vid } as never },
+                              { id: selectedProfile.id, data: profileVehiclePatch },
                               {
                                 onSuccess: () => {
                                   queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });

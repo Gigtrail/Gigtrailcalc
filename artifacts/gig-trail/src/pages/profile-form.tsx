@@ -4,12 +4,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
 import {
   useCreateProfile,
+  type CreateProfileMutationBody,
   useUpdateProfile,
+  type UpdateProfileMutationBody,
   useGetProfile,
   useGetVehicles,
   useCreateVehicle,
   getGetVehiclesQueryKey,
   getGetProfilesQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -673,7 +678,7 @@ export default function ProfileForm() {
     const activeIds = activeIdsArray ?? [];
     const peopleCount = derivePeopleCount(rest.actType, activeIds);
 
-    const payload = {
+    const payload: CreateProfileMutationBody = {
       ...rest,
       bandMembers: memberLibrary && memberLibrary.length > 0 ? JSON.stringify(memberLibrary) : null,
       activeMemberIds: activeIds.length > 0 ? JSON.stringify(activeIds) : null,
@@ -681,18 +686,33 @@ export default function ProfileForm() {
     };
 
     if (isEditing) {
+      const updatePayload: UpdateProfileMutationBody = payload;
       updateProfile.mutate(
-        { id: profileId, data: payload as Parameters<typeof updateProfile.mutate>[0]["data"] },
+        { id: profileId, data: updatePayload },
         {
-          onSuccess: () => { toast({ title: "Profile updated" }); setLocation("/profiles"); },
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+            toast({ title: "Profile updated" });
+            setLocation("/profiles");
+          },
           onError: () => toast({ title: "Failed to update profile", variant: "destructive" }),
         }
       );
     } else {
       createProfile.mutate(
-        { data: payload as Parameters<typeof createProfile.mutate>[0]["data"] },
+        { data: payload },
         {
-          onSuccess: () => { clearProfileDraft(); toast({ title: "Profile created" }); setLocation("/profiles"); },
+          onSuccess: () => {
+            clearProfileDraft();
+            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+            toast({ title: "Profile created" });
+            setLocation("/profiles");
+          },
           onError: () => toast({ title: "Failed to create profile", variant: "destructive" }),
         }
       );

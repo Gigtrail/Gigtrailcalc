@@ -38,6 +38,7 @@ import type {
   TourVehicleAssignment,
   TourWithStops,
   TrackCalculationResponse,
+  UpdateProfileBody,
   Vehicle,
   Venue,
   VenueDetail,
@@ -384,14 +385,14 @@ export const getUpdateProfileUrl = (id: number) => {
 
 export const updateProfile = async (
   id: number,
-  createProfileBody: CreateProfileBody,
+  updateProfileBody: UpdateProfileBody,
   options?: RequestInit,
 ): Promise<Profile> => {
   return customFetch<Profile>(getUpdateProfileUrl(id), {
     ...options,
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createProfileBody),
+    body: JSON.stringify(updateProfileBody),
   });
 };
 
@@ -402,14 +403,14 @@ export const getUpdateProfileMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateProfile>>,
     TError,
-    { id: number; data: BodyType<CreateProfileBody> },
+    { id: number; data: BodyType<UpdateProfileBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateProfile>>,
   TError,
-  { id: number; data: BodyType<CreateProfileBody> },
+  { id: number; data: BodyType<UpdateProfileBody> },
   TContext
 > => {
   const mutationKey = ["updateProfile"];
@@ -423,7 +424,7 @@ export const getUpdateProfileMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateProfile>>,
-    { id: number; data: BodyType<CreateProfileBody> }
+    { id: number; data: BodyType<UpdateProfileBody> }
   > = (props) => {
     const { id, data } = props ?? {};
 
@@ -436,7 +437,7 @@ export const getUpdateProfileMutationOptions = <
 export type UpdateProfileMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateProfile>>
 >;
-export type UpdateProfileMutationBody = BodyType<CreateProfileBody>;
+export type UpdateProfileMutationBody = BodyType<UpdateProfileBody>;
 export type UpdateProfileMutationError = ErrorType<unknown>;
 
 /**
@@ -449,14 +450,14 @@ export const useUpdateProfile = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateProfile>>,
     TError,
-    { id: number; data: BodyType<CreateProfileBody> },
+    { id: number; data: BodyType<UpdateProfileBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof updateProfile>>,
   TError,
-  { id: number; data: BodyType<CreateProfileBody> },
+  { id: number; data: BodyType<UpdateProfileBody> },
   TContext
 > => {
   return useMutation(getUpdateProfileMutationOptions(options));
