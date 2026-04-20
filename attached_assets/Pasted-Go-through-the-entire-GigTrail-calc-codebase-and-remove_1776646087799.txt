@@ -1,0 +1,106 @@
+Go through the entire GigTrail calc codebase and remove all old legacy plan naming, mapping, and fallback logic so pricing/access is clean and consistent.
+
+Goal:
+We should only have the current plan names everywhere in the app, database logic, API responses, auth checks, UI labels, and Stripe/billing references. No old aliases, no hidden remapping, no backwards-compatibility spaghetti unless absolutely required for existing users.
+
+What I want you to do:
+
+1. Audit the full codebase for any legacy plan naming
+Search for things like:
+- paid
+- pro
+- premium
+- free
+- basic
+- tester
+- admin
+- old normalizePlan logic
+- plan aliases
+- fallback mappings
+- upgrade labels
+- old entitlement checks
+- hardcoded strings in frontend and backend
+
+2. Create one single source of truth for plans
+Set up one central plan config / constants file that defines:
+- valid plan keys
+- display names
+- access/feature entitlements
+- monthly/yearly labels if needed
+- any tester/admin override handling
+
+Example direction:
+- free
+- pro
+- tester
+- admin override should be role-based, not a fake billing plan unless already intentionally designed that way
+
+3. Remove legacy mapping logic
+Delete old helper logic that converts one plan name into another unless it is absolutely needed for migration of existing user records.
+Examples to remove:
+- normalizePlan()
+- “if paid then pro”
+- “if premium then paid”
+- silent fallback remaps
+- mixed frontend/backend label translation
+
+4. Migrate existing data safely
+If the database contains old values, write a safe migration or repair step to update old plan names to the new canonical values.
+Requirements:
+- inspect existing schema and current user records logic
+- update old stored values
+- make migration idempotent if possible
+- do not break existing accounts
+- log what is being repaired
+
+5. Fix all access control checks
+Make sure all permission checks use the canonical plan values only.
+Check:
+- frontend gating
+- backend API guards
+- feature access logic
+- upgrade prompts
+- dashboard/account page
+- any billing webhook or sync logic
+- tester/admin exceptions
+
+6. Fix UI copy
+Update all user-facing text so only the new plan names appear.
+Check:
+- pricing page
+- account/settings
+- upgrade modals
+- feature lock messages
+- admin views
+- onboarding/signup flow
+- promo code / tester messaging
+
+7. Remove dead code
+Delete unused legacy helpers, constants, and fallback branches once the new structure is working.
+
+8. Validate everything
+After changes:
+- run app/build/tests
+- verify free user experience
+- verify pro user experience
+- verify tester access if used
+- verify admin account still works
+- verify billing/account responses return correct plan names everywhere
+
+9. Give me a clear report at the end
+I want a summary with:
+- files changed
+- old plan names found
+- new canonical naming structure
+- migrations added
+- any risky areas or follow-up items
+
+Important constraints:
+- Do not invent a messy abstraction
+- Keep it simple and easy to maintain
+- Prefer one clean entitlement source of truth
+- Do not leave mixed naming anywhere
+- If you find conflicting logic, resolve it properly rather than patching around it
+
+Success outcome:
+After this pass, the entire app should consistently use only the new plan naming with no legacy mapping conflicts left behind.

@@ -92,14 +92,14 @@ router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void
   const { userId, userRole } = req as AuthenticatedRequest;
 
   if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPaid: true });
+    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
     return;
   }
 
   const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
 
   if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPaid: false });
+    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
     return;
   }
 
@@ -110,7 +110,7 @@ router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void
     ? 7
     : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
 
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPaid: false });
+  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
 });
 
 router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -191,9 +191,9 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
     return;
   }
 
-  const isPaid = hasProAccess(userRole);
+  const isPro = hasProAccess(userRole);
 
-  if (isPaid) {
+  if (isPro) {
     res.json(TrackCalculationResponse.parse({ allowed: true, count: 0, limit: null }));
     return;
   }
@@ -223,14 +223,14 @@ router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void
   const { userId, userRole } = req as AuthenticatedRequest;
 
   if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPaid: true });
+    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
     return;
   }
 
   const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
 
   if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPaid: false });
+    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
     return;
   }
 
@@ -241,7 +241,7 @@ router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void
     ? 7
     : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
 
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPaid: false });
+  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
 });
 
 export default router;

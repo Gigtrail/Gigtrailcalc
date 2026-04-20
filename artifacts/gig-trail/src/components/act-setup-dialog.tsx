@@ -5,7 +5,7 @@ import {
   resolveActiveMembers,
   adjustActiveForActType,
 } from "@/lib/member-utils";
-import { canAddBandMember, maxBandMembersForPlan, type Plan } from "@/lib/plan-limits";
+import { canAddBandMember, maxBandMembersForRole, type UserRole } from "@/lib/plan-limits";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +46,7 @@ interface ActSetupDialogProps {
   initialSingleRoomsDefault: number;
   initialDoubleRoomsDefault: number;
   initialAvgFoodPerDay: number;
-  plan: Plan;
+  role: UserRole;
   onSave: (data: ActSetupData) => void;
   isSaving?: boolean;
 }
@@ -61,7 +61,7 @@ export function ActSetupDialog({
   initialSingleRoomsDefault,
   initialDoubleRoomsDefault,
   initialAvgFoodPerDay,
-  plan,
+  role,
   onSave,
   isSaving,
 }: ActSetupDialogProps) {
@@ -184,9 +184,9 @@ export function ActSetupDialog({
       : null;
 
   const canAdd =
-    actType === "Band" && canAddBandMember(plan, activeMemberIds.length);
+    actType === "Band" && canAddBandMember(role, activeMemberIds.length);
   const atPlanLimit =
-    actType === "Band" && !canAddBandMember(plan, activeMemberIds.length);
+    actType === "Band" && !canAddBandMember(role, activeMemberIds.length);
 
   const canSave =
     !bandError &&
@@ -327,7 +327,7 @@ export function ActSetupDialog({
             {/* Plan limit message — directly below member list */}
             {actType === "Band" && atPlanLimit && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                Free plan supports up to {maxBandMembersForPlan(plan)} members.{" "}
+                Free plan supports up to {maxBandMembersForRole(role)} members.{" "}
                 <a href="/billing" className="underline underline-offset-2 font-medium">
                   Upgrade
                 </a>{" "}

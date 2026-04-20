@@ -767,7 +767,7 @@ export default function Billing() {
           </div>
 
           {/* Weekly usage — free plan only */}
-          {!isPro && weeklyUsage && !weeklyUsage.isPaid && (
+          {!isPro && weeklyUsage && !weeklyUsage.isPro && (
             <div className="border-t border-border/40 pt-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

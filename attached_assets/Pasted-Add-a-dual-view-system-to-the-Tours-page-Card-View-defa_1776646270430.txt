@@ -1,0 +1,156 @@
+Add a dual-view system to the Tours page: "Card View" (default) and "Table View" (spreadsheet-style).
+
+Goal:
+Users can switch between visual cards and a compact, data-dense table view for managing tours.
+
+---
+
+1. STATE MANAGEMENT
+
+Add a view state:
+- "card" (default)
+- "table"
+
+Persist this in:
+- localStorage (so it remembers user preference)
+
+Example:
+const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+
+On load:
+- check localStorage for saved preference
+
+---
+
+2. UI TOGGLE (TOP RIGHT)
+
+Place next to "Build Tour" button:
+
+[ Card View ] [ Table View ]
+
+Style:
+- pill toggle or segmented control
+- highlight active view
+- keep it clean, not bulky
+
+---
+
+3. CARD VIEW (EXISTING)
+
+Keep your current card layout EXACTLY as is:
+- status badge (Worth it / Borderline / Not worth it)
+- tour name
+- dates
+- route
+- shows + km
+- profit/loss
+- income
+- view button
+
+Just wrap it in:
+{viewMode === 'card' && (...)}
+
+---
+
+4. TABLE VIEW (NEW)
+
+Create a clean, spreadsheet-style table.
+
+Columns:
+- Tour Name
+- Dates
+- Days
+- Shows
+- Distance (km)
+- Income
+- Profit/Loss
+- Status
+- Actions
+
+Example row:
+
+| Testy | Apr 23–May 3 | 11 | 1 | 3584km | $2440 | $249 | Borderline | View |
+
+---
+
+5. TABLE DESIGN RULES
+
+Make it:
+- compact
+- readable
+- sortable-ready (don’t implement sorting yet, but structure for it)
+
+Style:
+- zebra rows OR subtle row borders
+- right-align numbers
+- color-code profit/loss:
+  - green = profit
+  - red = loss
+
+Status:
+- reuse your existing labels (Worth it / Borderline / Not worth it)
+- small pill style
+
+---
+
+6. ACTIONS COLUMN
+
+Include:
+- "View" button (same as cards)
+
+Optional (if easy):
+- quick edit icon
+- delete icon
+
+---
+
+7. DATA SHARING
+
+DO NOT duplicate logic.
+
+Create a shared data mapper:
+- formatTourForDisplay(tour)
+
+Both views must use the SAME data source.
+
+---
+
+8. PERFORMANCE
+
+- Only render ONE view at a time
+- No double rendering hidden components
+
+---
+
+9. EMPTY STATE
+
+If no tours:
+- show same empty state for both views
+
+---
+
+10. POLISH
+
+- Smooth transition between views (fade or quick switch)
+- No layout jump
+- Keep padding consistent with rest of app
+
+---
+
+11. FUTURE-PROOFING
+
+Structure table so we can later add:
+- sorting
+- filtering
+- bulk select
+- export CSV
+
+---
+
+SUCCESS CRITERIA:
+
+- Toggle works instantly
+- Preference persists on refresh
+- Card view unchanged
+- Table view is clean and usable
+- No duplicated logic

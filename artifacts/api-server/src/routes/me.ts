@@ -60,7 +60,7 @@ router.post("/me/sync-plan", requireAuth, async (req, res): Promise<void> => {
   // ── Hard stop: permanent admin is immutable ──────────────────────────────
   if (isPermanentAdminEmail(user?.email)) {
     console.log(`[sync-plan] Skipping — permanent admin (${user?.email})`);
-    res.json({ role: "admin", plan: "paid" });
+    res.json({ role: "admin", plan: derivePlanFromRole("admin") });
     return;
   }
 

@@ -182,7 +182,7 @@ export function AppSidebar() {
       {/* ── Footer: upgrade card + user identity ── */}
       <SidebarFooter className="p-3 space-y-2">
         {/* Weekly usage meter — free plan only */}
-        {!isPro && weeklyUsage && !weeklyUsage.isPaid && weeklyUsage.limit != null && (
+        {!isPro && weeklyUsage && !weeklyUsage.isPro && weeklyUsage.limit != null && (
           <Link href="/billing">
             <div className="w-full rounded-md border border-border/50 bg-muted/30 px-3 py-2.5 space-y-1.5 cursor-pointer hover:bg-muted/50 transition-colors">
               <div className="flex items-center justify-between">

@@ -86,7 +86,7 @@ router.post("/me/redeem-promo", requireAuth, async (req, res): Promise<void> => 
 
   // Hard stop: permanent admin is never modified by promo codes
   if (isPermanentAdminEmail(user.email)) {
-    res.json({ role: "admin", plan: "paid", message: "Your current role already includes full access" });
+    res.json({ role: "admin", plan: derivePlanFromRole("admin"), message: "Your current role already includes full access" });
     return;
   }
 

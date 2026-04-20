@@ -105,7 +105,7 @@ async function repairPermanentAdmin() {
 
     logger.warn(
       `[PermanentAdmin] Repaired DB row for ${row.email}: ` +
-      `role: ${row.role} → admin, plan: ${row.plan} → paid, accessSource: ${row.accessSource} → admin`
+      `role: ${row.role} → admin, plan: ${row.plan} → pro, accessSource: ${row.accessSource} → admin`
     );
   } catch (err) {
     logger.error({ err }, "[PermanentAdmin] Repair check failed (non-fatal)");

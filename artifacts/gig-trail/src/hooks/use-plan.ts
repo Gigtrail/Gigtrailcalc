@@ -46,7 +46,7 @@ export interface MeResponse {
   email: string | null;
   role: UserRole;
   accessSource: AccessSource;
-  plan: "free" | "paid";
+  plan: "free" | "pro";
   /** Legacy shape — derived from entitlements server-side. */
   limits: PlanLimits;
   /** JSON-safe entitlements shape (Infinity is encoded as null). */
@@ -116,7 +116,7 @@ export interface WeeklyUsage {
   used: number;
   limit: number | null;
   resetsIn: number | null;
-  isPaid: boolean;
+  isPro: boolean;
 }
 
 export function useWeeklyUsage() {

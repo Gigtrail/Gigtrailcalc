@@ -16,7 +16,8 @@
 // ─── Core types ──────────────────────────────────────────────────────────────
 
 export type UserRole = "free" | "pro" | "tester" | "admin";
-export type Plan = "free" | "paid";
+/** Canonical plan label. Always derived from UserRole — never stored independently. */
+export type Plan = "free" | "pro";
 export type AccessSource = "default" | "stripe" | "promo" | "admin";
 
 export const VALID_ROLES: readonly UserRole[] = ["free", "pro", "tester", "admin"] as const;
@@ -60,7 +61,7 @@ export function normalizeRole(raw: string | null | undefined): UserRole {
 
 /** Derive plan label from role. role is authoritative; plan is always derived. */
 export function derivePlanFromRole(role: string): Plan {
-  return hasProAccess(role) ? "paid" : "free";
+  return hasProAccess(role) ? "pro" : "free";
 }
 
 // ─── Role predicates ─────────────────────────────────────────────────────────
@@ -166,12 +167,14 @@ const ADMIN: Entitlements = {
 
 /**
  * Single function the entire app should use to ask "what can this user do?".
- * Pass a role (preferred) or a legacy plan ("paid" / "free") — both work.
+ * Pass a UserRole ("free" | "pro" | "tester" | "admin").
+ * Legacy "paid" value is still handled silently during the DB migration window
+ * but should not appear in new code — use roles only.
  */
 export function getEntitlements(roleOrPlan: string | null | undefined): Entitlements {
   if (roleOrPlan === "admin") return ADMIN;
   if (roleOrPlan === "tester") return TESTER;
-  if (roleOrPlan === "pro" || roleOrPlan === "paid") return PRO;
+  if (roleOrPlan === "pro" || roleOrPlan === "paid" /* legacy — remove after migration */) return PRO;
   return FREE;
 }
 
@@ -259,12 +262,15 @@ export function getPlanLimits(role: string): PlanLimits {
   };
 }
 
-/** @deprecated Use hasProAccess. Kept for older call-sites. */
+/**
+ * @deprecated Use hasProAccess(role) instead.
+ * Legacy "paid" plan value is handled here but should not appear in new code.
+ */
 export function isPaidPlan(plan: string): boolean {
-  return plan === "paid" || hasProAccess(plan);
+  return plan === "paid" || plan === "pro" || hasProAccess(plan);
 }
 
-/** @deprecated Use maxBandMembersForRole. */
+/** @deprecated Use maxBandMembersForRole(role) instead. */
 export function maxBandMembersForPlan(plan: string): number {
   return maxBandMembersForRole(plan);
 }

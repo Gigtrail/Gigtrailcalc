@@ -44,8 +44,8 @@ export interface AuthenticatedRequest extends Request {
   userId: string;
   userRole: UserRole;
   accessSource: AccessSource;
-  /** Derived from role for backward compat — "paid" if hasProAccess(userRole) */
-  userPlan: "free" | "paid";
+  /** Canonical plan label derived from role — "pro" if hasProAccess(userRole), else "free". */
+  userPlan: "free" | "pro";
   /** The full Entitlements object — single source of truth for any limit/flag check. */
   entitlements: Entitlements;
 }
@@ -116,7 +116,7 @@ async function ensureUser(userId: string, email?: string) {
     const existingRole = normalizeRole(existing.role);
     const needsAdminRepair =
       isPermAdmin &&
-      (existingRole !== "admin" || existing.accessSource !== "admin" || existing.plan !== "paid");
+      (existingRole !== "admin" || existing.accessSource !== "admin" || existing.plan !== "pro");
 
     if (needsAdminRepair) {
       updates.role = "admin";
@@ -125,7 +125,7 @@ async function ensureUser(userId: string, email?: string) {
       console.log(
         `[Auth][PermanentAdmin] Repairing DB row for ${email}: ` +
         `role: ${existing.role} → admin, ` +
-        `plan: ${existing.plan} → paid, ` +
+        `plan: ${existing.plan} → pro, ` +
         `accessSource: ${existing.accessSource} → admin`
       );
     }
@@ -161,7 +161,7 @@ async function ensureUser(userId: string, email?: string) {
 
   console.log(
     isPermAdmin
-      ? `[Auth][PermanentAdmin] Creating new DB row for ${email} with admin/paid/admin`
+      ? `[Auth][PermanentAdmin] Creating new DB row for ${email} with admin/pro/admin`
       : `[Auth] Creating new user row for ${email ?? userId}`
   );
 
