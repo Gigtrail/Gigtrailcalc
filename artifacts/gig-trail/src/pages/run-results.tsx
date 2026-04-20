@@ -455,9 +455,46 @@ export default function RunResults() {
   const insights = allInsights.slice(0, 3);
 
   // Actions
-  const handleEdit = () => { effectiveRunId ? setLocation(`/runs/${effectiveRunId}/edit`) : setLocation("/runs/new"); };
+  const handleEdit = () => {
+    if (effectiveRunId) {
+      setLocation(`/runs/${effectiveRunId}/edit`);
+      return;
+    }
+    // Transient result: persist the inputs so the form can restore them on mount,
+    // then navigate back to the calculator. Inputs are preserved exactly.
+    try {
+      sessionStorage.setItem("gigtrail_form_draft", JSON.stringify(formData));
+    } catch (err) {
+      console.warn("[RunResults] Could not persist form draft", err);
+    }
+    setLocation("/runs/new");
+  };
   const handleBack = () => { snapshotMode ? setLocation("/runs") : handleEdit(); };
-  const handleAnother = () => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs/new"); };
+  const handleAnother = () => {
+    sessionStorage.removeItem("gigtrail_result");
+    sessionStorage.removeItem("gigtrail_form_draft");
+    setLocation("/runs/new");
+  };
+  const handleDashboard = () => {
+    sessionStorage.removeItem("gigtrail_result");
+    setLocation("/");
+  };
+
+  // Plain-English summary sentence under the hero — explains the verdict in one line.
+  const summarySentence = (() => {
+    const v = (() => {
+      if (status === "Worth the Drive") return "This show looks worth the drive";
+      if (status === "Tight Margins") return "Margins here are tight";
+      return "This one looks tough to make work";
+    })();
+    if (displayNetProfit >= 0 && profilePeopleCount > 1) {
+      return `${v} — about $${fmt(Math.abs(displayTakeHome))} per person after costs.`;
+    }
+    if (displayNetProfit >= 0) {
+      return `${v} — you'd clear about $${fmt(Math.abs(displayNetProfit))} after costs.`;
+    }
+    return `${v} — you'd be down about $${fmt(Math.abs(displayNetProfit))} after costs.`;
+  })();
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -531,18 +568,45 @@ export default function RunResults() {
         </div>
       ) : null}
 
-      <div className={`rounded-xl border-2 overflow-hidden ${verdict.bg}`}>
-        <div className={`${verdict.headerBg} px-5 py-3 flex items-center gap-2.5`}>
+      <div className={`rounded-2xl border-2 overflow-hidden shadow-sm ${verdict.bg}`}>
+        <div className={`${verdict.headerBg} px-5 py-3.5 flex items-center gap-2.5`}>
           <VerdictIcon className="w-5 h-5 text-white" />
-          <span className="text-base font-bold text-white">{status}</span>
+          <span className="text-base font-bold text-white tracking-tight uppercase">{status}</span>
         </div>
-        <div className="px-5 py-4">
-          <p className="text-xs text-muted-foreground mb-0.5">Net result</p>
-          <p className={`text-4xl font-bold leading-tight ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-            {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
+        <div className="px-5 py-6 space-y-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Likely net</p>
+            <p className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
+              {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
+            </p>
+          </div>
+          <p className="text-sm text-foreground/80 leading-snug max-w-prose">
+            {summarySentence}
           </p>
+          {/* Quick at-a-glance metrics inside the hero */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-foreground/70 pt-1 border-t border-current/10">
+            {isTicketed && breakEvenTickets > 0 && (
+              <span className="flex items-center gap-1.5">
+                <Ticket className="w-3.5 h-3.5" />
+                Break-even at <span className="font-semibold text-foreground tabular-nums">{breakEvenTickets} tickets</span>
+              </span>
+            )}
+            {distanceKm > 0 && (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5" />
+                <span className="font-semibold text-foreground tabular-nums">{Math.round(distanceKm)} km</span>
+                {totalDriveMinutes ? <> · <span className="font-semibold text-foreground tabular-nums">{formatDuration(totalDriveMinutes)}</span></> : null}
+              </span>
+            )}
+            {profilePeopleCount > 1 && (
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5" />
+                <span className="font-semibold text-foreground tabular-nums">${fmt(Math.abs(displayTakeHome))}</span> per person
+              </span>
+            )}
+          </div>
           {showPayoutSection && totalMemberFees > 0 && (
-            <div className={`flex items-center gap-1.5 text-sm mt-1.5 ${fullFeesCovered ? "text-green-700" : "text-amber-700"}`}>
+            <div className={`flex items-center gap-1.5 text-sm ${fullFeesCovered ? "text-green-700" : "text-amber-700"}`}>
               {fullFeesCovered
                 ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>All member fees covered</span></>
                 : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(profitAfterMemberFees))} to cover band fees</span></>

@@ -42,7 +42,6 @@ import { trackEvent } from "@/lib/analytics";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
 import { getRunLifecycleState, getSavedCalculationStatusForPersist } from "@/lib/run-lifecycle";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
-import { ResultsStrip } from "@/components/results-strip";
 import { SliderInput } from "@/components/slider-input";
 import {
   Dialog,
@@ -375,6 +374,17 @@ export default function RunForm() {
   }, []);
 
   const handleCalculate = useCallback(async () => {
+    // Validate the form before navigating to results so users can't reach the
+    // results page with missing required inputs.
+    const valid = await form.trigger();
+    if (!valid) {
+      toast({
+        title: "Check your inputs",
+        description: "Some required fields are missing or invalid. Fix the highlighted fields and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
     const vals = form.getValues();
     const profileId = vals.profileId;
     if (usageReached) {
@@ -451,6 +461,92 @@ export default function RunForm() {
         is_profitable: computed.netProfit > 0,
         usage_count: nextCalcUsage?.count ?? calcUsage?.count ?? 0,
       });
+
+      // ─── Build a transient result snapshot and navigate to the dedicated
+      //     results page. This is the "payoff moment" — the form no longer
+      //     shows results inline. The snapshot mirrors the saved-run snapshot
+      //     so the results page can render with full context.
+      const profile = profiles?.find((p) => p.id === vals.profileId);
+      const peopleCount = profile?.peopleCount ?? 1;
+      const expectedTicketsSold =
+        vals.capacity != null && vals.expectedAttendancePct != null
+          ? Math.round(Number(vals.capacity) * (Number(vals.expectedAttendancePct) / 100))
+          : 0;
+      const { library: snapMemberLib, activeMemberIds: snapActiveMemberIds } = profile
+        ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
+        : { library: [], activeMemberIds: [] };
+      const snapActiveMembers = resolveActiveMembers(snapMemberLib, snapActiveMemberIds);
+      const snapshotMembers: SnapMember[] = snapActiveMembers.map((m) => ({
+        id: m.id,
+        name: m.name,
+        role: m.role,
+        expectedGigFee: m.expectedGigFee ?? 0,
+        feeType: resolveFeeType(m),
+      }));
+
+      const transientResult = {
+        fuelCost: computed.fuelCost,
+        totalCost: computed.totalCost,
+        totalIncome: computed.totalIncome,
+        netProfit: computed.netProfit,
+        status: computed.status,
+        profitPerMember: peopleCount > 0 ? computed.netProfit / peopleCount : computed.netProfit,
+        takeHomePerPerson: peopleCount > 0 ? computed.netProfit / peopleCount : computed.netProfit,
+        expectedTicketsSold,
+        grossRevenue: computed.grossRevenue,
+        bookingFeeTotal: computed.bookingFeeTotal,
+        netTicketRevenue: computed.netTicketRevenue,
+        breakEvenTickets: computed.breakEvenTickets,
+        breakEvenCapacity: computed.breakEvenCapacity,
+        showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
+        distanceKm: computed.distanceKm,
+        driveTimeMinutes: computed.driveTimeMinutes ?? null,
+        fuelUsedLitres: computed.fuelUsedLitres,
+        recommendedNights: Math.max(0, (Number(vals.accommodationNights) || 0) - 1),
+        maxDriveHoursPerDay: Number(profile?.maxDriveHoursPerDay) || DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
+        accomSingleRooms: Number(vals.singleRooms) || 0,
+        accomDoubleRooms: Number(vals.doubleRooms) || 0,
+        estimatedAccomCostFromDrive: computed.accommodationCost ?? 0,
+        formData: {
+          ...vals,
+          actType: profile?.actType ?? null,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+        },
+        profileName: profile?.name ?? null,
+        profilePeopleCount: peopleCount,
+        vehicleType: selectedVehicle?.vehicleType ?? profile?.vehicleType ?? null,
+        vehicleName: selectedVehicle?.name ?? profile?.vehicleName ?? null,
+        fuelPriceSource: computed.fuelPriceSource,
+        resolvedFuelPrice: computed.resolvedFuelPrice,
+        isEditing,
+        runId: isEditing ? runId : undefined,
+        savedRunId: null,
+        saveFailed: false,
+        calcCount: nextCalcUsage?.count ?? calcUsage?.count ?? undefined,
+        calcLimit: nextCalcUsage?.limit ?? calcUsage?.limit ?? null,
+        isPro,
+        calculationVersion: CALC_ENGINE_VERSION,
+        calculatedAt: new Date().toISOString(),
+        snapshotMembers,
+        runLifecycleStatus: getSavedCalculationStatusForPersist(vals.showDate),
+      };
+
+      try {
+        sessionStorage.setItem("gigtrail_result", JSON.stringify(transientResult));
+        // Always persist the inputs as a draft. The results page uses this on
+        // "Edit Inputs" to round-trip the user back to the form with the
+        // EXACT values they just calculated with — including unsaved edits
+        // when calculating from /runs/:id/edit (where reloading the run from
+        // the DB would otherwise overwrite their changes).
+        sessionStorage.setItem("gigtrail_form_draft", JSON.stringify(vals));
+      } catch (storageErr) {
+        console.warn("[RunForm] Could not persist result to sessionStorage", storageErr);
+      }
+      setLocation("/runs/results");
+      return;
 
       /* Legacy save-and-redirect flow removed to keep calculation inline and repeatable.
 
@@ -666,7 +762,25 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, runVehicleId, toast, trackCalculation, usageReached, vehicles]);
+  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, runId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
+
+  // Restore form draft saved by the calculator when user clicks "Edit Inputs"
+  // on the results page. For new runs (/runs/new) we apply on mount. For edits
+  // (/runs/:id/edit) the run-load effect below handles overlaying the draft on
+  // top of the DB values so unsaved tweaks aren't lost.
+  useEffect(() => {
+    if (isEditing) return;
+    try {
+      const raw = sessionStorage.getItem("gigtrail_form_draft");
+      if (!raw) return;
+      const draft = JSON.parse(raw) as Partial<RunFormValues>;
+      sessionStorage.removeItem("gigtrail_form_draft");
+      form.reset({ ...form.getValues(), ...draft });
+    } catch (err) {
+      console.warn("[RunForm] Failed to restore form draft", err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const LAST_PROFILE_KEY = "gigtrail_lastUsedProfileId";
 
@@ -777,6 +891,25 @@ export default function RunForm() {
       const cap = Number(run.capacity) || 0;
       const pct = Number(run.expectedAttendancePct) || 0;
       setAttendanceCount(cap > 0 ? Math.round((pct / 100) * cap) : 0);
+
+      // If the user came back from the results page via "Edit Inputs" while
+      // editing a saved run, overlay the just-calculated draft on top of the
+      // DB-loaded values so unsaved tweaks aren't lost.
+      try {
+        const raw = sessionStorage.getItem("gigtrail_form_draft");
+        if (raw) {
+          const draft = JSON.parse(raw) as Partial<RunFormValues>;
+          sessionStorage.removeItem("gigtrail_form_draft");
+          form.reset({ ...form.getValues(), ...draft });
+          if (draft.capacity != null && draft.expectedAttendancePct != null) {
+            const dCap = Number(draft.capacity) || 0;
+            const dPct = Number(draft.expectedAttendancePct) || 0;
+            setAttendanceCount(dCap > 0 ? Math.round((dPct / 100) * dCap) : 0);
+          }
+        }
+      } catch (err) {
+        console.warn("[RunForm] Failed to overlay form draft on edit", err);
+      }
     }
   }, [run, profiles, form]);
 
@@ -975,16 +1108,6 @@ export default function RunForm() {
     );
   }
 
-  const stripData = calculationResult
-    ? {
-        status: calculationResult.status,
-        netProfit: calculationResult.netProfit,
-        breakEvenTickets: calculationResult.breakEvenTickets,
-        distanceKm: calculationResult.distanceKm,
-        driveTimeMinutes: calculationResult.driveTimeMinutes,
-        isTicketed,
-      }
-    : null;
 
   const selectedProfile = profiles?.find((profile) => profile.id === formValues.profileId);
   const selectedVehicle = runVehicleId ? vehicles?.find((vehicle) => vehicle.id === runVehicleId) : null;
@@ -1017,13 +1140,22 @@ export default function RunForm() {
         </div>
       </div>
 
-      <ResultsStrip
-        result={stripData}
-        isStale={isStale}
-        celebrate={celebrate}
-        isPro={isPro}
-        calcUsage={calcUsage}
-      />
+      {!isPro && usageLimit !== null && (
+        <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-foreground">Free plan</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              Set your inputs, then hit Calculate for a full results breakdown.
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">This week</p>
+            <p className="text-sm font-bold tabular-nums text-foreground">
+              {(calcUsage?.count ?? 0)}/{usageLimit}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div>
         <Form {...form}>
@@ -2069,11 +2201,7 @@ export default function RunForm() {
                       <div className="text-xs text-muted-foreground min-w-0 truncate">
                         {isCalculating
                           ? "Crunching the numbers..."
-                          : isStale
-                            ? "Inputs changed. Hit Calculate to refresh."
-                            : calculationResult
-                              ? `Last result: ${calculationResult.netProfit >= 0 ? "+" : "−"}$${Math.abs(Math.round(calculationResult.netProfit)).toLocaleString()}`
-                              : "No live updates here. Tap Calculate when you're ready."}
+                          : "Calculate to see your full results breakdown."}
                       </div>
                       {!isPro && usageLimit !== null && (
                         <div className="text-xs text-muted-foreground tabular-nums shrink-0">
@@ -2084,15 +2212,12 @@ export default function RunForm() {
                     <Button
                       type="button"
                       size="lg"
-                      className={cn(
-                        "w-full text-base font-bold shadow-sm transition-transform",
-                        celebrate && !isStale && "scale-[1.01] ring-2 ring-primary/20"
-                      )}
+                      className="w-full text-base font-bold shadow-sm"
                       onClick={handleCalculate}
                       disabled={isCalculating}
                     >
                       <Calculator className="w-4 h-4 mr-2" />
-                      {isCalculating ? "Calculating..." : isStale ? "Recalculate" : "Calculate"}
+                      {isCalculating ? "Calculating..." : "Calculate"}
                     </Button>
                     <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
                       <Save className="w-4 h-4 mr-2" />
