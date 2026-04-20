@@ -38,6 +38,7 @@ import type {
   TourVehicleAssignment,
   TourWithStops,
   TrackCalculationResponse,
+  UpdateRunBody,
   UpdateProfileBody,
   Vehicle,
   Venue,
@@ -1367,14 +1368,14 @@ export const getUpdateRunUrl = (id: number) => {
 
 export const updateRun = async (
   id: number,
-  createRunBody: CreateRunBody,
+  updateRunBody: UpdateRunBody,
   options?: RequestInit,
 ): Promise<Run> => {
   return customFetch<Run>(getUpdateRunUrl(id), {
     ...options,
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createRunBody),
+    body: JSON.stringify(updateRunBody),
   });
 };
 
@@ -1385,14 +1386,14 @@ export const getUpdateRunMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateRun>>,
     TError,
-    { id: number; data: BodyType<CreateRunBody> },
+    { id: number; data: BodyType<UpdateRunBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateRun>>,
   TError,
-  { id: number; data: BodyType<CreateRunBody> },
+  { id: number; data: BodyType<UpdateRunBody> },
   TContext
 > => {
   const mutationKey = ["updateRun"];
@@ -1406,7 +1407,7 @@ export const getUpdateRunMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateRun>>,
-    { id: number; data: BodyType<CreateRunBody> }
+    { id: number; data: BodyType<UpdateRunBody> }
   > = (props) => {
     const { id, data } = props ?? {};
 
@@ -1419,7 +1420,7 @@ export const getUpdateRunMutationOptions = <
 export type UpdateRunMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateRun>>
 >;
-export type UpdateRunMutationBody = BodyType<CreateRunBody>;
+export type UpdateRunMutationBody = BodyType<UpdateRunBody>;
 export type UpdateRunMutationError = ErrorType<unknown>;
 
 /**
@@ -1432,14 +1433,14 @@ export const useUpdateRun = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateRun>>,
     TError,
-    { id: number; data: BodyType<CreateRunBody> },
+    { id: number; data: BodyType<UpdateRunBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof updateRun>>,
   TError,
-  { id: number; data: BodyType<CreateRunBody> },
+  { id: number; data: BodyType<UpdateRunBody> },
   TContext
 > => {
   return useMutation(getUpdateRunMutationOptions(options));

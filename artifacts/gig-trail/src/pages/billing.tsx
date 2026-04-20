@@ -29,6 +29,7 @@ import {
   useUpdatePromoCode,
   useDeletePromoCode,
   usePromoCodeRedemptions,
+  useSyncPlan,
   type AdminUser,
   type PromoCode,
 } from "@/hooks/use-plan";
@@ -463,6 +464,7 @@ function AdminUsersPanel() {
   const { toast } = useToast();
   const { data, isLoading, error } = useAdminUsers(query);
   const updateRole = useUpdateUserRole();
+  const syncPlan = useSyncPlan();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -635,10 +637,13 @@ export default function Billing() {
       trackEvent("upgrade_completed", { plan_type: pendingPlan });
       toast({ title: "Subscription activated!", description: "Your plan has been upgraded. It may take a moment to reflect." });
       setTimeout(() => {
-        fetch("/api/me/sync-plan", { method: "POST", credentials: "include" })
+        void syncPlan.mutateAsync()
           .then(() => {
             queryClient.invalidateQueries({ queryKey: ["/api/me"] });
             refetch();
+          })
+          .catch((error) => {
+            console.error("[Billing] Plan sync failed after checkout:", error);
           });
       }, 2000);
     } else if (isCanceled) {

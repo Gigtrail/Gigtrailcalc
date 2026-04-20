@@ -319,7 +319,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateRunBody"
+              $ref: "#/components/schemas/UpdateRunBody"
       responses:
         "200":
           description: Updated run
@@ -949,7 +949,7 @@ components:
         showDate:
           type: ["string", "null"]
         status:
-          type: string
+          $ref: "#/components/schemas/RunStatus"
         origin:
           type: ["string", "null"]
         originLat:
@@ -1051,7 +1051,9 @@ components:
         showDate:
           type: ["string", "null"]
         status:
-          type: ["string", "null"]
+          anyOf:
+            - $ref: "#/components/schemas/RunStatus"
+            - type: "null"
         origin:
           type: ["string", "null"]
         originLat:
@@ -1127,6 +1129,117 @@ components:
         - returnTrip
         - fuelPrice
         - showType
+
+    UpdateRunBody:
+      type: object
+      properties:
+        profileId:
+          type: ["integer", "null"]
+        vehicleId:
+          type: ["integer", "null"]
+        venueId:
+          type: ["integer", "null"]
+        venueName:
+          type: ["string", "null"]
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        country:
+          type: ["string", "null"]
+        showDate:
+          type: ["string", "null"]
+        status:
+          anyOf:
+            - $ref: "#/components/schemas/RunStatus"
+            - type: "null"
+        actType:
+          type: ["string", "null"]
+        origin:
+          type: ["string", "null"]
+        originLat:
+          type: ["number", "null"]
+        originLng:
+          type: ["number", "null"]
+        destination:
+          type: ["string", "null"]
+        destinationLat:
+          type: ["number", "null"]
+        destinationLng:
+          type: ["number", "null"]
+        distanceKm:
+          type: ["number", "null"]
+        returnTrip:
+          type: ["boolean", "null"]
+        fuelPrice:
+          type: ["number", "null"]
+        showType:
+          type: ["string", "null"]
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        expectedAttendancePct:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        marketingCost:
+          type: ["number", "null"]
+        bookingFeePerTicket:
+          type: ["number", "null"]
+        supportActCost:
+          type: ["number", "null"]
+        accommodationRequired:
+          type: ["boolean", "null"]
+        accommodationType:
+          type: ["string", "null"]
+        singleRooms:
+          type: ["integer", "null"]
+        doubleRooms:
+          type: ["integer", "null"]
+        accommodationNights:
+          type: ["number", "null"]
+        accommodationCost:
+          type: ["number", "null"]
+        foodCost:
+          type: ["number", "null"]
+        extraCosts:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        actualAttendance:
+          type: ["integer", "null"]
+        actualTicketIncome:
+          type: ["number", "null"]
+        actualOtherIncome:
+          type: ["number", "null"]
+        actualExpenses:
+          type: ["number", "null"]
+        actualProfit:
+          type: ["number", "null"]
+        wouldDoAgain:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        calculationSnapshot:
+          type: ["object", "null"]
+          additionalProperties: true
+
+    RunStatus:
+      type: string
+      enum: [draft, planned, past]
 
     Tour:
       type: object

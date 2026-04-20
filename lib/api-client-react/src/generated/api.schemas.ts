@@ -421,7 +421,7 @@ export interface Run {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  status: string;
+  status: RunStatus;
   /** @nullable */
   actType?: string | null;
   /** @nullable */
@@ -511,6 +511,8 @@ export interface Run {
   createdAt: string;
 }
 
+export type RunStatus = "draft" | "planned" | "past";
+
 export interface CreateRunBody {
   /** @nullable */
   profileId?: number | null;
@@ -529,7 +531,7 @@ export interface CreateRunBody {
   /** @nullable */
   showDate?: string | null;
   /** @nullable */
-  status?: string | null;
+  status?: RunStatus | null;
   /** @nullable */
   actType?: string | null;
   /** @nullable */
@@ -571,6 +573,109 @@ export interface CreateRunBody {
   /** @nullable */
   supportActCost?: number | null;
   accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  /** @nullable */
+  singleRooms?: number | null;
+  /** @nullable */
+  doubleRooms?: number | null;
+  /** @nullable */
+  accommodationNights?: number | null;
+  /** @nullable */
+  accommodationCost?: number | null;
+  /** @nullable */
+  foodCost?: number | null;
+  /** @nullable */
+  extraCosts?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  calculationSnapshot?: Record<string, unknown> | null;
+}
+
+export interface UpdateRunBody {
+  /** @nullable */
+  profileId?: number | null;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  /** @nullable */
+  status?: RunStatus | null;
+  /** @nullable */
+  actType?: string | null;
+  /** @nullable */
+  origin?: string | null;
+  /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
+  destination?: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
+  /** @nullable */
+  distanceKm?: number | null;
+  /** @nullable */
+  returnTrip?: boolean | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  /** @nullable */
+  showType?: string | null;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  ticketPrice?: number | null;
+  /** @nullable */
+  expectedAttendancePct?: number | null;
+  /** @nullable */
+  dealType?: string | null;
+  /** @nullable */
+  splitPct?: number | null;
+  /** @nullable */
+  guarantee?: number | null;
+  /** @nullable */
+  merchEstimate?: number | null;
+  /** @nullable */
+  marketingCost?: number | null;
+  /** @nullable */
+  bookingFeePerTicket?: number | null;
+  /** @nullable */
+  supportActCost?: number | null;
+  /** @nullable */
+  accommodationRequired?: boolean | null;
   /** @nullable */
   accommodationType?: string | null;
   /** @nullable */

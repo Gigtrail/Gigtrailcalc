@@ -328,6 +328,8 @@ export const DeleteVehicleParams = zod.object({
 /**
  * @summary List all single show calculations
  */
+export const RunStatus = zod.enum(["draft", "planned", "past"]);
+
 export const GetRunsResponseItem = zod.object({
   id: zod.number(),
   profileId: zod.number().nullish(),
@@ -338,7 +340,7 @@ export const GetRunsResponseItem = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: zod.string(),
+  status: RunStatus,
   actType: zod.string().nullish(),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
@@ -395,7 +397,7 @@ export const CreateRunBody = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: zod.string().nullish(),
+  status: RunStatus.nullish(),
   actType: zod.string().nullish(),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
@@ -515,7 +517,7 @@ export const UpdateRunBody = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: zod.string().nullish(),
+  status: RunStatus.nullish(),
   actType: zod.string().nullish(),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
@@ -523,10 +525,10 @@ export const UpdateRunBody = zod.object({
   destination: zod.string().nullish(),
   destinationLat: zod.number().nullish(),
   destinationLng: zod.number().nullish(),
-  distanceKm: zod.number(),
-  returnTrip: zod.boolean(),
-  fuelPrice: zod.number(),
-  showType: zod.string(),
+  distanceKm: zod.number().nullish(),
+  returnTrip: zod.boolean().nullish(),
+  fuelPrice: zod.number().nullish(),
+  showType: zod.string().nullish(),
   fee: zod.number().nullish(),
   capacity: zod.number().nullish(),
   ticketPrice: zod.number().nullish(),
@@ -538,7 +540,7 @@ export const UpdateRunBody = zod.object({
   marketingCost: zod.number().nullish(),
   bookingFeePerTicket: zod.number().nullish(),
   supportActCost: zod.number().nullish(),
-  accommodationRequired: zod.boolean().optional(),
+  accommodationRequired: zod.boolean().nullish(),
   accommodationType: zod.string().nullish(),
   singleRooms: zod.number().nullish(),
   doubleRooms: zod.number().nullish(),
@@ -569,7 +571,7 @@ export const UpdateRunResponse = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: zod.string(),
+  status: RunStatus,
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
   originLng: zod.number().nullish(),

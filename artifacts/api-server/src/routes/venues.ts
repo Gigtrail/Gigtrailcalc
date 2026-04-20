@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, desc, sql } from "drizzle-orm";
+import { eq, and, ilike, desc, sql, inArray } from "drizzle-orm";
 import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
 
@@ -71,7 +72,7 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
         avgProfit: sql<number | null>`avg(${runsTable.totalProfit})::float`,
       })
       .from(runsTable)
-      .where(and(eq(runsTable.userId, userId), sql`${runsTable.venueId} = ANY(${sql.raw(`ARRAY[${venueIds.join(",")}]`)})`))
+      .where(and(eq(runsTable.userId, userId), inArray(runsTable.venueId, venueIds)))
       .groupBy(runsTable.venueId);
     for (const s of stats) {
       if (s.venueId != null) {
@@ -142,7 +143,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   };
 
   // Fetch upcoming (confirmed, future) and pending tour stops at this venue
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = getTodayIsoDateFromRequest(req);
 
   const tourStops = await db
     .select({
@@ -161,7 +162,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     })
     .from(tourStopsTable)
     .leftJoin(toursTable, eq(tourStopsTable.tourId, toursTable.id))
-    .where(eq(tourStopsTable.venueId, id));
+    .where(and(eq(tourStopsTable.venueId, id), eq(toursTable.userId, userId)));
 
   const serializeVenueStop = (s: typeof tourStops[0]) => ({
     ...s,

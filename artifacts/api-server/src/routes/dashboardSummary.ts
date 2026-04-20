@@ -179,7 +179,7 @@ export function buildActualPerformanceSummary(
 
   return {
     label: "Past Show Snapshot",
-    helperText: "Real numbers from completed past shows only.",
+    helperText: "Real numbers from past-dated shows only.",
     totalsBasis: "past_shows",
     totalsRule: "Past Shows only",
     totalShows: completedRuns.length,

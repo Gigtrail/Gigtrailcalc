@@ -12,12 +12,19 @@ import {
   DeleteRunParams,
   GetRunsResponse,
 } from "@workspace/api-zod";
+import {
+  getDefaultSavedCalculationStatus,
+  getRunStatus,
+  getTodayIsoDateFromRequest,
+  isPastRun,
+} from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
 
-function serializeRun(r: typeof runsTable.$inferSelect) {
+function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
   return {
     ...r,
+    status: getRunStatus(r, todayIsoDate),
     originLat: r.originLat != null ? Number(r.originLat) : null,
     originLng: r.originLng != null ? Number(r.originLng) : null,
     destinationLat: r.destinationLat != null ? Number(r.destinationLat) : null,
@@ -72,8 +79,9 @@ function toDbRun(data: Record<string, unknown>) {
 
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const runs = await db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt));
-  res.json(GetRunsResponse.parse(runs.map(serializeRun)));
+  res.json(GetRunsResponse.parse(runs.map((run) => serializeRun(run, todayIsoDate))));
 });
 
 router.post("/runs", requireAuth, async (req, res): Promise<void> => {
@@ -92,33 +100,41 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Duplicate detection: if same userId + profileId + venueName + showDate + status=draft, update in place
-  if (parsed.data.venueName && parsed.data.profileId && parsed.data.showDate) {
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+  const derivedStatus = getDefaultSavedCalculationStatus(parsed.data.showDate, todayIsoDate);
+  const runData = {
+    ...parsed.data,
+    status: derivedStatus,
+  };
+
+  // Duplicate detection: auto-saved draft/planned calculations should update in place.
+  if (derivedStatus !== "past" && runData.venueName && runData.profileId && runData.showDate) {
     const [existing] = await db.select().from(runsTable).where(
       and(
         eq(runsTable.userId, userId),
-        eq(runsTable.profileId, parsed.data.profileId),
-        eq(runsTable.venueName, parsed.data.venueName),
-        eq(runsTable.showDate, parsed.data.showDate),
-        eq(runsTable.status, "draft")
+        eq(runsTable.profileId, runData.profileId),
+        eq(runsTable.venueName, runData.venueName),
+        eq(runsTable.showDate, runData.showDate),
+        eq(runsTable.status, runData.status)
       )
     ).limit(1);
     if (existing) {
       const [updated] = await db.update(runsTable)
-        .set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
+        .set(toDbRun(runData as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
         .where(eq(runsTable.id, existing.id))
         .returning();
-      res.json(GetRunResponse.parse(serializeRun(updated)));
+      res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
       return;
     }
   }
 
-  const [run] = await db.insert(runsTable).values({ ...toDbRun(parsed.data as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
-  res.status(201).json(GetRunResponse.parse(serializeRun(run)));
+  const [run] = await db.insert(runsTable).values({ ...toDbRun(runData as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
+  res.status(201).json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 
 router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = GetRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -129,11 +145,12 @@ router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Run not found" });
     return;
   }
-  res.json(GetRunResponse.parse(serializeRun(run)));
+  res.json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 
 router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = UpdateRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -144,21 +161,73 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [run] = await db.update(runsTable).set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  if (isPastRun(existingRun, todayIsoDate)) {
+    res.status(409).json({
+      error: "Past shows are read-only once their date has passed.",
+      code: "PAST_RUN_READ_ONLY",
+    });
+    return;
+  }
+
+  const effectiveShowDate =
+    parsed.data.showDate !== undefined
+      ? parsed.data.showDate
+      : existingRun.showDate;
+
+  const [run] = await db.update(runsTable)
+    .set(
+      toDbRun({
+        ...parsed.data,
+        status: getDefaultSavedCalculationStatus(effectiveShowDate, todayIsoDate),
+      } as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>,
+    )
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .returning();
   if (!run) {
     res.status(404).json({ error: "Run not found" });
     return;
   }
-  res.json(UpdateRunResponse.parse(serializeRun(run)));
+  res.json(UpdateRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 
 router.delete("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = DeleteRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  if (isPastRun(existingRun, todayIsoDate)) {
+    res.status(409).json({
+      error: "Past shows are read-only once their date has passed.",
+      code: "PAST_RUN_READ_ONLY",
+    });
+    return;
+  }
+
   const [run] = await db.delete(runsTable).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
   if (!run) {
     res.status(404).json({ error: "Run not found" });

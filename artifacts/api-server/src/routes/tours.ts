@@ -27,6 +27,7 @@ import {
   DeleteTourVehicleParams,
 } from "@workspace/api-zod";
 import { loadTourDerivations } from "../lib/tour-derivations";
+import { getDefaultSavedCalculationStatus, getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
 
@@ -90,6 +91,32 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
 
 const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
+
+async function getOwnedTour(userId: string, tourId: number) {
+  const [tour] = await db
+    .select()
+    .from(toursTable)
+    .where(and(eq(toursTable.id, tourId), eq(toursTable.userId, userId)));
+  return tour ?? null;
+}
+
+async function getOwnedTourStop(userId: string, tourId: number, stopId: number) {
+  const [row] = await db
+    .select({
+      stop: tourStopsTable,
+      tour: toursTable,
+    })
+    .from(tourStopsTable)
+    .innerJoin(toursTable, eq(tourStopsTable.tourId, toursTable.id))
+    .where(
+      and(
+        eq(toursTable.userId, userId),
+        eq(tourStopsTable.tourId, tourId),
+        eq(tourStopsTable.id, stopId),
+      ),
+    );
+  return row ?? null;
+}
 
 function normalizeVenueName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
@@ -227,21 +254,33 @@ router.delete("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await db.delete(tourStopsTable).where(eq(tourStopsTable.tourId, params.data.id));
-  const [tour] = await db.delete(toursTable).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId))).returning();
+
+  const tour = await getOwnedTour(userId, params.data.id);
   if (!tour) {
     res.status(404).json({ error: "Tour not found" });
     return;
   }
+
+  await db.delete(tourStopsTable).where(eq(tourStopsTable.tourId, params.data.id));
+  await db.delete(tourVehiclesTable).where(eq(tourVehiclesTable.tourId, params.data.id));
+  await db.delete(toursTable).where(and(eq(toursTable.id, params.data.id), eq(toursTable.userId, userId)));
   res.sendStatus(204);
 });
 
 router.get("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = GetTourStopsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const tour = await getOwnedTour(userId, params.data.tourId);
+  if (!tour) {
+    res.status(404).json({ error: "Tour not found" });
+    return;
+  }
+
   const stops = await db.select().from(tourStopsTable).where(eq(tourStopsTable.tourId, params.data.tourId)).orderBy(tourStopsTable.stopOrder);
   res.json(GetTourStopsResponse.parse(stops.map(serializeStop)));
 });
@@ -258,6 +297,14 @@ router.post("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void>
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const tour = await getOwnedTour(userId, params.data.tourId);
+  if (!tour) {
+    res.status(404).json({ error: "Tour not found" });
+    return;
+  }
+
+  console.log("[Tours] Creating stop", { userId, tourId: tour.id, stopOrder: parsed.data.stopOrder });
+
   const stopData = toDbNumeric({ ...parsed.data, tourId: params.data.tourId }, STOP_NUMERIC) as typeof tourStopsTable.$inferInsert;
   const [stop] = await db.insert(tourStopsTable).values(stopData).returning();
 
@@ -284,9 +331,17 @@ router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Prom
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const ownedStop = await getOwnedTourStop(userId, params.data.tourId, params.data.stopId);
+  if (!ownedStop) {
+    res.status(404).json({ error: "Stop not found" });
+    return;
+  }
+
+  console.log("[Tours] Updating stop", { userId, tourId: params.data.tourId, stopId: params.data.stopId });
+
   const [stop] = await db.update(tourStopsTable)
     .set(toDbNumeric(parsed.data as Record<string, unknown>, STOP_NUMERIC) as Partial<typeof tourStopsTable.$inferInsert>)
-    .where(eq(tourStopsTable.id, params.data.stopId))
+    .where(and(eq(tourStopsTable.id, params.data.stopId), eq(tourStopsTable.tourId, params.data.tourId)))
     .returning();
   if (!stop) {
     res.status(404).json({ error: "Stop not found" });
@@ -305,12 +360,24 @@ router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Prom
 });
 
 router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
   const params = DeleteTourStopParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [stop] = await db.delete(tourStopsTable).where(eq(tourStopsTable.id, params.data.stopId)).returning();
+  const ownedStop = await getOwnedTourStop(userId, params.data.tourId, params.data.stopId);
+  if (!ownedStop) {
+    res.status(404).json({ error: "Stop not found" });
+    return;
+  }
+
+  console.log("[Tours] Deleting stop", { userId, tourId: params.data.tourId, stopId: params.data.stopId });
+
+  const [stop] = await db
+    .delete(tourStopsTable)
+    .where(and(eq(tourStopsTable.id, params.data.stopId), eq(tourStopsTable.tourId, params.data.tourId)))
+    .returning();
   if (!stop) {
     res.status(404).json({ error: "Stop not found" });
     return;
@@ -331,11 +398,14 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
     return;
   }
 
-  const [tour] = await db.select().from(toursTable).where(and(eq(toursTable.id, tourId), eq(toursTable.userId, userId)));
+  const tour = await getOwnedTour(userId, tourId);
   if (!tour) { res.status(404).json({ error: "Tour not found" }); return; }
 
-  const [stop] = await db.select().from(tourStopsTable).where(eq(tourStopsTable.id, stopId));
-  if (!stop) { res.status(404).json({ error: "Stop not found" }); return; }
+  const ownedStop = await getOwnedTourStop(userId, tourId, stopId);
+  if (!ownedStop) { res.status(404).json({ error: "Stop not found" }); return; }
+  const stop = ownedStop.stop;
+
+  console.log("[Tours] Syncing stop to past show", { userId, tourId, stopId });
 
   // Use existing venueId from stop (already synced on save), or find/create as fallback
   let venueId: number | null = stop.venueId ?? null;
@@ -350,6 +420,7 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
   const fee = stop.fee != null ? Number(stop.fee) : null;
   const guarantee = stop.guarantee != null ? Number(stop.guarantee) : null;
   const merch = stop.merchEstimate != null ? Number(stop.merchEstimate) : null;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   if (existingRun) {
     // Update only planned fields; preserve any actual values already entered
@@ -357,6 +428,7 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
       venueName: stop.venueName ?? existingRun.venueName,
       city: stop.city ?? existingRun.city,
       showDate: stop.date ?? existingRun.showDate,
+      status: getDefaultSavedCalculationStatus(stop.date ?? existingRun.showDate, todayIsoDate),
       showType: stop.showType,
       fee: fee != null ? String(fee) : existingRun.fee,
       guarantee: guarantee != null ? String(guarantee) : existingRun.guarantee,
@@ -370,14 +442,14 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
     return;
   }
 
-  // 3. Create new Past Show
+  // 3. Create new synced show record
   const [created] = await db.insert(runsTable).values({
     userId,
     venueId,
     venueName: stop.venueName ?? null,
     city: stop.city ?? null,
     showDate: stop.date ?? null,
-    status: "completed",
+    status: getDefaultSavedCalculationStatus(stop.date ?? null, todayIsoDate),
     showType: stop.showType,
     fee: fee != null ? String(fee) : null,
     guarantee: guarantee != null ? String(guarantee) : null,

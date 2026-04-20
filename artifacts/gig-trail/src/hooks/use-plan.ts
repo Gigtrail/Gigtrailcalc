@@ -161,13 +161,13 @@ export function useStripePlans() {
 }
 
 export function useCreateCheckout() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (priceId: string) => {
-      const res = await fetch("/api/stripe/checkout", {
+      const res = await authedFetch("/api/stripe/checkout", () => getToken(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ priceId }),
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");
@@ -177,11 +177,11 @@ export function useCreateCheckout() {
 }
 
 export function useCustomerPortal() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/stripe/portal", {
+      const res = await authedFetch("/api/stripe/portal", () => getToken(), {
         method: "POST",
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Portal failed");
@@ -340,13 +340,13 @@ export function usePromoCodeRedemptions(id: number | null) {
 }
 
 export function useRedeemPromo() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (code: string) => {
-      const res = await fetch("/api/me/redeem-promo", {
+      const res = await authedFetch("/api/me/redeem-promo", () => getToken(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to redeem promo code");
@@ -470,6 +470,20 @@ export function useValidatePromoCode() {
       const res = await fetch(`/api/promo-codes/validate?code=${encodeURIComponent(code)}`);
       const data = await res.json();
       return data as { valid: boolean; grantsRole?: string; error?: string };
+    },
+  });
+}
+
+export function useSyncPlan() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await authedFetch("/api/me/sync-plan", () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to sync plan");
+      return data as { role: string; plan: string };
     },
   });
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,15 +25,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Clock, Fuel, Truck, BedDouble, History, Search, Plus, Star, DollarSign, Settings2, ChevronDown, ChevronUp, Eye, Pencil, Route } from "lucide-react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Fuel, Truck, BedDouble, History, Plus, Star, DollarSign, Settings2, ChevronDown, ChevronUp, Eye, Pencil, Route, Sparkles } from "lucide-react";
+import { useEffect, useState, useCallback, useRef, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
 import { DealTypeInfo } from "@/components/deal-type-info";
 import { usePlan } from "@/hooks/use-plan";
-import { UsageMeter } from "@/components/usage-meter";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
@@ -41,10 +40,10 @@ import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
 import { trackEvent } from "@/lib/analytics";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
+import { getRunLifecycleState, getSavedCalculationStatusForPersist } from "@/lib/run-lifecycle";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import { ResultsStrip } from "@/components/results-strip";
 import { SliderInput } from "@/components/slider-input";
-import { Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -199,6 +198,7 @@ export default function RunForm() {
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
   const [showTravelEdit, setShowTravelEdit] = useState(false);
+  const [showIncomeAdvanced, setShowIncomeAdvanced] = useState(false);
   const [distanceMode, setDistanceMode] = useState<"auto" | "manual">(isEditing ? "manual" : "auto");
   const [attendanceCount, setAttendanceCount] = useState<number>(0);
   // Garage box state
@@ -219,6 +219,11 @@ export default function RunForm() {
   const updateProfile = useUpdateProfile();
   const createVehicle = useCreateVehicle();
   const queryClient = useQueryClient();
+  const invalidateRunDashboardQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  }, [queryClient]);
 
   const trackCalculation = useTrackCalculation();
 
@@ -324,6 +329,7 @@ export default function RunForm() {
   const [calculationResult, setCalculationResult] = useState<ReturnType<typeof computeGigResults> | null>(null);
   const [lastCalcKey, setLastCalcKey] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState(false);
+  const celebrateTimeoutRef = useRef<number | null>(null);
 
   // Build a stable signature of inputs that affect the calc result.
   // Used to detect when the displayed result is "stale" after edits.
@@ -357,62 +363,56 @@ export default function RunForm() {
 
   const currentCalcKey = buildCalcKey(formValues);
   const isStale = !!calculationResult && lastCalcKey !== null && lastCalcKey !== currentCalcKey;
+  const usageLimit = calcUsage?.limit ?? (isPro ? null : 5);
+  const usageReached = !isPro && usageLimit !== null && (calcUsage?.count ?? 0) >= usageLimit;
+
+  useEffect(() => {
+    return () => {
+      if (celebrateTimeoutRef.current !== null) {
+        window.clearTimeout(celebrateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCalculate = useCallback(async () => {
     const vals = form.getValues();
     const profileId = vals.profileId;
+    if (usageReached) {
+      setShowLimitModal(true);
+      return;
+    }
     setIsCalculating(true);
     setRouteCalcFailed(false);
     trackEvent("show_calc_started", { deal_type: vals.dealType ?? "flat_fee" });
 
     let routeOverride: { distanceKm?: number; driveTimeMinutes?: number | null } = {};
 
-    if (distanceMode === "auto") {
-      const oLat = vals.originLat, oLng = vals.originLng;
-      const dLat = vals.destinationLat, dLng = vals.destinationLng;
-      if (oLat && oLng && dLat && dLng) {
-        const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
-        if (route) {
-          form.setValue("distanceKm", route.distanceKm);
-          routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
-        } else {
-          setRouteCalcFailed(true);
+    try {
+      if (distanceMode === "auto") {
+        const oLat = vals.originLat, oLng = vals.originLng;
+        const dLat = vals.destinationLat, dLng = vals.destinationLng;
+        if (oLat && oLng && dLat && dLng) {
+          const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
+          if (route) {
+            form.setValue("distanceKm", route.distanceKm);
+            routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
+          } else {
+            setRouteCalcFailed(true);
+          }
         }
       }
-    }
 
-    try {
-      let calcCount: number | undefined;
-      let calcLimit: number | null | undefined;
+      let nextCalcUsage = calcUsage;
 
       if (profileId) {
         const result = await trackCalculation.mutateAsync({ id: profileId });
-        calcCount = result.count;
-        calcLimit = result.limit ?? null;
-        setCalcUsage({ count: result.count, limit: result.limit ?? null });
+        nextCalcUsage = { count: result.count, limit: result.limit ?? null };
+        setCalcUsage(nextCalcUsage);
       }
 
-      const profile = profiles?.find(p => p.id === profileId);
 
-      // --- Dynamic accommodation calculation ---
-      const maxDriveHoursPerDay = (isPro && profile?.maxDriveHoursPerDay)
-        ? Number(profile.maxDriveHoursPerDay)
-        : DEFAULT_MAX_DRIVE_HOURS_PER_DAY;
-
-      // Estimate drive time using route override or fallback to 0
-      const estimatedDriveMinutes = routeOverride.driveTimeMinutes ?? null;
-      const totalDriveHours = estimatedDriveMinutes !== null
-        ? (vals.returnTrip ? estimatedDriveMinutes * 2 : estimatedDriveMinutes) / 60
-        : 0;
-      const drivingDaysNeeded = totalDriveHours > 0 ? Math.ceil(totalDriveHours / maxDriveHoursPerDay) : 0;
-      const recommendedNights = Math.max(0, drivingDaysNeeded - 1);
 
       // Use form values for accommodation — user can override profile defaults per-show
-      const accomRequired = vals.accommodationRequired ?? false;
-      const accomSingleRooms = Number(vals.singleRooms) || 0;
-      const accomDoubleRooms = Number(vals.doubleRooms) || 0;
-      const perNightRate = accomSingleRooms * SINGLE_ROOM_RATE + accomDoubleRooms * DOUBLE_ROOM_RATE;
-      const estimatedAccomCostFromDrive = accomRequired ? recommendedNights * perNightRate : 0;
 
       // Use selected garage vehicle's consumption and fuel type if available
       const selectedVehicle = runVehicleId ? vehicles?.find(v => v.id === runVehicleId) : null;
@@ -424,47 +424,24 @@ export default function RunForm() {
       const computed = computeGigResults(vals, {
         ...routeOverride,
         ...vehicleOverrides,
-        accommodationRequired: accomRequired,
-        singleRooms: accomSingleRooms,
-        doubleRooms: accomDoubleRooms,
+        accommodationRequired: vals.accommodationRequired ?? false,
+        singleRooms: Number(vals.singleRooms) || 0,
+        doubleRooms: Number(vals.doubleRooms) || 0,
       });
 
       // StatusIcon is a React component — not JSON-serializable; exclude it
-      const { StatusIcon: _icon, statusColor: _color, ...serializableComputed } = computed;
-
-      const resultData = {
-        ...serializableComputed,
-        recommendedNights,
-        maxDriveHoursPerDay,
-        accomSingleRooms,
-        accomDoubleRooms,
-        estimatedAccomCostFromDrive,
-        formData: {
-          ...vals,
-          actType: profile?.actType ?? null,
-          accommodationCost: computed.accommodationCost,
-          totalCost: computed.totalCost,
-          totalIncome: computed.totalIncome,
-          totalProfit: computed.netProfit,
-        },
-        profileName: profile?.name ?? null,
-        profilePeopleCount: profile?.peopleCount ?? 1,
-        vehicleType: profile?.vehicleType ?? null,
-        vehicleName: profile?.vehicleName ?? null,
-        isEditing,
-        runId: isEditing ? runId : undefined,
-        calcCount,
-        calcLimit,
-        isPro,
-      };
-
-      setCalculationResult(computed);
-      setLastCalcKey(buildCalcKey(form.getValues()));
-      setCelebrate(true);
-      window.setTimeout(() => setCelebrate(false), 1600);
+      if (celebrateTimeoutRef.current !== null) {
+        window.clearTimeout(celebrateTimeoutRef.current);
+      }
+      startTransition(() => {
+        setCalculationResult(computed);
+        setLastCalcKey(buildCalcKey(form.getValues()));
+        setCelebrate(true);
+      });
+      celebrateTimeoutRef.current = window.setTimeout(() => setCelebrate(false), 1400);
       trackEvent("show_calc_completed", {
         deal_type: vals.dealType ?? "flat_fee",
-        distance: typeof vals.distanceKm === "string" ? parseFloat(vals.distanceKm) : (vals.distanceKm ?? 0),
+        distance: routeOverride.distanceKm ?? (typeof vals.distanceKm === "string" ? parseFloat(vals.distanceKm) : (vals.distanceKm ?? 0)),
         fuel_cost: computed.fuelCost,
         accommodation_cost: computed.accommodationCost ?? 0,
         total_expenses: computed.totalCost ?? 0,
@@ -472,21 +449,10 @@ export default function RunForm() {
         projected_profit: computed.netProfit,
         break_even_tickets: computed.breakEvenTickets ?? null,
         is_profitable: computed.netProfit > 0,
+        usage_count: nextCalcUsage?.count ?? calcUsage?.count ?? 0,
       });
 
-      // Auto-save: upsert venue then create/update run
-      let savedRunId: number | null = isEditing ? runId : null;
-      let saveFailed = false;
-      try {
-        const vName = vals.venueName?.trim();
-        if (vName) {
-          await createOrUpdateVenue.mutateAsync({ data: { venueName: vName, city: vals.city || vals.destination || "" } });
-        }
-
-        const actType = profile?.actType ?? null;
-
-        const toNum = (v: unknown) => { const n = Number(v); return isNaN(n) ? 0 : n; };
-        const toNumOrNull = (v: unknown) => { const n = Number(v); return isNaN(n) || v === "" || v === null || v === undefined ? null : n; };
+      /* Legacy save-and-redirect flow removed to keep calculation inline and repeatable.
 
         // Resolve the member list as it existed at calculation time so the
         // snapshot is self-contained and won't drift if the profile changes later.
@@ -656,7 +622,6 @@ export default function RunForm() {
           totalCost: computed.totalCost,
           totalIncome: computed.totalIncome,
           totalProfit: computed.netProfit,
-          status: "draft" as const,
           calculationSnapshot,
         };
 
@@ -667,19 +632,29 @@ export default function RunForm() {
           const newRun = await createRun.mutateAsync({ data: payload });
           savedRunId = newRun.id;
         }
-        // Refresh the History sidebar / dashboard so the new or edited run appears immediately.
-        queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
+        invalidateRunDashboardQueries();
       } catch (saveErr: unknown) {
         saveFailed = true;
         console.error("[GigTrail] Auto-save failed:", saveErr);
+        if ((saveErr as { status?: number })?.status === 409) {
+          toast({
+            title: "Past shows are read-only once their date has passed",
+            variant: "destructive",
+          });
+        }
         trackEvent("save_failed", { entity_type: "run", error_message: String(saveErr) });
       }
 
       sessionStorage.setItem(
         "gigtrail_result",
-        JSON.stringify({ ...resultData, savedRunId, saveFailed, runLifecycleStatus: "draft" }),
+        JSON.stringify({
+          ...resultData,
+          savedRunId,
+          saveFailed,
+          runLifecycleStatus: getSavedCalculationStatusForPersist(vals.showDate),
+        }),
       );
-      setLocation("/runs/results");
+      */
     } catch (err: unknown) {
       const status = (err as { status?: number })?.status;
       if (status === 403) {
@@ -691,7 +666,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [form, trackCalculation, computeGigResults, profiles, isPro, isEditing, runId, setLocation, toast, createOrUpdateVenue, createRun, updateRun, distanceMode]);
+  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, runVehicleId, toast, trackCalculation, usageReached, vehicles]);
 
   const LAST_PROFILE_KEY = "gigtrail_lastUsedProfileId";
 
@@ -817,24 +792,6 @@ export default function RunForm() {
     }
   };
 
-  // Auto-calculate distance whenever both origin + destination coordinates are set (auto mode only)
-  useEffect(() => {
-    if (distanceMode !== "auto") return;
-    const oLat = formValues.originLat, oLng = formValues.originLng;
-    const dLat = formValues.destinationLat, dLng = formValues.destinationLng;
-    if (oLat && oLng && dLat && dLng) {
-      calculateGoogleRoute(oLat, oLng, dLat, dLng).then(route => {
-        if (route) {
-          form.setValue("distanceKm", route.distanceKm);
-          setRouteCalcFailed(false);
-        } else {
-          setRouteCalcFailed(true);
-        }
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formValues.originLat, formValues.originLng, formValues.destinationLat, formValues.destinationLng, distanceMode]);
-
   // Sync local vehicle selection when profile changes
   useEffect(() => {
     const currentProfileId = formValues.profileId ?? null;
@@ -855,43 +812,119 @@ export default function RunForm() {
   }, [quickAddType]);
 
   const onSubmit = (data: RunFormValues) => {
-    const computed = calculationResult ?? computeGigResults(data);
-    const payload = {
-      ...data,
-      vehicleId: runVehicleId,
-      accommodationCost: computed.accommodationCost,
-      totalCost: computed.totalCost,
-      totalIncome: computed.totalIncome,
-      totalProfit: computed.netProfit
-    };
+    void (async () => {
+      const profile = profiles?.find((item) => item.id === data.profileId);
+      const selectedVehicle = runVehicleId ? vehicles?.find((item) => item.id === runVehicleId) : null;
+      const computed = computeGigResults(
+        data,
+        selectedVehicle
+          ? { vehicleConsumption: selectedVehicle.avgConsumption, vehicleFuelType: selectedVehicle.fuelType }
+          : undefined,
+      );
+      const peopleCount = profile?.peopleCount ?? 1;
+      const expectedTicketsSold =
+        data.capacity != null && data.expectedAttendancePct != null
+          ? Math.round(Number(data.capacity) * (Number(data.expectedAttendancePct) / 100))
+          : 0;
+      const activeMembers = profile
+        ? resolveActiveMembers(
+            migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null).library,
+            migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null).activeMemberIds,
+          )
+        : [];
+      const snapshotMembers: SnapMember[] = activeMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        expectedGigFee: member.expectedGigFee ?? 0,
+        feeType: resolveFeeType(member),
+      }));
+      const calculationSnapshot = {
+        fuelCost: computed.fuelCost,
+        totalCost: computed.totalCost,
+        totalIncome: computed.totalIncome,
+        netProfit: computed.netProfit,
+        status: computed.status,
+        profitPerMember: peopleCount > 0 ? computed.netProfit / peopleCount : computed.netProfit,
+        takeHomePerPerson: peopleCount > 0 ? computed.netProfit / peopleCount : computed.netProfit,
+        expectedTicketsSold,
+        grossRevenue: computed.grossRevenue,
+        bookingFeeTotal: computed.bookingFeeTotal,
+        netTicketRevenue: computed.netTicketRevenue,
+        breakEvenTickets: computed.breakEvenTickets,
+        breakEvenCapacity: computed.breakEvenCapacity,
+        showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
+        distanceKm: computed.distanceKm,
+        driveTimeMinutes: computed.driveTimeMinutes ?? null,
+        fuelUsedLitres: computed.fuelUsedLitres,
+        recommendedNights: Math.max(0, (Number(data.accommodationNights) || 0) - 1),
+        maxDriveHoursPerDay: Number(profile?.maxDriveHoursPerDay) || DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
+        accomSingleRooms: Number(data.singleRooms) || 0,
+        accomDoubleRooms: Number(data.doubleRooms) || 0,
+        estimatedAccomCostFromDrive: computed.accommodationCost ?? 0,
+        formData: {
+          ...data,
+          actType: profile?.actType ?? null,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+        },
+        profileName: profile?.name ?? null,
+        profilePeopleCount: peopleCount,
+        vehicleType: selectedVehicle?.vehicleType ?? profile?.vehicleType ?? null,
+        vehicleName: selectedVehicle?.name ?? profile?.vehicleName ?? null,
+        fuelPriceSource: computed.fuelPriceSource,
+        resolvedFuelPrice: computed.resolvedFuelPrice,
+        isEditing,
+        runId: isEditing ? runId : undefined,
+        calculationVersion: CALC_ENGINE_VERSION,
+        calculatedAt: new Date().toISOString(),
+        snapshotMembers,
+      };
+      const payload = {
+        ...data,
+        vehicleId: runVehicleId,
+        accommodationCost: computed.accommodationCost,
+        totalCost: computed.totalCost,
+        totalIncome: computed.totalIncome,
+        totalProfit: computed.netProfit,
+        calculationSnapshot,
+      };
 
-    if (isEditing) {
-      updateRun.mutate(
-        { id: runId, data: payload },
-        {
-          onSuccess: () => {
-            toast({ title: "Show updated" });
-            setLocation(`/runs/${runId}`);
-          },
-          onError: () => {
-            toast({ title: "Failed to update show", variant: "destructive" });
-          },
+      try {
+        const venueName = data.venueName?.trim();
+        if (venueName) {
+          await createOrUpdateVenue.mutateAsync({
+            data: { venueName, city: data.city || data.destination || "" },
+          });
         }
-      );
-    } else {
-      createRun.mutate(
-        { data: payload },
-        {
-          onSuccess: (newRun) => {
-            toast({ title: "Show saved" });
-            setLocation(`/runs/${newRun.id}`);
-          },
-          onError: () => {
-            toast({ title: "Failed to save show", variant: "destructive" });
-          },
+
+        if (isEditing) {
+          await updateRun.mutateAsync({ id: runId, data: payload });
+          invalidateRunDashboardQueries();
+          toast({ title: "Show updated" });
+          setLocation(`/runs/${runId}`);
+          return;
         }
-      );
-    }
+
+        const newRun = await createRun.mutateAsync({ data: payload });
+        invalidateRunDashboardQueries();
+        toast({ title: "Show saved" });
+        setLocation(`/runs/${newRun.id}`);
+      } catch (error) {
+        console.error("[RunForm] Save failed:", error);
+        toast({
+          title:
+            (error as { status?: number })?.status === 409
+              ? "Past shows are read-only once their date has passed"
+              : isEditing
+                ? "Failed to update show"
+                : "Failed to save show",
+          variant: "destructive",
+        });
+      }
+    })();
   };
 
   const isPending = createRun.isPending || updateRun.isPending;
@@ -899,6 +932,47 @@ export default function RunForm() {
 
   if (isEditing && isLoadingRun) {
     return <div className="p-8 text-center text-muted-foreground">Loading run...</div>;
+  }
+
+  if (isEditing && run && getRunLifecycleState(run) === "past") {
+    return (
+      <div className="space-y-4 max-w-2xl mx-auto">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/runs")} className="h-8 w-8">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Past Show Locked</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              This show is now read-only because its show date has already passed.
+            </p>
+          </div>
+        </div>
+
+        <Card className="border-border/50 bg-card/50">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div>
+                Past shows lock automatically once their date is before today in your local timezone. View the saved
+                result instead of editing the record.
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button onClick={() => setLocation(`/runs/results?runId=${runId}`)}>
+                <History className="w-4 h-4 mr-2" />
+                View Saved Result
+              </Button>
+              <Button variant="outline" onClick={() => setLocation("/runs")}>
+                <Save className="w-4 h-4 mr-2" />
+                Saved Calculations
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const stripData = calculationResult
@@ -912,8 +986,24 @@ export default function RunForm() {
       }
     : null;
 
-  const usageLimit = calcUsage?.limit ?? (isPro ? null : 5);
-  const usageReached = !isPro && usageLimit !== null && (calcUsage?.count ?? 0) >= usageLimit;
+  const selectedProfile = profiles?.find((profile) => profile.id === formValues.profileId);
+  const selectedVehicle = runVehicleId ? vehicles?.find((vehicle) => vehicle.id === runVehicleId) : null;
+  const vehicleLabel = selectedVehicle
+    ? selectedVehicle.name
+    : selectedProfile
+      ? (selectedProfile.vehicleName
+          ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
+          : getStandardVehicle(selectedProfile.vehicleType).displayName)
+      : null;
+  const travelDistanceKm = Number(formValues.distanceKm) || 0;
+  const totalTravelDistanceKm = travelDistanceKm * (formValues.returnTrip ? 2 : 1);
+  const knownCosts = (Number(formValues.foodCost) || 0)
+    + (Number(formValues.extraCosts) || 0)
+    + (Number(formValues.marketingCost) || 0)
+    + (Number(formValues.supportActCost) || 0);
+  const dealLabel = formValues.showType === "Ticketed Show"
+    ? (formValues.dealType ?? "Ticketed")
+    : (formValues.showType ?? "Flat Fee");
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500 max-w-2xl mx-auto pb-2">
@@ -923,7 +1013,7 @@ export default function RunForm() {
         </Button>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{isEditing ? "Edit Show" : "Single Show Calculator"}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Run the numbers before you lock in the gig.</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Run it, tweak it, and calculate again without losing your place.</p>
         </div>
       </div>
 
@@ -944,11 +1034,56 @@ export default function RunForm() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-primary" />
-                  Show Details
+                  Travel
                 </CardTitle>
-                <CardDescription>Where and when</CardDescription>
+                <CardDescription>Venue, route, and fuel in one fast pass.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="profileId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Profile</FormLabel>
+                        <Select
+                          onValueChange={handleProfileChange}
+                          value={field.value ? field.value.toString() : "none"}
+                          disabled={isLoadingProfiles}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select profile" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            {profiles?.map((profile) => (
+                              <SelectItem key={profile.id} value={profile.id.toString()}>
+                                {profile.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="showDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Show Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} value={field.value || ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 {/* Venue / Destination — always front and centre */}
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium leading-none">Venue / Destination</label>
@@ -986,121 +1121,68 @@ export default function RunForm() {
                   )}
                 </div>
 
-                {/* Show Date */}
-                <FormField
-                  control={form.control}
-                  name="showDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Show Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} value={field.value || ""} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Compact travel summary using profile defaults */}
-                {(() => {
-                  const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
-                  const selectedVehicle = runVehicleId ? vehicles?.find(v => v.id === runVehicleId) : null;
-                  const vehicleLabel = selectedVehicle
-                    ? `${selectedVehicle.name}`
-                    : selectedProfile
-                      ? (selectedProfile.vehicleName
-                          ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
-                          : getStandardVehicle(selectedProfile.vehicleType).displayName)
-                      : null;
-                  const distNum = Number(formValues.distanceKm) || 0;
-                  const totalDist = distNum * (formValues.returnTrip ? 2 : 1);
-                  const distText = distNum > 0
-                    ? `${totalDist.toFixed(0)} km${formValues.returnTrip ? " round trip" : " one way"}`
-                    : "Auto-calculated when locations set";
-
-                  return (
-                    <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Travel Assumptions
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
-                          From profile
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground w-16 flex-shrink-0">Using:</span>
-                          <span className="font-medium text-foreground truncate">
-                            {selectedProfile?.name ?? "No profile"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="text-muted-foreground w-12 flex-shrink-0">From:</span>
-                          <span className="font-medium text-foreground truncate">
-                            {formValues.origin || "Not set"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="text-muted-foreground w-12 flex-shrink-0">Vehicle:</span>
-                          <span className="font-medium text-foreground truncate">
-                            {vehicleLabel ?? "Not set"}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Route className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="text-muted-foreground w-12 flex-shrink-0">Distance:</span>
-                          <span className="font-medium text-foreground truncate">{distText}</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowTravelEdit(v => !v)}
-                        className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 pt-1"
-                      >
-                        {showTravelEdit ? (
-                          <><ChevronUp className="w-3.5 h-3.5" /> Hide travel details</>
-                        ) : (
-                          <><Settings2 className="w-3.5 h-3.5" /> Edit travel assumptions</>
-                        )}
-                      </button>
+                <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Travel Snapshot
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
+                      Fast defaults
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground w-16 flex-shrink-0">Using:</span>
+                      <span className="font-medium text-foreground truncate">
+                        {selectedProfile?.name ?? "No profile"}
+                      </span>
                     </div>
-                  );
-                })()}
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-muted-foreground w-12 flex-shrink-0">From:</span>
+                      <span className="font-medium text-foreground truncate">
+                        {formValues.origin || "Not set"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Truck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-muted-foreground w-12 flex-shrink-0">Vehicle:</span>
+                      <span className="font-medium text-foreground truncate">
+                        {vehicleLabel ?? "Not set"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Route className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-muted-foreground w-12 flex-shrink-0">Distance:</span>
+                      <span className="font-medium text-foreground truncate">
+                        {travelDistanceKm > 0
+                          ? `${totalTravelDistanceKm.toFixed(0)} km${formValues.returnTrip ? " round trip" : " one way"}`
+                          : distanceMode === "auto"
+                            ? "Maps route on Calculate"
+                            : "Add a manual distance"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTravelEdit((value) => !value)}
+                    className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1 pt-1"
+                  >
+                    {showTravelEdit ? (
+                      <><ChevronUp className="w-3.5 h-3.5" /> Hide travel overrides</>
+                    ) : (
+                      <><Settings2 className="w-3.5 h-3.5" /> Show travel overrides</>
+                    )}
+                  </button>
+                </div>
 
                 {/* Expanded travel/profile/vehicle controls */}
                 {showTravelEdit && (
                   <div className="space-y-4 rounded-lg border border-primary/20 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-1 duration-200">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="profileId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Profile</FormLabel>
-                            <Select
-                              onValueChange={handleProfileChange}
-                              value={field.value ? field.value.toString() : "none"}
-                              disabled={isLoadingProfiles}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select profile" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                {profiles?.map(p => (
-                                  <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="rounded-lg border border-primary/15 bg-background/70 px-3 py-2.5 text-sm text-muted-foreground md:col-span-2">
+                        Manual overrides stay on this show only. Distance and maps stay idle until you press <span className="font-medium text-foreground">Calculate</span>.
+                      </div>
                       {/* Garage Box — vehicle selector for current act */}
                       {(() => {
                         const selectedProfile = profiles?.find(p => p.id === formValues.profileId);
@@ -1280,7 +1362,7 @@ export default function RunForm() {
                             {(Number(formValues.distanceKm) || 0) > 0 ? (
                               <span className="font-medium text-foreground">{formValues.distanceKm} km</span>
                             ) : (
-                              <span className="text-muted-foreground">Auto-calculated from locations</span>
+                              <span className="text-muted-foreground">Maps route runs when you hit Calculate</span>
                             )}
                           </div>
                         ) : (
@@ -1331,7 +1413,7 @@ export default function RunForm() {
                         )}
                         {distanceMode === "auto" && !routeCalcFailed && (Number(formValues.distanceKm) || 0) === 0 && (
                           <p className="text-xs text-muted-foreground">
-                            Calculated automatically when you select both locations
+                            Pick both locations now, then calculate once when you're ready
                           </p>
                         )}
                       </div>
@@ -1342,10 +1424,18 @@ export default function RunForm() {
                           <FormItem>
                             <FormLabel>Fuel Price Override ($/L)</FormLabel>
                             <FormControl>
-                              <Input type="number" min="0" step="0.01" placeholder="Leave blank for profile default" {...field} value={field.value || ""} onChange={e => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))} />
+                              <SliderInput
+                                value={Number(field.value) || 0}
+                                onChange={(value) => field.onChange(value)}
+                                min={0}
+                                max={4}
+                                step={0.01}
+                                prefix="$"
+                                ariaLabel="Fuel price override"
+                              />
                             </FormControl>
                             <p className="text-xs text-muted-foreground">
-                              Optional. Leave blank to use your profile's fuel assumption.
+                              Leave it at zero to keep your profile fuel assumption.
                             </p>
                             <FormMessage />
                           </FormItem>
@@ -1462,29 +1552,27 @@ export default function RunForm() {
 
                     <div className="space-y-2">
                       <label className="text-sm font-medium leading-none">Expected Attendance</label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          min="0"
-                          max={formValues.capacity || undefined}
-                          value={attendanceCount || 0}
-                          onChange={e => {
-                            const count = Math.max(0, parseInt(e.target.value) || 0);
-                            const cap = Number(formValues.capacity) || 0;
-                            setAttendanceCount(count);
-                            form.setValue(
-                              "expectedAttendancePct",
-                              cap > 0 ? Math.min(100, Math.round((count / cap) * 100)) : 0
-                            );
-                          }}
-                          placeholder="e.g. 120"
-                        />
-                        {(formValues.capacity || 0) > 0 && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                            {Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}%
-                          </span>
-                        )}
-                      </div>
+                      <SliderInput
+                        value={attendanceCount || 0}
+                        onChange={(value) => {
+                          const cap = Number(formValues.capacity) || 0;
+                          const count = Math.max(0, Math.min(value, cap || value));
+                          setAttendanceCount(count);
+                          form.setValue(
+                            "expectedAttendancePct",
+                            cap > 0 ? Math.min(100, Math.round((count / cap) * 100)) : 0
+                          );
+                        }}
+                        min={0}
+                        max={Math.max(Number(formValues.capacity) || 0, 100)}
+                        step={1}
+                        ariaLabel="Expected attendance"
+                      />
+                      {(formValues.capacity || 0) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}% of capacity
+                        </p>
+                      )}
                       {calculationResult && (
                         <p className="text-xs text-muted-foreground">
                           Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross
@@ -1492,11 +1580,27 @@ export default function RunForm() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="dealType"
-                        render={({ field }) => (
+                    <button
+                      type="button"
+                      onClick={() => setShowIncomeAdvanced((value) => !value)}
+                      className="w-full rounded-lg border border-dashed border-border/60 bg-background/70 px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:border-primary/40"
+                    >
+                      <span className="flex items-center gap-2">
+                        {showIncomeAdvanced ? <ChevronUp className="w-4 h-4 text-primary" /> : <ChevronDown className="w-4 h-4 text-primary" />}
+                        {showIncomeAdvanced ? "Hide advanced income" : "Show advanced income"}
+                      </span>
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        Door split, ticket fees, support costs, and merch stay tucked away until you need them.
+                      </span>
+                    </button>
+
+                    {showIncomeAdvanced && (
+                      <div className="space-y-4 rounded-lg border border-border/40 bg-background/50 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="dealType"
+                            render={({ field }) => (
                           <FormItem>
                             <FormLabel>Door Deal</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value || "100% door"} value={field.value || "100% door"}>
@@ -1531,12 +1635,12 @@ export default function RunForm() {
                           )}
                         />
                       )}
-                    </div>
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="bookingFeePerTicket"
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="bookingFeePerTicket"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Platform Fee per Ticket ($)</FormLabel>
@@ -1562,60 +1666,75 @@ export default function RunForm() {
                           </FormItem>
                         )}
                       />
-                    </div>
+                        </div>
+
+                        <FormField
+                          control={form.control}
+                          name="merchEstimate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Merch Estimate</FormLabel>
+                              <FormControl>
+                                <SliderInput
+                                  value={Number(field.value) || 0}
+                                  onChange={(n) => field.onChange(n)}
+                                  min={0}
+                                  max={2000}
+                                  step={25}
+                                  prefix="$"
+                                  ariaLabel="Merch Estimate"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="space-y-4 pt-2 border-t border-border/40">
-                  <FormField
-                    control={form.control}
-                    name="merchEstimate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Merch Estimate</FormLabel>
-                        <FormControl>
-                          <SliderInput
-                            value={Number(field.value) || 0}
-                            onChange={(n) => field.onChange(n)}
-                            min={0}
-                            max={2000}
-                            step={25}
-                            prefix="$"
-                            ariaLabel="Merch Estimate"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                {!isTicketed && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowIncomeAdvanced((value) => !value)}
+                      className="w-full rounded-lg border border-dashed border-border/60 bg-background/70 px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:border-primary/40"
+                    >
+                      <span className="flex items-center gap-2">
+                        {showIncomeAdvanced ? <ChevronUp className="w-4 h-4 text-primary" /> : <ChevronDown className="w-4 h-4 text-primary" />}
+                        {showIncomeAdvanced ? "Hide extra income" : "Show extra income"}
+                      </span>
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        Add merch only when you want it.
+                      </span>
+                    </button>
 
-                  {isTicketed && (
-                    <FormField
-                      control={form.control}
-                      name="marketingCost"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Marketing Cost</FormLabel>
-                          <FormControl>
-                            <SliderInput
-                              value={Number(field.value) || 0}
-                              onChange={(n) => field.onChange(n)}
-                              min={0}
-                              max={2000}
-                              step={25}
-                              prefix="$"
-                              ariaLabel="Marketing Cost"
-                            />
-                          </FormControl>
-                          {calculationResult && (
-                            <p className="text-xs text-muted-foreground">Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)</p>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
+                    {showIncomeAdvanced && (
+                      <FormField
+                        control={form.control}
+                        name="merchEstimate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Merch Estimate</FormLabel>
+                            <FormControl>
+                              <SliderInput
+                                value={Number(field.value) || 0}
+                                onChange={(n) => field.onChange(n)}
+                                min={0}
+                                max={2000}
+                                step={25}
+                                prefix="$"
+                                ariaLabel="Merch Estimate"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -1626,7 +1745,7 @@ export default function RunForm() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Fuel className="w-4 h-4 text-primary" />
-                      Costs
+                      Expenses
                       {!overridingCosts && (
                         <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wide text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
                           Using profile defaults
@@ -1746,6 +1865,34 @@ export default function RunForm() {
                           </FormItem>
                         )}
                       />
+                      {isTicketed && (
+                        <FormField
+                          control={form.control}
+                          name="marketingCost"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Marketing Cost</FormLabel>
+                              <FormControl>
+                                <SliderInput
+                                  value={Number(field.value) || 0}
+                                  onChange={(n) => field.onChange(n)}
+                                  min={0}
+                                  max={2000}
+                                  step={25}
+                                  prefix="$"
+                                  ariaLabel="Marketing Cost"
+                                />
+                              </FormControl>
+                              {calculationResult && (
+                                <p className="text-xs text-muted-foreground">
+                                  Suggested: ${Math.round(calculationResult.grossRevenue * 0.15)} (15% of gross)
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       <FormField
                         control={form.control}
                         name="extraCosts"
@@ -1910,7 +2057,7 @@ export default function RunForm() {
                       type="button"
                       size="lg"
                       className="w-full text-base font-bold shadow-sm"
-                      onClick={() => setLocation("/upgrade")}
+                      onClick={() => setLocation("/billing")}
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
                       Unlock Unlimited
@@ -1921,12 +2068,12 @@ export default function RunForm() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs text-muted-foreground min-w-0 truncate">
                         {isCalculating
-                          ? "Crunching the numbers…"
+                          ? "Crunching the numbers..."
                           : isStale
-                            ? "Inputs changed — hit Calculate to refresh"
+                            ? "Inputs changed. Hit Calculate to refresh."
                             : calculationResult
                               ? `Last result: ${calculationResult.netProfit >= 0 ? "+" : "−"}$${Math.abs(Math.round(calculationResult.netProfit)).toLocaleString()}`
-                              : "Ready to calculate"}
+                              : "No live updates here. Tap Calculate when you're ready."}
                       </div>
                       {!isPro && usageLimit !== null && (
                         <div className="text-xs text-muted-foreground tabular-nums shrink-0">
@@ -1937,19 +2084,20 @@ export default function RunForm() {
                     <Button
                       type="button"
                       size="lg"
-                      className="w-full text-base font-bold shadow-sm"
+                      className={cn(
+                        "w-full text-base font-bold shadow-sm transition-transform",
+                        celebrate && !isStale && "scale-[1.01] ring-2 ring-primary/20"
+                      )}
                       onClick={handleCalculate}
                       disabled={isCalculating}
                     >
                       <Calculator className="w-4 h-4 mr-2" />
-                      {isCalculating ? "Calculating..." : isStale ? "Recalculate" : "Calculate Gig"}
+                      {isCalculating ? "Calculating..." : isStale ? "Recalculate" : "Calculate"}
                     </Button>
-                    {isEditing && (
-                      <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
-                        <Save className="w-4 h-4 mr-2" />
-                        {isPending ? "Saving..." : "Save Changes"}
-                      </Button>
-                    )}
+                    <Button type="submit" variant="outline" className="w-full" disabled={isPending}>
+                      <Save className="w-4 h-4 mr-2" />
+                      {isPending ? "Saving..." : isEditing ? "Save Changes" : "Save Show"}
+                    </Button>
                   </>
                 )}
               </div>

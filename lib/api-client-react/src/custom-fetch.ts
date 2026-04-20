@@ -91,6 +91,16 @@ function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
   return headers;
 }
 
+function getBrowserTimeZone(): string | null {
+  if (typeof Intl === "undefined") return null;
+
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (typeof timeZone !== "string") return null;
+
+  const trimmed = timeZone.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 function getMediaType(headers: Headers): string | null {
   const value = headers.get("content-type");
   return value ? value.split(";", 1)[0].trim().toLowerCase() : null;
@@ -355,6 +365,13 @@ export async function customFetch<T = unknown>(
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
+    }
+  }
+
+  if (!headers.has("x-gigtrail-timezone")) {
+    const timeZone = getBrowserTimeZone();
+    if (timeZone) {
+      headers.set("x-gigtrail-timezone", timeZone);
     }
   }
 

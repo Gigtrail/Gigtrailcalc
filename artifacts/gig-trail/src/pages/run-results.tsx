@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useGetProfiles, useGetRun, useUpdateRun } from "@workspace/api-client-react";
-import { useToast } from "@/hooks/use-toast";
+import { useGetProfiles, useGetRun, type Run } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ChevronLeft,
@@ -20,7 +20,6 @@ import {
   RotateCcw,
   Save,
   Edit,
-  Archive,
   Users,
   CheckCircle2,
   History,
@@ -33,12 +32,12 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { usePlan } from "@/hooks/use-plan";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE } from "@/lib/calculations";
+import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION, calculateShowViability } from "@/lib/calculations";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
 import type { SnapMember } from "@/lib/snapshot-types";
 import { getStandardVehicle } from "@/lib/garage-constants";
-import { getRunLifecycleState, type RunLifecycleState } from "@/lib/run-lifecycle";
+import { getRunLifecycleState, getRunStatusMeta, normalizeRunStatus, type RunLifecycleState } from "@/lib/run-lifecycle";
 
 function fmt(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -184,6 +183,104 @@ export interface GigTrailResultData {
   runLifecycleStatus?: RunLifecycleState;
 }
 
+type FallbackProfile = {
+  id: number;
+  name: string;
+  peopleCount: number;
+  fuelConsumption: number;
+  maxDriveHoursPerDay: number | null;
+  vehicleType: string | null;
+  vehicleName: string | null;
+};
+
+function buildFallbackResultFromRun(run: Run, profile?: FallbackProfile): GigTrailResultData {
+  const totalIncome = run.totalIncome ?? 0;
+  const totalCost = run.totalCost ?? 0;
+  const netProfit = run.totalProfit ?? (totalIncome - totalCost);
+  const viability = calculateShowViability({ netProfit, totalIncome });
+  const distanceKm = run.distanceKm ?? 0;
+  const returnTrip = run.returnTrip ?? false;
+  const fuelPrice = run.fuelPrice ?? 0;
+  const profilePeopleCount = profile?.peopleCount ?? 1;
+  const vehicleType = profile?.vehicleType ?? null;
+  const fallbackVehicle = vehicleType ? getStandardVehicle(vehicleType) : null;
+  const fuelConsumption = Number(profile?.fuelConsumption ?? fallbackVehicle?.fuelConsumptionL100km ?? 0);
+  const totalDistance = returnTrip ? distanceKm * 2 : distanceKm;
+  const fuelUsedLitres = fuelConsumption > 0 ? (totalDistance * fuelConsumption) / 100 : 0;
+  const fuelCost = fuelUsedLitres * fuelPrice;
+  const expectedTicketsSold =
+    run.capacity != null && run.expectedAttendancePct != null
+      ? Math.round(run.capacity * (run.expectedAttendancePct / 100))
+      : 0;
+  const grossRevenue =
+    run.ticketPrice != null && expectedTicketsSold > 0
+      ? run.ticketPrice * expectedTicketsSold
+      : totalIncome;
+  const bookingFeeTotal =
+    run.bookingFeePerTicket != null && expectedTicketsSold > 0
+      ? run.bookingFeePerTicket * expectedTicketsSold
+      : 0;
+  const netTicketRevenue = Math.max(0, grossRevenue - bookingFeeTotal);
+  const breakEvenTickets = run.ticketPrice && run.ticketPrice > 0 ? Math.ceil(totalCost / run.ticketPrice) : 0;
+  const breakEvenCapacity =
+    run.capacity && run.capacity > 0 ? Math.round((breakEvenTickets / run.capacity) * 100) : 0;
+
+  return {
+    fuelCost,
+    totalCost,
+    totalIncome,
+    netProfit,
+    status: viability.status,
+    profitPerMember: profilePeopleCount > 0 ? netProfit / profilePeopleCount : netProfit,
+    takeHomePerPerson: profilePeopleCount > 0 ? netProfit / profilePeopleCount : netProfit,
+    expectedTicketsSold,
+    grossRevenue,
+    bookingFeeTotal,
+    netTicketRevenue,
+    breakEvenTickets,
+    breakEvenCapacity,
+    showCostBreakEvenTickets: breakEvenTickets,
+    distanceKm,
+    driveTimeMinutes: null,
+    fuelUsedLitres,
+    recommendedNights: Math.max(0, (run.accommodationNights ?? 0) - 1),
+    maxDriveHoursPerDay: Number(profile?.maxDriveHoursPerDay) || 8,
+    accomSingleRooms: run.singleRooms ?? 0,
+    accomDoubleRooms: run.doubleRooms ?? 0,
+    estimatedAccomCostFromDrive: run.accommodationCost ?? 0,
+    formData: {
+      ...run,
+      profileId: run.profileId ?? null,
+      venueName: run.venueName ?? null,
+      merchEstimate: run.merchEstimate ?? 0,
+      foodCost: run.foodCost ?? 0,
+      marketingCost: run.marketingCost ?? 0,
+      extraCosts: run.extraCosts ?? 0,
+      supportActCost: run.supportActCost ?? 0,
+      accommodationNights: run.accommodationNights ?? 0,
+      accommodationCost: run.accommodationCost ?? 0,
+      totalCost,
+      totalIncome,
+      totalProfit: netProfit,
+      returnTrip,
+    },
+    profileName: profile?.name ?? null,
+    profilePeopleCount,
+    vehicleType,
+    vehicleName: profile?.vehicleName ?? null,
+    fuelPriceSource: fuelPrice > 0 ? "manual" : "system_default",
+    resolvedFuelPrice: fuelPrice,
+    isEditing: true,
+    runId: run.id,
+    savedRunId: run.id,
+    snapshotMode: true,
+    snapshotDate: run.createdAt,
+    calculationVersion: CALC_ENGINE_VERSION,
+    calculatedAt: run.createdAt,
+    runLifecycleStatus: getRunLifecycleState(run),
+  };
+}
+
 export default function RunResults() {
   const [, setLocation] = useLocation();
   const [result, setResult] = useState<GigTrailResultData | null>(null);
@@ -191,10 +288,8 @@ export default function RunResults() {
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const [accomOn, setAccomOn] = useState(true);
   const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
-  const { toast } = useToast();
   const { isPro } = usePlan();
   const { data: profiles } = useGetProfiles();
-  const updateRun = useUpdateRun();
 
   const { data: snapshotRun, isLoading: isLoadingSnapshot } = useGetRun(snapshotRunId || 0, {
     query: { enabled: !!snapshotRunId, queryKey: ["snapshot-run", snapshotRunId] },
@@ -212,7 +307,7 @@ export default function RunResults() {
     try {
       const parsed = JSON.parse(raw) as GigTrailResultData;
       setResult(parsed);
-      setRunLifecycleStatus(parsed.runLifecycleStatus ?? "draft");
+      setRunLifecycleStatus(normalizeRunStatus(parsed.runLifecycleStatus) ?? "draft");
     } catch {
       setLocation("/runs/new");
     }
@@ -222,14 +317,17 @@ export default function RunResults() {
     if (!snapshotRunId) return;
     if (isLoadingSnapshot) return;
     if (!snapshotRun) { setLocation("/runs"); return; }
+    const profile = profiles?.find((item) => item.id === snapshotRun.profileId);
     const snap = snapshotRun.calculationSnapshot as GigTrailResultData | null | undefined;
     if (snap && snap.formData) {
       setResult({ ...snap, snapshotMode: true, savedRunId: snapshotRun.id, runId: snapshotRun.id, snapshotDate: snapshotRun.createdAt });
       setRunLifecycleStatus(getRunLifecycleState(snapshotRun));
     } else {
-      setLocation(`/runs/${snapshotRunId}`);
+      console.log("[RunResults] Missing snapshot payload, reconstructing from saved run", { runId: snapshotRun.id });
+      setResult(buildFallbackResultFromRun(snapshotRun, profile));
+      setRunLifecycleStatus(getRunLifecycleState(snapshotRun));
     }
-  }, [snapshotRunId, snapshotRun, isLoadingSnapshot]);
+  }, [snapshotRunId, snapshotRun, isLoadingSnapshot, profiles]);
 
   if (snapshotRunId && !result) {
     return <div className="p-8 text-center text-muted-foreground">Loading saved result…</div>;
@@ -253,32 +351,10 @@ export default function RunResults() {
   } = result;
 
   const effectiveRunId = savedRunId ?? runId;
-  const isDraftRun = runLifecycleStatus === "draft";
+  const runStatusMeta = getRunStatusMeta(runLifecycleStatus);
+  const canEditRun = runLifecycleStatus !== "past";
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
-
-  const handleAddToPastShows = async () => {
-    if (!effectiveRunId) return;
-
-    try {
-      await updateRun.mutateAsync({ id: effectiveRunId, data: { status: "completed" } });
-      setRunLifecycleStatus("completed");
-
-      const raw = sessionStorage.getItem("gigtrail_result");
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as GigTrailResultData;
-          sessionStorage.setItem("gigtrail_result", JSON.stringify({ ...parsed, runLifecycleStatus: "completed" }));
-        } catch {
-          // Ignore stale session data.
-        }
-      }
-
-      toast({ title: "Moved to Past Shows" });
-    } catch {
-      toast({ title: "Failed to update show status", variant: "destructive" });
-    }
-  };
 
   // Derived income fields
   const merch = Number(formData.merchEstimate) || 0;
@@ -394,7 +470,12 @@ export default function RunResults() {
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight truncate">{pageTitle}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight truncate">{pageTitle}</h1>
+            <Badge variant="outline" className={runStatusMeta.badgeClassName}>
+              {runStatusMeta.label}
+            </Badge>
+          </div>
           {(formData.origin || formData.destination) && (
             <p className="text-sm text-muted-foreground truncate">
               {formData.origin as string} → {formData.destination as string}
@@ -424,14 +505,14 @@ export default function RunResults() {
         <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 shrink-0 text-green-600" />
-            <span>Show saved to history</span>
+            <span>Calculation saved</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button className="font-medium underline underline-offset-2 hover:text-green-900" onClick={handleEdit}>Edit</button>
             <span>·</span>
             <button className="font-medium underline underline-offset-2 hover:text-green-900"
               onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}>
-              View all
+              Saved calculations
             </button>
           </div>
         </div>
@@ -443,6 +524,13 @@ export default function RunResults() {
       ) : null}
 
       {/* ── 1. VERDICT BANNER ─────────────────────────────────────────────── */}
+      {runLifecycleStatus === "past" ? (
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-700">
+          <History className="w-4 h-4 shrink-0 text-slate-500" />
+          <span>Past shows lock automatically once their show date has passed.</span>
+        </div>
+      ) : null}
+
       <div className={`rounded-xl border-2 overflow-hidden ${verdict.bg}`}>
         <div className={`${verdict.headerBg} px-5 py-3 flex items-center gap-2.5`}>
           <VerdictIcon className="w-5 h-5 text-white" />
@@ -1108,38 +1196,42 @@ export default function RunResults() {
         {snapshotMode ? (
           <>
             <div className="grid grid-cols-2 gap-3">
-              <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
-                <Edit className="w-4 h-4 mr-2" />Edit Show
-              </Button>
+              {canEditRun ? (
+                <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
+                  <Edit className="w-4 h-4 mr-2" />Edit Show
+                </Button>
+              ) : (
+                <Button size="lg" className="w-full font-bold" onClick={handleAnother}>
+                  <RotateCcw className="w-4 h-4 mr-2" />Calculate Another Run
+                </Button>
+              )}
               <Button size="lg" variant="outline" className="w-full font-bold" onClick={() => setLocation("/runs")}>
-                <Save className="w-4 h-4 mr-2" />All Calculations
+                <Save className="w-4 h-4 mr-2" />Saved Calculations
               </Button>
             </div>
-            {isDraftRun && (
-              <Button variant="outline" onClick={handleAddToPastShows} className="w-full">
-                <Archive className="w-4 h-4 mr-2" />Add to Past Shows
+            {canEditRun ? (
+              <Button variant="outline" onClick={handleEdit} className="w-full">
+                <RotateCcw className="w-4 h-4 mr-2" />Run again with current settings
               </Button>
-            )}
-            <Button variant="outline" onClick={handleEdit} className="w-full">
-              <RotateCcw className="w-4 h-4 mr-2" />Run again with current settings
-            </Button>
+            ) : null}
           </>
         ) : effectiveRunId ? (
           <>
             <div className="grid grid-cols-2 gap-3">
-              <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
-                <Edit className="w-4 h-4 mr-2" />Edit Show
-              </Button>
+              {canEditRun ? (
+                <Button size="lg" className="w-full font-bold" onClick={handleEdit}>
+                  <Edit className="w-4 h-4 mr-2" />Edit Show
+                </Button>
+              ) : (
+                <Button size="lg" className="w-full font-bold" onClick={handleAnother}>
+                  <RotateCcw className="w-4 h-4 mr-2" />Calculate Another Run
+                </Button>
+              )}
               <Button size="lg" variant="outline" className="w-full font-bold"
                 onClick={() => { sessionStorage.removeItem("gigtrail_result"); setLocation("/runs"); }}>
-                <Save className="w-4 h-4 mr-2" />All Calculations
+                <Save className="w-4 h-4 mr-2" />Saved Calculations
               </Button>
             </div>
-            {isDraftRun && (
-              <Button variant="outline" onClick={handleAddToPastShows} className="w-full">
-                <Archive className="w-4 h-4 mr-2" />Add to Past Shows
-              </Button>
-            )}
             <Button variant="outline" onClick={handleAnother} className="w-full">
               <RotateCcw className="w-4 h-4 mr-2" />Calculate Another Run
             </Button>

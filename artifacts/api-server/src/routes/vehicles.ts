@@ -31,6 +31,8 @@ async function setActAssignments(
   actIds: number[],
   defaultForActIds: number[]
 ): Promise<void> {
+  const currentAssignedActIds = await getAssignedActIds(vehicleId);
+
   // Verify all actIds belong to this user
   if (actIds.length > 0) {
     const validProfiles = await db
@@ -42,27 +44,56 @@ async function setActAssignments(
     defaultForActIds = defaultForActIds.filter((id) => validIds.has(id));
   }
 
+  const nextActIds = Array.from(new Set(actIds));
+  const nextDefaultActIds = Array.from(
+    new Set(defaultForActIds.filter((id) => nextActIds.includes(id)))
+  );
+  const clearedDefaultActIds = currentAssignedActIds.filter(
+    (actId) => !nextDefaultActIds.includes(actId)
+  );
+
+  console.log("[Vehicles] Syncing act assignments", {
+    vehicleId,
+    userId,
+    previousActIds: currentAssignedActIds,
+    nextActIds,
+    nextDefaultActIds,
+  });
+
   // Replace assignments (delete all then re-insert)
   await db
     .delete(vehicleActAssignmentsTable)
     .where(eq(vehicleActAssignmentsTable.vehicleId, vehicleId));
 
-  if (actIds.length > 0) {
+  if (nextActIds.length > 0) {
     await db.insert(vehicleActAssignmentsTable).values(
-      actIds.map((actId) => ({ vehicleId, actId }))
+      nextActIds.map((actId) => ({ vehicleId, actId }))
     );
   }
 
-  // Update defaultVehicleId on profiles where this vehicle should be the default
-  if (defaultForActIds.length > 0) {
-    for (const actId of defaultForActIds) {
-      if (actIds.includes(actId)) {
-        await db
-          .update(profilesTable)
-          .set({ defaultVehicleId: vehicleId })
-          .where(and(eq(profilesTable.id, actId), eq(profilesTable.userId, userId)));
-      }
-    }
+  if (clearedDefaultActIds.length > 0) {
+    await db
+      .update(profilesTable)
+      .set({ defaultVehicleId: null })
+      .where(
+        and(
+          eq(profilesTable.userId, userId),
+          eq(profilesTable.defaultVehicleId, vehicleId),
+          inArray(profilesTable.id, clearedDefaultActIds)
+        )
+      );
+  }
+
+  if (nextDefaultActIds.length > 0) {
+    await db
+      .update(profilesTable)
+      .set({ defaultVehicleId: vehicleId })
+      .where(
+        and(
+          eq(profilesTable.userId, userId),
+          inArray(profilesTable.id, nextDefaultActIds)
+        )
+      );
   }
 }
 
@@ -216,11 +247,30 @@ router.delete("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [vehicle] = await db.delete(vehiclesTable).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)));
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
+
+  console.log("[Vehicles] Deleting vehicle", { vehicleId: vehicle.id, userId });
+
+  await db
+    .update(profilesTable)
+    .set({ defaultVehicleId: null })
+    .where(and(eq(profilesTable.userId, userId), eq(profilesTable.defaultVehicleId, vehicle.id)));
+
+  await db
+    .delete(vehicleActAssignmentsTable)
+    .where(eq(vehicleActAssignmentsTable.vehicleId, vehicle.id));
+
+  await db
+    .delete(vehiclesTable)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)));
+
   res.sendStatus(204);
 });
 

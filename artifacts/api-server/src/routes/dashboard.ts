@@ -11,7 +11,7 @@ import {
   buildUpcomingTours,
 } from "./dashboardSummary";
 import { loadTourDerivations } from "../lib/tour-derivations";
-import { isCompletedRun } from "../lib/run-lifecycle";
+import { getTodayIsoDateFromRequest, isCompletedRun } from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
 
@@ -53,7 +53,7 @@ function getIsoDate(value: string | null | undefined): string | null {
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const todayIsoDate = new Date().toISOString().slice(0, 10);
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [runs, tours, profiles, vehicles] = await Promise.all([
     db.select().from(runsTable).where(eq(runsTable.userId, userId)),
@@ -78,7 +78,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
 router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const todayIsoDate = new Date().toISOString().slice(0, 10);
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [runs, tours] = await Promise.all([
     db.select().from(runsTable).where(eq(runsTable.userId, userId)),

@@ -50,6 +50,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { calculateTour, fmt, formatDriveTime, type TourLeg } from "@/lib/tour-calculator";
 import { generateTourICS, downloadICS, type ICSOptions, type ICSStop, type ICSLeg } from "@/lib/tour-ics";
+import { getTodayIsoDate } from "@/lib/run-lifecycle";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
@@ -176,9 +177,9 @@ export default function TourDetail() {
   useEffect(() => {
     if (autoSyncRun.current) return;
     if (!stops || stops.length === 0 || !tourId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayIsoDate();
     const eligible = stops.filter(
-      s => s.date && s.date <= today && s.venueName && s.venueName.trim().length > 0
+      s => s.date && s.date < today && s.venueName && s.venueName.trim().length > 0
     );
     if (eligible.length === 0) return;
     autoSyncRun.current = true;
@@ -933,8 +934,8 @@ export default function TourDetail() {
                                           queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
                                           toast({
                                             title: result.createdPastShow
-                                              ? "Saved to Past Shows"
-                                              : "Past Show updated",
+                                              ? "Show record saved"
+                                              : "Show record updated",
                                             description: stop.venueName ?? undefined,
                                           });
                                         },
@@ -946,7 +947,7 @@ export default function TourDetail() {
                                   {syncedStopIds.has(stop.id) ? (
                                     <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
                                   ) : (
-                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save Show Record</>
                                   )}
                                 </Button>
                               )}
@@ -1058,8 +1059,8 @@ export default function TourDetail() {
                                           queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
                                           toast({
                                             title: result.createdPastShow
-                                              ? "Saved to Past Shows"
-                                              : "Past Show updated",
+                                              ? "Show record saved"
+                                              : "Show record updated",
                                             description: stop.venueName ?? undefined,
                                           });
                                         },
@@ -1071,7 +1072,7 @@ export default function TourDetail() {
                                   {syncedStopIds.has(stop.id) ? (
                                     <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
                                   ) : (
-                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save Show Record</>
                                   )}
                                 </Button>
                               )}

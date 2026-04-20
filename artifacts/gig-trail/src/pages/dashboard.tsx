@@ -2,12 +2,10 @@ import type { ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import {
   AlertTriangle,
-  CalendarDays,
   CheckCircle2,
   ChevronRight,
   Map,
   Minus,
-  Navigation,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
@@ -39,27 +37,10 @@ type ActualPerformance = {
   notWorthIt: number;
 };
 
-type FuturePotential = {
-  label: string;
-  helperText: string;
-  totalsBasis: "upcoming_tours";
-  totalsRule: "Projected from upcoming tours only";
-  projectedTours: number;
-  projectedShows: number;
-  projectedIncome: number;
-  projectedProfit: number;
-  projectedExpenses: number;
-  projectedKm: number;
-  avgProjectedTourProfit: number;
-  bestProjectedTourProfit: number;
-  worstProjectedTourProfit: number;
-};
-
 type DashboardSummaryData = {
   totalProfiles: number;
   totalVehicles: number;
   actualPerformance: ActualPerformance;
-  futurePotential: FuturePotential;
 };
 
 type RecentRun = {
@@ -75,21 +56,8 @@ type RecentRun = {
   actualProfit?: number | null;
 };
 
-type UpcomingTour = {
-  id: number;
-  name: string;
-  nextStopDate: string;
-  endDate: string | null;
-  projectedShows: number;
-  projectedIncome: number;
-  projectedProfit: number;
-  projectedExpenses: number;
-  projectedKm: number;
-};
-
 type DashboardRecentData = {
   recentRuns: RecentRun[];
-  upcomingTours: UpcomingTour[];
 };
 
 type ActualHealthStatus = "HEALTHY" | "STEADY" | "AT RISK" | "LOSING MONEY";
@@ -146,7 +114,7 @@ function healthMeta(status: ActualHealthStatus, totalProfit: number) {
         bgColor: "bg-emerald-50",
         borderColor: "border-emerald-200",
         icon: CheckCircle2,
-        message: "Completed shows are landing profitably overall.",
+        message: "Past shows are landing profitably overall.",
       };
     case "STEADY":
       return {
@@ -154,7 +122,7 @@ function healthMeta(status: ActualHealthStatus, totalProfit: number) {
         bgColor: "bg-amber-50",
         borderColor: "border-amber-200",
         icon: Minus,
-        message: totalProfit > 0 ? "You are profitable, but margins still look mixed." : "Results are mixed and need closer review.",
+        message: totalProfit > 0 ? "You are profitable overall, but margins still look mixed." : "Results are mixed and need closer review.",
       };
     case "AT RISK":
       return {
@@ -162,7 +130,7 @@ function healthMeta(status: ActualHealthStatus, totalProfit: number) {
         bgColor: "bg-orange-50",
         borderColor: "border-orange-200",
         icon: AlertTriangle,
-        message: "A few more weak shows could flip the snapshot negative.",
+        message: "A few more weak past shows could flip the snapshot negative.",
       };
     case "LOSING MONEY":
       return {
@@ -170,7 +138,7 @@ function healthMeta(status: ActualHealthStatus, totalProfit: number) {
         bgColor: "bg-red-50",
         borderColor: "border-red-200",
         icon: TrendingDown,
-        message: "Completed show results are currently underwater overall.",
+        message: "Past-show results are currently underwater overall.",
       };
   }
 }
@@ -182,21 +150,21 @@ function buildActualInsights(actual: ActualPerformance) {
 
   if (actual.totalProfit > 0 && actual.profitableShowCount === actual.totalShows) {
     insights.push({
-      icon: "✓",
+      icon: "OK",
       tone: "green",
-      text: "Every completed past show in this snapshot is profitable.",
+      text: "Every past show in this snapshot is profitable.",
     });
   } else if (actual.totalProfit < 0) {
     insights.push({
-      icon: "↓",
+      icon: "DN",
       tone: "red",
-      text: "Completed shows are losing money overall - review fees, travel, and cost load.",
+      text: "Past shows are losing money overall. Review travel load, fees, and cost pressure.",
     });
   } else if (actual.profitableShowCount < actual.totalShows) {
     insights.push({
       icon: "~",
       tone: "amber",
-      text: `${actual.profitableShowCount} of ${actual.totalShows} completed shows are profitable.`,
+      text: `${actual.profitableShowCount} of ${actual.totalShows} past shows are profitable.`,
     });
   }
 
@@ -218,39 +186,30 @@ function buildActualInsights(actual: ActualPerformance) {
       insights.push({
         icon: "$",
         tone: biggest.amount / actual.totalExpenses > 0.35 ? "amber" : "neutral",
-        text: `${biggest.label} is your biggest cost pressure at ${pct(biggest.amount, actual.totalExpenses)}% of expenses.`,
+        text: `${biggest.label} is your biggest cost category at ${pct(biggest.amount, actual.totalExpenses)}% of total expenses.`,
       });
     }
   }
 
-  if (actual.totalShows > 0) {
-    const avg = actual.avgShowProfit;
-    if (avg > 500) {
-      insights.push({
-        icon: "↑",
-        tone: "green",
-        text: `Average completed show profit is $${fmtMoney(avg)}.`,
-      });
-    } else if (avg > 0) {
-      insights.push({
-        icon: "→",
-        tone: "neutral",
-        text: `Average completed show profit is $${fmtMoney(avg)} with room to improve.`,
-      });
-    } else if (avg < 0) {
-      insights.push({
-        icon: "↓",
-        tone: "red",
-        text: `Average completed show profit is ${sign(avg)}$${fmtMoney(avg)}.`,
-      });
-    }
+  if (actual.avgShowProfit > 0) {
+    insights.push({
+      icon: "UP",
+      tone: actual.avgShowProfit > 500 ? "green" : "neutral",
+      text: `Average profit per past show is ${sign(actual.avgShowProfit)}$${fmtMoney(actual.avgShowProfit)}.`,
+    });
+  } else if (actual.avgShowProfit < 0) {
+    insights.push({
+      icon: "DN",
+      tone: "red",
+      text: `Average profit per past show is ${sign(actual.avgShowProfit)}$${fmtMoney(actual.avgShowProfit)}.`,
+    });
   }
 
   if (actual.totalShows > 1 && actual.worstShowProfit < 0 && actual.totalProfit > 0) {
     insights.push({
       icon: "!",
       tone: "amber",
-      text: "One or more weak shows are dragging down otherwise positive results.",
+      text: "One or more weak shows are dragging down an otherwise positive result set.",
     });
   }
 
@@ -291,15 +250,11 @@ function SectionHeader({
   );
 }
 
-function DashboardHero({
-  actual,
-  future,
-}: {
-  actual: ActualPerformance | null;
-  future: FuturePotential | null;
-}) {
-  const actualShows = actual?.totalShows ?? 0;
-  const projectedTours = future?.projectedTours ?? 0;
+function DashboardHero({ actual }: { actual: ActualPerformance | null }) {
+  const totalShows = actual?.totalShows ?? 0;
+  const summaryLine = totalShows > 0
+    ? `${sign(actual!.totalProfit)}$${fmtMoney(actual!.totalProfit)} net profit · ${actual!.profitableShowCount}/${actual!.totalShows} profitable · ${actual!.totalKmDriven.toLocaleString()} km travelled`
+    : "No past-show data yet. Add your first completed show to start tracking performance.";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -308,22 +263,14 @@ function DashboardHero({
           Past Show Snapshot
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Real numbers from completed past shows only. Future Potential is shown separately below so actual results and projected plans never blend together.
+          Dashboard totals come from backend-calculated past shows only. Drafts, planned shows, tours, and projections are excluded.
         </p>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground/80">
-          <span>{actualShows} completed past show{actualShows !== 1 ? "s" : ""}</span>
-          <span>{projectedTours} upcoming tour{projectedTours !== 1 ? "s" : ""} projected separately</span>
-        </div>
+        <p className="text-sm font-medium text-foreground">{summaryLine}</p>
       </div>
-      <div className="flex gap-2 shrink-0 sm:mt-1">
+      <div className="shrink-0 sm:mt-1">
         <Button asChild size="sm" className="bg-primary text-primary-foreground shadow-sm">
           <Link href="/runs/new">
             <Map className="mr-1.5 h-4 w-4" /> New Show
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/tours/new">
-            <Navigation className="mr-1.5 h-4 w-4" /> New Tour
           </Link>
         </Button>
       </div>
@@ -378,7 +325,7 @@ function CostPressureCard({ actual }: { actual: ActualPerformance }) {
     <Card>
       <CardLabel>Cost Pressure</CardLabel>
       {categories.length === 0 ? (
-        <p className="text-sm italic text-muted-foreground">No cost data from completed past shows yet.</p>
+        <p className="text-sm italic text-muted-foreground">No cost breakdown is available for saved past shows yet.</p>
       ) : (
         <div className="space-y-2">
           {categories.slice(0, 4).map(category => (
@@ -427,7 +374,7 @@ function InsightIcon({ tone, icon }: { tone: "green" | "amber" | "red" | "neutra
     neutral: "text-muted-foreground",
   }[tone];
 
-  return <span className={cn("mt-0.5 w-4 shrink-0 text-center text-sm", className)}>{icon}</span>;
+  return <span className={cn("mt-0.5 w-4 shrink-0 text-center text-[11px] font-semibold", className)}>{icon}</span>;
 }
 
 function ActualInsightsCard({ actual }: { actual: ActualPerformance }) {
@@ -501,46 +448,6 @@ function RecentShowCard({
   );
 }
 
-function UpcomingTourCard({ tour }: { tour: UpcomingTour }) {
-  return (
-    <Link href={`/tours/${tour.id}`}>
-      <div className="group flex h-full cursor-pointer flex-col justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-4 shadow-[0_2px_10px_rgba(58,47,38,0.09)] transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[0_4px_16px_rgba(58,47,38,0.14)]">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground transition-colors group-hover:text-primary">
-              {tour.name}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Next stop {formatDateLabel(tour.nextStopDate)}
-              {tour.endDate ? ` · ends ${formatDateLabel(tour.endDate)}` : ""}
-            </p>
-          </div>
-          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
-        </div>
-
-        <div>
-          <p className={profitClass(tour.projectedProfit, false)}>
-            {sign(tour.projectedProfit)}${fmtMoney(tour.projectedProfit)}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">projected</span>
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            ${fmtMoney(tour.projectedIncome)} income · ${fmtMoney(tour.projectedExpenses)} expenses
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {tour.projectedShows} planned show{tour.projectedShows !== 1 ? "s" : ""}
-          </span>
-          <span className="inline-flex items-center rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {tour.projectedKm.toLocaleString()} km
-          </span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 function EmptyBlock({
   title,
   description,
@@ -566,7 +473,7 @@ function EmptyBlock({
   );
 }
 
-function SkeletonCards({ count = 3 }: { count?: number }) {
+function SkeletonCards({ count = 4 }: { count?: number }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {Array.from({ length: count }).map((_, index) => (
@@ -594,12 +501,8 @@ export default function Dashboard() {
   const dashboardRecent = (recent ?? null) as DashboardRecentData | null;
 
   const actual = dashboardSummary?.actualPerformance ?? null;
-  const future = dashboardSummary?.futurePotential ?? null;
   const recentRuns = dashboardRecent?.recentRuns ?? [];
-  const upcomingTours = dashboardRecent?.upcomingTours ?? [];
-
   const hasActual = (actual?.totalShows ?? 0) > 0;
-  const hasFuture = (future?.projectedTours ?? 0) > 0;
   const runProfits = recentRuns.map(run => run.actualProfit ?? run.totalProfit ?? 0);
   const maxRecentProfit = runProfits.length > 0 ? Math.max(...runProfits) : null;
   const minRecentProfit = runProfits.length > 1 ? Math.min(...runProfits) : null;
@@ -608,188 +511,122 @@ export default function Dashboard() {
     !loadingSummary &&
     !loadingRecent &&
     !hasActual &&
-    !hasFuture &&
-    recentRuns.length === 0 &&
-    upcomingTours.length === 0;
+    recentRuns.length === 0;
 
   return (
     <div className="space-y-10 pb-8">
       {loadingSummary ? (
         <Skeleton className="h-28 rounded-2xl" />
       ) : (
-        <DashboardHero actual={actual} future={future} />
+        <DashboardHero actual={actual} />
       )}
 
       {isCompletelyEmpty ? (
         <EmptyBlock
-          title="No dashboard data yet"
-          description="Past Show Snapshot only uses completed past shows, and Future Potential only uses upcoming tours with usable projected dates."
+          title="No past-show data yet"
+          description="Dashboard totals only use saved past shows. Add a completed show to start tracking real performance."
           actionHref="/runs/new"
           actionLabel="Log your first show"
         />
       ) : (
-        <>
-          <section className="space-y-4">
-            {actual && (
-              <SectionHeader
-                title={actual.label}
-                helper={actual.helperText}
-                rule={`${actual.totalsRule}. Headline totals in this section never include future tours or planned shows.`}
-              />
-            )}
+        <section className="space-y-4">
+          {actual && (
+            <SectionHeader
+              title={actual.label}
+              helper={actual.helperText}
+              rule={`${actual.totalsRule}. Totals exclude drafts, planned shows, tours, and projections.`}
+            />
+          )}
 
-            {loadingSummary ? (
-              <SkeletonCards count={4} />
-            ) : actual && hasActual ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard
-                  label="Net Profit"
-                  value={`${sign(actual.totalProfit)}$${fmtMoney(actual.totalProfit)}`}
-                  subtext={`$${fmtMoney(actual.totalIncome)} income · $${fmtMoney(actual.totalExpenses)} expenses`}
-                  tone={actual.totalProfit >= 0 ? "positive" : "negative"}
-                />
-                <StatCard
-                  label="Completed Shows"
-                  value={actual.totalShows.toString()}
-                  subtext={`${actual.profitableShowCount} profitable · ${actual.totalKmDriven.toLocaleString()} km`}
-                />
-                <StatCard
-                  label="Average Show"
-                  value={`${sign(actual.avgShowProfit)}$${fmtMoney(actual.avgShowProfit)}`}
-                  subtext={`Best ${sign(actual.bestShowProfit)}$${fmtMoney(actual.bestShowProfit)} · Worst ${sign(actual.worstShowProfit)}$${fmtMoney(actual.worstShowProfit)}`}
-                  tone={actual.avgShowProfit >= 0 ? "positive" : "negative"}
-                />
+          {loadingSummary ? (
+            <SkeletonCards />
+          ) : actual && hasActual ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Total Profit"
+                value={`${sign(actual.totalProfit)}$${fmtMoney(actual.totalProfit)}`}
+                subtext={`$${fmtMoney(actual.totalIncome)} total income`}
+                tone={actual.totalProfit >= 0 ? "positive" : "negative"}
+              />
+              <StatCard
+                label="Total Expenses"
+                value={`$${fmtMoney(actual.totalExpenses)}`}
+                subtext={`${actual.totalShows} past show${actual.totalShows !== 1 ? "s" : ""}`}
+              />
+              <StatCard
+                label="Average Per Show"
+                value={`${sign(actual.avgShowProfit)}$${fmtMoney(actual.avgShowProfit)}`}
+                subtext={`Best ${sign(actual.bestShowProfit)}$${fmtMoney(actual.bestShowProfit)} · Worst ${sign(actual.worstShowProfit)}$${fmtMoney(actual.worstShowProfit)}`}
+                tone={actual.avgShowProfit >= 0 ? "positive" : "negative"}
+              />
+              <StatCard
+                label="Completed Shows"
+                value={actual.totalShows.toString()}
+                subtext={`${actual.profitableShowCount} profitable · ${actual.totalKmDriven.toLocaleString()} km`}
+              />
+            </div>
+          ) : (
+            <EmptyBlock
+              title="No past shows yet"
+              description="Only shows whose date has already passed are counted here, so current shows, future plans, and draft calculations never affect these totals."
+              actionHref="/runs/new"
+              actionLabel="Add a past show"
+            />
+          )}
+
+          {loadingSummary ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <Skeleton className="h-48 rounded-2xl" />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <Skeleton className="h-48 rounded-2xl" />
+                <Skeleton className="h-48 rounded-2xl" />
+              </div>
+            </div>
+          ) : actual && hasActual ? (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <ActualInsightsCard actual={actual} />
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <ActualHealthCard actual={actual} />
                 <CostPressureCard actual={actual} />
               </div>
-            ) : (
-              <EmptyBlock
-                title="No completed past shows yet"
-                description="Past Show Snapshot only counts runs dated today or earlier, so future plans do not affect actual performance."
-                actionHref="/runs/new"
-                actionLabel="Add a past show"
-              />
-            )}
-
-            {loadingSummary ? (
-              <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
-                <Skeleton className="h-48 rounded-2xl" />
-                <Skeleton className="h-48 rounded-2xl" />
-              </div>
-            ) : actual && hasActual ? (
-              <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
-                <ActualInsightsCard actual={actual} />
-                <ActualHealthCard actual={actual} />
-              </div>
-            ) : null}
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold">Recent Past Shows</h3>
-                <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
-                  <Link href="/runs">
-                    View all <ChevronRight className="ml-0.5 h-3 w-3" />
-                  </Link>
-                </Button>
-              </div>
-
-              {loadingRecent ? (
-                <SkeletonList />
-              ) : recentRuns.length === 0 ? (
-                <Card className="border-dashed text-center">
-                  <p className="text-sm text-muted-foreground">No completed past shows are available yet.</p>
-                </Card>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {recentRuns.map(run => {
-                    const profit = run.actualProfit ?? run.totalProfit ?? 0;
-                    const isBest = maxRecentProfit != null && profit === maxRecentProfit;
-                    const isWorst = minRecentProfit != null && profit === minRecentProfit && !isBest;
-                    return (
-                      <RecentShowCard
-                        key={run.id}
-                        run={run}
-                        isBest={isBest}
-                        isWorst={isWorst}
-                      />
-                    );
-                  })}
-                </div>
-              )}
             </div>
-          </section>
+          ) : null}
 
-          <section className="space-y-4">
-            {future && (
-              <SectionHeader
-                title={future.label}
-                helper={future.helperText}
-                rule={`${future.totalsRule}. Projected totals in this section never include synced past-show runs or standalone upcoming runs.`}
-              />
-            )}
-
-            {loadingSummary ? (
-              <SkeletonCards count={4} />
-            ) : future && hasFuture ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard
-                  label="Projected Profit"
-                  value={`${sign(future.projectedProfit)}$${fmtMoney(future.projectedProfit)}`}
-                  subtext="Estimated from upcoming tours only"
-                  tone={future.projectedProfit >= 0 ? "positive" : "negative"}
-                />
-                <StatCard
-                  label="Projected Income"
-                  value={`$${fmtMoney(future.projectedIncome)}`}
-                  subtext={`$${fmtMoney(future.projectedExpenses)} projected expenses`}
-                />
-                <StatCard
-                  label="Upcoming Tours"
-                  value={future.projectedTours.toString()}
-                  subtext={`${future.projectedShows} planned shows`}
-                />
-                <StatCard
-                  label="Projected Distance"
-                  value={`${future.projectedKm.toLocaleString()} km`}
-                  subtext={`Avg ${sign(future.avgProjectedTourProfit)}$${fmtMoney(future.avgProjectedTourProfit)} per tour`}
-                />
-              </div>
-            ) : (
-              <EmptyBlock
-                title="No upcoming tour projections yet"
-                description="Future Potential only uses tours where all usable planned stops are still in the future. Started tours, past stops, cancelled stops, and undated stops stay out of headline projected totals."
-                actionHref="/tours/new"
-                actionLabel="Plan a tour"
-              />
-            )}
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold">Upcoming Tours</h3>
-                <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
-                  <Link href="/tours">
-                    View all <ChevronRight className="ml-0.5 h-3 w-3" />
-                  </Link>
-                </Button>
-              </div>
-
-              {loadingRecent ? (
-                <SkeletonList />
-              ) : upcomingTours.length === 0 ? (
-                <Card className="border-dashed text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No fully upcoming tours with usable projected dates are available yet.
-                  </p>
-                </Card>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {upcomingTours.map(tour => (
-                    <UpcomingTourCard key={tour.id} tour={tour} />
-                  ))}
-                </div>
-              )}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Recent Past Shows</h3>
+              <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
+                <Link href="/runs">
+                  View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Link>
+              </Button>
             </div>
-          </section>
-        </>
+
+            {loadingRecent ? (
+              <SkeletonList />
+            ) : recentRuns.length === 0 ? (
+              <Card className="border-dashed text-center">
+                <p className="text-sm text-muted-foreground">No past shows are available yet.</p>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {recentRuns.map(run => {
+                  const profit = run.actualProfit ?? run.totalProfit ?? 0;
+                  const isBest = maxRecentProfit != null && profit === maxRecentProfit;
+                  const isWorst = minRecentProfit != null && profit === minRecentProfit && !isBest;
+                  return (
+                    <RecentShowCard
+                      key={run.id}
+                      run={run}
+                      isBest={isBest}
+                      isWorst={isWorst}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       )}
     </div>
   );

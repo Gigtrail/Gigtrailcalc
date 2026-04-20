@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import {
 import { ChevronUp, Plus, Search, Megaphone, Loader2 } from "lucide-react";
 import { usePlan } from "@/hooks/use-plan";
 import { useToast } from "@/hooks/use-toast";
+import { authedFetch } from "@/lib/authed-fetch";
 
 type Category = "bug" | "feature_request" | "improvement" | "ux_issue";
 type Status = "planned" | "in_progress" | "released";
@@ -67,45 +69,24 @@ interface FeedbackPost {
   adminReplyUpdatedAt: string | null;
 }
 
-async function fetchFeedback(): Promise<FeedbackPost[]> {
-  const res = await fetch("/api/feedback", { credentials: "include" });
-  if (!res.ok) throw new Error("Failed to load feedback");
-  return res.json();
-}
+async function readFeedbackResponse<T>(res: Response, fallbackMessage: string): Promise<T> {
+  let body: unknown = null;
 
-async function createPost(data: { title: string; description: string; category: Category }) {
-  const res = await fetch("/api/feedback", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    let body: { error?: string } | null = null;
-    try { body = await res.json(); } catch { /* ignore */ }
-    throw new Error(body?.error || "Failed to create post");
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
   }
-  return res.json();
-}
 
-async function toggleVote(postId: number) {
-  const res = await fetch(`/api/feedback/${postId}/vote`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error("Failed to vote");
-  return res.json();
-}
+  if (!res.ok) {
+    const message =
+      body && typeof body === "object" && "error" in body && typeof body.error === "string"
+        ? body.error
+        : fallbackMessage;
+    throw new Error(message);
+  }
 
-async function updateStatus(postId: number, status: Status) {
-  const res = await fetch(`/api/feedback/${postId}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) throw new Error("Failed to update status");
-  return res.json();
+  return body as T;
 }
 
 function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
@@ -114,6 +95,7 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<Category>("feature_request");
   const { toast } = useToast();
+  const { getToken } = useAuth();
 
   const titleTrimmed = title.trim();
   const descTrimmed = description.trim();
@@ -122,7 +104,14 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
   const isFormValid = titleTrimmed.length >= 3 && descTrimmed.length >= 10;
 
   const mutation = useMutation({
-    mutationFn: createPost,
+    mutationFn: async (data: { title: string; description: string; category: Category }) => {
+      const res = await authedFetch("/api/feedback", () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return readFeedbackResponse<FeedbackPost>(res, "Failed to create post");
+    },
     onSuccess: () => {
       setOpen(false);
       setTitle("");
@@ -239,15 +228,24 @@ export default function FeedbackPage() {
   const qc = useQueryClient();
   const { isAdmin } = usePlan();
   const { toast } = useToast();
+  const { getToken } = useAuth();
   const [search, setSearch] = useState("");
 
   const { data: posts = [], isLoading } = useQuery<FeedbackPost[]>({
     queryKey: ["feedback"],
-    queryFn: fetchFeedback,
+    queryFn: async () => {
+      const res = await authedFetch("/api/feedback", () => getToken());
+      return readFeedbackResponse<FeedbackPost[]>(res, "Failed to load feedback");
+    },
   });
 
   const voteMutation = useMutation({
-    mutationFn: toggleVote,
+    mutationFn: async (postId: number) => {
+      const res = await authedFetch(`/api/feedback/${postId}/vote`, () => getToken(), {
+        method: "POST",
+      });
+      return readFeedbackResponse<FeedbackPost>(res, "Failed to vote");
+    },
     onMutate: async (postId) => {
       await qc.cancelQueries({ queryKey: ["feedback"] });
       const prev = qc.getQueryData<FeedbackPost[]>(["feedback"]);
@@ -268,7 +266,14 @@ export default function FeedbackPage() {
   });
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: Status }) => updateStatus(id, status),
+    mutationFn: async ({ id, status }: { id: number; status: Status }) => {
+      const res = await authedFetch(`/api/feedback/${id}`, () => getToken(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      return readFeedbackResponse<FeedbackPost>(res, "Failed to update status");
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["feedback"] }),
     onError: () => toast({ title: "Error", description: "Failed to update status.", variant: "destructive" }),
   });
