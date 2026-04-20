@@ -63,6 +63,8 @@ interface FeedbackPost {
   upvotes: number;
   hasVoted: boolean;
   createdAt: string;
+  adminReply: string | null;
+  adminReplyUpdatedAt: string | null;
 }
 
 async function fetchFeedback(): Promise<FeedbackPost[]> {
@@ -357,6 +359,15 @@ export default function FeedbackPage() {
                       </Select>
                     )}
                   </div>
+
+                  {post.adminReply && (
+                    <div className="mt-3 rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary mb-1">
+                        Admin reply
+                      </p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{post.adminReply}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

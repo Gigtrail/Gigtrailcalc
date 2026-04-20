@@ -1,0 +1,228 @@
+Add a full Feedback Management section to the admin panel.
+
+Goal:
+Create an admin-only feedback management system so the owner/admin can:
+- view all feedback posts
+- search/filter/sort feedback
+- update status/category
+- add internal admin notes (private, admin-only)
+- add a public admin reply (visible to users on the feedback page)
+- delete feedback posts
+- optionally soft delete instead of hard delete
+- keep the current public feedback board working
+
+Important:
+- Do not break existing voting
+- Do not break existing feedback creation
+- Respect current admin auth and permanent admin protections
+- Reuse existing UI patterns where possible
+- Keep this clean and production-ready, not a hack
+
+==================================================
+1. BACKEND / DATABASE
+==================================================
+
+Inspect the current feedback schema/model and extend it safely.
+
+Add fields to feedback posts if not already present:
+- adminReply: text nullable
+- adminReplyUpdatedAt: datetime nullable
+- internalNotes: text nullable
+- deletedAt: datetime nullable (for soft delete)
+- deletedByUserId: text nullable
+
+If a separate admin notes table is cleaner, that is acceptable, but simplest is fine for alpha.
+
+Also add timestamps if missing:
+- createdAt
+- updatedAt
+
+Ensure existing rows still work after migration.
+
+==================================================
+2. API ROUTES
+==================================================
+
+Add admin-only feedback routes under /api/admin/feedback
+
+Required endpoints:
+
+1. GET /api/admin/feedback
+- return all non-deleted feedback
+- support query params:
+  - search
+  - status
+  - category
+  - sort (newest, oldest, top_voted)
+- include:
+  - id
+  - title
+  - description
+  - category
+  - status
+  - votes
+  - createdBy / author if available
+  - createdAt
+  - updatedAt
+  - adminReply
+  - internalNotes
+  - any useful metadata
+
+2. GET /api/admin/feedback/:id
+- return full feedback detail
+
+3. PATCH /api/admin/feedback/:id
+- allow admin to update:
+  - status
+  - category
+  - adminReply
+  - internalNotes
+- validate inputs carefully
+
+4. DELETE /api/admin/feedback/:id
+- soft delete preferred:
+  - set deletedAt and deletedByUserId
+- if hard delete is currently easier, only do that if needed, but soft delete is preferred
+
+Optional:
+5. POST /api/admin/feedback/:id/restore
+- restore soft-deleted feedback
+
+Security:
+- every admin feedback route must require admin access
+- use the same permanent admin / admin middleware patterns already used elsewhere in the app
+- do not trust client-side admin checks
+
+==================================================
+3. PUBLIC FEEDBACK API / UI ADJUSTMENTS
+==================================================
+
+Update the public feedback list endpoint so deleted feedback does not show.
+
+Allow public page to display:
+- adminReply if present
+- status badge
+- existing votes
+
+Do NOT expose internalNotes on public endpoints.
+
+==================================================
+4. ADMIN PANEL UI
+==================================================
+
+Add a new Feedback section/page in the admin panel navigation.
+
+Build a clean admin feedback manager with:
+
+Top bar:
+- search input
+- status filter
+- category filter
+- sort dropdown
+
+Main layout:
+- left: feedback list/table
+- right or modal/drawer: selected feedback detail editor
+
+Each feedback row should show:
+- title
+- short description preview
+- category
+- status
+- vote count
+- created date
+- maybe author/email if available
+
+Clicking a row opens detail view with:
+- full title
+- full description
+- category selector
+- status selector
+- vote count
+- created/updated timestamps
+- Public Admin Reply textarea
+- Internal Notes textarea
+- Save button
+- Delete button
+
+Actions:
+- save changes with optimistic or clean refresh
+- delete with confirmation dialog
+- toast on success/failure
+
+==================================================
+5. PUBLIC FEEDBACK PAGE
+==================================================
+
+Update feedback cards so that if an admin reply exists, it appears as:
+
+Admin reply
+[reply text]
+
+Style it clearly but subtly.
+Do not show internal notes.
+
+==================================================
+6. UX DETAILS
+==================================================
+
+Status options should be consistent everywhere:
+- open
+- planned
+- in_progress
+- completed
+- closed
+
+Categories should stay normalized:
+- bug
+- feature_request
+- improvement
+- ux_issue
+
+Add friendly labels for display:
+- feature_request -> Feature Request
+- ux_issue -> UX Issue
+- in_progress -> In Progress
+
+==================================================
+7. TYPE SAFETY / VALIDATION
+==================================================
+
+Add shared validation schema if possible.
+Validate admin updates on the backend.
+Trim text fields.
+Prevent empty admin reply/internal notes from causing issues.
+
+==================================================
+8. DO NOT BREAK EXISTING APP
+==================================================
+
+Before finishing:
+- run migration if needed
+- run typecheck
+- run tests if present
+- verify:
+  - public feedback create still works
+  - voting still works
+  - admin can update status
+  - admin can add public reply
+  - admin can add internal notes
+  - deleted feedback disappears from public page
+
+==================================================
+9. NICE UI DIRECTION
+==================================================
+
+Use the existing parchment / Gig Trail style.
+Keep it simple, not corporate.
+Admin feedback page should feel practical and easy to scan.
+
+==================================================
+10. BONUS IF EASY
+==================================================
+
+If easy, add:
+- “Responded” badge when adminReply exists
+- “Needs reply” quick filter
+- vote count sorting
+- restore deleted feedback in admin view

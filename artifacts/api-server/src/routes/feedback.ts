@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { db, feedbackPostsTable, feedbackVotesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 
@@ -19,12 +19,15 @@ router.get("/feedback", requireAuth, async (req, res): Promise<void> => {
       description: feedbackPostsTable.description,
       category: feedbackPostsTable.category,
       status: feedbackPostsTable.status,
+      adminReply: feedbackPostsTable.adminReply,
+      adminReplyUpdatedAt: feedbackPostsTable.adminReplyUpdatedAt,
       createdAt: feedbackPostsTable.createdAt,
       upvotes: sql<number>`cast(count(${feedbackVotesTable.id}) as int)`,
       hasVoted: sql<boolean>`bool_or(${feedbackVotesTable.userId} = ${userId})`,
     })
     .from(feedbackPostsTable)
     .leftJoin(feedbackVotesTable, eq(feedbackVotesTable.postId, feedbackPostsTable.id))
+    .where(isNull(feedbackPostsTable.deletedAt))
     .groupBy(feedbackPostsTable.id)
     .orderBy(desc(sql`count(${feedbackVotesTable.id})`), desc(feedbackPostsTable.createdAt));
 
@@ -33,6 +36,9 @@ router.get("/feedback", requireAuth, async (req, res): Promise<void> => {
     upvotes: Number(p.upvotes),
     hasVoted: Boolean(p.hasVoted),
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+    adminReplyUpdatedAt: p.adminReplyUpdatedAt instanceof Date
+      ? p.adminReplyUpdatedAt.toISOString()
+      : (p.adminReplyUpdatedAt ? String(p.adminReplyUpdatedAt) : null),
   })));
 });
 
@@ -72,7 +78,7 @@ router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { status, category } = req.body ?? {};
-  const updates: Record<string, string> = {};
+  const updates: Record<string, string | Date> = {};
   if (status && STATUSES.has(status)) updates.status = status;
   if (category && CATEGORIES.has(category)) updates.category = category;
 
@@ -98,6 +104,7 @@ router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  updates.updatedAt = new Date();
   const [updated] = await db
     .update(feedbackPostsTable)
     .set(updates)

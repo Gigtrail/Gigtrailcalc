@@ -355,6 +355,115 @@ export function useRedeemPromo() {
   });
 }
 
+// ─── Admin: Feedback Management ───────────────────────────────────────────────
+
+export type AdminFeedbackCategory = "bug" | "feature_request" | "improvement" | "ux_issue";
+export type AdminFeedbackStatus = "planned" | "in_progress" | "released";
+export type AdminFeedbackSort = "newest" | "oldest" | "top_voted";
+
+export interface AdminFeedbackPost {
+  id: number;
+  userId: string;
+  title: string;
+  description: string;
+  category: AdminFeedbackCategory;
+  status: AdminFeedbackStatus;
+  adminReply: string | null;
+  adminReplyUpdatedAt: string | null;
+  internalNotes: string | null;
+  deletedAt: string | null;
+  deletedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  authorEmail: string | null;
+  upvotes: number;
+}
+
+export interface AdminFeedbackFilters {
+  search?: string;
+  status?: AdminFeedbackStatus | "";
+  category?: AdminFeedbackCategory | "";
+  sort?: AdminFeedbackSort;
+  needsReply?: boolean;
+  includeDeleted?: boolean;
+}
+
+export function useAdminFeedback(filters: AdminFeedbackFilters = {}) {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.sort) params.set("sort", filters.sort);
+  if (filters.needsReply) params.set("needsReply", "true");
+  if (filters.includeDeleted) params.set("includeDeleted", "true");
+  const qs = params.toString();
+  return useQuery<{ posts: AdminFeedbackPost[] }>({
+    queryKey: ["/api/admin/feedback", filters],
+    queryFn: async () => {
+      const res = await authedFetch(`/api/admin/feedback${qs ? `?${qs}` : ""}`, () => getToken());
+      if (!res.ok) throw new Error("Failed to fetch feedback");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useUpdateAdminFeedback() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: number;
+      status?: AdminFeedbackStatus;
+      category?: AdminFeedbackCategory;
+      adminReply?: string | null;
+      internalNotes?: string | null;
+    }) => {
+      const res = await authedFetch(`/api/admin/feedback/${id}`, () => getToken(), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to update feedback");
+      return json as { post: AdminFeedbackPost };
+    },
+  });
+}
+
+export function useDeleteAdminFeedback() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await authedFetch(`/api/admin/feedback/${id}`, () => getToken(), {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to delete feedback");
+      return json as { deleted: boolean };
+    },
+  });
+}
+
+export function useRestoreAdminFeedback() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await authedFetch(`/api/admin/feedback/${id}/restore`, () => getToken(), {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to restore feedback");
+      return json as { post: AdminFeedbackPost };
+    },
+  });
+}
+
 export function useValidatePromoCode() {
   return useMutation({
     mutationFn: async (code: string) => {

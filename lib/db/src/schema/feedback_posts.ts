@@ -9,9 +9,15 @@ export const feedbackPostsTable = pgTable("feedback_posts", {
   description: text("description").notNull(),
   category: text("category").notNull().default("feature_request"),
   status: text("status").notNull().default("planned"),
+  adminReply: text("admin_reply"),
+  adminReplyUpdatedAt: timestamp("admin_reply_updated_at", { withTimezone: true }),
+  internalNotes: text("internal_notes"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedByUserId: text("deleted_by_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertFeedbackPostSchema = createInsertSchema(feedbackPostsTable).omit({ id: true, createdAt: true });
+export const insertFeedbackPostSchema = createInsertSchema(feedbackPostsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertFeedbackPost = z.infer<typeof insertFeedbackPostSchema>;
 export type FeedbackPost = typeof feedbackPostsTable.$inferSelect;

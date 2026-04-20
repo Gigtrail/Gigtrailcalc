@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   usePlan,
   useAdminUsers,
@@ -7,13 +7,39 @@ import {
   useCreatePromoCode,
   useUpdatePromoCode,
   useDeletePromoCode,
+  useAdminFeedback,
+  useUpdateAdminFeedback,
+  useDeleteAdminFeedback,
+  useRestoreAdminFeedback,
+  type AdminFeedbackPost,
+  type AdminFeedbackCategory,
+  type AdminFeedbackStatus,
+  type AdminFeedbackSort,
 } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   Shield,
@@ -29,6 +55,10 @@ import {
   Plus,
   Check,
   X,
+  MessageSquare,
+  ChevronUp,
+  RotateCcw,
+  Reply,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -538,6 +568,451 @@ function PromoCodesSection() {
   );
 }
 
+// ─── Feedback Management Section ──────────────────────────────────────────────
+
+const FEEDBACK_CATEGORY_LABELS: Record<AdminFeedbackCategory, string> = {
+  bug: "Bug",
+  feature_request: "Feature Request",
+  improvement: "Improvement",
+  ux_issue: "UX Issue",
+};
+
+const FEEDBACK_CATEGORY_COLORS: Record<AdminFeedbackCategory, string> = {
+  bug: "bg-red-50 text-red-700 border-red-200",
+  feature_request: "bg-blue-50 text-blue-700 border-blue-200",
+  improvement: "bg-amber-50 text-amber-700 border-amber-200",
+  ux_issue: "bg-violet-50 text-violet-700 border-violet-200",
+};
+
+const FEEDBACK_STATUS_LABELS: Record<AdminFeedbackStatus, string> = {
+  planned: "Planned",
+  in_progress: "In Progress",
+  released: "Released",
+};
+
+const FEEDBACK_STATUS_COLORS: Record<AdminFeedbackStatus, string> = {
+  planned: "bg-slate-100 text-slate-700 border-slate-200",
+  in_progress: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  released: "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+
+function FeedbackEditDialog({
+  post,
+  onClose,
+  onSaved,
+}: {
+  post: AdminFeedbackPost | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const update = useUpdateAdminFeedback();
+  const del = useDeleteAdminFeedback();
+  const restore = useRestoreAdminFeedback();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const [status, setStatus] = useState<AdminFeedbackStatus>(post?.status ?? "planned");
+  const [category, setCategory] = useState<AdminFeedbackCategory>(post?.category ?? "feature_request");
+  const [adminReply, setAdminReply] = useState(post?.adminReply ?? "");
+  const [internalNotes, setInternalNotes] = useState(post?.internalNotes ?? "");
+
+  // Reset form when opening on a different post
+  const postId = post?.id;
+  useEffect(() => {
+    if (post) {
+      setStatus(post.status);
+      setCategory(post.category);
+      setAdminReply(post.adminReply ?? "");
+      setInternalNotes(post.internalNotes ?? "");
+    }
+  }, [postId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!post) return null;
+
+  async function handleSave() {
+    if (!post) return;
+    try {
+      const trimmedReply = adminReply.trim();
+      const trimmedNotes = internalNotes.trim();
+      await update.mutateAsync({
+        id: post.id,
+        status,
+        category,
+        adminReply: trimmedReply.length === 0 ? null : trimmedReply,
+        internalNotes: trimmedNotes.length === 0 ? null : trimmedNotes,
+      });
+      toast({ title: "Feedback updated" });
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to save",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleDelete() {
+    if (!post) return;
+    try {
+      await del.mutateAsync(post.id);
+      toast({ title: "Feedback deleted", description: "The post has been soft-deleted." });
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to delete",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRestore() {
+    if (!post) return;
+    try {
+      await restore.mutateAsync(post.id);
+      toast({ title: "Feedback restored" });
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      toast({
+        title: "Error",
+        description: e instanceof Error ? e.message : "Failed to restore",
+        variant: "destructive",
+      });
+    }
+  }
+
+  const isDeleted = !!post.deletedAt;
+
+  return (
+    <>
+      <Dialog open={!!post} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-start gap-2 pr-6">
+              <MessageSquare className="w-5 h-5 mt-0.5 text-primary shrink-0" />
+              <span className="leading-tight">{post.title}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            {isDeleted && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> This post is deleted (hidden from public).
+              </div>
+            )}
+
+            {/* Meta */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div>
+                <p className="text-muted-foreground mb-0.5">Author</p>
+                <p className="font-medium truncate" title={post.authorEmail ?? post.userId}>
+                  {post.authorEmail ?? post.userId}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-0.5">Votes</p>
+                <p className="font-medium">{post.upvotes}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-0.5">Created</p>
+                <p className="font-medium">{format(new Date(post.createdAt), "MMM d, yyyy")}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-0.5">Updated</p>
+                <p className="font-medium">{format(new Date(post.updatedAt), "MMM d, yyyy")}</p>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Description</p>
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap">
+                {post.description}
+              </div>
+            </div>
+
+            {/* Status / Category */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                <select
+                  className="w-full text-sm border border-border rounded-md px-3 py-2 bg-background focus:outline-none"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as AdminFeedbackStatus)}
+                >
+                  {(Object.entries(FEEDBACK_STATUS_LABELS) as [AdminFeedbackStatus, string][]).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Category</label>
+                <select
+                  className="w-full text-sm border border-border rounded-md px-3 py-2 bg-background focus:outline-none"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as AdminFeedbackCategory)}
+                >
+                  {(Object.entries(FEEDBACK_CATEGORY_LABELS) as [AdminFeedbackCategory, string][]).map(([v, l]) => (
+                    <option key={v} value={v}>{l}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Admin reply */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
+                <Reply className="w-3 h-3" /> Public Admin Reply
+                <span className="ml-auto text-[10px] uppercase tracking-wide text-amber-700">Visible to users</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Reply publicly to this feedback…"
+                value={adminReply}
+                onChange={(e) => setAdminReply(e.target.value)}
+                maxLength={5000}
+              />
+              {post.adminReplyUpdatedAt && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Last updated {format(new Date(post.adminReplyUpdatedAt), "MMM d, yyyy h:mm a")}
+                </p>
+              )}
+            </div>
+
+            {/* Internal notes */}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1.5">
+                <Shield className="w-3 h-3" /> Internal Notes
+                <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-500">Admin only</span>
+              </label>
+              <Textarea
+                rows={3}
+                placeholder="Private notes (never shown to users)…"
+                value={internalNotes}
+                onChange={(e) => setInternalNotes(e.target.value)}
+                maxLength={5000}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2 mt-4">
+            {isDeleted ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleRestore}
+                disabled={restore.isPending}
+                className="gap-1.5"
+              >
+                <RotateCcw className="w-4 h-4" /> Restore
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmDelete(true)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" /> Delete
+              </Button>
+            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button onClick={handleSave} disabled={update.isPending}>
+                {update.isPending ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this feedback?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The post will be hidden from the public feedback page. You can restore it later from the deleted view.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => { setConfirmDelete(false); handleDelete(); }}
+              disabled={del.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+function FeedbackSection() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AdminFeedbackStatus | "">("");
+  const [categoryFilter, setCategoryFilter] = useState<AdminFeedbackCategory | "">("");
+  const [sort, setSort] = useState<AdminFeedbackSort>("newest");
+  const [needsReply, setNeedsReply] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [selected, setSelected] = useState<AdminFeedbackPost | null>(null);
+
+  const { data, isLoading, refetch } = useAdminFeedback({
+    search: search.trim() || undefined,
+    status: statusFilter || undefined,
+    category: categoryFilter || undefined,
+    sort,
+    needsReply,
+    includeDeleted: showDeleted,
+  });
+
+  const posts = data?.posts ?? [];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-primary" />
+          Feedback
+          <span className="text-xs font-normal text-slate-500">({posts.length})</span>
+        </h3>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={needsReply}
+              onChange={(e) => setNeedsReply(e.target.checked)}
+              className="rounded"
+            />
+            Needs reply
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showDeleted}
+              onChange={(e) => setShowDeleted(e.target.checked)}
+              className="rounded"
+            />
+            Show deleted
+          </label>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Search title or description…"
+            className="pl-9 rounded-xl border-slate-200 bg-white"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <select
+          className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as AdminFeedbackStatus | "")}
+        >
+          <option value="">All statuses</option>
+          {(Object.entries(FEEDBACK_STATUS_LABELS) as [AdminFeedbackStatus, string][]).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
+        <select
+          className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value as AdminFeedbackCategory | "")}
+        >
+          <option value="">All categories</option>
+          {(Object.entries(FEEDBACK_CATEGORY_LABELS) as [AdminFeedbackCategory, string][]).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
+        <select
+          className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as AdminFeedbackSort)}
+        >
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="top_voted">Top voted</option>
+        </select>
+      </div>
+
+      {/* List */}
+      {isLoading ? (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+        </div>
+      ) : posts.length === 0 ? (
+        <p className="text-sm text-slate-500 text-center py-10">No feedback matches your filters.</p>
+      ) : (
+        <div className="space-y-2">
+          {posts.map((post) => (
+            <button
+              key={post.id}
+              onClick={() => setSelected(post)}
+              className={cn(
+                "w-full text-left rounded-xl border bg-white px-4 py-3 hover:border-primary/40 hover:shadow-sm transition-all flex gap-3 items-start group",
+                post.deletedAt && "opacity-60 border-red-200 bg-red-50/30"
+              )}
+            >
+              <div className="flex flex-col items-center justify-center w-10 shrink-0 text-slate-500">
+                <ChevronUp className="w-4 h-4" />
+                <span className="text-xs font-semibold">{post.upvotes}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h4 className="text-sm font-semibold text-slate-900 truncate">{post.title}</h4>
+                  <Badge className={cn("text-[10px] px-2 py-0 border font-medium", FEEDBACK_CATEGORY_COLORS[post.category])}>
+                    {FEEDBACK_CATEGORY_LABELS[post.category]}
+                  </Badge>
+                  <Badge className={cn("text-[10px] px-2 py-0 border font-medium", FEEDBACK_STATUS_COLORS[post.status])}>
+                    {FEEDBACK_STATUS_LABELS[post.status]}
+                  </Badge>
+                  {post.adminReply && (
+                    <Badge className="text-[10px] px-2 py-0 border-emerald-200 bg-emerald-50 text-emerald-700 font-medium gap-1">
+                      <Reply className="w-2.5 h-2.5" /> Responded
+                    </Badge>
+                  )}
+                  {post.internalNotes && (
+                    <Badge className="text-[10px] px-2 py-0 border-slate-200 bg-slate-50 text-slate-600 font-medium">
+                      Has notes
+                    </Badge>
+                  )}
+                  {post.deletedAt && (
+                    <Badge className="text-[10px] px-2 py-0 border-red-200 bg-red-50 text-red-700 font-medium">
+                      Deleted
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 line-clamp-2">{post.description}</p>
+                <p className="text-[10px] text-slate-400 mt-1.5">
+                  {post.authorEmail ?? "(unknown)"} · {format(new Date(post.createdAt), "MMM d, yyyy")}
+                </p>
+              </div>
+              <Pencil className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 mt-1 shrink-0 transition-colors" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      <FeedbackEditDialog
+        post={selected}
+        onClose={() => setSelected(null)}
+        onSaved={() => refetch()}
+      />
+    </section>
+  );
+}
+
 // ─── Main admin page ──────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -599,6 +1074,9 @@ export default function Admin() {
 
         {/* Promo Codes */}
         <PromoCodesSection />
+
+        {/* Feedback Management */}
+        <FeedbackSection />
 
         {/* Auth Debug — dev only */}
         {import.meta.env.DEV && (
