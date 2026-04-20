@@ -1,0 +1,51 @@
+Fix the feedback submit 400 error by aligning the frontend form validation and error handling with the backend API contract.
+
+Context:
+- Backend route: artifacts/api-server/src/routes/feedback.ts
+- Frontend page: artifacts/gig-trail/src/pages/feedback.tsx
+
+What the backend currently requires:
+- title: string, trimmed length 3–200
+- description: string, trimmed length 10–2000
+- category: one of "bug" | "feature_request" | "improvement" | "ux_issue"
+- Returns 400 with JSON { error: "..." } when validation fails
+
+Problems to fix:
+1. The frontend currently allows submit without enforcing min lengths, so users can hit 400 easily.
+2. The frontend hides the real backend error and only shows a generic toast.
+3. The submit button should stay disabled until the form is valid.
+
+Make these exact changes in artifacts/gig-trail/src/pages/feedback.tsx:
+1. In createPost(), parse the response body on failure and throw the backend error message:
+   - If !res.ok:
+     - try await res.json()
+     - throw new Error(body?.error || "Failed to create post")
+2. In the dialog form:
+   - add titleError if trimmed title length is > 0 and < 3
+   - add descriptionError if trimmed description length is > 0 and < 10
+   - disable submit when:
+     - mutation.isPending
+     - title.trim().length < 3
+     - description.trim().length < 10
+   - add helper text under fields:
+     - Title: “Minimum 3 characters”
+     - Description: “Minimum 10 characters”
+   - show inline red validation text when too short
+   - add minLength={3} to title input
+   - add minLength={10} to description textarea
+3. In mutation onError, surface the real error:
+   - onError: (error) => toast({ title: "Couldn’t submit feedback", description: error instanceof Error ? error.message : "Failed to submit feedback.", variant: "destructive" })
+4. In handleSubmit():
+   - trim the values first
+   - if title is < 3 or description is < 10, do not submit and show a destructive toast explaining what is missing
+5. Keep the existing success flow intact.
+
+Optional but recommended:
+- Add console.error("Feedback submit failed", error) in onError for easier debugging.
+
+Do not change the backend contract unless absolutely necessary.
+Do not break voting or status updates.
+After changes:
+- run typecheck
+- verify feedback submit with a valid payload
+- verify short title/description are blocked in the UI before request is sent
