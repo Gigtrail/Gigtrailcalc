@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useGetTours, useDeleteTour, getGetToursQueryKey } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Plus, Navigation, Trash2, MapPin, Mic2, ArrowRight, Route, LayoutGrid, Table2 } from "lucide-react";
+import { Plus, Navigation, Trash2, MapPin, Mic2, ArrowRight, Route, LayoutGrid, Table2, ChevronUp, ChevronDown, ChevronsUpDown, Search, X } from "lucide-react";
 import { UpgradeCTA } from "@/components/upgrade-cta";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,6 +27,11 @@ type ViewMode = "card" | "table";
 
 const LS_KEY = "gig-trail:tours-view-mode";
 
+type SortCol = "name" | "dates" | "days" | "shows" | "distance" | "income" | "profit" | "status";
+type SortDir = "asc" | "desc";
+
+const LS_SORT_KEY = "gig-trail:tours-sort";
+
 // ─── Shared display mapper ─────────────────────────────────────────────────────
 
 interface TourDisplayData {
@@ -44,6 +49,13 @@ interface TourDisplayData {
   startLocation: string | null;
   endLocation: string | null;
   returnHome: boolean;
+  // Raw numeric values for sorting (null treated as -Infinity asc / Infinity desc)
+  rawStart: number;
+  rawDays: number;
+  rawShows: number;
+  rawDistance: number;
+  rawIncome: number;
+  rawProfit: number;
 }
 
 function getVerdict(profit: number | null, income: number | null): {
@@ -131,6 +143,12 @@ function formatTourForDisplay(tour: {
     startLocation: tour.startLocation ?? null,
     endLocation: tour.endLocation ?? null,
     returnHome: tour.returnHome ?? false,
+    rawStart: tour.startDate ? new Date(tour.startDate).getTime() : -Infinity,
+    rawDays: tour.daysOnTour ?? -Infinity,
+    rawShows: tour.stopCount,
+    rawDistance: tour.totalDistance ?? -Infinity,
+    rawIncome: income ?? -Infinity,
+    rawProfit: profit ?? -Infinity,
   };
 }
 
@@ -342,112 +360,218 @@ function CardView({
 
 // ─── Table view ───────────────────────────────────────────────────────────────
 
+type TourRow = ReturnType<typeof formatTourForDisplay>;
+
+function sortTours(rows: TourRow[], col: SortCol, dir: SortDir): TourRow[] {
+  const asc = dir === "asc";
+  return [...rows].sort((a, b) => {
+    let cmp = 0;
+    if (col === "name") {
+      cmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    } else if (col === "dates") {
+      cmp = a.rawStart - b.rawStart;
+    } else if (col === "days") {
+      cmp = a.rawDays - b.rawDays;
+    } else if (col === "shows") {
+      cmp = a.rawShows - b.rawShows;
+    } else if (col === "distance") {
+      cmp = a.rawDistance - b.rawDistance;
+    } else if (col === "income") {
+      cmp = a.rawIncome - b.rawIncome;
+    } else if (col === "profit") {
+      cmp = a.rawProfit - b.rawProfit;
+    } else if (col === "status") {
+      cmp = a.verdict.label.localeCompare(b.verdict.label);
+    }
+    return asc ? cmp : -cmp;
+  });
+}
+
+function SortIcon({ col, activeCol, dir }: { col: SortCol; activeCol: SortCol; dir: SortDir }) {
+  if (col !== activeCol) return <ChevronsUpDown className="w-3 h-3 opacity-30" />;
+  return dir === "asc"
+    ? <ChevronUp className="w-3 h-3 text-foreground" />
+    : <ChevronDown className="w-3 h-3 text-foreground" />;
+}
+
 function TableView({
   tours,
   onView,
 }: {
-  tours: ReturnType<typeof formatTourForDisplay>[];
+  tours: TourRow[];
   onView: (id: number) => void;
 }) {
-  return (
-    <div className="rounded-xl border border-border/50 overflow-hidden bg-card/50">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm" data-view="tours-table">
-          <thead>
-            <tr className="border-b border-border/60 bg-muted/30">
-              <th data-col="name" className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Tour Name
-              </th>
-              <th data-col="dates" className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                Dates
-              </th>
-              <th data-col="days" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Days
-              </th>
-              <th data-col="shows" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Shows
-              </th>
-              <th data-col="distance" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                Distance (km)
-              </th>
-              <th data-col="income" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Income
-              </th>
-              <th data-col="profit" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground whitespace-nowrap">
-                Profit / Loss
-              </th>
-              <th data-col="status" className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Status
-              </th>
-              <th data-col="actions" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {tours.map((t, idx) => {
-              const isLoss = t.profitSign === "loss";
-              const isProfit = t.profitSign === "profit";
-              const profitColorClass = isLoss
-                ? "text-destructive"
-                : isProfit
-                ? "text-[#2E7D32]"
-                : "text-muted-foreground";
+  const [filterText, setFilterText] = useState("");
+  const [sortCol, setSortCol] = useState<SortCol>(() => {
+    try {
+      const s = localStorage.getItem(LS_SORT_KEY);
+      if (s) {
+        const parsed = JSON.parse(s);
+        return parsed.col ?? "dates";
+      }
+    } catch { /* ignore */ }
+    return "dates";
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    try {
+      const s = localStorage.getItem(LS_SORT_KEY);
+      if (s) {
+        const parsed = JSON.parse(s);
+        return parsed.dir ?? "desc";
+      }
+    } catch { /* ignore */ }
+    return "desc";
+  });
 
-              return (
-                <tr
-                  key={t.id}
-                  className={`border-b border-border/30 last:border-b-0 hover:bg-muted/20 transition-colors duration-100 cursor-pointer ${idx % 2 === 1 ? "bg-muted/10" : ""}`}
-                  onClick={() => onView(t.id)}
-                >
-                  <td data-col="name" className="px-4 py-3 font-medium max-w-[200px]">
-                    <span className="truncate block">{t.name}</span>
-                  </td>
-                  <td data-col="dates" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                    {t.datesLabel}
-                  </td>
-                  <td data-col="days" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                    {t.daysLabel}
-                  </td>
-                  <td data-col="shows" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                    {t.hasShows ? t.shows : <span className="italic text-muted-foreground/50">—</span>}
-                  </td>
-                  <td data-col="distance" className="px-4 py-3 text-right text-muted-foreground tabular-nums whitespace-nowrap">
-                    {t.distanceLabel}
-                  </td>
-                  <td data-col="income" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                    {t.incomeLabel}
-                  </td>
-                  <td data-col="profit" className="px-4 py-3 text-right tabular-nums">
-                    {t.profitSign === "none" ? (
-                      <span className="text-muted-foreground/50 italic">—</span>
-                    ) : (
-                      <span className={`font-semibold ${profitColorClass}`}>
-                        {isLoss ? "-" : ""}{t.profitLabel}
-                      </span>
-                    )}
-                  </td>
-                  <td data-col="status" className="px-4 py-3">
-                    <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full border ${t.verdict.color}`}>
-                      {t.verdict.label}
-                    </span>
-                  </td>
-                  <td data-col="actions" className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="group/btn h-7 text-xs"
-                      onClick={() => onView(t.id)}
-                    >
-                      View
-                      <ArrowRight className="w-3 h-3 ml-1 group-hover/btn:translate-x-0.5 transition-transform" />
-                    </Button>
+  const handleSort = (col: SortCol) => {
+    const newDir: SortDir = col === sortCol && sortDir === "asc" ? "desc" : "asc";
+    // Default new column to desc for numeric cols, asc for name/status
+    const defaultDir: SortDir = (col === "name" || col === "status") ? "asc" : "desc";
+    const dir = col === sortCol ? newDir : defaultDir;
+    setSortCol(col);
+    setSortDir(dir);
+    try { localStorage.setItem(LS_SORT_KEY, JSON.stringify({ col, dir })); } catch { /* ignore */ }
+  };
+
+  const filtered = filterText.trim()
+    ? tours.filter((t) => t.name.toLowerCase().includes(filterText.toLowerCase()))
+    : tours;
+
+  const sorted = sortTours(filtered, sortCol, sortDir);
+
+  const thClass = (col: SortCol, align: "left" | "right" = "left") =>
+    `${align === "right" ? "text-right" : "text-left"} px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer transition-colors hover:text-foreground ${
+      col === sortCol ? "text-foreground" : "text-muted-foreground"
+    }`;
+
+  return (
+    <div className="space-y-3">
+      {/* Filter bar */}
+      <div className="relative max-w-xs">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="Filter by tour name…"
+          className="w-full pl-8 pr-8 py-1.5 text-sm bg-background border border-border/60 rounded-md outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 placeholder:text-muted-foreground/50 transition"
+        />
+        {filterText && (
+          <button
+            onClick={() => setFilterText("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Clear filter"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border/50 overflow-hidden bg-card/50">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm" data-view="tours-table">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th data-col="name" className={thClass("name")} onClick={() => handleSort("name")}>
+                  <span className="flex items-center gap-1.5">Tour Name <SortIcon col="name" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="dates" className={`${thClass("dates")} whitespace-nowrap`} onClick={() => handleSort("dates")}>
+                  <span className="flex items-center gap-1.5">Dates <SortIcon col="dates" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="days" className={thClass("days", "right")} onClick={() => handleSort("days")}>
+                  <span className="flex items-center justify-end gap-1.5">Days <SortIcon col="days" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="shows" className={thClass("shows", "right")} onClick={() => handleSort("shows")}>
+                  <span className="flex items-center justify-end gap-1.5">Shows <SortIcon col="shows" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="distance" className={`${thClass("distance", "right")} whitespace-nowrap`} onClick={() => handleSort("distance")}>
+                  <span className="flex items-center justify-end gap-1.5">Distance (km) <SortIcon col="distance" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="income" className={thClass("income", "right")} onClick={() => handleSort("income")}>
+                  <span className="flex items-center justify-end gap-1.5">Income <SortIcon col="income" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="profit" className={`${thClass("profit", "right")} whitespace-nowrap`} onClick={() => handleSort("profit")}>
+                  <span className="flex items-center justify-end gap-1.5">Profit / Loss <SortIcon col="profit" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="status" className={thClass("status")} onClick={() => handleSort("status")}>
+                  <span className="flex items-center gap-1.5">Status <SortIcon col="status" activeCol={sortCol} dir={sortDir} /></span>
+                </th>
+                <th data-col="actions" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground italic">
+                    No tours match &ldquo;{filterText}&rdquo;
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ) : sorted.map((t, idx) => {
+                const isLoss = t.profitSign === "loss";
+                const isProfit = t.profitSign === "profit";
+                const profitColorClass = isLoss
+                  ? "text-destructive"
+                  : isProfit
+                  ? "text-[#2E7D32]"
+                  : "text-muted-foreground";
+
+                return (
+                  <tr
+                    key={t.id}
+                    className={`border-b border-border/30 last:border-b-0 hover:bg-muted/20 transition-colors duration-100 cursor-pointer ${idx % 2 === 1 ? "bg-muted/10" : ""}`}
+                    onClick={() => onView(t.id)}
+                  >
+                    <td data-col="name" className="px-4 py-3 font-medium max-w-[200px]">
+                      <span className="truncate block">{t.name}</span>
+                    </td>
+                    <td data-col="dates" className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {t.datesLabel}
+                    </td>
+                    <td data-col="days" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
+                      {t.daysLabel}
+                    </td>
+                    <td data-col="shows" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
+                      {t.hasShows ? t.shows : <span className="italic text-muted-foreground/50">—</span>}
+                    </td>
+                    <td data-col="distance" className="px-4 py-3 text-right text-muted-foreground tabular-nums whitespace-nowrap">
+                      {t.distanceLabel}
+                    </td>
+                    <td data-col="income" className="px-4 py-3 text-right text-muted-foreground tabular-nums">
+                      {t.incomeLabel}
+                    </td>
+                    <td data-col="profit" className="px-4 py-3 text-right tabular-nums">
+                      {t.profitSign === "none" ? (
+                        <span className="text-muted-foreground/50 italic">—</span>
+                      ) : (
+                        <span className={`font-semibold ${profitColorClass}`}>
+                          {isLoss ? "-" : ""}{t.profitLabel}
+                        </span>
+                      )}
+                    </td>
+                    <td data-col="status" className="px-4 py-3">
+                      <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-full border ${t.verdict.color}`}>
+                        {t.verdict.label}
+                      </span>
+                    </td>
+                    <td data-col="actions" className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="group/btn h-7 text-xs"
+                        onClick={() => onView(t.id)}
+                      >
+                        View
+                        <ArrowRight className="w-3 h-3 ml-1 group-hover/btn:translate-x-0.5 transition-transform" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
