@@ -31,6 +31,11 @@ type SortCol = "name" | "dates" | "days" | "shows" | "distance" | "income" | "pr
 type SortDir = "asc" | "desc";
 
 const LS_SORT_KEY = "gig-trail:tours-sort";
+const VALID_SORT_COLS: readonly SortCol[] = ["name", "dates", "days", "shows", "distance", "income", "profit", "status"];
+const VALID_SORT_DIRS: readonly SortDir[] = ["asc", "desc"];
+
+function isSortCol(v: unknown): v is SortCol { return VALID_SORT_COLS.includes(v as SortCol); }
+function isSortDir(v: unknown): v is SortDir { return VALID_SORT_DIRS.includes(v as SortDir); }
 
 // ─── Shared display mapper ─────────────────────────────────────────────────────
 
@@ -404,23 +409,15 @@ function TableView({
   const [filterText, setFilterText] = useState("");
   const [sortCol, setSortCol] = useState<SortCol>(() => {
     try {
-      const s = localStorage.getItem(LS_SORT_KEY);
-      if (s) {
-        const parsed = JSON.parse(s);
-        return parsed.col ?? "dates";
-      }
-    } catch { /* ignore */ }
-    return "dates";
+      const parsed = JSON.parse(localStorage.getItem(LS_SORT_KEY) ?? "{}");
+      return isSortCol(parsed.col) ? parsed.col : "dates";
+    } catch { return "dates"; }
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
     try {
-      const s = localStorage.getItem(LS_SORT_KEY);
-      if (s) {
-        const parsed = JSON.parse(s);
-        return parsed.dir ?? "desc";
-      }
-    } catch { /* ignore */ }
-    return "desc";
+      const parsed = JSON.parse(localStorage.getItem(LS_SORT_KEY) ?? "{}");
+      return isSortDir(parsed.dir) ? parsed.dir : "desc";
+    } catch { return "desc"; }
   });
 
   const handleSort = (col: SortCol) => {
@@ -443,6 +440,9 @@ function TableView({
     `${align === "right" ? "text-right" : "text-left"} px-4 py-3 font-semibold text-xs uppercase tracking-wide select-none cursor-pointer transition-colors hover:text-foreground ${
       col === sortCol ? "text-foreground" : "text-muted-foreground"
     }`;
+
+  const ariaSort = (col: SortCol): React.AriaAttributes["aria-sort"] =>
+    col !== sortCol ? "none" : sortDir === "asc" ? "ascending" : "descending";
 
   return (
     <div className="space-y-3">
@@ -472,28 +472,28 @@ function TableView({
           <table className="w-full text-sm" data-view="tours-table">
             <thead>
               <tr className="border-b border-border/60 bg-muted/30">
-                <th data-col="name" className={thClass("name")} onClick={() => handleSort("name")}>
+                <th data-col="name" aria-sort={ariaSort("name")} className={thClass("name")} onClick={() => handleSort("name")}>
                   <span className="flex items-center gap-1.5">Tour Name <SortIcon col="name" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="dates" className={`${thClass("dates")} whitespace-nowrap`} onClick={() => handleSort("dates")}>
+                <th data-col="dates" aria-sort={ariaSort("dates")} className={`${thClass("dates")} whitespace-nowrap`} onClick={() => handleSort("dates")}>
                   <span className="flex items-center gap-1.5">Dates <SortIcon col="dates" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="days" className={thClass("days", "right")} onClick={() => handleSort("days")}>
+                <th data-col="days" aria-sort={ariaSort("days")} className={thClass("days", "right")} onClick={() => handleSort("days")}>
                   <span className="flex items-center justify-end gap-1.5">Days <SortIcon col="days" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="shows" className={thClass("shows", "right")} onClick={() => handleSort("shows")}>
+                <th data-col="shows" aria-sort={ariaSort("shows")} className={thClass("shows", "right")} onClick={() => handleSort("shows")}>
                   <span className="flex items-center justify-end gap-1.5">Shows <SortIcon col="shows" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="distance" className={`${thClass("distance", "right")} whitespace-nowrap`} onClick={() => handleSort("distance")}>
+                <th data-col="distance" aria-sort={ariaSort("distance")} className={`${thClass("distance", "right")} whitespace-nowrap`} onClick={() => handleSort("distance")}>
                   <span className="flex items-center justify-end gap-1.5">Distance (km) <SortIcon col="distance" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="income" className={thClass("income", "right")} onClick={() => handleSort("income")}>
+                <th data-col="income" aria-sort={ariaSort("income")} className={thClass("income", "right")} onClick={() => handleSort("income")}>
                   <span className="flex items-center justify-end gap-1.5">Income <SortIcon col="income" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="profit" className={`${thClass("profit", "right")} whitespace-nowrap`} onClick={() => handleSort("profit")}>
+                <th data-col="profit" aria-sort={ariaSort("profit")} className={`${thClass("profit", "right")} whitespace-nowrap`} onClick={() => handleSort("profit")}>
                   <span className="flex items-center justify-end gap-1.5">Profit / Loss <SortIcon col="profit" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
-                <th data-col="status" className={thClass("status")} onClick={() => handleSort("status")}>
+                <th data-col="status" aria-sort={ariaSort("status")} className={thClass("status")} onClick={() => handleSort("status")}>
                   <span className="flex items-center gap-1.5">Status <SortIcon col="status" activeCol={sortCol} dir={sortDir} /></span>
                 </th>
                 <th data-col="actions" className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wide text-muted-foreground">
