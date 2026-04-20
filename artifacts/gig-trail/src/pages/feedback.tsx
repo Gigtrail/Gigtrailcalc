@@ -78,7 +78,11 @@ async function createPost(data: { title: string; description: string; category: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to create post");
+  if (!res.ok) {
+    let body: { error?: string } | null = null;
+    try { body = await res.json(); } catch { /* ignore */ }
+    throw new Error(body?.error || "Failed to create post");
+  }
   return res.json();
 }
 
@@ -109,6 +113,12 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
   const [category, setCategory] = useState<Category>("feature_request");
   const { toast } = useToast();
 
+  const titleTrimmed = title.trim();
+  const descTrimmed = description.trim();
+  const titleError = titleTrimmed.length > 0 && titleTrimmed.length < 3;
+  const descriptionError = descTrimmed.length > 0 && descTrimmed.length < 10;
+  const isFormValid = titleTrimmed.length >= 3 && descTrimmed.length >= 10;
+
   const mutation = useMutation({
     mutationFn: createPost,
     onSuccess: () => {
@@ -119,15 +129,30 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
       onSuccess();
       toast({ title: "Posted!", description: "Your feedback has been submitted." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to submit feedback. Try again.", variant: "destructive" });
+    onError: (error) => {
+      console.error("Feedback submit failed", error);
+      toast({
+        title: "Couldn't submit feedback",
+        description: error instanceof Error ? error.message : "Failed to submit feedback.",
+        variant: "destructive",
+      });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim()) return;
-    mutation.mutate({ title: title.trim(), description: description.trim(), category });
+    if (titleTrimmed.length < 3 || descTrimmed.length < 10) {
+      const missing: string[] = [];
+      if (titleTrimmed.length < 3) missing.push("title (min 3 characters)");
+      if (descTrimmed.length < 10) missing.push("description (min 10 characters)");
+      toast({
+        title: "Form incomplete",
+        description: `Please fix: ${missing.join(" and ")}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    mutation.mutate({ title: titleTrimmed, description: descTrimmed, category });
   };
 
   return (
@@ -150,9 +175,16 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
               placeholder="Short, clear summary"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              minLength={3}
               maxLength={200}
               required
+              aria-describedby="fb-title-hint"
             />
+            {titleError ? (
+              <p id="fb-title-hint" className="text-xs text-destructive">Title must be at least 3 characters</p>
+            ) : (
+              <p id="fb-title-hint" className="text-xs text-muted-foreground">Minimum 3 characters</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="fb-description">Description</Label>
@@ -162,9 +194,16 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
+              minLength={10}
               maxLength={2000}
               required
+              aria-describedby="fb-description-hint"
             />
+            {descriptionError ? (
+              <p id="fb-description-hint" className="text-xs text-destructive">Description must be at least 10 characters</p>
+            ) : (
+              <p id="fb-description-hint" className="text-xs text-muted-foreground">Minimum 10 characters</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label>Category</Label>
@@ -183,7 +222,7 @@ function NewPostDialog({ onSuccess }: { onSuccess: () => void }) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || !isFormValid}>
               {mutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Submit
             </Button>
