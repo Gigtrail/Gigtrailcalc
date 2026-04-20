@@ -18,6 +18,7 @@ import {
   getTodayIsoDateFromRequest,
   isPastRun,
 } from "../lib/run-lifecycle";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -56,6 +57,17 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
 }
 
 function toDbRun(data: Record<string, unknown>) {
+  const normalizedData: Record<string, unknown> = { ...data };
+  if (normalizedData.totalCost === undefined && normalizedData.totalExpenses !== undefined) {
+    normalizedData.totalCost = normalizedData.totalExpenses;
+  }
+  if (normalizedData.totalProfit === undefined && normalizedData.netProfit !== undefined) {
+    normalizedData.totalProfit = normalizedData.netProfit;
+  }
+  if (normalizedData.totalProfit === undefined && normalizedData.profit !== undefined) {
+    normalizedData.totalProfit = normalizedData.profit;
+  }
+
   const result: Record<string, unknown> = {};
   const numericFields = new Set([
     'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
@@ -65,7 +77,7 @@ function toDbRun(data: Record<string, unknown>) {
     'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',
   ]);
   const dateFields = new Set(['showDate']);
-  for (const [k, v] of Object.entries(data)) {
+  for (const [k, v] of Object.entries(normalizedData)) {
     if (typeof v === 'number' && numericFields.has(k)) {
       result[k] = String(v);
     } else if (dateFields.has(k)) {
@@ -75,6 +87,26 @@ function toDbRun(data: Record<string, unknown>) {
     }
   }
   return result;
+}
+
+function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferSelect) {
+  logger.info(
+    {
+      stage,
+      id: run.id,
+      status: run.status,
+      showDate: run.showDate,
+      totalIncome: run.totalIncome,
+      totalExpenses: run.totalCost,
+      netProfit: run.totalProfit,
+      actualExpenses: run.actualExpenses,
+      actualProfit: run.actualProfit,
+      hasCalculationSnapshot: run.calculationSnapshot != null,
+      importedFromTour: run.importedFromTour,
+      sourceStopId: run.sourceStopId,
+    },
+    "[Runs] Saved run financial snapshot",
+  );
 }
 
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
@@ -123,12 +155,14 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
         .set(toDbRun(runData as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
         .where(eq(runsTable.id, existing.id))
         .returning();
+      logSavedRun("updated", updated);
       res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
       return;
     }
   }
 
   const [run] = await db.insert(runsTable).values({ ...toDbRun(runData as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
+  logSavedRun("created", run);
   res.status(201).json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 
@@ -198,6 +232,7 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Run not found" });
     return;
   }
+  logSavedRun("updated", run);
   res.json(UpdateRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 

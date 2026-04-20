@@ -1,5 +1,6 @@
 import type { runsTable, toursTable, tourStopsTable } from "@workspace/db";
 import { isCompletedRun } from "../lib/run-lifecycle";
+import { logger } from "../lib/logger";
 
 type RunRecord = typeof runsTable.$inferSelect;
 type TourRecord = typeof toursTable.$inferSelect;
@@ -22,6 +23,9 @@ export interface DashboardActualPerformance {
   totalsBasis: "past_shows";
   totalsRule: "Past Shows only";
   totalShows: number;
+  showsUsedInTotals: number;
+  incompleteDataCount: number;
+  missingFinancialDataMessage: string | null;
   totalIncome: number;
   totalProfit: number;
   totalExpenses: number;
@@ -89,11 +93,62 @@ interface UpcomingTourCandidate {
   projectedShows: number;
 }
 
+type JsonRecord = Record<string, unknown>;
+
+interface ResolvedRunFinancials {
+  income: number | null;
+  expenses: number | null;
+  profit: number | null;
+  hasFinancialData: boolean;
+}
+
 const CANCELLED_STOP_STATUSES = new Set(["cancelled", "canceled"]);
+const COMPLETED_RUN_STATUSES = new Set(["completed", "past"]);
 
 function n(value: unknown): number {
   const parsed = Number.parseFloat(String(value ?? 0));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+
+  const parsed = Number.parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value != null && typeof value === "object" ? (value as JsonRecord) : null;
+}
+
+function getNestedValue(record: JsonRecord | null, path: string[]): unknown {
+  let current: unknown = record;
+
+  for (const segment of path) {
+    const currentRecord = asRecord(current);
+    if (!currentRecord) {
+      return null;
+    }
+
+    current = currentRecord[segment];
+  }
+
+  return current;
+}
+
+function pickFirstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed = nullableNumber(value);
+    if (parsed != null) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function getIsoDate(value: string | null | undefined): string | null {
@@ -106,24 +161,97 @@ function isCancelledStop(stop: TourStopRecord): boolean {
   return CANCELLED_STOP_STATUSES.has(status);
 }
 
-function getRunIncome(run: RunRecord): number {
-  const hasActualIncome = run.actualTicketIncome != null || run.actualOtherIncome != null;
-  if (hasActualIncome) {
-    return n(run.actualTicketIncome) + n(run.actualOtherIncome);
+function resolveRunFinancials(run: RunRecord): ResolvedRunFinancials {
+  const runRecord = run as unknown as JsonRecord;
+  const snapshot = asRecord(run.calculationSnapshot);
+
+  let income =
+    run.actualTicketIncome != null || run.actualOtherIncome != null
+      ? n(run.actualTicketIncome) + n(run.actualOtherIncome)
+      : pickFirstNumber(
+          run.totalIncome,
+          runRecord.totalIncome,
+          runRecord.total_income,
+          runRecord.income,
+          getNestedValue(snapshot, ["outputs", "totalIncome"]),
+          getNestedValue(snapshot, ["totalIncome"]),
+          getNestedValue(snapshot, ["formData", "totalIncome"]),
+          getNestedValue(snapshot, ["outputs", "grossRevenue"]),
+        );
+
+  let expenses = pickFirstNumber(
+    run.actualExpenses,
+    runRecord.actualExpenses,
+    runRecord.actual_expenses,
+    runRecord.totalExpenses,
+    runRecord.total_expenses,
+    runRecord.expenses,
+    run.totalCost,
+    runRecord.totalCost,
+    runRecord.total_cost,
+    getNestedValue(snapshot, ["outputs", "totalCost"]),
+    getNestedValue(snapshot, ["totalCost"]),
+    getNestedValue(snapshot, ["formData", "totalCost"]),
+  );
+
+  let profit = pickFirstNumber(
+    run.actualProfit,
+    runRecord.actualProfit,
+    runRecord.actual_profit,
+    runRecord.netProfit,
+    runRecord.net_profit,
+    runRecord.profit,
+    run.totalProfit,
+    runRecord.totalProfit,
+    runRecord.total_profit,
+    getNestedValue(snapshot, ["outputs", "netProfit"]),
+    getNestedValue(snapshot, ["netProfit"]),
+    getNestedValue(snapshot, ["formData", "totalProfit"]),
+    getNestedValue(snapshot, ["outputs", "profit"]),
+  );
+
+  if (profit == null && income != null && expenses != null) {
+    profit = roundMoney(income - expenses);
   }
-  return n(run.totalIncome);
+
+  if (expenses == null && income != null && profit != null) {
+    expenses = roundMoney(income - profit);
+  }
+
+  if (income == null && expenses != null && profit != null) {
+    income = roundMoney(expenses + profit);
+  }
+
+  return {
+    income,
+    expenses,
+    profit,
+    hasFinancialData: income != null || expenses != null || profit != null,
+  };
 }
 
-function getRunExpenses(run: RunRecord): number {
-  return run.actualExpenses != null ? n(run.actualExpenses) : n(run.totalCost);
-}
+function buildMissingFinancialDataMessage(totalShows: number, incompleteDataCount: number): string | null {
+  if (totalShows === 0 || incompleteDataCount === 0) {
+    return null;
+  }
 
-function getRunProfit(run: RunRecord): number {
-  return run.actualProfit != null ? n(run.actualProfit) : n(run.totalProfit);
+  if (incompleteDataCount === totalShows) {
+    return "Past shows found but financial data not saved yet";
+  }
+
+  return `${incompleteDataCount} past show${incompleteDataCount === 1 ? "" : "s"} excluded due to incomplete financial data.`;
 }
 
 function isCompletedPastShowRun(run: RunRecord, todayIsoDate: string): boolean {
-  return isCompletedRun(run, todayIsoDate);
+  if (isCompletedRun(run, todayIsoDate)) {
+    return true;
+  }
+
+  const status = String((run as unknown as JsonRecord).status ?? "")
+    .trim()
+    .toLowerCase();
+
+  return COMPLETED_RUN_STATUSES.has(status);
 }
 
 export function buildActualPerformanceSummary(
@@ -131,6 +259,12 @@ export function buildActualPerformanceSummary(
   todayIsoDate: string,
 ): DashboardActualPerformance {
   const completedRuns = runs.filter(run => isCompletedPastShowRun(run, todayIsoDate));
+  const financiallyUsableRuns = completedRuns.map(run => ({
+    run,
+    financials: resolveRunFinancials(run),
+  }));
+  const runsUsedInTotals = financiallyUsableRuns.filter(entry => entry.financials.hasFinancialData);
+  const incompleteDataCount = completedRuns.length - runsUsedInTotals.length;
 
   let totalKmDriven = 0;
   let totalIncome = 0;
@@ -147,11 +281,11 @@ export function buildActualPerformanceSummary(
   let totalFoodCost = 0;
   let totalMarketingCost = 0;
 
-  for (const run of completedRuns) {
+  for (const { run, financials } of runsUsedInTotals) {
     const km = n(run.distanceKm) * (run.returnTrip ? 2 : 1);
-    const income = getRunIncome(run);
-    const profit = getRunProfit(run);
-    const expenses = getRunExpenses(run);
+    const income = financials.income ?? 0;
+    const profit = financials.profit ?? 0;
+    const expenses = financials.expenses ?? 0;
 
     totalKmDriven += km;
     totalIncome += income;
@@ -177,17 +311,50 @@ export function buildActualPerformanceSummary(
     }
   }
 
+  logger.info(
+    {
+      totalCompletedShows: completedRuns.length,
+      showsUsedInTotals: runsUsedInTotals.length,
+      incompleteDataCount,
+      sampleCompletedRun:
+        completedRuns.length > 0
+          ? {
+              id: completedRuns[0].id,
+              status: completedRuns[0].status,
+              showDate: completedRuns[0].showDate,
+              totalIncome: completedRuns[0].totalIncome,
+              totalCost: completedRuns[0].totalCost,
+              totalProfit: completedRuns[0].totalProfit,
+              actualExpenses: completedRuns[0].actualExpenses,
+              actualProfit: completedRuns[0].actualProfit,
+              hasCalculationSnapshot: completedRuns[0].calculationSnapshot != null,
+            }
+          : null,
+      summedValues: runsUsedInTotals.map(({ run, financials }) => ({
+        id: run.id,
+        status: run.status,
+        income: financials.income,
+        expenses: financials.expenses,
+        profit: financials.profit,
+      })),
+    },
+    "[DashboardSummary] Aggregating past-show financials",
+  );
+
   return {
     label: "Past Show Snapshot",
     helperText: "Real numbers from past-dated shows only.",
     totalsBasis: "past_shows",
     totalsRule: "Past Shows only",
     totalShows: completedRuns.length,
+    showsUsedInTotals: runsUsedInTotals.length,
+    incompleteDataCount,
+    missingFinancialDataMessage: buildMissingFinancialDataMessage(completedRuns.length, incompleteDataCount),
     totalIncome,
     totalProfit,
     totalExpenses,
     totalKmDriven,
-    avgShowProfit: completedRuns.length > 0 ? profitSum / completedRuns.length : 0,
+    avgShowProfit: runsUsedInTotals.length > 0 ? profitSum / runsUsedInTotals.length : 0,
     bestShowProfit: bestShowProfit ?? 0,
     worstShowProfit: worstShowProfit ?? 0,
     profitableShowCount,

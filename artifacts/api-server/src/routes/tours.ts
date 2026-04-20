@@ -89,6 +89,54 @@ function toDbNumeric(data: Record<string, unknown>, numericFields: string[]) {
   return result;
 }
 
+function n(value: unknown): number {
+  const parsed = Number.parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function estimatePastShowFinancialsFromStop(stop: typeof tourStopsTable.$inferSelect) {
+  const merchIncome = n(stop.merchEstimate);
+  let showIncome = 0;
+
+  if (stop.showType === "Flat Fee") {
+    showIncome = n(stop.fee);
+  } else if (stop.showType === "Ticketed Show" || stop.showType === "Hybrid") {
+    const expectedTicketsSold = Math.floor((n(stop.capacity) * n(stop.expectedAttendancePct)) / 100);
+    const grossRevenue = expectedTicketsSold * n(stop.ticketPrice);
+    const effectiveDealType = stop.dealType ?? "100% door";
+    let doorIncome = 0;
+
+    if (stop.showType === "Hybrid") {
+      const hybridSplit =
+        effectiveDealType === "percentage split" || effectiveDealType === "guarantee vs door"
+          ? n(stop.splitPct)
+          : 100;
+      doorIncome = grossRevenue * (hybridSplit / 100);
+    } else if (effectiveDealType === "100% door") {
+      doorIncome = grossRevenue;
+    } else if (effectiveDealType === "percentage split") {
+      doorIncome = grossRevenue * (n(stop.splitPct) / 100);
+    } else if (effectiveDealType === "guarantee vs door") {
+      doorIncome = Math.max(n(stop.guarantee), grossRevenue * (n(stop.splitPct) / 100));
+    }
+
+    showIncome = stop.showType === "Hybrid" ? n(stop.guarantee) + doorIncome : doorIncome;
+  }
+
+  const totalIncome = roundMoney(showIncome + merchIncome);
+  const totalCost = roundMoney(n(stop.marketingCost) + n(stop.accommodationCost) + n(stop.extraCosts));
+  const totalProfit = roundMoney(totalIncome - totalCost);
+  const hasFinancialData = totalIncome > 0 || totalCost > 0;
+
+  return hasFinancialData
+    ? { totalIncome, totalCost, totalProfit }
+    : null;
+}
+
 const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
@@ -421,6 +469,7 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
   const guarantee = stop.guarantee != null ? Number(stop.guarantee) : null;
   const merch = stop.merchEstimate != null ? Number(stop.merchEstimate) : null;
   const todayIsoDate = getTodayIsoDateFromRequest(req);
+  const estimatedFinancials = estimatePastShowFinancialsFromStop(stop);
 
   if (existingRun) {
     // Update only planned fields; preserve any actual values already entered
@@ -436,6 +485,24 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
       notes: existingRun.actualProfit != null ? existingRun.notes : (stop.notes ?? existingRun.notes),
       venueId: venueId ?? existingRun.venueId,
       tourName: tour.name,
+      totalIncome:
+        existingRun.totalIncome != null
+          ? existingRun.totalIncome
+          : estimatedFinancials
+            ? String(estimatedFinancials.totalIncome)
+            : existingRun.totalIncome,
+      totalCost:
+        existingRun.totalCost != null
+          ? existingRun.totalCost
+          : estimatedFinancials
+            ? String(estimatedFinancials.totalCost)
+            : existingRun.totalCost,
+      totalProfit:
+        existingRun.totalProfit != null
+          ? existingRun.totalProfit
+          : estimatedFinancials
+            ? String(estimatedFinancials.totalProfit)
+            : existingRun.totalProfit,
     };
     const [updated] = await db.update(runsTable).set(update).where(eq(runsTable.id, existingRun.id)).returning();
     res.json({ ...updated, id: updated.id, createdPastShow: false });
@@ -457,6 +524,9 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
     notes: stop.notes ?? null,
     distanceKm: "0",
     fuelPrice: "0",
+    totalIncome: estimatedFinancials ? String(estimatedFinancials.totalIncome) : null,
+    totalCost: estimatedFinancials ? String(estimatedFinancials.totalCost) : null,
+    totalProfit: estimatedFinancials ? String(estimatedFinancials.totalProfit) : null,
     returnTrip: false,
     sourceTourId: tourId,
     sourceStopId: stopId,

@@ -967,6 +967,9 @@ export interface DashboardSummary {
     totalsBasis: "past_shows";
     totalsRule: "Past Shows only";
     totalShows: number;
+    showsUsedInTotals: number;
+    incompleteDataCount: number;
+    missingFinancialDataMessage: string | null;
     totalIncome: number;
     totalProfit: number;
     totalExpenses: number;

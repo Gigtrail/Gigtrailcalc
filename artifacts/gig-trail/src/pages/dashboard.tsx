@@ -21,6 +21,9 @@ type ActualPerformance = {
   totalsBasis: "past_shows";
   totalsRule: "Past Shows only";
   totalShows: number;
+  showsUsedInTotals: number;
+  incompleteDataCount: number;
+  missingFinancialDataMessage: string | null;
   totalIncome: number;
   totalProfit: number;
   totalExpenses: number;
@@ -98,8 +101,8 @@ function dealLabel(value: string | null | undefined) {
 }
 
 function deriveActualHealthStatus(actual: ActualPerformance): ActualHealthStatus {
-  if (actual.totalShows === 0) return "STEADY";
-  const profitRatio = actual.profitableShowCount / actual.totalShows;
+  if (actual.showsUsedInTotals === 0) return "STEADY";
+  const profitRatio = actual.profitableShowCount / actual.showsUsedInTotals;
   if (actual.totalProfit > 0 && profitRatio >= 0.6) return "HEALTHY";
   if (actual.totalProfit > 0 && profitRatio >= 0.4) return "STEADY";
   if (actual.totalProfit >= 0 || profitRatio >= 0.4) return "AT RISK";
@@ -145,10 +148,11 @@ function healthMeta(status: ActualHealthStatus, totalProfit: number) {
 
 function buildActualInsights(actual: ActualPerformance) {
   const insights: Array<{ icon: string; tone: "green" | "amber" | "red" | "neutral"; text: string }> = [];
+  const showsUsedInTotals = actual.showsUsedInTotals;
 
-  if (actual.totalShows === 0) return insights;
+  if (showsUsedInTotals === 0) return insights;
 
-  if (actual.totalProfit > 0 && actual.profitableShowCount === actual.totalShows) {
+  if (actual.totalProfit > 0 && actual.profitableShowCount === showsUsedInTotals) {
     insights.push({
       icon: "OK",
       tone: "green",
@@ -160,11 +164,11 @@ function buildActualInsights(actual: ActualPerformance) {
       tone: "red",
       text: "Past shows are losing money overall. Review travel load, fees, and cost pressure.",
     });
-  } else if (actual.profitableShowCount < actual.totalShows) {
+  } else if (actual.profitableShowCount < showsUsedInTotals) {
     insights.push({
       icon: "~",
       tone: "amber",
-      text: `${actual.profitableShowCount} of ${actual.totalShows} past shows are profitable.`,
+      text: `${actual.profitableShowCount} of ${showsUsedInTotals} shows used in totals are profitable.`,
     });
   }
 
@@ -205,7 +209,7 @@ function buildActualInsights(actual: ActualPerformance) {
     });
   }
 
-  if (actual.totalShows > 1 && actual.worstShowProfit < 0 && actual.totalProfit > 0) {
+  if (showsUsedInTotals > 1 && actual.worstShowProfit < 0 && actual.totalProfit > 0) {
     insights.push({
       icon: "!",
       tone: "amber",
@@ -252,6 +256,14 @@ function SectionHeader({
 
 function DashboardHero({ actual }: { actual: ActualPerformance | null }) {
   const totalShows = actual?.totalShows ?? 0;
+  const showsUsedInTotals = actual?.showsUsedInTotals ?? 0;
+  const heroSummaryLine = totalShows > 0
+    ? (
+        showsUsedInTotals === 0
+          ? `${totalShows} past show${totalShows === 1 ? "" : "s"} found, but financial data hasn't been saved yet.`
+          : `${sign(actual!.totalProfit)}$${fmtMoney(actual!.totalProfit)} net profit · ${actual!.profitableShowCount}/${showsUsedInTotals} profitable · ${actual!.totalKmDriven.toLocaleString()} km travelled`
+      )
+    : null;
   const summaryLine = totalShows > 0
     ? `${sign(actual!.totalProfit)}$${fmtMoney(actual!.totalProfit)} net profit · ${actual!.profitableShowCount}/${actual!.totalShows} profitable · ${actual!.totalKmDriven.toLocaleString()} km travelled`
     : "No past-show data yet. Add your first completed show to start tracking performance.";
@@ -265,7 +277,7 @@ function DashboardHero({ actual }: { actual: ActualPerformance | null }) {
         <p className="max-w-2xl text-sm text-muted-foreground">
           Dashboard totals come from backend-calculated past shows only. Drafts, planned shows, tours, and projections are excluded.
         </p>
-        <p className="text-sm font-medium text-foreground">{summaryLine}</p>
+        <p className="text-sm font-medium text-foreground">{heroSummaryLine ?? summaryLine}</p>
       </div>
       <div className="shrink-0 sm:mt-1">
         <Button asChild size="sm" className="bg-primary text-primary-foreground shadow-sm">
@@ -502,7 +514,7 @@ export default function Dashboard() {
 
   const actual = dashboardSummary?.actualPerformance ?? null;
   const recentRuns = dashboardRecent?.recentRuns ?? [];
-  const hasActual = (actual?.totalShows ?? 0) > 0;
+  const hasActual = (actual?.showsUsedInTotals ?? 0) > 0;
   const runProfits = recentRuns.map(run => run.actualProfit ?? run.totalProfit ?? 0);
   const maxRecentProfit = runProfits.length > 0 ? Math.max(...runProfits) : null;
   const minRecentProfit = runProfits.length > 1 ? Math.min(...runProfits) : null;
@@ -510,7 +522,7 @@ export default function Dashboard() {
   const isCompletelyEmpty =
     !loadingSummary &&
     !loadingRecent &&
-    !hasActual &&
+    (actual?.totalShows ?? 0) === 0 &&
     recentRuns.length === 0;
 
   return (
@@ -538,6 +550,12 @@ export default function Dashboard() {
             />
           )}
 
+          {actual && actual.incompleteDataCount > 0 ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {actual.missingFinancialDataMessage ?? "Some past shows were excluded because their financial data is incomplete."}
+            </div>
+          ) : null}
+
           {loadingSummary ? (
             <SkeletonCards />
           ) : actual && hasActual ? (
@@ -551,7 +569,7 @@ export default function Dashboard() {
               <StatCard
                 label="Total Expenses"
                 value={`$${fmtMoney(actual.totalExpenses)}`}
-                subtext={`${actual.totalShows} past show${actual.totalShows !== 1 ? "s" : ""}`}
+                subtext={`${actual.showsUsedInTotals} show${actual.showsUsedInTotals !== 1 ? "s" : ""} used in totals`}
               />
               <StatCard
                 label="Average Per Show"
@@ -565,6 +583,16 @@ export default function Dashboard() {
                 subtext={`${actual.profitableShowCount} profitable · ${actual.totalKmDriven.toLocaleString()} km`}
               />
             </div>
+          ) : actual && actual.totalShows > 0 ? (
+            <EmptyBlock
+              title="Past shows found but financial data not saved yet"
+              description={
+                actual.missingFinancialDataMessage ??
+                "Completed shows exist, but none of them currently include saved income, expense, or profit data for dashboard totals."
+              }
+              actionHref="/runs"
+              actionLabel="Review past shows"
+            />
           ) : (
             <EmptyBlock
               title="No past shows yet"
