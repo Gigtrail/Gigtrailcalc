@@ -31,7 +31,7 @@ export function buildAppLocation(
 }
 
 export function formatCoordinateLabel(lat: number, lng: number): string {
-  return `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`;
+  return `Lat ${lat.toFixed(2)}, Lng ${lng.toFixed(2)}`;
 }
 
 export function looksLikeCoordinateLabel(value: string | null | undefined): boolean {
