@@ -59,6 +59,12 @@ import {
 } from "@/lib/member-utils";
 import { calculateTicketRecovery } from "@/lib/ticket-recovery";
 import { trackEvent } from "@/lib/analytics";
+import {
+  analyzeTourRisk,
+  buildTourRiskShowSnapshot,
+  createTourRiskSnapshot,
+  type TourRiskResult,
+} from "@/lib/tour-risk";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -76,6 +82,7 @@ export default function TourDetail() {
   const [showMemberPayouts, setShowMemberPayouts] = useState(false);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
+  const [riskAnalysis, setRiskAnalysis] = useState<TourRiskResult | null>(null);
   const toggleDay = (date: string) =>
     setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
@@ -452,6 +459,49 @@ export default function TourDetail() {
     });
   }, [calc, tourId]);
 
+  const riskResetKey = useMemo(() => {
+    if (!calc) return "tour-risk:none";
+    return JSON.stringify({
+      tourId,
+      grossIncome: calc.grossIncome,
+      totalExpenses: calc.totalExpenses,
+      netProfit: calc.netProfit,
+      totalDistance: calc.totalDistance,
+      totalDriveTimeMinutes: calc.totalDriveTimeMinutes,
+      totalFuelCost: calc.totalFuelCost,
+      totalAccommodation: calc.totalAccommodation,
+      localFuelType,
+      localFuelPricePetrol,
+      localFuelPriceDiesel,
+      localFuelPriceLpg,
+      profilePayouts: profile
+        ? {
+            bandMembers: profile.bandMembers,
+            activeMemberIds: profile.activeMemberIds,
+          }
+        : null,
+      stops: (stops ?? []).map((stop) => ({
+        id: stop.id,
+        showType: stop.showType,
+        dealType: stop.dealType,
+        fee: stop.fee,
+        guarantee: stop.guarantee,
+        merchEstimate: stop.merchEstimate,
+        marketingCost: stop.marketingCost,
+        accommodationCost: stop.accommodationCost,
+        extraCosts: stop.extraCosts,
+        distanceOverride: stop.distanceOverride,
+        expectedAttendancePct: stop.expectedAttendancePct,
+        capacity: stop.capacity,
+        ticketPrice: stop.ticketPrice,
+      })),
+    });
+  }, [calc, localFuelPriceDiesel, localFuelPriceLpg, localFuelPricePetrol, localFuelType, profile, stops, tourId]);
+
+  useEffect(() => {
+    setRiskAnalysis(null);
+  }, [riskResetKey]);
+
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
   }
@@ -548,6 +598,122 @@ export default function TourDetail() {
   );
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
+
+  const riskSnapshot = (() => {
+    if (!calc || sortedStops.length === 0) return null;
+
+    const daySlotByStopId = new Map<number, (typeof daySlots)[number]>();
+    for (const day of daySlots) {
+      if (day.stop) daySlotByStopId.set(day.stop.id, day);
+    }
+
+    const fallbackFoodCostPerShow = sortedStops.length > 0 ? calc.totalFoodCost / sortedStops.length : 0;
+    const memberPayoutPerShow = qualifyingShowCount > 0 ? totalMemberPayout / qualifyingShowCount : 0;
+
+    const showResults = sortedStops
+      .map((stop, index) => {
+        const stopCalc = calc.stopCalcs.find((entry) => entry.stopId === stop.id);
+        if (!stopCalc) return null;
+
+        const daySlot = daySlotByStopId.get(stop.id);
+        const legacyLegIndex = tour.startLocation ? index : index - 1;
+        const incomingLeg = daySlot?.incomingLeg ?? (legacyLegIndex >= 0 ? calc.legs[legacyLegIndex] : undefined);
+        const allocatedFoodCost = daySlot ? daySlot.dailyFoodCost : fallbackFoodCostPerShow;
+        const allocatedAccommodationCost = daySlot ? daySlot.dailyAccomCost : stopCalc.accommodation;
+        const allocatedMemberPayout =
+          stopCalc.totalIncome > 0 && qualifyingShowCount > 0 ? memberPayoutPerShow : 0;
+
+        const variableCostFlags: string[] = [];
+        if ((stop.accommodationMode ?? "") === "manual" && allocatedAccommodationCost > 0) {
+          variableCostFlags.push("manual_accommodation");
+        }
+        if ((stop.extraCosts ?? 0) > 0) variableCostFlags.push("extra_costs");
+        if ((stop.marketingCost ?? 0) > 0) variableCostFlags.push("marketing_cost");
+        if ((incomingLeg?.source ?? "") === "unknown") variableCostFlags.push("unknown_route_cost");
+        if (stop.dealType === "guarantee vs door" || stop.dealType === "percentage split") {
+          variableCostFlags.push("variable_deal_terms");
+        }
+
+        return buildTourRiskShowSnapshot({
+          showId: stop.id,
+          date: stop.date ? stop.date.split("T")[0] : null,
+          venueName: stop.venueName || stop.city,
+          showType: stop.showType,
+          dealType: stop.dealType,
+          fee: stop.fee,
+          capacity: stop.capacity,
+          ticketPrice: stop.ticketPrice,
+          expectedAttendancePct: stop.expectedAttendancePct,
+          splitPct: stop.splitPct,
+          guarantee: stop.guarantee,
+          merchEstimate: stop.merchEstimate,
+          totalCosts:
+            stopCalc.totalCosts +
+            (incomingLeg?.fuelCost ?? 0) +
+            allocatedFoodCost +
+            allocatedMemberPayout,
+          fuelCost: incomingLeg?.fuelCost ?? 0,
+          accommodationCost: allocatedAccommodationCost,
+          travelDistance: incomingLeg?.distanceKm ?? 0,
+          travelHours: (incomingLeg?.driveTimeMinutes ?? 0) / 60,
+          variableCostFlags,
+        });
+      })
+      .filter((show): show is NonNullable<typeof show> => !!show);
+
+    const showResultById = new Map(showResults.map((show) => [String(show.showId), show]));
+    const stopCalcById = new Map(calc.stopCalcs.map((entry) => [entry.stopId, entry]));
+    const dayResults = hasDaySlots
+      ? daySlots.map((day) => {
+          const showResult = day.stop ? showResultById.get(String(day.stop.id)) : undefined;
+          const stopCalc = day.stop ? stopCalcById.get(day.stop.id) : undefined;
+          const allocatedMemberPayout =
+            showResult && showResult.grossIncome > 0 && qualifyingShowCount > 0 ? memberPayoutPerShow : 0;
+          return {
+            date: day.date,
+            type: day.stop ? "show_day" as const : "day_off" as const,
+            hasShow: Boolean(day.stop),
+            showId: day.stop?.id ?? null,
+            revenue: showResult?.grossIncome ?? 0,
+            showSpecificCosts: day.stop ? (stopCalc?.marketing ?? 0) + (stopCalc?.extraCosts ?? 0) : 0,
+            fixedOperatingCosts: day.dailyFoodCost + allocatedMemberPayout,
+            accommodationCost: day.dailyAccomCost,
+            travelDistance: day.incomingLeg?.distanceKm ?? 0,
+            travelHours: (day.incomingLeg?.driveTimeMinutes ?? 0) / 60,
+            dailyTravelBurn: day.incomingLeg?.fuelCost ?? 0,
+          };
+        })
+      : undefined;
+
+    return createTourRiskSnapshot({
+      totalGrossIncome: grossIncome,
+      totalCosts: totalExpensesWithPayouts,
+      totalNetProfit: profitAfterMemberFees,
+      overallMarginPercent: margin,
+      totalFuelCost: calc.totalFuelCost,
+      totalAccommodationCost: calc.totalAccommodation,
+      totalDistance: calc.totalDistance,
+      totalTravelHours: calc.totalDriveTimeMinutes / 60,
+      breakEvenPoint:
+        ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible"
+          ? ticketRecovery.totalTicketsNeeded
+          : 0,
+      expectedTicketTotals: showResults.reduce((sum, show) => sum + show.expectedTickets, 0),
+      runDays: hasDaySlots ? daySlots.length : daysOnTour ?? sortedStops.length,
+      volatileCostFlags: [
+        ...(calc.totalStopAccommodation > 0 ? ["stop_accommodation"] : []),
+        ...(calc.blankDayAccomCost > 0 ? ["blank_day_accommodation"] : []),
+        ...(calc.totalExtraCosts > 0 ? ["tour_extra_costs"] : []),
+        ...(calc.totalMarketing > 0 ? ["tour_marketing_costs"] : []),
+        ...(calc.blankDayCount > 0 ? ["blank_days"] : []),
+        ...(calc.legs.some((leg) => leg.source === "unknown") ? ["unknown_route_distance"] : []),
+      ],
+      // Placeholder until the tour form has an explicit intent selector.
+      tourIntent: "profit",
+      dayResults,
+      showResults,
+    });
+  })();
 
   const renderLegRow = (leg: TourLeg, driveWarning: boolean, legKey: string) => {
     const legOpen = expandedLegs.has(legKey);
@@ -660,6 +826,41 @@ export default function TourDetail() {
       (r.showDate?.includes(q))
     );
   });
+
+  const riskBadgeClassName = (() => {
+    if (!riskAnalysis) return "bg-muted text-muted-foreground";
+    if (riskAnalysis.riskSummary.label === "Bulletproof") return "bg-emerald-100 text-emerald-800";
+    if (riskAnalysis.riskSummary.label === "Healthy") return "bg-green-100 text-green-800";
+    if (riskAnalysis.riskSummary.label === "Balanced / Caution") return "bg-amber-100 text-amber-800";
+    if (riskAnalysis.riskSummary.label === "Fragile") return "bg-orange-100 text-orange-800";
+    if (riskAnalysis.insufficientData) return "bg-slate-100 text-slate-800";
+    return "bg-red-100 text-red-800";
+  })();
+
+  const handleCalculateRisk = () => {
+    if (!riskSnapshot) return;
+    const nextRiskAnalysis = analyzeTourRisk(riskSnapshot);
+    setRiskAnalysis(nextRiskAnalysis);
+    trackEvent("tour_risk_calculated", {
+      tour_id: tourId,
+      risk_score: nextRiskAnalysis.riskSummary.overallScore,
+      risk_label: nextRiskAnalysis.riskSummary.label,
+      anchor_collapse_net: nextRiskAnalysis.stressTests.anchorCollapse.anchorCollapseNet,
+      distance_to_ruin_percent: nextRiskAnalysis.stressTests.distanceToRuin.distanceToRuinPercent,
+      post_spike_net: nextRiskAnalysis.stressTests.logisticsSpike.postSpikeNet,
+      red_flag_count: nextRiskAnalysis.flags.redFlags.length,
+    });
+  };
+
+  const riskCategoryRows = riskAnalysis
+    ? [
+        { label: "Concentration", category: riskAnalysis.categoryScores.concentrationRisk },
+        { label: "Liquidity", category: riskAnalysis.categoryScores.liquidityRisk },
+        { label: "Structural", category: riskAnalysis.categoryScores.structuralFragility },
+        { label: "Logistics", category: riskAnalysis.categoryScores.logisticsPressure },
+        { label: "Volatility", category: riskAnalysis.categoryScores.revenueVolatility },
+      ]
+    : [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto">
@@ -1706,8 +1907,326 @@ export default function TourDetail() {
                   </div>
                 );
               })()}
+
+              {calc && sortedStops.length > 0 && (
+                <div className="rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-3 space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Risk Engine
+                  </div>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    See how this tour holds up if things don&apos;t go to plan.
+                  </p>
+                  <Button variant="outline" className="w-full" onClick={handleCalculateRisk}>
+                    <BarChart2 className="w-4 h-4 mr-2" />
+                    Calculate Risk
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {riskAnalysis && riskSnapshot && (
+            <Card className="border-border/50 bg-card/60">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <BarChart2 className="w-4 h-4 text-primary" />
+                      Risk Analysis
+                    </CardTitle>
+                    <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                      Structural stress testing based on the current tour result.
+                    </p>
+                  </div>
+                  <Badge className={riskBadgeClassName}>
+                    {riskAnalysis.riskSummary.label}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border border-border/50 bg-muted/15 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Tour Risk Score
+                  </div>
+                  <div className="mt-1 flex items-end justify-between gap-3">
+                    <div className="text-4xl font-bold tracking-tight">
+                      {riskAnalysis.riskSummary.overallScore}
+                      <span className="text-lg text-muted-foreground font-medium"> / 100</span>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {riskAnalysis.flags.redFlags.length} red flag{riskAnalysis.flags.redFlags.length !== 1 ? "s" : ""}
+                      <br />
+                      {riskAnalysis.flags.amberFlags.length} amber flag{riskAnalysis.flags.amberFlags.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <div className="mt-3 border-t border-border/40 pt-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Primary Concern
+                    </div>
+                    <p className="text-sm text-foreground/85 mt-1">{riskAnalysis.riskSummary.primaryConcern}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{riskAnalysis.summaryText}</p>
+                  </div>
+                </div>
+
+                {(riskAnalysis.insufficientData || riskAnalysis.riskSummary.confidenceLevel !== "high") && (
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">
+                      Confidence
+                    </div>
+                    <p className="text-sm text-amber-800 mt-1">
+                      {riskAnalysis.insufficientData
+                        ? "Insufficient data for a reliable risk score. Add clearer revenue assumptions before relying on this analysis."
+                        : `Confidence is ${riskAnalysis.riskSummary.confidenceLevel}; treat this as directional because some route or revenue data is limited.`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Schedule Efficiency
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground text-xs">Show Days</div>
+                      <div className="font-semibold">
+                        {riskAnalysis.scheduleMetrics.totalShowDays} / {riskAnalysis.scheduleMetrics.totalCalendarDays}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Off / Travel Days</div>
+                      <div className="font-semibold">
+                        {riskAnalysis.scheduleMetrics.deadDayCount}
+                        <span className="text-xs text-muted-foreground font-normal">
+                          {" "}({riskAnalysis.scheduleMetrics.totalTravelDays} travel)
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Efficiency Ratio</div>
+                      <div className="font-semibold">{Math.round(riskAnalysis.scheduleMetrics.efficiencyRatio * 100)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Dead Day Ratio</div>
+                      <div className="font-semibold">{Math.round(riskAnalysis.scheduleMetrics.deadDayRatio * 100)}%</div>
+                    </div>
+                  </div>
+                  {(riskAnalysis.scheduleMetrics.consecutiveBurnDaysMax > 0 || riskAnalysis.scheduleMetrics.highBurnTravelDayCount > 0) && (
+                    <p className="text-xs text-muted-foreground leading-snug mt-3">
+                      Max burn-day run: {riskAnalysis.scheduleMetrics.consecutiveBurnDaysMax}. High-burn non-show travel days: {riskAnalysis.scheduleMetrics.highBurnTravelDayCount}.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3 space-y-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Structural Stress Tests
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Anchor Date Collapse</span>
+                        <span className={riskAnalysis.stressTests.anchorCollapse.remainsViableWithoutAnchor ? "text-xs font-semibold text-green-700" : "text-xs font-semibold text-red-700"}>
+                          {riskAnalysis.stressTests.anchorCollapse.remainsViableWithoutAnchor ? "Viable" : "Fails"}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Anchor</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "Not available"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Profit share</div>
+                          <div className="font-semibold">
+                            {Math.round(riskAnalysis.stressTests.anchorCollapse.anchorProfitContributionShare * 100)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net impact</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.anchorCollapse.anchorNetImpact)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net without anchor</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Distance to Ruin</span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {riskAnalysis.stressTests.distanceToRuin.riskBand}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Revenue buffer</div>
+                          <div className="font-semibold">
+                            {Math.round(riskAnalysis.stressTests.distanceToRuin.distanceToRuinPercent)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Variable revenue</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.distanceToRuin.revenueSensitiveIncome)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Loaded cost/show</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.distanceToRuin.costPerShowDay)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Load per show</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.distanceToRuin.operationalLoadPerShow} days</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Logistics Spike</span>
+                        <span className={riskAnalysis.stressTests.logisticsSpike.postSpikeNet >= 0 ? "text-xs font-semibold text-green-700" : "text-xs font-semibold text-red-700"}>
+                          {riskAnalysis.stressTests.logisticsSpike.postSpikeNet >= 0 ? "Survives" : "Negative"}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Logistics OpEx</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.logisticsOpEx)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">20% spike</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.spikeCostIncrease)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Post-spike net</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.postSpikeNet)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net erosion</div>
+                          <div className="font-semibold">
+                            {riskAnalysis.stressTests.logisticsSpike.netErosionPercent == null
+                              ? "N/A"
+                              : `${Math.round(riskAnalysis.stressTests.logisticsSpike.netErosionPercent * 100)}%`}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">High-burn travel days</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.logisticsSpike.highBurnTravelDayCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Worst travel day</div>
+                          <div className="font-semibold">{Math.round(riskAnalysis.stressTests.logisticsSpike.worstTravelDayDistance)} km</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Category Breakdown
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {riskCategoryRows.map(({ label, category }) => (
+                      <div key={label} className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium">{label}</span>
+                          <span className="text-sm font-bold">{category.score}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                          {category.explanation}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-xl border border-red-200/70 bg-red-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-red-700">
+                      Red Flags
+                    </div>
+                    {riskAnalysis.flags.redFlags.length === 0 ? (
+                      <p className="text-sm text-red-700/80 mt-1">No red flags triggered from the current tour result.</p>
+                    ) : (
+                      <div className="space-y-2 mt-2">
+                        {riskAnalysis.flags.redFlags.map((flag) => (
+                          <div key={flag.code}>
+                            <div className="text-sm font-semibold text-red-800">{flag.label}</div>
+                            <p className="text-xs leading-snug text-red-700/90">{flag.explanation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">
+                      Amber Flags
+                    </div>
+                    {riskAnalysis.flags.amberFlags.length === 0 ? (
+                      <p className="text-sm text-amber-700/80 mt-1">No amber flags triggered from the current tour result.</p>
+                    ) : (
+                      <div className="space-y-2 mt-2">
+                        {riskAnalysis.flags.amberFlags.map((flag) => (
+                          <div key={flag.code}>
+                            <div className="text-sm font-semibold text-amber-800">{flag.label}</div>
+                            <p className="text-xs leading-snug text-amber-700/90">{flag.explanation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {riskAnalysis.recommendations.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Recommendations
+                    </div>
+                    <div className="space-y-2">
+                      {riskAnalysis.recommendations.map((recommendation) => (
+                        <div key={recommendation.code} className="rounded-lg border border-primary/20 bg-primary/[0.05] px-3 py-2.5">
+                          <div className="text-sm font-semibold">{recommendation.message}</div>
+                          <p className="text-xs text-muted-foreground leading-snug mt-1">{recommendation.mitigation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {riskAnalysis.weakestShows.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Weakest Shows
+                    </div>
+                    <div className="space-y-2">
+                      {riskAnalysis.weakestShows.map((show) => (
+                        <div key={String(show.showId)} className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold">{show.venueName}</div>
+                              {show.date && (
+                                <div className="text-[11px] text-muted-foreground mt-0.5">{show.date}</div>
+                              )}
+                            </div>
+                            <div className="text-right text-xs">
+                              <div className={show.netProfit >= 0 ? "text-foreground font-semibold" : "text-destructive font-semibold"}>
+                                {fmt(show.netProfit)}
+                              </div>
+                              <div className="text-muted-foreground">
+                                travel {fmt(show.travelBurden)}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-snug mt-2">{show.explanation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Ticket Recovery */}
           {calc && (ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible" || ticketRecovery.state === "no_ticketed_shows") && (
