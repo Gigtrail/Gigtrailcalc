@@ -536,26 +536,28 @@ function VenueDetailsDashboard({
   };
 
   const handleSave = () => {
-    const ticketSales = draft.actualTicketSales.trim();
+    const trim = (v: string | null | undefined) => (v ?? "").trim();
+    const ticketSales = trim(draft.actualTicketSales);
+    const capacityRaw = trim(draft.capacity);
     onSave({
-      fullAddress: draft.fullAddress.trim() || null,
-      suburb: draft.suburb.trim() || null,
-      city: draft.city.trim() || null,
-      state: draft.state.trim() || null,
-      postcode: draft.postcode.trim() || null,
-      country: draft.country.trim() || null,
-      capacity: draft.capacity ? parseInt(draft.capacity, 10) || null : null,
-      website: draft.website.trim() || null,
-      contactEmail: draft.contactEmail.trim() || null,
-      contactPhone: draft.contactPhone.trim() || null,
-      roomNotes: draft.roomNotes.trim() || null,
+      fullAddress: trim(draft.fullAddress) || null,
+      suburb: trim(draft.suburb) || null,
+      city: trim(draft.city) || null,
+      state: trim(draft.state) || null,
+      postcode: trim(draft.postcode) || null,
+      country: trim(draft.country) || null,
+      capacity: capacityRaw ? parseInt(capacityRaw, 10) || null : null,
+      website: trim(draft.website) || null,
+      contactEmail: trim(draft.contactEmail) || null,
+      contactPhone: trim(draft.contactPhone) || null,
+      roomNotes: trim(draft.roomNotes) || null,
       venueStatus: draft.venueStatus,
       willPlayAgain: draft.willPlayAgain,
       actualTicketSales: ticketSales ? parseInt(ticketSales, 10) || null : null,
       accommodationAvailable: draft.accommodationAvailable,
       riderProvided: draft.riderProvided,
-      playingDays: draft.playingDays.length > 0 ? draft.playingDays : null,
-      venueNotes: draft.venueNotes.trim() || null,
+      playingDays: draft.playingDays && draft.playingDays.length > 0 ? draft.playingDays : null,
+      venueNotes: trim(draft.venueNotes) || null,
     });
     setDirty(false);
   };
