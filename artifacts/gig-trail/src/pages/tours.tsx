@@ -408,9 +408,11 @@ function SortIcon({ col, activeCol, dir }: { col: SortCol; activeCol: SortCol; d
 function TableView({
   tours,
   onView,
+  onDelete,
 }: {
   tours: TourRow[];
   onView: (id: number) => void;
+  onDelete: (id: number) => void;
 }) {
   const [filterText, setFilterText] = useState("");
   const [sortCol, setSortCol] = useState<SortCol>(() => {
@@ -562,15 +564,44 @@ function TableView({
                       </span>
                     </td>
                     <td data-col="actions" className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="group/btn h-7 text-xs"
-                        onClick={() => onView(t.id)}
-                      >
-                        View
-                        <ArrowRight className="w-3 h-3 ml-1 group-hover/btn:translate-x-0.5 transition-transform" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <button
+                              className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-150"
+                              aria-label="Delete tour"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete "{t.name}"?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete the tour and all its stops. This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => onDelete(t.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="group/btn h-7 text-xs"
+                          onClick={() => onView(t.id)}
+                        >
+                          View
+                          <ArrowRight className="w-3 h-3 ml-1 group-hover/btn:translate-x-0.5 transition-transform" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -756,7 +787,7 @@ export default function Tours() {
           {viewMode === "card" ? (
             <CardView tours={mappedTours} onView={handleView} onDelete={handleDelete} />
           ) : (
-            <TableView tours={mappedTours} onView={handleView} />
+            <TableView tours={mappedTours} onView={handleView} onDelete={handleDelete} />
           )}
         </div>
       )}
