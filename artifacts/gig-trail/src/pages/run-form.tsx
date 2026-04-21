@@ -26,7 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ChevronLeft, Save, TrendingUp, AlertTriangle, XCircle, Calculator, Lock, MapPin, Fuel, Truck, BedDouble, History, Plus, Star, DollarSign, Settings2, ChevronDown, ChevronUp, Eye, Pencil, Route, Sparkles } from "lucide-react";
-import { useEffect, useState, useCallback, useRef, startTransition } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
