@@ -21,6 +21,7 @@ import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
