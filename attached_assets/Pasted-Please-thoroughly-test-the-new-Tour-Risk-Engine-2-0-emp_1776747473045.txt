@@ -1,0 +1,67 @@
+Please thoroughly test the new Tour Risk Engine 2.0 empty-day / burn-day enhancement in the GigTrail codebase.
+
+What was implemented:
+- Tour calc only
+- Added day-level records: show_day, day_off, travel_day
+- Added scheduleMetrics to risk output:
+  - totalCalendarDays
+  - totalShowDays
+  - totalOffDays
+  - totalTravelDays
+  - deadDayCount
+  - deadDayRatio
+  - efficiencyRatio
+  - operationalLoadPerShow
+  - loadedCostPerShowDay
+  - consecutiveBurnDaysMax
+  - highBurnTravelDayCount
+- Empty-day burn is now included in:
+  - liquidity risk
+  - structural fragility
+  - logistics pressure
+  - revenue volatility
+  - flags
+  - recommendations
+- Stress tests now account for sparse schedules and non-show travel burden:
+  - Anchor Date Collapse
+  - Distance to Ruin
+  - Logistics Spike
+- UI now includes a compact “Schedule Efficiency” section in Risk Analysis
+- Tests were added, but they have not been run in the previous environment
+
+Your task:
+1. Run the full available test suite
+2. Run typecheck
+3. Run lint if available
+4. Report all failures clearly
+5. If tests fail, fix only issues directly related to the new Tour Risk Engine / empty-day enhancement
+6. Re-run tests after fixes
+7. Confirm whether the following scenarios pass and behave correctly:
+   - dense profitable tour with no dead days
+   - sparse tour with many off days but positive headline net
+   - anchor-dependent sparse tour
+   - 3 consecutive burn days
+   - travel-day trap with >400km non-show day
+   - logistics spike + high-burn travel day turning tour negative
+   - low-show-count acoustic run
+   - partial-data / inferred travel-day handling
+
+Please also do a quick manual review of the UI on /runs/results and verify:
+- Calculate Risk still works only on Tour Calc results
+- Risk Analysis panel renders without crashing
+- Schedule Efficiency metrics display correctly
+- Empty-day metrics do not show nonsense values like NaN, Infinity, or negative counts
+- Existing tour results page layout is still clean and readable
+
+Important:
+- Do NOT refactor unrelated parts of the app
+- Do NOT change single-show mode
+- Do NOT rewrite the feature unless a bug requires it
+- Keep fixes tight and scoped to the new risk-engine enhancement
+
+At the end, give me:
+- test results
+- any errors found
+- files changed
+- what you fixed
+- any remaining risks or edge cases
