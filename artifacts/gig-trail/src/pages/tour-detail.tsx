@@ -247,19 +247,50 @@ export default function TourDetail() {
   };
 
   const handleAddTourVehicle = (vehicleId: number, vehicleName: string) => {
-    addTourVehicleMutation.mutate(
-      { tourId, data: { vehicleId } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
-          invalidateTourSummaryQueries();
-          toast({ title: `"${vehicleName}" added to tour fleet` });
-        },
-        onError: () => {
-          toast({ title: "Failed to add vehicle", variant: "destructive" });
-        },
-      }
-    );
+    // If the tour still relies on the old single-vehicle field (legacyVehicle)
+    // and has no rows in tour_vehicles yet, the first add would silently drop
+    // that legacy vehicle (the UI flips from "show legacy" to "show tour_vehicles"
+    // and the legacy id is no longer rendered or used for fuel). Migrate the
+    // legacy vehicle into tour_vehicles first so adding a new one truly adds.
+    const legacyId =
+      (tourVehicles?.length ?? 0) === 0 && tour?.vehicleId
+        ? tour.vehicleId
+        : null;
+    const needsLegacyMigration = legacyId !== null && legacyId !== vehicleId;
+
+    const addPrimary = () => {
+      addTourVehicleMutation.mutate(
+        { tourId, data: { vehicleId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+            invalidateTourSummaryQueries();
+            toast({ title: `"${vehicleName}" added to tour fleet` });
+          },
+          onError: () => {
+            toast({ title: "Failed to add vehicle", variant: "destructive" });
+          },
+        }
+      );
+    };
+
+    if (needsLegacyMigration) {
+      addTourVehicleMutation.mutate(
+        { tourId, data: { vehicleId: legacyId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+            addPrimary();
+          },
+          onError: () => {
+            // Legacy already migrated elsewhere or conflict — proceed with the new add anyway.
+            addPrimary();
+          },
+        }
+      );
+    } else {
+      addPrimary();
+    }
   };
 
   const handleRemoveTourVehicle = (vehicleId: number, vehicleName: string) => {
@@ -3019,6 +3050,9 @@ export default function TourDetail() {
           <div className="space-y-2 mt-2">
             {(() => {
               const assignedIds = new Set((tourVehicles ?? []).map(tv => tv.vehicle.id));
+              if ((tourVehicles?.length ?? 0) === 0 && tour?.vehicleId) {
+                assignedIds.add(tour.vehicleId);
+              }
               const available = (allVehicles ?? []).filter(v => !assignedIds.has(v.id));
               if (available.length === 0) {
                 return (
