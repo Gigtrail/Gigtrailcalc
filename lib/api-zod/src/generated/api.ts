@@ -1053,6 +1053,27 @@ export const GetDashboardSummaryResponse = zod.object({
 });
 
 /**
+ * @summary Unified upcoming tour items (runs + tour stops) for Tour View
+ */
+export const GetDashboardTourItemsResponse = zod.array(
+  zod.object({
+    id: zod.string(),
+    sourceId: zod.number(),
+    type: zod.enum(["run", "tour_stop"]),
+    showDate: zod.string(),
+    venueName: zod.string().nullable(),
+    location: zod.string().nullable(),
+    latitude: zod.number().nullable(),
+    longitude: zod.number().nullable(),
+    status: zod.enum(["draft", "pitched", "confirmed", "cancelled"]),
+    tourId: zod.number().nullable(),
+    tourName: zod.string().nullable(),
+    tourOrderIndex: zod.number().nullable(),
+    linkPath: zod.string(),
+  }),
+);
+
+/**
  * @summary Get recent runs and tours for dashboard
  */
 export const GetDashboardRecentResponse = zod.object({

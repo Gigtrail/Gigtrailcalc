@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, runsTable, toursTable, profilesTable, vehiclesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
+  GetDashboardTourItemsResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -114,6 +115,119 @@ router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => 
     recentRuns: recentRuns.map(serializeRun),
     upcomingTours,
   }));
+});
+
+type RawTourItem = {
+  id: string;
+  sourceId: number;
+  type: "run" | "tour_stop";
+  showDate: string;
+  venueName: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: "draft" | "pitched" | "confirmed" | "cancelled";
+  tourId: number | null;
+  tourName: string | null;
+  tourOrderIndex: number | null;
+  linkPath: string;
+};
+
+function normalizeRunStatusForTourItem(
+  run: typeof runsTable.$inferSelect,
+): RawTourItem["status"] {
+  const raw = (run.status ?? "draft").toLowerCase();
+  if (raw === "draft") return "draft";
+  if (raw === "cancelled" || raw === "canceled") return "cancelled";
+  if (raw === "pitched" || raw === "tentative" || raw === "pending") return "pitched";
+  if (raw === "past" || raw === "planned" || raw === "completed" || raw === "confirmed") return "confirmed";
+  return "draft";
+}
+
+function normalizeStopStatus(value: string | null): RawTourItem["status"] {
+  const raw = (value ?? "confirmed").toLowerCase();
+  if (raw === "draft") return "draft";
+  if (raw === "pitched" || raw === "pending" || raw === "tentative") return "pitched";
+  if (raw === "cancelled" || raw === "canceled") return "cancelled";
+  return "confirmed";
+}
+
+function buildRunLocation(run: typeof runsTable.$inferSelect): string | null {
+  const parts = [run.city, run.state, run.country].filter(Boolean) as string[];
+  if (parts.length > 0) return parts.join(", ");
+  return run.destination ?? null;
+}
+
+router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
+  const [runs, tours] = await Promise.all([
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
+  ]);
+
+  const tourIds = tours.map(t => t.id);
+  const stops = tourIds.length === 0
+    ? []
+    : await db
+        .select()
+        .from(tourStopsTable)
+        .where(inArray(tourStopsTable.tourId, tourIds));
+
+  const tourById = new Map(tours.map(t => [t.id, t]));
+
+  const items: RawTourItem[] = [];
+
+  for (const run of runs) {
+    const date = (run.showDate ?? "").split("T")[0] ?? "";
+    if (!date || date < todayIsoDate) continue;
+    items.push({
+      id: `run:${run.id}`,
+      sourceId: run.id,
+      type: "run",
+      showDate: date,
+      venueName: run.venueName ?? null,
+      location: buildRunLocation(run),
+      latitude: run.destinationLat != null ? Number(run.destinationLat) : null,
+      longitude: run.destinationLng != null ? Number(run.destinationLng) : null,
+      status: normalizeRunStatusForTourItem(run),
+      tourId: null,
+      tourName: null,
+      tourOrderIndex: null,
+      linkPath: `/runs/${run.id}`,
+    });
+  }
+
+  for (const stop of stops) {
+    const date = (stop.date ?? "").split("T")[0] ?? "";
+    if (!date || date < todayIsoDate) continue;
+    const tour = tourById.get(stop.tourId);
+    items.push({
+      id: `stop:${stop.id}`,
+      sourceId: stop.id,
+      type: "tour_stop",
+      showDate: date,
+      venueName: stop.venueName ?? null,
+      location: stop.city ?? null,
+      latitude: stop.cityLat != null ? Number(stop.cityLat) : null,
+      longitude: stop.cityLng != null ? Number(stop.cityLng) : null,
+      status: normalizeStopStatus(stop.bookingStatus),
+      tourId: stop.tourId,
+      tourName: tour?.name ?? null,
+      tourOrderIndex: stop.stopOrder ?? null,
+      linkPath: `/tours/${stop.tourId}`,
+    });
+  }
+
+  items.sort((a, b) => {
+    if (a.showDate !== b.showDate) return a.showDate < b.showDate ? -1 : 1;
+    const at = a.tourOrderIndex ?? 0;
+    const bt = b.tourOrderIndex ?? 0;
+    return at - bt;
+  });
+
+  res.json(GetDashboardTourItemsResponse.parse(items));
 });
 
 export default router;

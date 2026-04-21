@@ -20,6 +20,7 @@ export * from "./profile";
 export * from "./run";
 export * from "./searchVenuesParams";
 export * from "./tour";
+export * from "./tourItem";
 export * from "./tourStop";
 export * from "./tourWithStops";
 export * from "./trackCalculationResponse";

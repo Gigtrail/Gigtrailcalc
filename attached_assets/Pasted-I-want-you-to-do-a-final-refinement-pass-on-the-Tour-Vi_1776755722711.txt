@@ -1,0 +1,234 @@
+I want you to do a final refinement pass on the Tour View dashboard.
+
+IMPORTANT CONTEXT:
+
+We now have a working Tour View with:
+- Calendar
+- Map
+- Standalone shows (runs)
+
+However:
+Tour stops inside tours are NOT currently shown.
+
+This creates a broken experience because:
+- Users cannot see full touring runs
+- Tours appear fragmented
+- The dashboard does not reflect real-world touring
+
+We need to fix this WITHOUT overbuilding the backend.
+
+--------------------------------
+CORE PRODUCT SHIFT
+--------------------------------
+
+The dashboard should NOT think in terms of:
+- runs
+- tours
+
+Instead it should show:
+
+→ TOUR ITEMS (everything happening on the road)
+
+This includes:
+- standalone shows (runs)
+- tour stops
+
+All rendered in one unified timeline.
+
+--------------------------------
+PHASE 1 — LIGHTWEIGHT BACKEND FIX
+--------------------------------
+
+Create a SMALL, CLEAN backend endpoint to support Tour View.
+
+GOAL:
+Return a unified list of upcoming “tour items”
+
+Each item should include:
+
+- id
+- type: "run" | "tour_stop"
+- showDate
+- venueName
+- location (city or label)
+- latitude / longitude (if available)
+- status (Draft / Pitched / Confirmed / Cancelled)
+- tourId (nullable)
+- tourName (nullable)
+- tourOrderIndex (nullable)
+- link target (existing route)
+
+IMPORTANT RULES:
+- Keep this endpoint simple
+- Do NOT rebuild the data model
+- Do NOT create heavy joins
+- If needed, lightly merge:
+  - runs table
+  - tour stops
+
+Sort all results by showDate ASC.
+
+--------------------------------
+PHASE 2 — CALENDAR FIX (LOGIC)
+--------------------------------
+
+Fix all calendar date issues:
+
+- Use showDate ONLY
+- Do NOT use createdAt
+- Normalize dates to local calendar days
+- Prevent timezone drift
+
+Ensure:
+- no off-by-one errors
+- correct month placement
+- correct rendering at month boundaries
+
+Outside-month days:
+- keep visible
+- but visually faded
+
+--------------------------------
+PHASE 3 — TOUR GROUPING (THE STRING)
+--------------------------------
+
+This is the key new feature.
+
+If multiple items share the same tourId:
+
+Render them as a TOUR STRING.
+
+Example:
+
+Test Tour
+May 3 — Venue A
+May 4 — Venue B
+May 5 — Venue C
+
+Calendar behaviour:
+
+- visually connect consecutive tour days
+- use a subtle background band OR left border indicator
+- show tour name when selecting any day in the sequence
+
+Do NOT:
+- over-style
+- draw heavy lines
+- clutter cells
+
+Keep it subtle but clearly connected.
+
+If tourName exists:
+- show it in the detail panel
+- optionally show small label in calendar
+
+--------------------------------
+PHASE 4 — MAKE SHOWS MORE PROMINENT
+--------------------------------
+
+Replace tiny dots with stronger signals.
+
+Each show day should:
+
+- have a subtle tinted background
+- display a small chip or label when space allows
+
+Status colours:
+
+- Draft = grey
+- Pitched = amber
+- Confirmed = green
+- Cancelled = muted red
+
+If multiple items on one day:
+- show first item
+- add "+X more"
+
+--------------------------------
+PHASE 5 — CALENDAR UI IMPROVEMENTS
+--------------------------------
+
+Improve clarity:
+
+- stronger day grid structure
+- better spacing
+- clearer selected day
+- easier scanning
+
+Do NOT over-design.
+
+--------------------------------
+PHASE 6 — NAV BUTTONS
+--------------------------------
+
+Make month navigation:
+
+- larger
+- more prominent
+- easier to click
+- clearly interactive
+
+--------------------------------
+PHASE 7 — CLICK ACTION PANEL
+--------------------------------
+
+Clicking a day or show should open a detail panel showing:
+
+- Venue
+- Date
+- Status
+- Tour name (if applicable)
+- Starred state
+
+Actions:
+
+- Open Show
+- Edit Show
+- Start New Calculation
+- Star / Unstar
+
+Reuse existing routes and systems.
+
+--------------------------------
+PHASE 8 — MAP VIEW UPDATE
+--------------------------------
+
+Update map to use the SAME unified data.
+
+- show both runs and tour stops
+- maintain consistent status colours
+- clicking a pin shows same detail panel
+
+Optional:
+- draw subtle route line for tour sequences
+
+--------------------------------
+PHASE 9 — KEEP THIS ALPHA SAFE
+--------------------------------
+
+- Do NOT build full scheduling system
+- Do NOT add heavy drag logic yet
+- Do NOT break existing flows
+- Keep backend changes minimal
+- Focus on clarity and usefulness
+
+--------------------------------
+SUCCESS CRITERIA
+--------------------------------
+
+After this pass:
+
+- I can see ALL upcoming shows (runs + tour stops)
+- Tours appear as connected sequences
+- Calendar dates are correct and reliable
+- Show days are visually clear and easy to spot
+- I can click a show and take action quickly
+- Map and calendar show the same unified data
+
+FINAL RULE:
+
+This should feel like:
+“My tour, clearly laid out”
+
+NOT:
+“A collection of disconnected entries”

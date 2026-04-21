@@ -620,6 +620,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/DashboardRecent"
 
+  /dashboard/tour-items:
+    get:
+      operationId: getDashboardTourItems
+      tags: [dashboard]
+      summary: Unified upcoming tour items (runs + tour stops) for Tour View
+      responses:
+        "200":
+          description: Upcoming tour items sorted by showDate ASC
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourItem"
+
 components:
   schemas:
     HealthStatus:
@@ -1548,3 +1563,49 @@ components:
       required:
         - recentRuns
         - recentTours
+
+    TourItem:
+      type: object
+      properties:
+        id:
+          type: string
+        sourceId:
+          type: integer
+        type:
+          type: string
+          enum: [run, tour_stop]
+        showDate:
+          type: string
+        venueName:
+          type: ["string", "null"]
+        location:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [draft, pitched, confirmed, cancelled]
+        tourId:
+          type: ["integer", "null"]
+        tourName:
+          type: ["string", "null"]
+        tourOrderIndex:
+          type: ["integer", "null"]
+        linkPath:
+          type: string
+      required:
+        - id
+        - sourceId
+        - type
+        - showDate
+        - venueName
+        - location
+        - latitude
+        - longitude
+        - status
+        - tourId
+        - tourName
+        - tourOrderIndex
+        - linkPath
