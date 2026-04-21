@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,7 @@ import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import { SliderInput } from "@/components/slider-input";
 import { calculateDrivingRoute, geocodeAddress, reverseGeocodeLocation } from "@/lib/google-maps";
 import { formatCoordinateLabel, isFiniteCoordinate, looksLikeCoordinateLabel, type AppLocation } from "@/lib/location";
-import { buildRunVenueDefaults, stripVenueOutcomeFields } from "@/lib/venue-defaults";
+import { buildRunVenueDefaults, buildVenueDefaultDisplayRows, type VenueDefaultsSource } from "@/lib/venue-defaults";
 import {
   Dialog,
   DialogContent,
@@ -129,6 +129,61 @@ async function calculateGoogleRoute(
   };
 }
 
+function VenueDefaultsComparison({
+  venue,
+  formValues,
+}: {
+  venue?: VenueDefaultsSource | null;
+  formValues: RunFormValues;
+}) {
+  const rows = buildVenueDefaultDisplayRows(venue, {
+    venueName: formValues.venueName,
+    capacity: formValues.capacity,
+    soundcheckTime: formValues.soundcheckTime,
+    playingTime: formValues.playingTime,
+    accommodationRequired: formValues.accommodationRequired,
+    notes: formValues.notes,
+  });
+
+  if (!venue || rows.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-muted/15 p-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Venue Defaults
+          </div>
+          <div className="space-y-1.5">
+            {rows.map((row) => (
+              <div key={`default-${row.label}`} className="flex items-start justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="max-w-[65%] text-right font-medium text-foreground">{row.venueDefault}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            This Show Overrides
+          </div>
+          <div className="space-y-1.5">
+            {rows.map((row) => (
+              <div key={`override-${row.label}`} className="flex items-start justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="max-w-[65%] text-right font-medium text-foreground">{row.showOverride}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 border-t border-border/40 pt-2 text-xs text-muted-foreground">
+        Defaults are copied into this show once. Saving here updates the show only.
+      </p>
+    </div>
+  );
+}
+
 interface CompactRunFormLayoutProps {
   calcUsage: { count: number; limit: number | null } | null;
   calculationResult: any;
@@ -157,6 +212,7 @@ interface CompactRunFormLayoutProps {
   runVehicleId: number | null;
   runSelectedVenueId: number | null;
   selectedProfile?: any;
+  selectedVenueDefaults?: VenueDefaultsSource | null;
   setAttendanceCount: (value: number) => void;
   setDistanceMode: (value: "auto" | "manual") => void;
   setOverridingCosts: (value: boolean) => void;
@@ -204,6 +260,7 @@ function CompactRunFormLayout({
   runVehicleId,
   runSelectedVenueId,
   selectedProfile,
+  selectedVenueDefaults,
   setAttendanceCount,
   setDistanceMode,
   setOverridingCosts,
@@ -370,6 +427,8 @@ function CompactRunFormLayout({
                           onUseDeal={onUseVenueDeal}
                         />
                       )}
+
+                      <VenueDefaultsComparison venue={selectedVenueDefaults} formValues={formValues as RunFormValues} />
                     </div>
                   </div>
 
@@ -1441,6 +1500,8 @@ export default function RunForm() {
     if (defaults.state !== undefined) form.setValue("state", defaults.state);
     if (defaults.country !== undefined) form.setValue("country", defaults.country);
     if (defaults.capacity != null) form.setValue("capacity", defaults.capacity);
+    if (defaults.soundcheckTime !== undefined) form.setValue("soundcheckTime", defaults.soundcheckTime);
+    if (defaults.playingTime !== undefined) form.setValue("playingTime", defaults.playingTime);
     if (defaults.accommodationRequired !== undefined) form.setValue("accommodationRequired", defaults.accommodationRequired);
     if (defaults.notes !== undefined) form.setValue("notes", defaults.notes);
     venuePrefillAppliedRef.current = venuePrefillId;
@@ -1467,12 +1528,13 @@ export default function RunForm() {
       form.setValue("capacity", defaults.capacity);
       setAttendanceCount(current => current || Math.round(defaults.capacity! * ((Number(form.getValues("expectedAttendancePct")) || 0) / 100)));
     }
+    if (defaults.soundcheckTime !== undefined) form.setValue("soundcheckTime", defaults.soundcheckTime);
+    if (defaults.playingTime !== undefined) form.setValue("playingTime", defaults.playingTime);
     if (defaults.accommodationRequired !== undefined) form.setValue("accommodationRequired", defaults.accommodationRequired);
     if (defaults.notes !== undefined) form.setValue("notes", defaults.notes);
     venueDefaultsAppliedRef.current = runSelectedVenueId;
   }, [form, isEditing, runSelectedVenueId, selectedVenueDetailQuery.data]);
 
-  const createOrUpdateVenue = useCreateOrUpdateVenue();
   const { data: vehicles } = useGetVehicles();
   const updateProfile = useUpdateProfile();
   const createVehicle = useCreateVehicle();
@@ -2633,13 +2695,6 @@ export default function RunForm() {
       };
 
       try {
-        const venueName = data.venueName?.trim();
-        if (venueName) {
-          await createOrUpdateVenue.mutateAsync({
-            data: stripVenueOutcomeFields({ venueName, city: data.city || data.destination || "" }),
-          });
-        }
-
         if (isEditing) {
           await updateRun.mutateAsync({ id: runId, data: payload });
           invalidateRunDashboardQueries();
@@ -2812,6 +2867,7 @@ export default function RunForm() {
         runSelectedVenueId={runSelectedVenueId}
         runVehicleId={runVehicleId}
         selectedProfile={selectedProfile}
+        selectedVenueDefaults={selectedVenueDetailQuery.data ?? venuePrefillQuery.data ?? null}
         setAttendanceCount={setAttendanceCount}
         setDistanceMode={setDistanceMode}
         setLocation={setLocation}

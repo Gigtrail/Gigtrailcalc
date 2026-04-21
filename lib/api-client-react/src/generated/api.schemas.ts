@@ -207,8 +207,7 @@ export interface Venue {
   profileId?: number | null;
   venueName: string;
   normalizedVenueName: string;
-  /** @nullable */
-  city?: string | null;
+  city: string;
   /** @nullable */
   state?: string | null;
   /** @nullable */
@@ -242,6 +241,10 @@ export interface Venue {
   /** @nullable */
   productionContactEmail?: string | null;
   /** @nullable */
+  typicalSoundcheckTime?: string | null;
+  /** @nullable */
+  typicalSetTime?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
@@ -250,9 +253,19 @@ export interface Venue {
   /** @nullable */
   riderProvided?: boolean | null;
   /** @nullable */
+  riderFriendly?: boolean | null;
+  /** @nullable */
   playingDays?: string[] | null;
   /** @nullable */
   venueNotes?: string | null;
+  /** @nullable */
+  generalNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
   /** @nullable */
   postcode?: string | null;
   showCount?: number;
@@ -278,6 +291,18 @@ export interface VenueStats {
   avgAudience?: number | null;
   /** @nullable */
   wouldPlayAgainRatio?: number | null;
+}
+
+export interface VenuePerformanceSummary {
+  totalShows: number;
+  /** @nullable */
+  avgTicketSales?: number | null;
+  /** @nullable */
+  avgProfit?: number | null;
+  /** @nullable */
+  bestShowProfit?: number | null;
+  /** @nullable */
+  worstShowProfit?: number | null;
 }
 
 export interface VenueShow {
@@ -357,6 +382,7 @@ export interface VenueStop {
 
 export interface VenueDetail extends Venue {
   stats: VenueStats;
+  performanceSummary: VenuePerformanceSummary;
   shows: VenueShow[];
   upcomingRuns?: VenueShow[];
   upcomingStops: VenueStop[];
@@ -367,8 +393,7 @@ export interface CreateVenueBody {
   venueName: string;
   /** @nullable */
   profileId?: number | null;
-  /** @nullable */
-  city?: string | null;
+  city: string;
   /** @nullable */
   state?: string | null;
   /** @nullable */
@@ -404,6 +429,10 @@ export interface CreateVenueBody {
   /** @nullable */
   productionContactEmail?: string | null;
   /** @nullable */
+  typicalSoundcheckTime?: string | null;
+  /** @nullable */
+  typicalSetTime?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
@@ -412,9 +441,19 @@ export interface CreateVenueBody {
   /** @nullable */
   riderProvided?: boolean | null;
   /** @nullable */
+  riderFriendly?: boolean | null;
+  /** @nullable */
   playingDays?: string[] | null;
   /** @nullable */
   venueNotes?: string | null;
+  /** @nullable */
+  generalNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
 }
 
 export interface PatchVenueBody {
@@ -453,6 +492,10 @@ export interface PatchVenueBody {
   /** @nullable */
   productionContactEmail?: string | null;
   /** @nullable */
+  typicalSoundcheckTime?: string | null;
+  /** @nullable */
+  typicalSetTime?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
@@ -461,9 +504,19 @@ export interface PatchVenueBody {
   /** @nullable */
   riderProvided?: boolean | null;
   /** @nullable */
+  riderFriendly?: boolean | null;
+  /** @nullable */
   playingDays?: string[] | null;
   /** @nullable */
   venueNotes?: string | null;
+  /** @nullable */
+  generalNotes?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
 }
 
 export interface Run {

@@ -23,6 +23,31 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
+  const raw = r as typeof runsTable.$inferSelect & {
+    totalCost?: string | number | null;
+    totalIncome?: string | number | null;
+    totalProfit?: string | number | null;
+    actualTicketIncome?: string | number | null;
+    actualOtherIncome?: string | number | null;
+    actualProfit?: string | number | null;
+    actualIncome?: string | number | null;
+    merch?: string | number | null;
+    attendance?: number | null;
+    actualAttendance?: number | null;
+    notes?: string | null;
+    showNotes?: string | null;
+    calculationSnapshot?: Record<string, unknown> | null;
+  };
+  const actualIncome = raw.actualIncome != null ? Number(raw.actualIncome) : null;
+  const actualExpenses = r.actualExpenses != null ? Number(r.actualExpenses) : null;
+  const derivedProfit =
+    actualIncome != null && actualExpenses != null
+      ? actualIncome - actualExpenses
+      : raw.actualProfit != null
+        ? Number(raw.actualProfit)
+        : raw.totalProfit != null
+          ? Number(raw.totalProfit)
+          : null;
   return {
     ...r,
     status: getRunStatus(r, todayIsoDate),
@@ -45,15 +70,17 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
     accommodationCost: r.accommodationCost != null ? Number(r.accommodationCost) : null,
     foodCost: r.foodCost != null ? Number(r.foodCost) : null,
     extraCosts: r.extraCosts != null ? Number(r.extraCosts) : null,
-    totalCost: r.totalCost != null ? Number(r.totalCost) : null,
-    totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
-    totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
+    totalCost: raw.totalCost != null ? Number(raw.totalCost) : actualExpenses,
+    totalIncome: raw.totalIncome != null ? Number(raw.totalIncome) : actualIncome,
+    totalProfit: derivedProfit,
     soundcheckTime: r.soundcheckTime ?? null,
     playingTime: r.playingTime ?? null,
-    actualTicketIncome: r.actualTicketIncome != null ? Number(r.actualTicketIncome) : null,
-    actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
+    actualAttendance: raw.attendance ?? raw.actualAttendance ?? null,
+    actualTicketIncome: raw.actualTicketIncome != null ? Number(raw.actualTicketIncome) : actualIncome,
+    actualOtherIncome: raw.merch != null ? Number(raw.merch) : raw.actualOtherIncome != null ? Number(raw.actualOtherIncome) : null,
     actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,
-    actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
+    actualProfit: derivedProfit,
+    notes: raw.showNotes ?? raw.notes ?? null,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
@@ -69,14 +96,43 @@ function toDbRun(data: Record<string, unknown>) {
   if (normalizedData.totalProfit === undefined && normalizedData.profit !== undefined) {
     normalizedData.totalProfit = normalizedData.profit;
   }
+  if (normalizedData.attendance === undefined && normalizedData.actualAttendance !== undefined) {
+    normalizedData.attendance = normalizedData.actualAttendance;
+  }
+  if (normalizedData.actualIncome === undefined && normalizedData.actualTicketIncome !== undefined) {
+    normalizedData.actualIncome = normalizedData.actualTicketIncome;
+  }
+  if (normalizedData.merch === undefined && normalizedData.actualOtherIncome !== undefined) {
+    normalizedData.merch = normalizedData.actualOtherIncome;
+  }
+  if (normalizedData.showNotes === undefined && normalizedData.notes !== undefined) {
+    normalizedData.showNotes = normalizedData.notes;
+  }
+  for (const staleField of [
+    "venueName",
+    "city",
+    "state",
+    "country",
+    "totalCost",
+    "totalIncome",
+    "totalProfit",
+    "actualAttendance",
+    "actualTicketIncome",
+    "actualOtherIncome",
+    "actualProfit",
+    "notes",
+    "calculationSnapshot",
+  ]) {
+    delete normalizedData[staleField];
+  }
 
   const result: Record<string, unknown> = {};
   const numericFields = new Set([
     'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
     'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'bookingFeePerTicket', 'supportActCost',
     'accommodationNights', 'accommodationCost',
-    'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit',
-    'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',
+    'foodCost', 'extraCosts',
+    'actualIncome', 'actualExpenses', 'merch',
   ]);
   const dateFields = new Set(['showDate']);
   for (const [k, v] of Object.entries(normalizedData)) {
@@ -92,18 +148,23 @@ function toDbRun(data: Record<string, unknown>) {
 }
 
 function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferSelect) {
+  const raw = run as typeof runsTable.$inferSelect & {
+    actualIncome?: string | number | null;
+    totalCost?: string | number | null;
+    totalProfit?: string | number | null;
+    calculationSnapshot?: Record<string, unknown> | null;
+  };
   logger.info(
     {
       stage,
       id: run.id,
       status: run.status,
       showDate: run.showDate,
-      totalIncome: run.totalIncome,
-      totalExpenses: run.totalCost,
-      netProfit: run.totalProfit,
+      totalIncome: raw.actualIncome,
+      totalExpenses: raw.totalCost,
+      netProfit: raw.totalProfit,
       actualExpenses: run.actualExpenses,
-      actualProfit: run.actualProfit,
-      hasCalculationSnapshot: run.calculationSnapshot != null,
+      hasCalculationSnapshot: raw.calculationSnapshot != null,
       importedFromTour: run.importedFromTour,
       sourceStopId: run.sourceStopId,
     },
@@ -142,12 +203,12 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
   };
 
   // Duplicate detection: auto-saved draft/planned calculations should update in place.
-  if (derivedStatus !== "past" && runData.venueName && runData.profileId && runData.showDate) {
+  if (derivedStatus !== "past" && runData.venueId && runData.profileId && runData.showDate) {
     const [existing] = await db.select().from(runsTable).where(
       and(
         eq(runsTable.userId, userId),
         eq(runsTable.profileId, runData.profileId),
-        eq(runsTable.venueName, runData.venueName),
+        eq(runsTable.venueId, runData.venueId),
         eq(runsTable.showDate, runData.showDate),
         eq(runsTable.status, runData.status)
       )

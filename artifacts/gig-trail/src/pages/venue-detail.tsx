@@ -5,7 +5,6 @@ import {
   getGetVenueQueryKey,
   getGetVenuesQueryKey,
 } from "@workspace/api-client-react";
-import type { VenueShow, VenueStop } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,26 +40,32 @@ import {
   Mail,
   MapPin,
   Mic2,
-  Music,
   Phone,
   Plus,
   RotateCcw,
   Save,
   SlidersHorizontal,
   Star,
-  StarOff,
   Ticket,
+  TrendingUp,
   Utensils,
   X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 
 type VenueStatus = "great" | "risky" | "avoid" | "untested";
 type WillPlayAgain = "yes" | "no" | "unsure";
+type VenuePerformanceSummary = {
+  totalShows: number;
+  avgTicketSales: number | null;
+  avgProfit: number | null;
+  bestShowProfit: number | null;
+  worstShowProfit: number | null;
+};
 
 const VENUE_STATUSES: { value: VenueStatus; label: string }[] = [
   { value: "great", label: "Great" },
@@ -76,37 +81,46 @@ const WILL_PLAY_AGAIN: { value: WillPlayAgain; label: string }[] = [
 ];
 
 const WEEKDAYS = [
-  { value: "mon", label: "M", title: "Monday" },
-  { value: "tue", label: "T", title: "Tuesday" },
-  { value: "wed", label: "W", title: "Wednesday" },
-  { value: "thu", label: "T", title: "Thursday" },
-  { value: "fri", label: "F", title: "Friday" },
-  { value: "sat", label: "S", title: "Saturday" },
-  { value: "sun", label: "S", title: "Sunday" },
+  { value: "mon", label: "Mon", title: "Monday" },
+  { value: "tue", label: "Tue", title: "Tuesday" },
+  { value: "wed", label: "Wed", title: "Wednesday" },
+  { value: "thu", label: "Thu", title: "Thursday" },
+  { value: "fri", label: "Fri", title: "Friday" },
+  { value: "sat", label: "Sat", title: "Saturday" },
+  { value: "sun", label: "Sun", title: "Sunday" },
 ];
 
+const EMPTY_TEXT = "—";
+const UNKNOWN_TEXT = "Unknown";
+
+function displayText(value: string | number | null | undefined, fallback = EMPTY_TEXT): string {
+  if (value == null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
 function fmtMoney(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "-";
+  if (n == null || Number.isNaN(n)) return EMPTY_TEXT;
   return `$${Math.round(n).toLocaleString()}`;
 }
 
 function fmtSignedMoney(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "-";
+  if (n == null || Number.isNaN(n)) return EMPTY_TEXT;
   const prefix = n > 0 ? "+" : n < 0 ? "-" : "";
   return `${prefix}${fmtMoney(Math.abs(n))}`;
 }
 
 function fmtNumber(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "-";
+  if (n == null || Number.isNaN(n)) return EMPTY_TEXT;
   return Math.round(n).toLocaleString();
 }
 
 function fmtDate(d: string | null | undefined): string {
-  if (!d) return "-";
+  if (!d) return EMPTY_TEXT;
   try {
     return format(parseISO(`${d}T00:00:00`), "d MMM yyyy");
   } catch {
-    return d;
+    return displayText(d);
   }
 }
 
@@ -126,57 +140,6 @@ function willPlayAgainLabel(value: WillPlayAgain | null | undefined): string {
   return WILL_PLAY_AGAIN.find(option => option.value === value)?.label ?? "Unsure";
 }
 
-function deriveVenueStatus({
-  storedStatus,
-  storedWillPlayAgain,
-  avgProfit,
-  wouldPlayAgainRatio,
-  shows,
-}: {
-  storedStatus?: string | null;
-  storedWillPlayAgain?: string | null;
-  avgProfit?: number | null;
-  wouldPlayAgainRatio?: number | null;
-  shows: VenueShow[];
-}): VenueStatus {
-  const explicit = normalizeVenueStatus(storedStatus);
-  if (explicit) return explicit;
-  if (shows.length === 0) return "untested";
-
-  const willPlayAgain = normalizeWillPlayAgain(storedWillPlayAgain);
-  if (willPlayAgain === "no") return "avoid";
-
-  const profits = shows
-    .map(show => show.actualProfit ?? show.totalProfit)
-    .filter((profit): profit is number => profit != null);
-  const lossCount = profits.filter(profit => profit < 0).length;
-
-  if ((avgProfit ?? 0) > 0 && (willPlayAgain === "yes" || (wouldPlayAgainRatio ?? 0) >= 0.6)) {
-    return "great";
-  }
-  if (profits.length >= 2 && lossCount >= 2 && (wouldPlayAgainRatio == null || wouldPlayAgainRatio <= 0.4)) {
-    return "avoid";
-  }
-  return "risky";
-}
-
-function calcBreakEvenTickets(shows: VenueShow[]): number | null {
-  const values = shows
-    .map(show => {
-      const profit = show.actualProfit ?? show.totalProfit;
-      const income = show.totalIncome;
-      const ticketPrice = show.ticketPrice;
-      if (profit == null || income == null || ticketPrice == null || ticketPrice <= 0) return null;
-      const cost = income - profit;
-      if (cost <= 0) return null;
-      return Math.ceil(cost / ticketPrice);
-    })
-    .filter((value): value is number => value != null);
-
-  if (values.length === 0) return null;
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
-
 function statusBadgeClass(status: VenueStatus): string {
   if (status === "great") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700";
   if (status === "risky") return "border-amber-500/40 bg-amber-500/10 text-amber-700";
@@ -189,41 +152,6 @@ function VenueStatusBadge({ status }: { status: VenueStatus }) {
     <Badge variant="outline" className={cn("rounded-md px-2.5 py-1 text-xs font-semibold", statusBadgeClass(status))}>
       {venueStatusLabel(status)}
     </Badge>
-  );
-}
-
-function bookingStatusBadge(status: string | null | undefined) {
-  if (status === "pending") {
-    return <Badge variant="outline" className="border-amber-400/60 bg-amber-500/10 text-amber-700">Pending</Badge>;
-  }
-  if (status === "hold") {
-    return <Badge variant="outline" className="border-sky-400/60 bg-sky-500/10 text-sky-700">On Hold</Badge>;
-  }
-  return <Badge variant="outline" className="border-emerald-500/50 bg-emerald-500/10 text-emerald-700">Confirmed</Badge>;
-}
-
-function showStatusBadge(status: string | null | undefined) {
-  if (status === "past") return <Badge variant="secondary">Past</Badge>;
-  if (status === "planned") return <Badge variant="outline">Planned</Badge>;
-  return <Badge variant="outline">{status ?? "Draft"}</Badge>;
-}
-
-function WouldDoAgainBadge({ value }: { value?: string | null }) {
-  const normalized = normalizeWillPlayAgain(value);
-  if (!normalized || normalized === "unsure") {
-    return <span className="text-xs font-medium text-muted-foreground">Unsure</span>;
-  }
-  if (normalized === "yes") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-        <Star className="h-3.5 w-3.5 fill-current" /> Yes
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
-      <StarOff className="h-3.5 w-3.5" /> No
-    </span>
   );
 }
 
@@ -262,101 +190,15 @@ function SnapshotCard({
   );
 }
 
-function ShowCard({ show }: { show: VenueShow }) {
-  const profit = show.actualProfit ?? show.totalProfit;
-  const audience = show.actualAttendance;
-
-  return (
-    <div className="rounded-lg border border-border/60 bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold text-foreground">{fmtDate(show.showDate)}</p>
-            {showStatusBadge(show.status)}
-            {show.importedFromTour && show.tourName && (
-              <Badge variant="outline" className="border-primary/30 text-primary/70">
-                {show.tourName}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {show.showType.replace(/_/g, " ")}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className={cn("text-lg font-bold", profit != null && profit < 0 ? "text-red-600" : "text-emerald-700")}>
-            {fmtSignedMoney(profit)}
-          </p>
-          <p className="text-xs text-muted-foreground">profit</p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <p className="text-xs text-muted-foreground">Audience</p>
-          <p className="font-semibold">{audience != null ? `${audience} pax` : "-"}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Ticket sales</p>
-          <p className="font-semibold">{show.actualTicketSales != null ? fmtNumber(show.actualTicketSales) : "-"}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Would play again</p>
-          <WouldDoAgainBadge value={show.wouldDoAgain} />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Income</p>
-          <p className="font-semibold">{fmtMoney(show.totalIncome)}</p>
-        </div>
-      </div>
-
-      {show.notes && (
-        <p className="mt-3 line-clamp-2 rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          {show.notes}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function VenueStopCard({ stop }: { stop: VenueStop }) {
-  const income = stop.fee ?? stop.guarantee;
-
-  return (
-    <div className="rounded-lg border border-border/60 bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold">{fmtDate(stop.date)}</p>
-            {bookingStatusBadge(stop.bookingStatus)}
-          </div>
-          {stop.tourName && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              via <span className="font-medium text-foreground/80">{stop.tourName}</span>
-            </p>
-          )}
-        </div>
-        <div className="text-right">
-          <p className="font-bold">{fmtMoney(income)}</p>
-          <p className="text-xs text-muted-foreground">fee</p>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <Music className="h-3.5 w-3.5" />
-        <span>{stop.showType.replace(/_/g, " ")}</span>
-        {stop.notes && <span className="min-w-0 truncate">- {stop.notes}</span>}
-      </div>
-    </div>
-  );
-}
-
 function InfoRow({ label, value, icon }: { label: string; value?: ReactNode; icon?: ReactNode }) {
+  const safeValue = typeof value === "string" || typeof value === "number" ? displayText(value) : value;
+
   return (
     <div className="flex items-start gap-3 rounded-md border border-border/40 bg-muted/20 px-3 py-2.5">
       {icon && <div className="mt-0.5 text-muted-foreground">{icon}</div>}
       <div className="min-w-0">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-        <div className="mt-0.5 break-words text-sm font-medium text-foreground">{value || "-"}</div>
+        <div className="mt-0.5 break-words text-sm font-medium text-foreground">{safeValue || EMPTY_TEXT}</div>
       </div>
     </div>
   );
@@ -408,6 +250,8 @@ interface DraftForm {
   productionContactName: string;
   productionContactPhone: string;
   productionContactEmail: string;
+  typicalSoundcheckTime: string;
+  typicalSetTime: string;
   roomNotes: string;
   venueStatus: VenueStatus;
   willPlayAgain: WillPlayAgain;
@@ -432,11 +276,18 @@ type VenueDraftSource = {
   productionContactName?: string | null;
   productionContactPhone?: string | null;
   productionContactEmail?: string | null;
+  typicalSoundcheckTime?: string | null;
+  typicalSetTime?: string | null;
   roomNotes?: string | null;
+  generalNotes?: string | null;
+  productionNotes?: string | null;
+  techSpecs?: string | null;
+  stagePlotNotes?: string | null;
   venueStatus?: string | null;
   willPlayAgain?: string | null;
   accommodationAvailable?: boolean | null;
   riderProvided?: boolean | null;
+  riderFriendly?: boolean | null;
   playingDays?: string[] | null;
   venueNotes?: string | null;
 };
@@ -457,14 +308,363 @@ function makeDraft(venue: VenueDraftSource): DraftForm {
     productionContactName: venue.productionContactName ?? "",
     productionContactPhone: venue.productionContactPhone ?? "",
     productionContactEmail: venue.productionContactEmail ?? "",
-    roomNotes: venue.roomNotes ?? "",
+    typicalSoundcheckTime: venue.typicalSoundcheckTime ?? "",
+    typicalSetTime: venue.typicalSetTime ?? "",
+    roomNotes: venue.generalNotes ?? venue.roomNotes ?? "",
     venueStatus: normalizeVenueStatus(venue.venueStatus) ?? "untested",
     willPlayAgain: normalizeWillPlayAgain(venue.willPlayAgain) ?? "unsure",
     accommodationAvailable: venue.accommodationAvailable ?? false,
-    riderProvided: venue.riderProvided ?? false,
+    riderProvided: venue.riderFriendly ?? venue.riderProvided ?? false,
     playingDays: venue.playingDays ?? [],
-    venueNotes: venue.venueNotes ?? "",
+    venueNotes: venue.generalNotes ?? venue.venueNotes ?? "",
   };
+}
+
+function VenueHeader({
+  venueName,
+  locationLine,
+  status,
+  willPlayAgain,
+  lastPlayed,
+  nameEditing,
+  nameDraft,
+  nameInputRef,
+  setNameDraft,
+  startNameEdit,
+  commitNameEdit,
+  cancelNameEdit,
+  onEditVenue,
+  onAddShow,
+}: {
+  venueName: string;
+  locationLine?: string | null;
+  status: VenueStatus;
+  willPlayAgain: WillPlayAgain | null;
+  lastPlayed?: string | null;
+  nameEditing: boolean;
+  nameDraft: string;
+  nameInputRef: RefObject<HTMLInputElement | null>;
+  setNameDraft: (value: string) => void;
+  startNameEdit: () => void;
+  commitNameEdit: () => void;
+  cancelNameEdit: () => void;
+  onEditVenue: () => void;
+  onAddShow: () => void;
+}) {
+  return (
+    <Card className="border-border/60 bg-card">
+      <CardContent className="p-5">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            {nameEditing ? (
+              <div className="flex max-w-xl items-center gap-2">
+                <Input
+                  ref={nameInputRef}
+                  value={nameDraft}
+                  onChange={event => setNameDraft(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter") commitNameEdit();
+                    if (event.key === "Escape") cancelNameEdit();
+                  }}
+                  className="h-auto py-1 text-2xl font-bold"
+                  aria-label="Venue name"
+                />
+                <Button size="icon" variant="secondary" onClick={commitNameEdit} disabled={!nameDraft.trim()}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={cancelNameEdit}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="group/name flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-3xl font-bold tracking-tight">{displayText(venueName, "Unknown Venue")}</h1>
+                <button
+                  onClick={startNameEdit}
+                  className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover/name:opacity-100"
+                  aria-label="Edit venue name"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {locationLine && (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                {locationLine}
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <VenueStatusBadge status={status} />
+              <Badge variant="outline" className="rounded-md px-2.5 py-1">
+                <Star className="mr-1.5 h-3.5 w-3.5" />
+                Will play again: {willPlayAgainLabel(willPlayAgain)}
+              </Badge>
+              {lastPlayed && (
+                <Badge variant="secondary" className="rounded-md px-2.5 py-1">
+                  <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                  Last played: {fmtDate(lastPlayed)}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <Button variant="outline" onClick={onEditVenue}>
+              <Edit2 className="mr-2 h-4 w-4" /> Edit Venue
+            </Button>
+            <Button onClick={onAddShow}>
+              <Plus className="mr-2 h-4 w-4" /> Add Show
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VenueContacts({ venue }: { venue: VenueDraftSource }) {
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Phone className="h-4 w-4 text-primary/70" /> Contacts
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-2">
+        <InfoRow label="Contact name" value={venue.contactName} icon={<Phone className="h-4 w-4" />} />
+        <InfoRow label="Email" value={venue.contactEmail} icon={<Mail className="h-4 w-4" />} />
+        <InfoRow label="Phone" value={venue.contactPhone} icon={<Phone className="h-4 w-4" />} />
+        <InfoRow label="Production contact" value={venue.productionContactName} icon={<Mic2 className="h-4 w-4" />} />
+        <InfoRow label="Production email" value={venue.productionContactEmail} icon={<Mail className="h-4 w-4" />} />
+        <InfoRow label="Production phone" value={venue.productionContactPhone} icon={<Phone className="h-4 w-4" />} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function PlayingDayChips({ days }: { days?: string[] | null }) {
+  if (!days?.length) return <span>{EMPTY_TEXT}</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {WEEKDAYS.map(day => {
+        const active = days.includes(day.value);
+        return (
+          <Badge
+            key={day.value}
+            variant={active ? "default" : "outline"}
+            className={cn("rounded-md px-2 py-0.5 text-[11px]", !active && "text-muted-foreground")}
+          >
+            {day.label}
+          </Badge>
+        );
+      })}
+    </div>
+  );
+}
+
+function VenueLogistics({ venue }: { venue: VenueDraftSource }) {
+  const riderFriendly = venue.riderFriendly ?? venue.riderProvided ?? false;
+
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <SlidersHorizontal className="h-4 w-4 text-primary/70" /> Logistics
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-2">
+        <InfoRow label="Capacity" value={fmtNumber(venue.capacity)} icon={<Ticket className="h-4 w-4" />} />
+        <InfoRow label="Accommodation" value={venue.accommodationAvailable ? "Yes" : "No"} icon={<Bed className="h-4 w-4" />} />
+        <InfoRow label="Rider friendly" value={riderFriendly ? "Yes" : "No"} icon={<Utensils className="h-4 w-4" />} />
+        <InfoRow label="Soundcheck" value={venue.typicalSoundcheckTime} icon={<Mic2 className="h-4 w-4" />} />
+        <InfoRow label="Set time" value={venue.typicalSetTime} icon={<Calendar className="h-4 w-4" />} />
+        <InfoRow label="Playing days" value={<PlayingDayChips days={venue.playingDays} />} icon={<Calendar className="h-4 w-4" />} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function VenueStats({ performance }: { performance?: VenuePerformanceSummary }) {
+  const totalShows = performance?.totalShows ?? 0;
+  const avgProfit = performance?.avgProfit ?? null;
+
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <TrendingUp className="h-4 w-4 text-primary/70" /> Performance Summary
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-medium">
+            You've played here {totalShows} {totalShows === 1 ? "time" : "times"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Avg profit: <span className="font-semibold text-foreground">{fmtSignedMoney(avgProfit)}</span>
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <SnapshotCard
+            label="Total Shows"
+            value={fmtNumber(totalShows)}
+            helper="Derived from runs"
+            icon={<Calendar className="h-4 w-4" />}
+          />
+          <SnapshotCard
+            label="Avg Ticket Sales"
+            value={fmtNumber(performance?.avgTicketSales)}
+            helper={totalShows > 0 ? "Average actual sales" : "No history yet"}
+            icon={<Ticket className="h-4 w-4" />}
+          />
+          <SnapshotCard
+            label="Avg Profit"
+            value={fmtSignedMoney(avgProfit)}
+            helper="Income minus expenses"
+            tone={avgProfit == null ? "neutral" : avgProfit < 0 ? "negative" : "positive"}
+            icon={<TrendingUp className="h-4 w-4" />}
+          />
+          <SnapshotCard
+            label="Best Show"
+            value={fmtSignedMoney(performance?.bestShowProfit)}
+            helper="Highest profit"
+            icon={<Star className="h-4 w-4" />}
+          />
+          <SnapshotCard
+            label="Worst Show"
+            value={fmtSignedMoney(performance?.worstShowProfit)}
+            helper="Lowest profit"
+            tone={(performance?.worstShowProfit ?? 0) < 0 ? "negative" : "neutral"}
+            icon={<SlidersHorizontal className="h-4 w-4" />}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VenueNotes({ notes }: { notes?: string | null }) {
+  return (
+    <Card className="border-border/60">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <FileText className="h-4 w-4 text-primary/70" /> Notes
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="whitespace-pre-wrap rounded-md border border-border/40 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
+          {displayText(notes, "No venue notes yet.")}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type AdvancedVenueDraft = {
+  productionNotes: string;
+  techSpecs: string;
+  stagePlotNotes: string;
+};
+
+function makeAdvancedDraft(venue: VenueDraftSource): AdvancedVenueDraft {
+  return {
+    productionNotes: venue.productionNotes ?? "",
+    techSpecs: venue.techSpecs ?? "",
+    stagePlotNotes: venue.stagePlotNotes ?? "",
+  };
+}
+
+function AdvancedVenueFields({
+  venue,
+  onSave,
+  isSaving,
+}: {
+  venue: VenueDraftSource;
+  onSave: (data: Partial<{
+    productionNotes: string | null;
+    techSpecs: string | null;
+    stagePlotNotes: string | null;
+  }>) => void;
+  isSaving: boolean;
+}) {
+  const [draft, setDraft] = useState<AdvancedVenueDraft>(() => makeAdvancedDraft(venue));
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    setDraft(makeAdvancedDraft(venue));
+    setDirty(false);
+  }, [venue.productionNotes, venue.techSpecs, venue.stagePlotNotes]);
+
+  const set = (field: keyof AdvancedVenueDraft, value: string) => {
+    setDraft(current => ({ ...current, [field]: value }));
+    setDirty(true);
+  };
+
+  const handleSave = () => {
+    const trim = (value: string) => value.trim() || null;
+    onSave({
+      productionNotes: trim(draft.productionNotes),
+      techSpecs: trim(draft.techSpecs),
+      stagePlotNotes: trim(draft.stagePlotNotes),
+    });
+    setDirty(false);
+  };
+
+  const handleReset = () => {
+    setDraft(makeAdvancedDraft(venue));
+    setDirty(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Production notes</Label>
+        <Textarea
+          value={draft.productionNotes}
+          onChange={event => set("productionNotes", event.target.value)}
+          placeholder="House engineer preferences, load-in details, patching quirks."
+          className="min-h-[96px] resize-none text-sm"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tech specs</Label>
+        <Textarea
+          value={draft.techSpecs}
+          onChange={event => set("techSpecs", event.target.value)}
+          placeholder="PA, console, monitors, power, backline, lighting."
+          className="min-h-[96px] resize-none text-sm"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stage plot notes</Label>
+        <Textarea
+          value={draft.stagePlotNotes}
+          onChange={event => set("stagePlotNotes", event.target.value)}
+          placeholder="Stage dimensions, risers, drum position, DI locations."
+          className="min-h-[96px] resize-none text-sm"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        {dirty && (
+          <Button size="sm" variant="ghost" onClick={handleReset} disabled={isSaving}>
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
+          </Button>
+        )}
+        <Button size="sm" onClick={handleSave} disabled={!dirty || isSaving}>
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {isSaving ? "Saving..." : "Save advanced fields"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function VenueDetailsDashboard({
@@ -488,6 +688,8 @@ function VenueDetailsDashboard({
     productionContactName: string | null;
     productionContactPhone: string | null;
     productionContactEmail: string | null;
+    typicalSoundcheckTime: string | null;
+    typicalSetTime: string | null;
     roomNotes: string | null;
     venueStatus: VenueStatus | null;
     willPlayAgain: WillPlayAgain | null;
@@ -519,11 +721,15 @@ function VenueDetailsDashboard({
     venue.productionContactName,
     venue.productionContactPhone,
     venue.productionContactEmail,
+    venue.typicalSoundcheckTime,
+    venue.typicalSetTime,
     venue.roomNotes,
+    venue.generalNotes,
     venue.venueStatus,
     venue.willPlayAgain,
     venue.accommodationAvailable,
     venue.riderProvided,
+    venue.riderFriendly,
     venue.playingDays,
     venue.venueNotes,
   ]);
@@ -573,6 +779,8 @@ function VenueDetailsDashboard({
       productionContactName: trim(draft.productionContactName) || null,
       productionContactPhone: trim(draft.productionContactPhone) || null,
       productionContactEmail: trim(draft.productionContactEmail) || null,
+      typicalSoundcheckTime: trim(draft.typicalSoundcheckTime) || null,
+      typicalSetTime: trim(draft.typicalSetTime) || null,
       roomNotes: trim(draft.roomNotes) || null,
       venueStatus: draft.venueStatus,
       willPlayAgain: draft.willPlayAgain,
@@ -589,7 +797,7 @@ function VenueDetailsDashboard({
     setDirty(false);
   };
 
-  const field = (label: string, key: keyof Pick<DraftForm, "suburb" | "city" | "state" | "postcode" | "country" | "capacity" | "website" | "contactName" | "contactEmail" | "contactPhone" | "productionContactName" | "productionContactPhone" | "productionContactEmail">, placeholder?: string) => (
+  const field = (label: string, key: keyof Pick<DraftForm, "suburb" | "city" | "state" | "postcode" | "country" | "capacity" | "website" | "contactName" | "contactEmail" | "contactPhone" | "productionContactName" | "productionContactPhone" | "productionContactEmail" | "typicalSoundcheckTime" | "typicalSetTime">, placeholder?: string) => (
     <div className="space-y-1">
       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</Label>
       <Input
@@ -598,6 +806,7 @@ function VenueDetailsDashboard({
         placeholder={placeholder ?? ""}
         className="h-9 text-sm"
         inputMode={key === "capacity" ? "numeric" : undefined}
+        required={key === "city"}
       />
     </div>
   );
@@ -631,6 +840,10 @@ function VenueDetailsDashboard({
       <DashboardSection title="Venue Details" icon={<Mic2 className="h-4 w-4" />}>
         {field("Capacity", "capacity", "200")}
         {field("Website", "website", "https://thevenue.com.au")}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {field("Typical soundcheck", "typicalSoundcheckTime", "5:00 PM")}
+          {field("Typical set time", "typicalSetTime", "8:30 PM")}
+        </div>
         {draft.website && (
           <a
             href={draft.website.startsWith("http") ? draft.website : `https://${draft.website}`}
@@ -783,6 +996,8 @@ export default function VenueDetail() {
 
   const [nameEditing, setNameEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const patchVenue = usePatchVenue({
@@ -837,32 +1052,23 @@ export default function VenueDetail() {
     );
   }
 
-  const { stats, shows, upcomingRuns = [], upcomingStops = [], pendingStops = [] } = venue;
-  const timesPlayed = stats?.timesPlayed ?? 0;
-  const wouldPlayPct = stats?.wouldPlayAgainRatio != null
-    ? Math.round(stats.wouldPlayAgainRatio * 100)
-    : null;
-  const breakEvenTickets = calcBreakEvenTickets(shows);
-  const effectiveStatus = deriveVenueStatus({
-    storedStatus: venue.venueStatus,
-    storedWillPlayAgain: venue.willPlayAgain,
-    avgProfit: stats?.avgProfit,
-    wouldPlayAgainRatio: stats?.wouldPlayAgainRatio,
-    shows,
-  });
-  const safeSuburb = venue.suburb && !/^\d/.test(venue.suburb.trim()) ? venue.suburb : null;
-  const locationLine = [safeSuburb, venue.city, venue.state, venue.country].filter(Boolean).join(", ");
-  const upcomingItems = [...upcomingRuns, ...upcomingStops, ...pendingStops];
-  const upcomingItemDate = (item: VenueShow | VenueStop) => "date" in item ? item.date : item.showDate;
-  const nextShow = upcomingItems
-    .filter(item => Boolean(upcomingItemDate(item)))
-    .sort((a, b) => String(upcomingItemDate(a) ?? "").localeCompare(String(upcomingItemDate(b) ?? "")))[0];
-  const allUpcomingStops = [...upcomingStops, ...pendingStops]
-    .sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")));
-  const willPlayAgain = normalizeWillPlayAgain(venue.willPlayAgain);
+  const venueMemory = venue as typeof venue & VenueDraftSource & {
+    performanceSummary?: VenuePerformanceSummary;
+  };
+  const performance = venueMemory.performanceSummary;
+  const effectiveStatus = normalizeVenueStatus(venueMemory.venueStatus) ?? "untested";
+  const willPlayAgain = normalizeWillPlayAgain(venueMemory.willPlayAgain) ?? "unsure";
+  const cityName = displayText(venueMemory.city, UNKNOWN_TEXT);
+  const countryName = displayText(venueMemory.country, "");
+  const cityCountryLine = countryName ? `${cityName} / ${countryName}` : cityName;
+  const headerLocationLine = cityCountryLine || displayText(venueMemory.fullAddress, UNKNOWN_TEXT);
+  const visibleNotes = venueMemory.generalNotes || venueMemory.venueNotes || venueMemory.roomNotes || "";
 
-  const scrollToEdit = () => {
-    document.getElementById("venue-edit")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const openVenueEditor = () => {
+    setEditOpen(true);
+    setTimeout(() => {
+      document.getElementById("venue-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   return (
@@ -871,180 +1077,76 @@ export default function VenueDetail() {
         <ArrowLeft className="mr-1 h-4 w-4" /> Venues
       </Button>
 
-      <Card className="border-border/60 bg-card">
-        <CardContent className="p-5">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <VenueStatusBadge status={effectiveStatus} />
-                {timesPlayed > 0 && (
-                  <Badge variant="outline" className="rounded-md px-2.5 py-1">
-                    <Mic2 className="mr-1.5 h-3.5 w-3.5" />
-                    {timesPlayed} {timesPlayed === 1 ? "show" : "shows"}
-                  </Badge>
-                )}
-              </div>
+      <VenueHeader
+        venueName={venue.venueName}
+        locationLine={headerLocationLine}
+        status={effectiveStatus}
+        willPlayAgain={willPlayAgain}
+        lastPlayed={venue.stats?.lastPlayed}
+        nameEditing={nameEditing}
+        nameDraft={nameDraft}
+        nameInputRef={nameInputRef}
+        setNameDraft={setNameDraft}
+        startNameEdit={() => startNameEdit(venue.venueName)}
+        commitNameEdit={commitNameEdit}
+        cancelNameEdit={cancelNameEdit}
+        onEditVenue={openVenueEditor}
+        onAddShow={() => setLocation(`/runs/new?venueId=${venue.id}`)}
+      />
 
-              {nameEditing ? (
-                <div className="flex max-w-xl items-center gap-2">
-                  <Input
-                    ref={nameInputRef}
-                    value={nameDraft}
-                    onChange={event => setNameDraft(event.target.value)}
-                    onKeyDown={event => {
-                      if (event.key === "Enter") commitNameEdit();
-                      if (event.key === "Escape") cancelNameEdit();
-                    }}
-                    className="h-auto py-1 text-2xl font-bold"
-                    aria-label="Venue name"
-                  />
-                  <Button size="icon" variant="secondary" onClick={commitNameEdit} disabled={!nameDraft.trim()}>
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={cancelNameEdit}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="group/name flex min-w-0 items-center gap-2">
-                  <h1 className="truncate text-3xl font-bold tracking-tight">{venue.venueName}</h1>
-                  <button
-                    onClick={() => startNameEdit(venue.venueName)}
-                    className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover/name:opacity-100"
-                    aria-label="Edit venue name"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-
-              {(locationLine || venue.fullAddress) && (
-                <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" />
-                  {locationLine || venue.fullAddress}
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[420px]">
-              <InfoRow label="Last played" value={fmtDate(stats?.lastPlayed)} icon={<Calendar className="h-4 w-4" />} />
-              <InfoRow
-                label="Next show"
-                value={nextShow ? `${fmtDate(upcomingItemDate(nextShow))} (${"bookingStatus" in nextShow ? nextShow.bookingStatus ?? "confirmed" : nextShow.status ?? "planned"})` : "-"}
-                icon={<Music className="h-4 w-4" />}
-              />
-              <Button variant="outline" onClick={scrollToEdit}>
-                <Edit2 className="mr-2 h-4 w-4" /> Edit Venue
-              </Button>
-              <Button onClick={() => setLocation(`/runs/new?venueId=${venue.id}`)}>
-                <Plus className="mr-2 h-4 w-4" /> Add Show
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-        <div className="space-y-5">
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold tracking-tight">Performance Snapshot</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <SnapshotCard
-                label="Avg Profit"
-                value={fmtSignedMoney(stats?.avgProfit)}
-                helper={timesPlayed > 0 ? `${timesPlayed} recorded ${timesPlayed === 1 ? "show" : "shows"}` : "No history yet"}
-                tone={(stats?.avgProfit ?? 0) < 0 ? "negative" : "positive"}
-                icon={<Ticket className="h-4 w-4" />}
-              />
-              <SnapshotCard
-                label="Break-even Tickets"
-                value={breakEvenTickets != null ? fmtNumber(breakEvenTickets) : "-"}
-                helper={breakEvenTickets != null ? "Average from ticketed history" : "Needs ticket price and cost data"}
-                icon={<SlidersHorizontal className="h-4 w-4" />}
-              />
-              <SnapshotCard
-                label="Avg Audience"
-                value={fmtNumber(stats?.avgAudience)}
-                helper={timesPlayed > 0 ? "Average from linked shows" : "No history yet"}
-                icon={<Mic2 className="h-4 w-4" />}
-              />
-              <SnapshotCard
-                label="Will Play Again"
-                value={willPlayAgain ? willPlayAgainLabel(willPlayAgain) : wouldPlayPct != null ? `${wouldPlayPct}%` : "-"}
-                helper={willPlayAgain ? "Stored preference" : "Based on show history"}
-                tone={willPlayAgain === "no" ? "negative" : willPlayAgain === "yes" ? "positive" : "neutral"}
-                icon={<Star className="h-4 w-4" />}
-              />
-            </div>
-          </section>
-
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Music className="h-4 w-4 text-primary/70" /> Show History
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {shows.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/70 py-8 text-center">
-                  <Calendar className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-sm font-medium">No shows recorded yet.</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Past shows will build this venue's decision history.</p>
-                </div>
-              ) : (
-                shows.map(show => <ShowCard key={show.id} show={show} />)
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Calendar className="h-4 w-4 text-primary/70" /> Upcoming Shows
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {upcomingRuns.length === 0 && allUpcomingStops.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border/70 py-8 text-center text-sm text-muted-foreground">
-                  No upcoming confirmed, pending, or on-hold shows.
-                </div>
-              ) : (
-                <>
-                  {upcomingRuns.map(show => <ShowCard key={`run-${show.id}`} show={show} />)}
-                  {allUpcomingStops.map(stop => <VenueStopCard key={`stop-${stop.id}`} stop={stop} />)}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-5">
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Venue Details</CardTitle>
-              <p className="text-sm text-muted-foreground">Details, contacts, and booking preferences for future decisions.</p>
-            </CardHeader>
-            <CardContent>
-              <VenueDetailsDashboard
-                venue={venue}
-                onSave={data => patchVenue.mutate({ id: venueId, data })}
-                isSaving={patchVenue.isPending}
-              />
-            </CardContent>
-          </Card>
-
-          <div className="grid grid-cols-2 gap-3">
-            <InfoRow label="Accommodation" value={venue.accommodationAvailable ? "Available" : "-"} icon={<Bed className="h-4 w-4" />} />
-            <InfoRow label="Rider" value={venue.riderProvided ? "Provided" : "-"} icon={<Utensils className="h-4 w-4" />} />
-            <InfoRow label="Contact" value={venue.contactName || "-"} icon={<Phone className="h-4 w-4" />} />
-            <InfoRow label="Email" value={venue.contactEmail || "-"} icon={<Mail className="h-4 w-4" />} />
-            <InfoRow label="Production" value={venue.productionContactName || "-"} icon={<Mic2 className="h-4 w-4" />} />
-            <InfoRow label="Production phone" value={venue.productionContactPhone || "-"} icon={<Phone className="h-4 w-4" />} />
-          </div>
-        </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <VenueContacts venue={venueMemory} />
+        <VenueLogistics venue={venueMemory} />
       </div>
+
+      <VenueStats performance={performance} />
+
+      <VenueNotes notes={visibleNotes} />
+
+      {editOpen && (
+        <Card id="venue-editor" className="border-border/60">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Edit2 className="h-4 w-4 text-primary/70" /> Venue Defaults Editor
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setEditOpen(false)}>
+                <X className="mr-1.5 h-4 w-4" /> Close
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <VenueDetailsDashboard
+              venue={venueMemory}
+              onSave={data => patchVenue.mutate({ id: venueId, data })}
+              isSaving={patchVenue.isPending}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card id="venue-advanced" className="border-border/60">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <SlidersHorizontal className="h-4 w-4 text-primary/70" /> Advanced Fields
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={() => setAdvancedOpen(open => !open)}>
+              <ChevronDown className={cn("mr-2 h-4 w-4 transition-transform", advancedOpen && "rotate-180")} />
+              {advancedOpen ? "Hide Advanced Fields" : "Show Advanced Fields"}
+            </Button>
+          </div>
+        </CardHeader>
+        {advancedOpen && (
+          <CardContent>
+            <AdvancedVenueFields
+              venue={venueMemory}
+              onSave={data => patchVenue.mutate({ id: venueId, data })}
+              isSaving={patchVenue.isPending}
+            />
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }

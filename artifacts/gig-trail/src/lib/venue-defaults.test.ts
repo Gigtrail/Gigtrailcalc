@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRunVenueDefaults, stripVenueOutcomeFields } from "./venue-defaults";
+import { buildRunVenueDefaults, buildVenueDefaultDisplayRows } from "./venue-defaults";
 
 describe("venue defaults", () => {
   it("prefills run creation from venue identity and booking defaults", () => {
@@ -14,12 +14,14 @@ describe("venue defaults", () => {
       contactName: "Sam Booker",
       productionContactName: "Jo Sound",
       roomNotes: "Load in from the side door.",
-      venueNotes: "Ask for early settlement.",
+      generalNotes: "Ask for early settlement.",
       venueStatus: "great",
       willPlayAgain: "yes",
+      typicalSoundcheckTime: "17:00",
+      typicalSetTime: "21:00",
       playingDays: ["thu", "fri", "sat"],
       accommodationAvailable: true,
-      riderProvided: true,
+      riderFriendly: true,
     });
 
     expect(defaults).toMatchObject({
@@ -29,27 +31,53 @@ describe("venue defaults", () => {
       state: "VIC",
       country: "Australia",
       capacity: 300,
-      accommodationRequired: false,
+      soundcheckTime: "17:00",
+      playingTime: "21:00",
     });
-    expect(defaults.notes).toContain("Room notes: Load in from the side door.");
+    expect(defaults.accommodationRequired).toBeUndefined();
+    expect(defaults.notes).toContain("Venue notes: Ask for early settlement.");
     expect(defaults.notes).toContain("Booking contact: Sam Booker");
     expect(defaults.notes).toContain("Production contact: Jo Sound");
-    expect(defaults.notes).toContain("Venue status: great");
     expect(defaults.notes).toContain("Playing days: thu, fri, sat");
-    expect(defaults.notes).toContain("Venue default: rider provided.");
+    expect(defaults.notes).toContain("Venue default: rider friendly.");
   });
 
-  it("does not copy actual ticket sales into venue payloads", () => {
-    const venuePayload = stripVenueOutcomeFields({
-      venueName: "Northcote Social Club",
-      playingDays: ["thu", "fri", "sat"],
-      actualTicketSales: 180,
+  it("formats venue defaults beside show overrides", () => {
+    const rows = buildVenueDefaultDisplayRows(
+      {
+        venueName: "Northcote Social Club",
+        capacity: 250,
+        typicalSoundcheckTime: "16:30",
+        accommodationAvailable: false,
+        riderProvided: true,
+        contactName: "Pat",
+      },
+      {
+        capacity: 200,
+        soundcheckTime: "17:00",
+        accommodationRequired: true,
+        notes: "Booking contact: Pat\nRider details confirmed.",
+      },
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Capacity", venueDefault: "250", showOverride: "200" }),
+        expect.objectContaining({ label: "Soundcheck", venueDefault: "16:30", showOverride: "17:00" }),
+        expect.objectContaining({ label: "Rider", venueDefault: "Yes", showOverride: "In show notes" }),
+      ]),
+    );
+  });
+
+  it("keeps legacy venue field names compatible while building run defaults", () => {
+    const defaults = buildRunVenueDefaults({
+      venueName: "The Curtin",
+      venueNotes: "Legacy note.",
+      roomNotes: "Legacy room note.",
+      riderProvided: true,
     });
 
-    expect(venuePayload).toEqual({
-      venueName: "Northcote Social Club",
-      playingDays: ["thu", "fri", "sat"],
-    });
-    expect(venuePayload).not.toHaveProperty("actualTicketSales");
+    expect(defaults.notes).toContain("Venue notes: Legacy room note.");
+    expect(defaults.notes).toContain("Venue default: rider friendly.");
   });
 });

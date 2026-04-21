@@ -11,9 +11,29 @@ export function normalizeVenueName(name: string): string {
 }
 
 function serializeVenue(v: typeof venuesTable.$inferSelect) {
+  const raw = v as typeof venuesTable.$inferSelect & {
+    name?: string | null;
+    venueName?: string | null;
+    lastTotalProfit?: string | number | null;
+    riderProvided?: boolean | null;
+    riderFriendly?: boolean | null;
+    roomNotes?: string | null;
+    venueNotes?: string | null;
+    generalNotes?: string | null;
+    productionNotes?: string | null;
+    techSpecs?: string | null;
+    stagePlotNotes?: string | null;
+  };
   return {
     ...v,
-    lastTotalProfit: v.lastTotalProfit != null ? Number(v.lastTotalProfit) : null,
+    venueName: cleanText(raw.name) ?? cleanText(raw.venueName) ?? "Unknown Venue",
+    city: cleanText(v.city) ?? "Unknown",
+    venueStatus: parseVenueStatus(v.venueStatus) ?? "untested",
+    willPlayAgain: parseWillPlayAgain(v.willPlayAgain) ?? "unsure",
+    lastTotalProfit: null,
+    riderProvided: raw.riderFriendly ?? raw.riderProvided ?? false,
+    roomNotes: raw.generalNotes ?? raw.roomNotes ?? null,
+    venueNotes: raw.generalNotes ?? raw.venueNotes ?? null,
     createdAt: v.createdAt instanceof Date ? v.createdAt.toISOString() : String(v.createdAt),
     updatedAt: v.updatedAt instanceof Date ? v.updatedAt.toISOString() : String(v.updatedAt),
   };
@@ -26,41 +46,99 @@ const venueStatuses = new Set<VenueStatus>(["great", "risky", "avoid", "untested
 const willPlayAgainValues = new Set<WillPlayAgain>(["yes", "no", "unsure"]);
 const validPlayingDays = new Set(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
 
-function isValidVenueStatus(value: unknown): value is VenueStatus | null {
-  return value == null || (typeof value === "string" && venueStatuses.has(value as VenueStatus));
+function cleanText(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
-function isValidWillPlayAgain(value: unknown): value is WillPlayAgain | null {
-  return value == null || (typeof value === "string" && willPlayAgainValues.has(value as WillPlayAgain));
+function cleanNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseVenueStatus(value: unknown): VenueStatus | null {
+  if (value == null || value === "") return null;
+  return typeof value === "string" && venueStatuses.has(value as VenueStatus) ? value as VenueStatus : null;
+}
+
+function parseWillPlayAgain(value: unknown): WillPlayAgain | null {
+  if (value == null || value === "") return null;
+  return typeof value === "string" && willPlayAgainValues.has(value as WillPlayAgain) ? value as WillPlayAgain : null;
+}
+
+function hasInvalidVenueStatus(value: unknown): boolean {
+  return value != null && value !== "" && parseVenueStatus(value) == null;
+}
+
+function hasInvalidWillPlayAgain(value: unknown): boolean {
+  return value != null && value !== "" && parseWillPlayAgain(value) == null;
 }
 
 function isValidPlayingDays(value: unknown): value is string[] | null {
   return value == null || (Array.isArray(value) && value.every(day => typeof day === "string" && validPlayingDays.has(day)));
 }
 
-function serializeShow(r: typeof runsTable.$inferSelect) {
+function cleanPlayingDays(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const days = Array.from(new Set(value.filter((day): day is string => (
+    typeof day === "string" && validPlayingDays.has(day)
+  ))));
+  return days.length > 0 ? days : null;
+}
+
+function serializeShow(r: typeof runsTable.$inferSelect, venue?: typeof venuesTable.$inferSelect) {
+  const raw = r as typeof runsTable.$inferSelect & {
+    venueName?: string | null;
+    city?: string | null;
+    state?: string | null;
+    capacity?: number | null;
+    totalProfit?: string | number | null;
+    totalIncome?: string | number | null;
+    actualAttendance?: number | null;
+    attendance?: number | null;
+    actualProfit?: string | number | null;
+    actualOtherIncome?: string | number | null;
+    actualIncome?: string | number | null;
+    merch?: string | number | null;
+    notes?: string | null;
+    showNotes?: string | null;
+  };
+  const rawVenue = venue as (typeof venuesTable.$inferSelect & { name?: string | null; venueName?: string | null }) | undefined;
+  const actualIncome = raw.actualIncome != null ? Number(raw.actualIncome) : null;
+  const actualExpenses = r.actualExpenses != null ? Number(r.actualExpenses) : null;
+  const derivedProfit =
+    actualIncome != null && actualExpenses != null
+      ? actualIncome - actualExpenses
+      : raw.actualProfit != null
+        ? Number(raw.actualProfit)
+        : raw.totalProfit != null
+          ? Number(raw.totalProfit)
+          : null;
   return {
     id: r.id,
     showDate: r.showDate ?? null,
-    venueName: r.venueName ?? null,
-    city: r.city ?? null,
-    state: r.state ?? null,
+    venueName: rawVenue?.name ?? rawVenue?.venueName ?? raw.venueName ?? null,
+    city: venue?.city ?? raw.city ?? null,
+    state: venue?.state ?? raw.state ?? null,
     showType: r.showType,
     fee: r.fee != null ? Number(r.fee) : null,
     guarantee: r.guarantee != null ? Number(r.guarantee) : null,
     dealType: r.dealType ?? null,
     splitPct: r.splitPct != null ? Number(r.splitPct) : null,
     ticketPrice: r.ticketPrice != null ? Number(r.ticketPrice) : null,
-    capacity: r.capacity != null ? Number(r.capacity) : null,
-    totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
-    totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
-    actualAttendance: r.actualAttendance ?? null,
+    capacity: raw.capacity != null ? Number(raw.capacity) : venue?.capacity != null ? Number(venue.capacity) : null,
+    totalProfit: derivedProfit,
+    totalIncome: actualIncome ?? (raw.totalIncome != null ? Number(raw.totalIncome) : null),
+    actualAttendance: raw.attendance ?? raw.actualAttendance ?? null,
     actualTicketSales: r.actualTicketSales ?? null,
-    actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
+    actualProfit: derivedProfit,
     merchEstimate: r.merchEstimate != null ? Number(r.merchEstimate) : null,
-    actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
+    actualOtherIncome: raw.merch != null ? Number(raw.merch) : raw.actualOtherIncome != null ? Number(raw.actualOtherIncome) : null,
     wouldDoAgain: r.wouldDoAgain ?? null,
-    notes: r.notes ?? null,
+    notes: raw.showNotes ?? raw.notes ?? null,
     importedFromTour: r.importedFromTour,
     tourName: r.tourName ?? null,
     sourceTourId: r.sourceTourId ?? null,
@@ -71,6 +149,67 @@ function serializeShow(r: typeof runsTable.$inferSelect) {
 }
 
 // ─── GET /venues ──────────────────────────────────────────────────────────────
+
+type VenuePerformanceSummary = {
+  totalShows: number;
+  avgTicketSales: number | null;
+  avgProfit: number | null;
+  bestShowProfit: number | null;
+  worstShowProfit: number | null;
+};
+
+function runProfit(run: typeof runsTable.$inferSelect): number | null {
+  const raw = run as typeof runsTable.$inferSelect & {
+    actualIncome?: string | number | null;
+    actualProfit?: string | number | null;
+    totalProfit?: string | number | null;
+  };
+
+  if (raw.actualIncome != null && run.actualExpenses != null) {
+    return Number(raw.actualIncome) - Number(run.actualExpenses);
+  }
+  if (raw.actualProfit != null) return Number(raw.actualProfit);
+  if (raw.totalProfit != null) return Number(raw.totalProfit);
+  return null;
+}
+
+function avg(values: number[]): number | null {
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+export async function getVenuePerformance(
+  venueId: number,
+  userId?: string,
+  todayIsoDate?: string,
+): Promise<VenuePerformanceSummary> {
+  const conditions = [eq(runsTable.venueId, venueId)];
+  if (userId) conditions.push(eq(runsTable.userId, userId));
+
+  const runs = await db
+    .select()
+    .from(runsTable)
+    .where(and(...conditions));
+
+  const playedRuns = runs.filter(run => (
+    run.status === "past" ||
+    !run.showDate ||
+    (todayIsoDate ? run.showDate < todayIsoDate : false)
+  ));
+  const ticketSales = playedRuns
+    .map(run => run.actualTicketSales)
+    .filter((value): value is number => value != null);
+  const profits = playedRuns
+    .map(runProfit)
+    .filter((value): value is number => value != null);
+
+  return {
+    totalShows: playedRuns.length,
+    avgTicketSales: avg(ticketSales),
+    avgProfit: avg(profits),
+    bestShowProfit: profits.length > 0 ? Math.max(...profits) : null,
+    worstShowProfit: profits.length > 0 ? Math.min(...profits) : null,
+  };
+}
 
 router.get("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
@@ -90,7 +229,7 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
         venueId: runsTable.venueId,
         count: sql<number>`count(*)::int`,
         lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
-        avgProfit: sql<number | null>`avg(coalesce(${runsTable.actualProfit}, ${runsTable.totalProfit}))::float`,
+        avgProfit: sql<number | null>`avg(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
       })
       .from(runsTable)
       .where(and(
@@ -126,7 +265,7 @@ router.get("/venues/search", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const venues = await db.select().from(venuesTable)
-    .where(and(eq(venuesTable.userId, userId), ilike(venuesTable.venueName, `%${q}%`)))
+    .where(and(eq(venuesTable.userId, userId), ilike(venuesTable.name, `%${q}%`)))
     .orderBy(desc(venuesTable.updatedAt))
     .limit(6);
   res.json(venues.map(serializeVenue));
@@ -155,9 +294,11 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   const timesPlayed = historicalShows.length;
   const lastPlayed = historicalShows[0]?.showDate ?? null;
   const fees = historicalShows.map(s => s.fee != null ? Number(s.fee) : (s.guarantee != null ? Number(s.guarantee) : null)).filter((f): f is number => f != null);
-  const profits = historicalShows.map(s => s.actualProfit != null ? Number(s.actualProfit) : (s.totalProfit != null ? Number(s.totalProfit) : null)).filter((p): p is number => p != null);
-  const merches = historicalShows.map(s => s.actualOtherIncome != null ? Number(s.actualOtherIncome) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
-  const audiences = historicalShows.map(s => s.actualAttendance).filter((a): a is number => a != null);
+  const profits = historicalShows
+    .map(s => s.actualIncome != null && s.actualExpenses != null ? Number(s.actualIncome) - Number(s.actualExpenses) : null)
+    .filter((p): p is number => p != null);
+  const merches = historicalShows.map(s => s.merch != null ? Number(s.merch) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
+  const audiences = historicalShows.map(s => s.attendance).filter((a): a is number => a != null);
   const wouldPlayAgainCount = historicalShows.filter(s => s.wouldDoAgain === "yes").length;
 
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
@@ -171,6 +312,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     avgAudience: avg(audiences),
     wouldPlayAgainRatio: timesPlayed > 0 ? wouldPlayAgainCount / timesPlayed : null,
   };
+  const performanceSummary = await getVenuePerformance(id, userId, today);
 
   const tourStops = await db
     .select({
@@ -208,8 +350,9 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({
     ...serializeVenue(venue),
     stats,
-    shows: historicalShows.map(serializeShow),
-    upcomingRuns: upcomingRuns.map(serializeShow),
+    performanceSummary,
+    shows: historicalShows.map(show => serializeShow(show, venue)),
+    upcomingRuns: upcomingRuns.map(show => serializeShow(show, venue)),
     upcomingStops,
     pendingStops,
   });
@@ -240,19 +383,26 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     productionContactPhone?: string | null;
     productionContactEmail?: string | null;
     roomNotes?: string | null;
+    typicalSoundcheckTime?: string | null;
+    typicalSetTime?: string | null;
     venueStatus?: VenueStatus | null;
     willPlayAgain?: WillPlayAgain | null;
     accommodationAvailable?: boolean | null;
     riderProvided?: boolean | null;
+    riderFriendly?: boolean | null;
     playingDays?: string[] | null;
     venueNotes?: string | null;
+    generalNotes?: string | null;
+    productionNotes?: string | null;
+    techSpecs?: string | null;
+    stagePlotNotes?: string | null;
   };
 
-  if ('venueStatus' in body && !isValidVenueStatus(body.venueStatus)) {
+  if ('venueStatus' in body && hasInvalidVenueStatus(body.venueStatus)) {
     res.status(400).json({ error: "Invalid venueStatus" });
     return;
   }
-  if ('willPlayAgain' in body && !isValidWillPlayAgain(body.willPlayAgain)) {
+  if ('willPlayAgain' in body && hasInvalidWillPlayAgain(body.willPlayAgain)) {
     res.status(400).json({ error: "Invalid willPlayAgain" });
     return;
   }
@@ -261,45 +411,66 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const [existingVenue] = await db.select().from(venuesTable)
+    .where(and(eq(venuesTable.id, id), eq(venuesTable.userId, userId)));
+
+  if (!existingVenue) {
+    res.status(404).json({ error: "Venue not found" });
+    return;
+  }
+
+  const nextName = body.venueName !== undefined ? cleanText(body.venueName) : existingVenue.name;
+  const nextCity = 'city' in body ? cleanText(body.city) : existingVenue.city;
+
+  if (!nextName) {
+    res.status(400).json({ error: "venueName is required" });
+    return;
+  }
+  if (!nextCity) {
+    res.status(400).json({ error: "city is required" });
+    return;
+  }
+
   const updateData: Partial<typeof venuesTable.$inferInsert> = { updatedAt: new Date() };
   if (body.venueName !== undefined) {
-    const trimmedVenueName = body.venueName.trim();
-    if (!trimmedVenueName) {
-      res.status(400).json({ error: "venueName cannot be empty" });
-      return;
-    }
-    updateData.venueName = trimmedVenueName;
-    updateData.normalizedVenueName = normalizeVenueName(trimmedVenueName);
+    updateData.name = nextName;
+    updateData.normalizedVenueName = normalizeVenueName(nextName);
   }
-  if ('city' in body) updateData.city = body.city;
-  if ('state' in body) updateData.state = body.state;
-  if ('country' in body) updateData.country = body.country;
-  if ('address' in body) updateData.address = body.address;
-  if ('suburb' in body) updateData.suburb = body.suburb;
-  if ('fullAddress' in body) updateData.fullAddress = body.fullAddress;
-  if ('postcode' in body) updateData.postcode = body.postcode;
-  if ('capacity' in body) updateData.capacity = body.capacity;
-  if ('website' in body) updateData.website = body.website;
-  if ('contactName' in body) updateData.contactName = body.contactName;
-  if ('contactEmail' in body) updateData.contactEmail = body.contactEmail;
-  if ('contactPhone' in body) updateData.contactPhone = body.contactPhone;
-  if ('productionContactName' in body) updateData.productionContactName = body.productionContactName;
-  if ('productionContactPhone' in body) updateData.productionContactPhone = body.productionContactPhone;
-  if ('productionContactEmail' in body) updateData.productionContactEmail = body.productionContactEmail;
-  if ('roomNotes' in body) updateData.roomNotes = body.roomNotes;
-  if ('venueStatus' in body) updateData.venueStatus = body.venueStatus;
-  if ('willPlayAgain' in body) updateData.willPlayAgain = body.willPlayAgain;
+  if ('city' in body) updateData.city = nextCity;
+  if ('state' in body) updateData.state = cleanText(body.state);
+  if ('country' in body) updateData.country = cleanText(body.country);
+  if ('address' in body) updateData.address = cleanText(body.address);
+  if ('suburb' in body) updateData.suburb = cleanText(body.suburb);
+  if ('fullAddress' in body) updateData.fullAddress = cleanText(body.fullAddress);
+  if ('postcode' in body) updateData.postcode = cleanText(body.postcode);
+  if ('capacity' in body) updateData.capacity = cleanNumber(body.capacity);
+  if ('website' in body) updateData.website = cleanText(body.website);
+  if ('contactName' in body) updateData.contactName = cleanText(body.contactName);
+  if ('contactEmail' in body) updateData.contactEmail = cleanText(body.contactEmail);
+  if ('contactPhone' in body) updateData.contactPhone = cleanText(body.contactPhone);
+  if ('productionContactName' in body) updateData.productionContactName = cleanText(body.productionContactName);
+  if ('productionContactPhone' in body) updateData.productionContactPhone = cleanText(body.productionContactPhone);
+  if ('productionContactEmail' in body) updateData.productionContactEmail = cleanText(body.productionContactEmail);
+  if ('roomNotes' in body) updateData.generalNotes = cleanText(body.roomNotes);
+  if ('generalNotes' in body) updateData.generalNotes = cleanText(body.generalNotes);
+  if ('typicalSoundcheckTime' in body) updateData.typicalSoundcheckTime = cleanText(body.typicalSoundcheckTime);
+  if ('typicalSetTime' in body) updateData.typicalSetTime = cleanText(body.typicalSetTime);
+  if ('venueStatus' in body) updateData.venueStatus = parseVenueStatus(body.venueStatus) ?? "untested";
+  if ('willPlayAgain' in body) updateData.willPlayAgain = parseWillPlayAgain(body.willPlayAgain) ?? "unsure";
   if ('accommodationAvailable' in body) updateData.accommodationAvailable = body.accommodationAvailable;
-  if ('riderProvided' in body) updateData.riderProvided = body.riderProvided;
-  if ('playingDays' in body) updateData.playingDays = body.playingDays;
-  if ('venueNotes' in body) updateData.venueNotes = body.venueNotes;
+  if ('riderProvided' in body) updateData.riderFriendly = body.riderProvided;
+  if ('riderFriendly' in body) updateData.riderFriendly = body.riderFriendly;
+  if ('playingDays' in body) updateData.playingDays = cleanPlayingDays(body.playingDays);
+  if ('venueNotes' in body) updateData.generalNotes = cleanText(body.venueNotes);
+  if ('productionNotes' in body) updateData.productionNotes = cleanText(body.productionNotes);
+  if ('techSpecs' in body) updateData.techSpecs = cleanText(body.techSpecs);
+  if ('stagePlotNotes' in body) updateData.stagePlotNotes = cleanText(body.stagePlotNotes);
 
   const [venue] = await db.update(venuesTable)
     .set(updateData)
     .where(and(eq(venuesTable.id, id), eq(venuesTable.userId, userId)))
     .returning();
 
-  if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
   res.json(serializeVenue(venue));
 });
 
@@ -308,19 +479,19 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
 router.post("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const {
-    venueName, profileId, city, state, country, lastTotalProfit, lastStatus,
+    venueName, profileId, city, state, country,
     address, suburb, fullAddress, postcode, capacity, website,
     contactName, contactEmail, contactPhone,
     productionContactName, productionContactPhone, productionContactEmail,
-    roomNotes, venueStatus, willPlayAgain, accommodationAvailable, riderProvided, playingDays, venueNotes,
+    roomNotes, generalNotes, typicalSoundcheckTime, typicalSetTime,
+    venueStatus, willPlayAgain, accommodationAvailable, riderProvided, riderFriendly, playingDays, venueNotes,
+    productionNotes, techSpecs, stagePlotNotes,
   } = req.body as {
     venueName: string;
     profileId?: number | null;
     city?: string | null;
     state?: string | null;
     country?: string | null;
-    lastTotalProfit?: number | null;
-    lastStatus?: string | null;
     address?: string | null;
     suburb?: string | null;
     fullAddress?: string | null;
@@ -334,23 +505,39 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     productionContactPhone?: string | null;
     productionContactEmail?: string | null;
     roomNotes?: string | null;
+    generalNotes?: string | null;
+    typicalSoundcheckTime?: string | null;
+    typicalSetTime?: string | null;
     venueStatus?: VenueStatus | null;
     willPlayAgain?: WillPlayAgain | null;
     accommodationAvailable?: boolean | null;
     riderProvided?: boolean | null;
+    riderFriendly?: boolean | null;
     playingDays?: string[] | null;
     venueNotes?: string | null;
+    productionNotes?: string | null;
+    techSpecs?: string | null;
+    stagePlotNotes?: string | null;
   };
 
-  if (!venueName?.trim()) {
+  const cleanedVenueName = cleanText(venueName);
+  const cleanedCity = cleanText(city);
+  const cleanedVenueStatus = parseVenueStatus(venueStatus) ?? "untested";
+  const cleanedWillPlayAgain = parseWillPlayAgain(willPlayAgain) ?? "unsure";
+
+  if (!cleanedVenueName) {
     res.status(400).json({ error: "venueName is required" });
     return;
   }
-  if (!isValidVenueStatus(venueStatus)) {
+  if (!cleanedCity) {
+    res.status(400).json({ error: "city is required" });
+    return;
+  }
+  if (hasInvalidVenueStatus(venueStatus)) {
     res.status(400).json({ error: "Invalid venueStatus" });
     return;
   }
-  if (!isValidWillPlayAgain(willPlayAgain)) {
+  if (hasInvalidWillPlayAgain(willPlayAgain)) {
     res.status(400).json({ error: "Invalid willPlayAgain" });
     return;
   }
@@ -359,75 +546,51 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const normalized = normalizeVenueName(venueName);
+  const normalized = normalizeVenueName(cleanedVenueName);
 
   const [existing] = await db.select().from(venuesTable)
     .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
 
   if (existing) {
-    const [updated] = await db.update(venuesTable)
-      .set({
-        city: city ?? existing.city,
-        state: state ?? existing.state,
-        country: country ?? existing.country,
-        lastTotalProfit: lastTotalProfit != null ? String(lastTotalProfit) : existing.lastTotalProfit,
-        lastStatus: lastStatus ?? existing.lastStatus,
-        address: address ?? existing.address,
-        suburb: suburb ?? existing.suburb,
-        fullAddress: fullAddress ?? existing.fullAddress,
-        postcode: postcode ?? existing.postcode,
-        capacity: capacity ?? existing.capacity,
-        website: website ?? existing.website,
-        contactName: contactName ?? existing.contactName,
-        contactEmail: contactEmail ?? existing.contactEmail,
-        contactPhone: contactPhone ?? existing.contactPhone,
-        productionContactName: productionContactName ?? existing.productionContactName,
-        productionContactPhone: productionContactPhone ?? existing.productionContactPhone,
-        productionContactEmail: productionContactEmail ?? existing.productionContactEmail,
-        roomNotes: roomNotes ?? existing.roomNotes,
-        venueStatus: venueStatus ?? existing.venueStatus,
-        willPlayAgain: willPlayAgain ?? existing.willPlayAgain,
-        accommodationAvailable: accommodationAvailable ?? existing.accommodationAvailable,
-        riderProvided: riderProvided ?? existing.riderProvided,
-        playingDays: playingDays ?? existing.playingDays,
-        venueNotes: venueNotes ?? existing.venueNotes,
-        updatedAt: new Date(),
-      })
-      .where(eq(venuesTable.id, existing.id))
-      .returning();
-    res.json(serializeVenue(updated));
+    res.status(409).json({
+      error: "Venue already exists. Edit it from the venue page to change venue defaults.",
+      code: "VENUE_ALREADY_EXISTS",
+      venue: serializeVenue(existing),
+    });
     return;
   }
 
   const [created] = await db.insert(venuesTable).values({
     userId,
     profileId: profileId ?? null,
-    venueName: venueName.trim(),
+    name: cleanedVenueName,
     normalizedVenueName: normalized,
-    city: city ?? null,
-    state: state ?? null,
-    country: country ?? null,
-    lastTotalProfit: lastTotalProfit != null ? String(lastTotalProfit) : null,
-    lastStatus: lastStatus ?? null,
-    address: address ?? null,
-    suburb: suburb ?? null,
-    fullAddress: fullAddress ?? null,
-    postcode: postcode ?? null,
-    capacity: capacity ?? null,
-    website: website ?? null,
-    contactName: contactName ?? null,
-    contactEmail: contactEmail ?? null,
-    contactPhone: contactPhone ?? null,
-    productionContactName: productionContactName ?? null,
-    productionContactPhone: productionContactPhone ?? null,
-    productionContactEmail: productionContactEmail ?? null,
-    roomNotes: roomNotes ?? null,
-    venueStatus: venueStatus ?? null,
-    willPlayAgain: willPlayAgain ?? null,
+    city: cleanedCity,
+    state: cleanText(state),
+    country: cleanText(country),
+    address: cleanText(address),
+    suburb: cleanText(suburb),
+    fullAddress: cleanText(fullAddress),
+    postcode: cleanText(postcode),
+    capacity: cleanNumber(capacity),
+    website: cleanText(website),
+    contactName: cleanText(contactName),
+    contactEmail: cleanText(contactEmail),
+    contactPhone: cleanText(contactPhone),
+    productionContactName: cleanText(productionContactName),
+    productionContactPhone: cleanText(productionContactPhone),
+    productionContactEmail: cleanText(productionContactEmail),
+    generalNotes: cleanText(generalNotes) ?? cleanText(roomNotes) ?? cleanText(venueNotes),
+    typicalSoundcheckTime: cleanText(typicalSoundcheckTime),
+    typicalSetTime: cleanText(typicalSetTime),
+    venueStatus: cleanedVenueStatus,
+    willPlayAgain: cleanedWillPlayAgain,
     accommodationAvailable: accommodationAvailable ?? false,
-    riderProvided: riderProvided ?? false,
-    playingDays: playingDays ?? null,
-    venueNotes: venueNotes ?? null,
+    riderFriendly: riderFriendly ?? riderProvided ?? false,
+    playingDays: cleanPlayingDays(playingDays),
+    productionNotes: cleanText(productionNotes),
+    techSpecs: cleanText(techSpecs),
+    stagePlotNotes: cleanText(stagePlotNotes),
     updatedAt: new Date(),
   }).returning();
 

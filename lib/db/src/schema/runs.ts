@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,10 +8,6 @@ export const runsTable = pgTable("runs", {
   profileId: integer("profile_id"),
   vehicleId: integer("vehicle_id"),
   venueId: integer("venue_id"),
-  venueName: text("venue_name"),
-  city: text("city"),
-  state: text("state"),
-  country: text("country"),
   showDate: date("show_date"),
   status: text("status").notNull().default("draft"),
   actType: text("act_type"),
@@ -44,20 +40,15 @@ export const runsTable = pgTable("runs", {
   accommodationCost: numeric("accommodation_cost", { precision: 10, scale: 2 }),
   foodCost: numeric("food_cost", { precision: 10, scale: 2 }),
   extraCosts: numeric("extra_costs", { precision: 10, scale: 2 }),
-  totalCost: numeric("total_cost", { precision: 10, scale: 2 }),
-  totalIncome: numeric("total_income", { precision: 10, scale: 2 }),
-  totalProfit: numeric("total_profit", { precision: 10, scale: 2 }),
   soundcheckTime: text("soundcheck_time"),
   playingTime: text("playing_time"),
-  actualAttendance: integer("actual_attendance"),
+  attendance: integer("attendance"),
   actualTicketSales: integer("actual_ticket_sales"),
-  actualTicketIncome: numeric("actual_ticket_income", { precision: 10, scale: 2 }),
-  actualOtherIncome: numeric("actual_other_income", { precision: 10, scale: 2 }),
+  actualIncome: numeric("actual_income", { precision: 10, scale: 2 }),
   actualExpenses: numeric("actual_expenses", { precision: 10, scale: 2 }),
-  actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
+  merch: numeric("merch", { precision: 10, scale: 2 }),
   wouldDoAgain: text("would_do_again"),
-  notes: text("notes"),
-  calculationSnapshot: jsonb("calculation_snapshot"),
+  showNotes: text("show_notes"),
   // Tour linkage
   sourceTourId: integer("source_tour_id"),
   sourceStopId: integer("source_stop_id"),
