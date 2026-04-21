@@ -1,6 +1,6 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { LocateFixed, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { MapPin } from "lucide-react";
 
 export interface ParsedAddress {
   suburb?: string;
@@ -23,88 +23,132 @@ interface PlacesAutocompleteProps {
   placeholder?: string;
   className?: string;
   id?: string;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  enableCurrentLocation?: boolean;
 }
 
-// Singleton script loader — tracks which key was loaded so key changes force a reload
 type ScriptStatus = "idle" | "loading" | "loaded" | "error";
+
 let scriptStatus: ScriptStatus = "idle";
 let loadedApiKey: string | null = null;
 const readyCallbacks: Array<() => void> = [];
 
-export function loadGoogleMaps(apiKey: string): void {
-  if (scriptStatus === "loaded" && loadedApiKey === apiKey) {
-    readyCallbacks.forEach(cb => cb());
-    readyCallbacks.length = 0;
+function logPlacesEvent(message: string, extra?: unknown) {
+  if (extra !== undefined) {
+    console.info(`[PlacesAutocomplete] ${message}`, extra);
     return;
   }
+  console.info(`[PlacesAutocomplete] ${message}`);
+}
+
+function logPlacesError(message: string, error?: unknown) {
+  if (error !== undefined) {
+    console.error(`[PlacesAutocomplete] ${message}`, error);
+    return;
+  }
+  console.error(`[PlacesAutocomplete] ${message}`);
+}
+
+export function loadGoogleMaps(apiKey: string): void {
+  if (scriptStatus === "loaded" && loadedApiKey === apiKey) {
+    readyCallbacks.splice(0).forEach((callback) => callback());
+    return;
+  }
+
   if (loadedApiKey && loadedApiKey !== apiKey) {
-    const old = document.querySelector(`script[src*="maps.googleapis.com"]`);
-    if (old) old.remove();
+    document.querySelector(`script[src*="maps.googleapis.com"]`)?.remove();
     scriptStatus = "idle";
     loadedApiKey = null;
   }
+
   if (scriptStatus === "loading") return;
 
   scriptStatus = "loading";
   loadedApiKey = apiKey;
+
   const script = document.createElement("script");
   script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&callback=__gmapsReady`;
   script.async = true;
   script.defer = true;
-  (window as any).__gmapsReady = () => {
+
+  (window as typeof window & { __gmapsReady?: () => void }).__gmapsReady = () => {
     scriptStatus = "loaded";
-    readyCallbacks.forEach(cb => cb());
-    readyCallbacks.length = 0;
+    readyCallbacks.splice(0).forEach((callback) => callback());
+    logPlacesEvent("Google Maps Places library loaded");
   };
-  script.onerror = () => { scriptStatus = "error"; };
+
+  script.onerror = (event) => {
+    scriptStatus = "error";
+    logPlacesError("Google Maps script failed to load", event);
+  };
+
   document.head.appendChild(script);
 }
 
-export function onGoogleMapsReady(cb: () => void) {
+export function onGoogleMapsReady(callback: () => void) {
   if (scriptStatus === "loaded") {
-    cb();
-  } else {
-    readyCallbacks.push(cb);
+    callback();
+    return;
   }
+  readyCallbacks.push(callback);
 }
 
-/** Extract the first matching address component value by type. */
 function getComponent(
   components: google.maps.GeocoderAddressComponent[],
   types: string[],
   key: "long_name" | "short_name" = "long_name",
 ): string {
-  return components.find(c => c.types.some(t => types.includes(t)))?.[key] ?? "";
+  return components.find((component) => component.types.some((type) => types.includes(type)))?.[key] ?? "";
 }
 
-/** Parse Google address_components into structured venue fields.
- *  Prefer blank over wrong — only set a field when we have clear data. */
 export function parseAddressComponents(
   components: google.maps.GeocoderAddressComponent[],
 ): ParsedAddress {
-  // suburb: use strict sublocality first, fall back to locality (AU-style: locality = suburb)
   const sublocality = getComponent(components, ["sublocality_level_1", "sublocality"]);
-  const locality    = getComponent(components, ["locality"]);
-  const admin2      = getComponent(components, ["administrative_area_level_2"]);
+  const locality = getComponent(components, ["locality"]);
+  const admin2 = getComponent(components, ["administrative_area_level_2"]);
   const admin1Short = getComponent(components, ["administrative_area_level_1"], "short_name");
-  const postalCode  = getComponent(components, ["postal_code"]);
+  const postalCode = getComponent(components, ["postal_code"]);
   const countryLong = getComponent(components, ["country"]);
 
-  // suburb: prefer explicit sublocality; if only locality exists use it (many AU addresses)
   const suburb = sublocality || locality || "";
-  // city: prefer locality; if same as suburb, try admin2 (LGA); else leave blank
-  const city = locality && locality !== suburb
-    ? locality
-    : (admin2 || "");
+  const city = locality && locality !== suburb ? locality : (admin2 || "");
 
   return {
-    suburb:   suburb   || undefined,
-    city:     city     || undefined,
-    state:    admin1Short || undefined,
-    postcode: postalCode  || undefined,
-    country:  countryLong || undefined,
+    suburb: suburb || undefined,
+    city: city || undefined,
+    state: admin1Short || undefined,
+    postcode: postalCode || undefined,
+    country: countryLong || undefined,
   };
+}
+
+function reverseGeocodeLocation(lat: number, lng: number): Promise<PlaceResult | null> {
+  return new Promise((resolve) => {
+    if (!(window as typeof window & { google?: typeof google }).google?.maps?.Geocoder) {
+      resolve(null);
+      return;
+    }
+
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status !== "OK" || !results?.length) {
+        logPlacesError("Reverse geocoding failed", { lat, lng, status });
+        resolve(null);
+        return;
+      }
+
+      const first = results[0];
+      resolve({
+        name: first.formatted_address,
+        lat,
+        lng,
+        parsed: first.address_components
+          ? parseAddressComponents(first.address_components)
+          : undefined,
+      });
+    });
+  });
 }
 
 export function PlacesAutocomplete({
@@ -114,39 +158,52 @@ export function PlacesAutocomplete({
   className,
   id,
   onKeyDown,
+  enableCurrentLocation = false,
 }: PlacesAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const onChangeRef = useRef(onChange);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
   onChangeRef.current = onChange;
 
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
   const initAutocomplete = useCallback(() => {
-    if (!inputRef.current || autocompleteRef.current) return;
+    if (!inputRef.current || autocompleteRef.current || !(window as typeof window & { google?: typeof google }).google?.maps?.places) {
+      return;
+    }
 
-    const ac = new google.maps.places.Autocomplete(inputRef.current, {
+    const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
       fields: ["formatted_address", "name", "geometry", "address_components"],
     });
 
-    ac.addListener("place_changed", () => {
-      const place = ac.getPlace();
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
       const name = place.formatted_address || place.name || "";
       const lat = place.geometry?.location?.lat();
       const lng = place.geometry?.location?.lng();
       const parsed = place.address_components
         ? parseAddressComponents(place.address_components)
         : undefined;
+
+      setLocationError(null);
       onChangeRef.current(name, { name, lat, lng, parsed });
     });
 
-    autocompleteRef.current = ac;
+    autocompleteRef.current = autocomplete;
   }, []);
 
   useEffect(() => {
-    if (!apiKey) return;
+    if (!apiKey) {
+      logPlacesEvent("No Google Maps API key found - falling back to manual entry");
+      return;
+    }
+
     loadGoogleMaps(apiKey);
     onGoogleMapsReady(initAutocomplete);
+
     return () => {
       if (autocompleteRef.current) {
         google.maps.event.clearInstanceListeners(autocompleteRef.current);
@@ -155,32 +212,99 @@ export function PlacesAutocomplete({
     };
   }, [apiKey, initAutocomplete]);
 
-  if (!apiKey) {
-    return (
-      <Input
-        id={id}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={className}
-        onKeyDown={onKeyDown}
-      />
+  const handleManualChange = useCallback((nextValue: string) => {
+    setLocationError(null);
+    onChange(nextValue);
+  }, [onChange]);
+
+  const handleUseCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      const message = "Current location is not available on this device.";
+      setLocationError(message);
+      logPlacesError(message);
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+
+        try {
+          const geocodedPlace = await reverseGeocodeLocation(lat, lng);
+          if (geocodedPlace) {
+            onChangeRef.current(geocodedPlace.name, geocodedPlace);
+          } else {
+            const fallbackName = `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`;
+            onChangeRef.current(fallbackName, { name: fallbackName, lat, lng });
+          }
+        } catch (error) {
+          const fallbackName = `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`;
+          logPlacesError("Failed to resolve the user's current location", error);
+          onChangeRef.current(fallbackName, { name: fallbackName, lat, lng });
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        const message =
+          error.code === error.PERMISSION_DENIED
+            ? "Location access was denied. You can still type your home base manually."
+            : "We couldn't fetch your current location. Try typing it instead.";
+        setLocationError(message);
+        logPlacesError("Geolocation request failed", error);
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
     );
-  }
+  }, []);
+
+  const input = (
+    <Input
+      id={id}
+      ref={inputRef}
+      value={value}
+      onChange={(event) => handleManualChange(event.target.value)}
+      placeholder={placeholder}
+      className={`pl-8 ${className || ""}`.trim()}
+      onKeyDown={onKeyDown}
+      autoComplete="off"
+    />
+  );
 
   return (
-    <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40 pointer-events-none z-10" />
-      <Input
-        id={id}
-        ref={inputRef}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={`pl-8 ${className || ""}`}
-        onKeyDown={onKeyDown}
-        autoComplete="off"
-      />
+    <div className="space-y-2">
+      <div className="relative">
+        <MapPin className="pointer-events-none absolute left-3 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
+        {input}
+      </div>
+
+      {enableCurrentLocation && (
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={isLocating}
+            className="inline-flex items-center gap-1.5 font-medium text-primary transition-colors hover:text-primary/80 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LocateFixed className="h-3.5 w-3.5" />
+            {isLocating ? "Finding your current location..." : "Use my current location"}
+          </button>
+
+          {!apiKey && (
+            <span className="text-muted-foreground">Manual entry only</span>
+          )}
+        </div>
+      )}
+
+      {locationError && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {locationError}
+        </p>
+      )}
     </div>
   );
 }

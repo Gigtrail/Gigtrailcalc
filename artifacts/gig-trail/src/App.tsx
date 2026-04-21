@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, useUser } from "@clerk/react";
@@ -33,6 +33,7 @@ import Feedback from "@/pages/feedback";
 import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 import { useGetProfiles, setAuthTokenGetter } from "@workspace/api-client-react";
+import { findFirstCompleteProfile } from "@/lib/profile-setup";
 
 function ClerkTokenProvider() {
   const { getToken } = useAuth();
@@ -125,11 +126,13 @@ function SignedInRedirect() {
     return <div className="min-h-screen bg-background" />;
   }
 
-  if (!profiles || profiles.length === 0) {
+  const completeProfile = findFirstCompleteProfile(profiles);
+
+  if (!completeProfile) {
     return <Redirect to="/onboarding" />;
   }
 
-  return <Redirect to="/runs/new" />;
+  return <Redirect to={`/runs/new?profileId=${completeProfile.id}`} />;
 }
 
 function HomeRedirect() {
@@ -145,13 +148,51 @@ function HomeRedirect() {
   );
 }
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function RequireCompletedProfile({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const { data: profiles, isLoading } = useGetProfiles();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  if (findFirstCompleteProfile(profiles)) {
+    return <>{children}</>;
+  }
+
+  const params = new URLSearchParams();
+  const returnTo =
+    typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : location;
+  if (returnTo) {
+    params.set("returnTo", returnTo);
+  }
+
+  return <Redirect to={`/onboarding${params.toString() ? `?${params.toString()}` : ""}`} />;
+}
+
+function ProtectedRoute({
+  component: Component,
+  allowIncompleteProfile = false,
+}: {
+  component: ComponentType;
+  allowIncompleteProfile?: boolean;
+}) {
   return (
     <>
       <Show when="signed-in">
-        <Layout>
-          <Component />
-        </Layout>
+        {allowIncompleteProfile ? (
+          <Layout>
+            <Component />
+          </Layout>
+        ) : (
+          <RequireCompletedProfile>
+            <Layout>
+              <Component />
+            </Layout>
+          </RequireCompletedProfile>
+        )}
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
@@ -160,17 +201,48 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
-function ProtectedFullPage({ component: Component }: { component: React.ComponentType }) {
+function ProtectedFullPage({
+  component: Component,
+  allowIncompleteProfile = false,
+}: {
+  component: ComponentType;
+  allowIncompleteProfile?: boolean;
+}) {
   return (
     <>
       <Show when="signed-in">
-        <Component />
+        {allowIncompleteProfile ? (
+          <Component />
+        ) : (
+          <RequireCompletedProfile>
+            <Component />
+          </RequireCompletedProfile>
+        )}
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
       </Show>
     </>
   );
+}
+
+function NewProfileRedirect() {
+  return <Redirect to="/onboarding?start=1" />;
+}
+
+function OnboardingRoutePage() {
+  const { data: profiles, isLoading } = useGetProfiles();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  const completeProfile = findFirstCompleteProfile(profiles);
+  if (completeProfile) {
+    return <Redirect to={`/runs/new?profileId=${completeProfile.id}`} />;
+  }
+
+  return <Onboarding />;
 }
 
 function ClerkProviderWithRoutes() {
@@ -193,19 +265,19 @@ function ClerkProviderWithRoutes() {
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/onboarding">
-              {() => <ProtectedFullPage component={Onboarding} />}
+              {() => <ProtectedFullPage component={OnboardingRoutePage} allowIncompleteProfile />}
             </Route>
             <Route path="/dashboard">
               {() => <ProtectedRoute component={Dashboard} />}
             </Route>
             <Route path="/billing">
-              {() => <ProtectedRoute component={Billing} />}
+              {() => <ProtectedRoute component={Billing} allowIncompleteProfile />}
             </Route>
             <Route path="/privacy">
-              {() => <ProtectedRoute component={Privacy} />}
+              {() => <ProtectedRoute component={Privacy} allowIncompleteProfile />}
             </Route>
             <Route path="/feedback">
-              {() => <ProtectedRoute component={Feedback} />}
+              {() => <ProtectedRoute component={Feedback} allowIncompleteProfile />}
             </Route>
             <Route path="/admin">
               {() => <ProtectedRoute component={Admin} />}
@@ -214,10 +286,10 @@ function ClerkProviderWithRoutes() {
               {() => <ProtectedRoute component={Profiles} />}
             </Route>
             <Route path="/profiles/new">
-              {() => <ProtectedRoute component={ProfileForm} />}
+              {() => <ProtectedFullPage component={NewProfileRedirect} allowIncompleteProfile />}
             </Route>
             <Route path="/profiles/:id/edit">
-              {() => <ProtectedRoute component={ProfileForm} />}
+              {() => <ProtectedRoute component={ProfileForm} allowIncompleteProfile />}
             </Route>
             <Route path="/garage">
               {() => <ProtectedRoute component={Garage} />}

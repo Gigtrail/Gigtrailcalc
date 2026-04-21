@@ -119,7 +119,7 @@ export default function Profiles() {
           <UpgradeCTA feature="more_profiles" variant="inline" />
         ) : (
           <Button asChild>
-            <Link href="/profiles/new">
+            <Link href="/onboarding?start=1">
               <Plus className="w-4 h-4 mr-2" />
               Add Profile
             </Link>
@@ -164,7 +164,7 @@ export default function Profiles() {
           <h3 className="text-lg font-medium">No profiles yet</h3>
           <p className="text-muted-foreground mb-4">Create your first profile to get started.</p>
           <Button asChild>
-            <Link href="/profiles/new">Create Profile</Link>
+            <Link href="/onboarding?start=1">Create Profile</Link>
           </Button>
         </div>
       ) : (
@@ -367,7 +367,7 @@ export default function Profiles() {
 
           {/* Add another profile card — Pro only, not at limit */}
           {isPro && !atProfileLimit && profiles && profiles.length > 0 && (
-            <Link href="/profiles/new">
+            <Link href="/onboarding?start=1">
               <div className="group h-full min-h-[200px] flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer p-8 text-center">
                 <div className="w-10 h-10 rounded-full bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center mb-3 transition-colors">
                   <Plus className="w-5 h-5 text-primary" />

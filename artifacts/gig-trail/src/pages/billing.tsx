@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import {
   CreditCard, Zap, CheckCircle2, XCircle, Loader2, Star, ShieldCheck,
   Search, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Eye, Tag,
@@ -36,6 +37,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
+import { PROFILE_CHECKOUT_RETURN_KEY } from "@/lib/profile-setup";
 
 type Period = "monthly" | "yearly";
 
@@ -603,6 +605,7 @@ function AdminPanel() {
 // ─── Main Billing Page ───────────────────────────────────────────────────────
 
 export default function Billing() {
+  const [, setLocation] = useLocation();
   const [period, setPeriod] = useState<Period>("yearly");
   const { plan, role, accessSource, isPro, me, isLoading, refetch } = usePlan();
   const { data: weeklyUsage } = useWeeklyUsage();
@@ -628,11 +631,13 @@ export default function Billing() {
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const isSuccess = searchParams.get("success") === "1";
   const isCanceled = searchParams.get("canceled") === "1";
+  const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
     trackEvent("pricing_viewed", { source: isSuccess ? "post_checkout" : isCanceled ? "post_cancel" : "direct" });
     if (isSuccess) {
       const pendingPlan = sessionStorage.getItem("gt_pending_plan") ?? "unknown";
+      const checkoutReturnTo = sessionStorage.getItem(PROFILE_CHECKOUT_RETURN_KEY);
       sessionStorage.removeItem("gt_pending_plan");
       trackEvent("upgrade_completed", { plan_type: pendingPlan });
       toast({ title: "Subscription activated!", description: "Your plan has been upgraded. It may take a moment to reflect." });
@@ -641,6 +646,10 @@ export default function Billing() {
           .then(() => {
             queryClient.invalidateQueries({ queryKey: ["/api/me"] });
             refetch();
+            if (checkoutReturnTo) {
+              sessionStorage.removeItem(PROFILE_CHECKOUT_RETURN_KEY);
+              setLocation(checkoutReturnTo);
+            }
           })
           .catch((error) => {
             console.error("[Billing] Plan sync failed after checkout:", error);
@@ -675,6 +684,11 @@ export default function Billing() {
       return;
     }
     try {
+      if (returnTo) {
+        sessionStorage.setItem(PROFILE_CHECKOUT_RETURN_KEY, returnTo);
+      } else {
+        sessionStorage.removeItem(PROFILE_CHECKOUT_RETURN_KEY);
+      }
       sessionStorage.setItem("gt_pending_plan", staticPlan.stripePlanKey ?? staticPlan.name);
       trackEvent("upgrade_started", { plan_type: staticPlan.stripePlanKey ?? staticPlan.name, interval: period });
       const { url } = await createCheckout.mutateAsync(price.id);
