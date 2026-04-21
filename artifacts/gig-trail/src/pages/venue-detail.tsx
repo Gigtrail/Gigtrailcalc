@@ -56,6 +56,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/utils";
+import { formatVenueAddressSummary } from "@/lib/venue-defaults";
 
 type VenueStatus = "great" | "risky" | "avoid" | "untested";
 type WillPlayAgain = "yes" | "no" | "unsure";
@@ -702,6 +703,13 @@ function VenueDetailsDashboard({
 }) {
   const [draft, setDraft] = useState<DraftForm>(() => makeDraft(venue));
   const [dirty, setDirty] = useState(false);
+  // Hidden/editable address pattern:
+  // The detailed address fields (suburb, city, state, postcode, country) stay
+  // in form state at all times so save always uses the full picture, but they
+  // are hidden behind an "Edit address details" toggle. Default collapsed —
+  // most users only need the autocomplete + summary line. Selecting a place
+  // fills the structured fields automatically; manual editing is opt-in.
+  const [isEditingAddressDetails, setIsEditingAddressDetails] = useState(false);
 
   useEffect(() => {
     setDraft(makeDraft(venue));
@@ -815,26 +823,70 @@ function VenueDetailsDashboard({
     <div id="venue-edit" className="space-y-3">
       <DashboardSection title="Location" icon={<MapPin className="h-4 w-4" />} defaultOpen>
         <div className="space-y-1">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Full address</Label>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Search location</Label>
           <PlacesAutocomplete
             value={draft.fullAddress}
             onChange={(text, place) => {
               set("fullAddress", text);
               if (place?.parsed) handleAddressSelect(text, place);
             }}
-            placeholder="123 Gig Street, Melbourne VIC 3000"
+            placeholder="Start typing a venue or address…"
             className="h-9 text-sm"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {field("Suburb", "suburb", "Fitzroy")}
-          {field("City", "city", "Melbourne")}
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {field("State", "state", "VIC")}
-          {field("Postcode", "postcode", "3065")}
-          {field("Country", "country", "Australia")}
-        </div>
+
+        {/*
+          Hidden/editable address pattern:
+          Show a muted summary line built from the structured fields and keep
+          suburb/city/state/postcode/country tucked behind an Edit button. The
+          underlying form state always carries the full address — collapsing
+          never discards values, and save uses draft state directly.
+        */}
+        {(() => {
+          const summary = formatVenueAddressSummary({
+            fullAddress: draft.fullAddress,
+            suburb: draft.suburb,
+            city: draft.city,
+            state: draft.state,
+            postcode: draft.postcode,
+            country: draft.country,
+          });
+          return (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+              <div className="min-w-0 flex-1 text-sm">
+                {summary ? (
+                  <span className="text-foreground/90">{summary}</span>
+                ) : (
+                  <span className="text-muted-foreground">No address yet — search above or add details manually.</span>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={() => setIsEditingAddressDetails(prev => !prev)}
+              >
+                <Edit2 className="mr-1 h-3 w-3" />
+                {isEditingAddressDetails ? "Hide details" : "Edit address details"}
+              </Button>
+            </div>
+          );
+        })()}
+
+        {isEditingAddressDetails && (
+          <div className="space-y-3 pt-1">
+            <div className="grid grid-cols-2 gap-3">
+              {field("Suburb", "suburb", "Fitzroy")}
+              {field("City", "city", "Melbourne")}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {field("State", "state", "VIC")}
+              {field("Postcode", "postcode", "3065")}
+              {field("Country", "country", "Australia")}
+            </div>
+          </div>
+        )}
       </DashboardSection>
 
       <DashboardSection title="Venue Details" icon={<Mic2 className="h-4 w-4" />}>

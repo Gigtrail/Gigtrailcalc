@@ -1,3 +1,25 @@
+/**
+ * Build a single human-readable address line from the structured fields.
+ * Used by the venue editor's collapsed address summary and anywhere else
+ * that needs a graceful fallback when only partial address data exists.
+ */
+export function formatVenueAddressSummary(parts: {
+  fullAddress?: string | null;
+  suburb?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+}): string {
+  const trimmedFull = parts.fullAddress?.trim();
+  if (trimmedFull) return trimmedFull;
+  const stateLine = [parts.state?.trim(), parts.postcode?.trim()].filter(Boolean).join(" ");
+  return [parts.suburb?.trim(), parts.city?.trim(), stateLine, parts.country?.trim()]
+    .map(part => (part ?? "").trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 export type VenueDefaultsSource = {
   id?: number;
   name?: string | null;
