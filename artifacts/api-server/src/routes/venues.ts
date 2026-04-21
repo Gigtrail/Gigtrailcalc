@@ -19,6 +19,25 @@ function serializeVenue(v: typeof venuesTable.$inferSelect) {
   };
 }
 
+type VenueStatus = "great" | "risky" | "avoid" | "untested";
+type WillPlayAgain = "yes" | "no" | "unsure";
+
+const venueStatuses = new Set<VenueStatus>(["great", "risky", "avoid", "untested"]);
+const willPlayAgainValues = new Set<WillPlayAgain>(["yes", "no", "unsure"]);
+const validPlayingDays = new Set(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]);
+
+function isValidVenueStatus(value: unknown): value is VenueStatus | null {
+  return value == null || (typeof value === "string" && venueStatuses.has(value as VenueStatus));
+}
+
+function isValidWillPlayAgain(value: unknown): value is WillPlayAgain | null {
+  return value == null || (typeof value === "string" && willPlayAgainValues.has(value as WillPlayAgain));
+}
+
+function isValidPlayingDays(value: unknown): value is string[] | null {
+  return value == null || (Array.isArray(value) && value.every(day => typeof day === "string" && validPlayingDays.has(day)));
+}
+
 function serializeShow(r: typeof runsTable.$inferSelect) {
   return {
     id: r.id,
@@ -208,12 +227,37 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     contactEmail?: string | null;
     contactPhone?: string | null;
     roomNotes?: string | null;
+    venueStatus?: VenueStatus | null;
+    willPlayAgain?: WillPlayAgain | null;
+    actualTicketSales?: number | null;
+    accommodationAvailable?: boolean | null;
+    riderProvided?: boolean | null;
+    playingDays?: string[] | null;
+    venueNotes?: string | null;
   };
+
+  if ('venueStatus' in body && !isValidVenueStatus(body.venueStatus)) {
+    res.status(400).json({ error: "Invalid venueStatus" });
+    return;
+  }
+  if ('willPlayAgain' in body && !isValidWillPlayAgain(body.willPlayAgain)) {
+    res.status(400).json({ error: "Invalid willPlayAgain" });
+    return;
+  }
+  if ('playingDays' in body && !isValidPlayingDays(body.playingDays)) {
+    res.status(400).json({ error: "Invalid playingDays" });
+    return;
+  }
 
   const updateData: Partial<typeof venuesTable.$inferInsert> = { updatedAt: new Date() };
   if (body.venueName !== undefined) {
-    updateData.venueName = body.venueName.trim();
-    updateData.normalizedVenueName = normalizeVenueName(body.venueName);
+    const trimmedVenueName = body.venueName.trim();
+    if (!trimmedVenueName) {
+      res.status(400).json({ error: "venueName cannot be empty" });
+      return;
+    }
+    updateData.venueName = trimmedVenueName;
+    updateData.normalizedVenueName = normalizeVenueName(trimmedVenueName);
   }
   if ('city' in body) updateData.city = body.city;
   if ('state' in body) updateData.state = body.state;
@@ -227,6 +271,13 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   if ('contactEmail' in body) updateData.contactEmail = body.contactEmail;
   if ('contactPhone' in body) updateData.contactPhone = body.contactPhone;
   if ('roomNotes' in body) updateData.roomNotes = body.roomNotes;
+  if ('venueStatus' in body) updateData.venueStatus = body.venueStatus;
+  if ('willPlayAgain' in body) updateData.willPlayAgain = body.willPlayAgain;
+  if ('actualTicketSales' in body) updateData.actualTicketSales = body.actualTicketSales;
+  if ('accommodationAvailable' in body) updateData.accommodationAvailable = body.accommodationAvailable;
+  if ('riderProvided' in body) updateData.riderProvided = body.riderProvided;
+  if ('playingDays' in body) updateData.playingDays = body.playingDays;
+  if ('venueNotes' in body) updateData.venueNotes = body.venueNotes;
 
   const [venue] = await db.update(venuesTable)
     .set(updateData)
@@ -244,6 +295,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
   const {
     venueName, profileId, city, state, country, lastTotalProfit, lastStatus,
     address, suburb, fullAddress, postcode, capacity, website, contactEmail, contactPhone, roomNotes,
+    venueStatus, willPlayAgain, actualTicketSales, accommodationAvailable, riderProvided, playingDays, venueNotes,
   } = req.body as {
     venueName: string;
     profileId?: number | null;
@@ -261,10 +313,29 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     contactEmail?: string | null;
     contactPhone?: string | null;
     roomNotes?: string | null;
+    venueStatus?: VenueStatus | null;
+    willPlayAgain?: WillPlayAgain | null;
+    actualTicketSales?: number | null;
+    accommodationAvailable?: boolean | null;
+    riderProvided?: boolean | null;
+    playingDays?: string[] | null;
+    venueNotes?: string | null;
   };
 
   if (!venueName?.trim()) {
     res.status(400).json({ error: "venueName is required" });
+    return;
+  }
+  if (!isValidVenueStatus(venueStatus)) {
+    res.status(400).json({ error: "Invalid venueStatus" });
+    return;
+  }
+  if (!isValidWillPlayAgain(willPlayAgain)) {
+    res.status(400).json({ error: "Invalid willPlayAgain" });
+    return;
+  }
+  if (!isValidPlayingDays(playingDays)) {
+    res.status(400).json({ error: "Invalid playingDays" });
     return;
   }
 
@@ -290,6 +361,13 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
         contactEmail: contactEmail ?? existing.contactEmail,
         contactPhone: contactPhone ?? existing.contactPhone,
         roomNotes: roomNotes ?? existing.roomNotes,
+        venueStatus: venueStatus ?? existing.venueStatus,
+        willPlayAgain: willPlayAgain ?? existing.willPlayAgain,
+        actualTicketSales: actualTicketSales ?? existing.actualTicketSales,
+        accommodationAvailable: accommodationAvailable ?? existing.accommodationAvailable,
+        riderProvided: riderProvided ?? existing.riderProvided,
+        playingDays: playingDays ?? existing.playingDays,
+        venueNotes: venueNotes ?? existing.venueNotes,
         updatedAt: new Date(),
       })
       .where(eq(venuesTable.id, existing.id))
@@ -317,6 +395,13 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     contactEmail: contactEmail ?? null,
     contactPhone: contactPhone ?? null,
     roomNotes: roomNotes ?? null,
+    venueStatus: venueStatus ?? null,
+    willPlayAgain: willPlayAgain ?? null,
+    actualTicketSales: actualTicketSales ?? null,
+    accommodationAvailable: accommodationAvailable ?? false,
+    riderProvided: riderProvided ?? false,
+    playingDays: playingDays ?? null,
+    venueNotes: venueNotes ?? null,
     updatedAt: new Date(),
   }).returning();
 

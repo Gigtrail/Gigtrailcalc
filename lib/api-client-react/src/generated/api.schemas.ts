@@ -234,6 +234,20 @@ export interface Venue {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
+  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  /** @nullable */
+  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
+  /** @nullable */
   postcode?: string | null;
   showCount?: number;
   /** @nullable */
@@ -372,6 +386,20 @@ export interface CreateVenueBody {
   contactPhone?: string | null;
   /** @nullable */
   roomNotes?: string | null;
+  /** @nullable */
+  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  /** @nullable */
+  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
 }
 
 export interface PatchVenueBody {
@@ -401,6 +429,20 @@ export interface PatchVenueBody {
   contactPhone?: string | null;
   /** @nullable */
   roomNotes?: string | null;
+  /** @nullable */
+  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  /** @nullable */
+  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
 }
 
 export interface Run {
@@ -528,6 +570,8 @@ export interface TourItem {
   status: TourItemStatus;
   tourId: number | null;
   tourName: string | null;
+  tourStartDate: string | null;
+  tourEndDate: string | null;
   tourOrderIndex: number | null;
   linkPath: string;
 }

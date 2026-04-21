@@ -130,6 +130,8 @@ type RawTourItem = {
   status: "draft" | "pitched" | "confirmed" | "cancelled";
   tourId: number | null;
   tourName: string | null;
+  tourStartDate: string | null;
+  tourEndDate: string | null;
   tourOrderIndex: number | null;
   linkPath: string;
 };
@@ -195,6 +197,8 @@ router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void>
       status: normalizeRunStatusForTourItem(run),
       tourId: null,
       tourName: null,
+      tourStartDate: null,
+      tourEndDate: null,
       tourOrderIndex: null,
       linkPath: `/runs/${run.id}`,
     });
@@ -216,6 +220,8 @@ router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void>
       status: normalizeStopStatus(stop.bookingStatus),
       tourId: stop.tourId,
       tourName: tour?.name ?? null,
+      tourStartDate: tour?.startDate ?? null,
+      tourEndDate: tour?.endDate ?? null,
       tourOrderIndex: stop.stopOrder ?? null,
       linkPath: `/tours/${stop.tourId}`,
     });
@@ -270,6 +276,22 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
     else runsByVenueId.set(r.venueId, [r]);
   }
 
+  const stopsByVenueId = new Map<number, typeof tourStopsTable.$inferSelect[]>();
+  const stopsByVenueName = new Map<string, typeof tourStopsTable.$inferSelect[]>();
+  for (const s of stops) {
+    if (s.venueId != null) {
+      const byId = stopsByVenueId.get(s.venueId);
+      if (byId) byId.push(s);
+      else stopsByVenueId.set(s.venueId, [s]);
+    }
+    const key = normalizeName(s.venueName);
+    if (key) {
+      const byName = stopsByVenueName.get(key);
+      if (byName) byName.push(s);
+      else stopsByVenueName.set(key, [s]);
+    }
+  }
+
   // Tour stops are indexed by normalized venue name as a coordinate fallback.
   const stopCoordsByName = new Map<string, { lat: number; lng: number }>();
   for (const s of stops) {
@@ -283,6 +305,10 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
 
   const items: RawVenueMapItem[] = venues.map(v => {
     const vRuns = runsByVenueId.get(v.id) ?? [];
+    const vStops = [
+      ...(stopsByVenueId.get(v.id) ?? []),
+      ...(stopsByVenueName.get(normalizeName(v.venueName)) ?? []).filter(s => s.venueId == null),
+    ];
     let upcoming = 0;
     let past = 0;
     let lat: number | null = null;
@@ -293,6 +319,13 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
       else if (date && date < todayIsoDate) past += 1;
       if (lat == null && r.destinationLat != null) lat = Number(r.destinationLat);
       if (lng == null && r.destinationLng != null) lng = Number(r.destinationLng);
+    }
+    for (const s of vStops) {
+      const date = (s.date ?? "").split("T")[0] ?? "";
+      if (date && date >= todayIsoDate) upcoming += 1;
+      else if (date && date < todayIsoDate) past += 1;
+      if (lat == null && s.cityLat != null) lat = Number(s.cityLat);
+      if (lng == null && s.cityLng != null) lng = Number(s.cityLng);
     }
     if (lat == null || lng == null) {
       const stopHit = stopCoordsByName.get(normalizeName(v.venueName));

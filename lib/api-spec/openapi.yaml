@@ -911,6 +911,24 @@ components:
           type: ["number", "null"]
         lastStatus:
           type: ["string", "null"]
+        venueStatus:
+          type: ["string", "null"]
+          enum: ["great", "risky", "avoid", "untested", null]
+        willPlayAgain:
+          type: ["string", "null"]
+          enum: ["yes", "no", "unsure", null]
+        actualTicketSales:
+          type: ["integer", "null"]
+        accommodationAvailable:
+          type: ["boolean", "null"]
+        riderProvided:
+          type: ["boolean", "null"]
+        playingDays:
+          type: ["array", "null"]
+          items:
+            type: string
+        venueNotes:
+          type: ["string", "null"]
         createdAt:
           type: string
         updatedAt:
@@ -938,6 +956,24 @@ components:
         lastTotalProfit:
           type: ["number", "null"]
         lastStatus:
+          type: ["string", "null"]
+        venueStatus:
+          type: ["string", "null"]
+          enum: ["great", "risky", "avoid", "untested", null]
+        willPlayAgain:
+          type: ["string", "null"]
+          enum: ["yes", "no", "unsure", null]
+        actualTicketSales:
+          type: ["integer", "null"]
+        accommodationAvailable:
+          type: ["boolean", "null"]
+        riderProvided:
+          type: ["boolean", "null"]
+        playingDays:
+          type: ["array", "null"]
+          items:
+            type: string
+        venueNotes:
           type: ["string", "null"]
       required:
         - venueName
@@ -1591,6 +1627,10 @@ components:
           type: ["integer", "null"]
         tourName:
           type: ["string", "null"]
+        tourStartDate:
+          type: ["string", "null"]
+        tourEndDate:
+          type: ["string", "null"]
         tourOrderIndex:
           type: ["integer", "null"]
         linkPath:
@@ -1607,5 +1647,7 @@ components:
         - status
         - tourId
         - tourName
+        - tourStartDate
+        - tourEndDate
         - tourOrderIndex
         - linkPath

@@ -24,6 +24,20 @@ export interface Venue {
   lastTotalProfit?: number | null;
   /** @nullable */
   lastStatus?: string | null;
+  /** @nullable */
+  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  /** @nullable */
+  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 }

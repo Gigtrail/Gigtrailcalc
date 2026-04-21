@@ -133,13 +133,33 @@ export default function Dashboard() {
 
   const tourBands = useMemo(() => {
     const grouped = new Map<number, Set<string>>();
+    const ranges = new Map<number, { start: Date; end: Date }>();
+
     for (const item of upcoming) {
       if (item.tourId == null) continue;
-      const k = isoKey(item._date);
-      const set = grouped.get(item.tourId);
-      if (set) set.add(k);
-      else grouped.set(item.tourId, new Set([k]));
+      const start = parseLocalIsoDate(item.tourStartDate) ?? item._date;
+      const end = parseLocalIsoDate(item.tourEndDate) ?? item._date;
+      const current = ranges.get(item.tourId);
+      ranges.set(item.tourId, {
+        start: current ? (start < current.start ? start : current.start) : start,
+        end: current ? (end > current.end ? end : current.end) : end,
+      });
     }
+
+    for (const [tourId, range] of ranges) {
+      const dates = new Set<string>();
+      const rangeStart = range.start <= range.end ? range.start : range.end;
+      const rangeEnd = range.start <= range.end ? range.end : range.start;
+      for (
+        let d = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate());
+        d <= rangeEnd;
+        d = addDays(d, 1)
+      ) {
+        dates.add(isoKey(d));
+      }
+      grouped.set(tourId, dates);
+    }
+
     return grouped;
   }, [upcoming]);
 
@@ -396,26 +416,24 @@ function CalendarView({
   const dayMeta = useCallback(
     (date: Date): DayMeta | null => {
       const k = isoKey(date);
-      const items = itemsByDate.get(k);
-      if (!items || items.length === 0) return null;
-      const primary = [...items].sort(
-        (a, b) => statusPriority(b.status) - statusPriority(a.status),
-      )[0];
+      const items = itemsByDate.get(k) ?? [];
       let inTour = false;
       let bandLeft = false;
       let bandRight = false;
-      for (const item of items) {
-        if (item.tourId == null) continue;
+      const prev = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
+      const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+      for (const set of tourBands.values()) {
+        if (!set.has(k)) continue;
         inTour = true;
-        const set = tourBands.get(item.tourId);
-        if (!set) continue;
-        const prev = new Date(date.getFullYear(), date.getMonth(), date.getDate() - 1);
-        const next = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
         if (set.has(isoKey(prev))) bandLeft = true;
         if (set.has(isoKey(next))) bandRight = true;
       }
+      if (!inTour && items.length === 0) return null;
+      const primary = [...items].sort(
+        (a, b) => statusPriority(b.status) - statusPriority(a.status),
+      )[0] ?? null;
       return {
-        primaryStatus: primary.status,
+        primaryStatus: primary?.status ?? "draft",
         count: items.length,
         tourBandLeft: bandLeft,
         tourBandRight: bandRight,
@@ -481,7 +499,7 @@ function TourDayButton({
         "relative flex aspect-square w-full flex-col items-center justify-center rounded-md text-sm transition-colors",
         "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "data-[selected-single=true]:ring-2 data-[selected-single=true]:ring-primary data-[selected-single=true]:ring-offset-1",
-        meta && STATUS_TINT_BG[meta.primaryStatus],
+        meta && meta.count > 0 && STATUS_TINT_BG[meta.primaryStatus],
         meta?.inTour && "before:pointer-events-none before:absolute before:inset-x-0 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-foreground/15",
         meta?.tourBandLeft && "rounded-l-none",
         meta?.tourBandRight && "rounded-r-none",
@@ -489,7 +507,7 @@ function TourDayButton({
       )}
     >
       <span className="relative z-10 leading-none">{children}</span>
-      {meta && (
+      {meta && meta.count > 0 && (
         <span className="relative z-10 mt-0.5 flex items-center gap-0.5">
           <span
             className={cn("inline-block h-1.5 w-1.5 rounded-full", STATUS_DOT[meta.primaryStatus])}
@@ -597,11 +615,20 @@ function ShowRow({
   onClick: () => void;
 }) {
   const location = item.location;
+  const [, setLocation] = useLocation();
+  const newCalcPath =
+    item.type === "run"
+      ? `/runs/new?from=${item.sourceId}`
+      : item.tourId != null
+        ? `/runs/new?fromStop=${item.sourceId}`
+        : "/runs/new";
+
   return (
     <li>
       <button
         type="button"
         onClick={onClick}
+        onDoubleClick={() => setLocation(newCalcPath)}
         className="group flex w-full cursor-pointer items-start gap-3 rounded-xl border border-transparent px-2 py-2 text-left transition-colors hover:border-border/60 hover:bg-muted/40"
       >
         <span

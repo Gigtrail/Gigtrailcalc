@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
 import { useGetVenues } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
-import { Building2, MapPin, Search, X, TrendingUp, Clock, Star, Lock } from "lucide-react";
+import { Bed, Building2, MapPin, Search, X, TrendingUp, Clock, Star, Lock, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const fmt = (n: number | null | undefined) =>
@@ -31,6 +32,46 @@ function ProfitBadge({ profit }: { profit: number | null | undefined }) {
     )}>
       {isPositive ? "+" : "−"}${Math.round(Math.abs(profit)).toLocaleString()}
     </span>
+  );
+}
+
+type VenueStatus = "great" | "risky" | "avoid" | "untested";
+
+function normalizeVenueStatus(value?: string | null): VenueStatus | null {
+  return value === "great" || value === "risky" || value === "avoid" || value === "untested"
+    ? value
+    : null;
+}
+
+function deriveVenueStatus(venue: {
+  venueStatus?: string | null;
+  showCount?: number | null;
+  avgProfit?: number | null;
+  willPlayAgain?: string | null;
+}): VenueStatus {
+  const storedStatus = normalizeVenueStatus(venue.venueStatus);
+  if (storedStatus) return storedStatus;
+  if ((venue.showCount ?? 0) === 0) return "untested";
+  if (venue.willPlayAgain === "no") return "avoid";
+  if ((venue.avgProfit ?? 0) > 0 && venue.willPlayAgain === "yes") return "great";
+  return "risky";
+}
+
+function VenueStatusBadge({ status }: { status: VenueStatus }) {
+  const label = status === "great" ? "Great" : status === "risky" ? "Risky" : status === "avoid" ? "Avoid" : "Untested";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "rounded-md px-1.5 py-0 text-[10px] font-semibold",
+        status === "great" && "border-emerald-500/40 bg-emerald-500/10 text-emerald-700",
+        status === "risky" && "border-amber-500/40 bg-amber-500/10 text-amber-700",
+        status === "avoid" && "border-red-500/40 bg-red-500/10 text-red-700",
+        status === "untested" && "border-slate-400/40 bg-slate-500/10 text-slate-700",
+      )}
+    >
+      {label}
+    </Badge>
   );
 }
 
@@ -138,6 +179,7 @@ export default function Venues() {
       {!isLoading && filtered.length > 0 && (
         <div className="space-y-2">
           {filtered.map(venue => {
+            const status = deriveVenueStatus(venue);
             const location = [venue.suburb ?? venue.city, venue.state].filter(Boolean).join(", ") || venue.city || "—";
             return (
               <div
@@ -152,11 +194,28 @@ export default function Venues() {
 
                 {/* Main info */}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-foreground truncate text-sm">{venue.venueName}</div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-foreground">{venue.venueName}</div>
+                    {status && <VenueStatusBadge status={status} />}
+                  </div>
                   {location !== "—" && (
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                       <MapPin className="w-3 h-3 flex-shrink-0" />
                       <span className="truncate">{location}</span>
+                    </div>
+                  )}
+                  {(venue.accommodationAvailable || venue.riderProvided) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      {venue.accommodationAvailable && (
+                        <span className="inline-flex items-center gap-1">
+                          <Bed className="h-3 w-3" /> accom
+                        </span>
+                      )}
+                      {venue.riderProvided && (
+                        <span className="inline-flex items-center gap-1">
+                          <Utensils className="h-3 w-3" /> rider
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

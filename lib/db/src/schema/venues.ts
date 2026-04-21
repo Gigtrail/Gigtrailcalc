@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -22,6 +22,13 @@ export const venuesTable = pgTable("venues", {
   contactEmail: text("contact_email"),
   contactPhone: text("contact_phone"),
   roomNotes: text("room_notes"),
+  venueStatus: text("venue_status"),
+  willPlayAgain: text("will_play_again"),
+  actualTicketSales: integer("actual_ticket_sales"),
+  accommodationAvailable: boolean("accommodation_available").default(false),
+  riderProvided: boolean("rider_provided").default(false),
+  playingDays: text("playing_days").array(),
+  venueNotes: text("venue_notes"),
   postcode: text("postcode"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

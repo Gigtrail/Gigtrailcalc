@@ -17,6 +17,8 @@ export interface TourItem {
   status: TourItemStatus;
   tourId: number | null;
   tourName: string | null;
+  tourStartDate: string | null;
+  tourEndDate: string | null;
   tourOrderIndex: number | null;
   linkPath: string;
 }
