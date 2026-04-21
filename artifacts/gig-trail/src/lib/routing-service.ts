@@ -1,3 +1,5 @@
+import type { AppLocation } from "@/lib/location";
+
 interface CityCoords {
   lat: number;
   lon: number;
@@ -247,4 +249,11 @@ export function estimateLegDistance(
   }
 
   return { from, to, distanceKm: 0, driveTimeMinutes: 0, source: 'unknown' };
+}
+
+export function estimateLegDistanceBetweenLocations(
+  from: Pick<AppLocation, "label"> & { lat?: number | null; lng?: number | null },
+  to: Pick<AppLocation, "label"> & { lat?: number | null; lng?: number | null },
+): RouteLeg {
+  return estimateLegDistance(from.label, to.label, from.lat, from.lng, to.lat, to.lng);
 }

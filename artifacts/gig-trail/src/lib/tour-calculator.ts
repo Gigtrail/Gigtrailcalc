@@ -1,4 +1,4 @@
-import { estimateLegDistance, type RouteLeg, type DistanceSource } from './routing-service';
+import { estimateLegDistanceBetweenLocations, type RouteLeg, type DistanceSource } from './routing-service';
 import { getFuelPrice, type FuelPriceResult } from './fuel-service';
 import { calculateShowIncome, calculateFuelCost, calculateVehicleCosts, calculateStopPreview } from './calculations';
 
@@ -290,24 +290,41 @@ export function calculateTour(
     ? fleetVehicles.reduce((s, v) => s + n(v.avgConsumption), 0)
     : n(vehicleConsumptionLPer100);
 
-  type LocationNode = { name: string; lat?: number | null; lng?: number | null; stop?: TourStopInput };
+  type LocationNode = { label: string; lat?: number | null; lng?: number | null; stop?: TourStopInput };
   const locations: LocationNode[] = [];
-  if (startLocation?.trim()) locations.push({ name: startLocation.trim(), lat: startLocationLat, lng: startLocationLng });
+  if (startLocation?.trim()) {
+    locations.push({
+      label: startLocation.trim(),
+      lat: startLocationLat,
+      lng: startLocationLng,
+    });
+  }
   const validStops = sortedStops.filter(s => s.city?.trim());
-  for (const stop of validStops) locations.push({ name: stop.city, lat: stop.cityLat, lng: stop.cityLng, stop });
+  for (const stop of validStops) {
+    locations.push({
+      label: stop.city,
+      lat: stop.cityLat,
+      lng: stop.cityLng,
+      stop,
+    });
+  }
   if (returnHome) {
     const dest = endLocation?.trim() || startLocation?.trim();
     if (dest) {
       const destLat = endLocation?.trim() ? endLocationLat : startLocationLat;
       const destLng = endLocation?.trim() ? endLocationLng : startLocationLng;
-      locations.push({ name: dest, lat: destLat, lng: destLng });
+      locations.push({
+        label: dest,
+        lat: destLat,
+        lng: destLng,
+      });
     }
   }
 
   const legs: TourLeg[] = [];
   for (let i = 0; i < locations.length - 1; i++) {
-    const from = locations[i].name;
-    const to = locations[i + 1].name;
+    const from = locations[i].label;
+    const to = locations[i + 1].label;
     const destStop = locations[i + 1].stop;
     const srcNode = locations[i];
     const dstNode = locations[i + 1];
@@ -321,7 +338,7 @@ export function calculateTour(
       driveTimeMinutes = Math.round((distanceKm / 80) * 60);
       source = 'manual';
     } else {
-      const est = estimateLegDistance(from, to, srcNode.lat, srcNode.lng, dstNode.lat, dstNode.lng);
+      const est = estimateLegDistanceBetweenLocations(srcNode, dstNode);
       distanceKm = est.distanceKm;
       driveTimeMinutes = est.driveTimeMinutes;
       source = est.source;

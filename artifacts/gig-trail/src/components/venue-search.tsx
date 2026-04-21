@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { MapPin, Search, X, Building2, PenLine, Clock, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PlacesAutocomplete, loadGoogleMaps, onGoogleMapsReady } from "@/components/places-autocomplete";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { useSearchVenues } from "@workspace/api-client-react";
+import { getGoogleMapsApiKey, getGoogleMapsLoadError, loadGoogleMaps, parseAddressComponents } from "@/lib/google-maps";
+import { buildAppLocation, type AppLocation } from "@/lib/location";
 
 export interface VenueSelection {
   venueName: string;
@@ -10,8 +12,7 @@ export interface VenueSelection {
   suburb?: string;
   state?: string;
   country?: string;
-  lat?: number;
-  lng?: number;
+  location?: AppLocation;
   /** Set when the venue was selected from the user's own venue database */
   venueId?: number;
 }
@@ -78,6 +79,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   const [googlePredictions, setGooglePredictions] = useState<GooglePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoadingPlace, setIsLoadingPlace] = useState(false);
+  const [mapsUnavailable, setMapsUnavailable] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const acServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -96,7 +98,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
     if (venueName) setIsSelected(true);
   }, [venueName]);
 
-  const envApiKey = apiKey || (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined);
+  const envApiKey = apiKey || getGoogleMapsApiKey() || undefined;
 
   const initGoogleServices = useCallback(() => {
     if (!window.google?.maps?.places) return;
@@ -109,9 +111,30 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   }, []);
 
   useEffect(() => {
-    if (!envApiKey) return;
-    loadGoogleMaps(envApiKey);
-    onGoogleMapsReady(initGoogleServices);
+    if (!envApiKey) {
+      setMapsUnavailable(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void loadGoogleMaps(envApiKey).then((loaded) => {
+      if (cancelled) {
+        return;
+      }
+
+      setMapsUnavailable(!loaded);
+      if (!loaded) {
+        console.error("[VenueSearch] %s", getGoogleMapsLoadError() ?? "Location services unavailable");
+        return;
+      }
+
+      initGoogleServices();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [envApiKey, initGoogleServices]);
 
   useEffect(() => {
@@ -168,30 +191,24 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
         setIsLoadingPlace(false);
         if (status !== "OK" || !place) return;
 
-        let suburb = "";
-        let state = "";
-        let country = "";
-
-        place.address_components?.forEach((c) => {
-          if (c.types.includes("locality") || c.types.includes("sublocality_level_1")) {
-            suburb = c.long_name;
-          }
-          if (c.types.includes("administrative_area_level_1")) {
-            state = c.short_name;
-          }
-          if (c.types.includes("country")) {
-            country = c.long_name;
-          }
-        });
+        const parsed = place.address_components
+          ? parseAddressComponents(place.address_components)
+          : undefined;
+        const destinationLabel = place.formatted_address || prediction.secondaryText;
+        const location = buildAppLocation(
+          destinationLabel,
+          place.geometry?.location?.lat(),
+          place.geometry?.location?.lng(),
+          "autocomplete",
+        );
 
         selectVenue({
           venueName: place.name || prediction.mainText,
-          destination: place.formatted_address || prediction.secondaryText,
-          suburb,
-          state,
-          country,
-          lat: place.geometry?.location?.lat(),
-          lng: place.geometry?.location?.lng(),
+          destination: destinationLabel,
+          suburb: parsed?.suburb,
+          state: parsed?.state,
+          country: parsed?.country,
+          location: location ?? undefined,
         });
       }
     );
@@ -247,8 +264,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
                 onSelect({
                   venueName: selectedVenueName,
                   destination: text,
-                  lat: place?.lat,
-                  lng: place?.lng,
+                  location: place,
                 });
               }}
               placeholder="City or address"
@@ -407,6 +423,10 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
         <PenLine className="w-3 h-3" />
         Can't find venue? Enter manually
       </button>
+
+      {mapsUnavailable && (
+        <p className="text-xs text-muted-foreground">Location services unavailable</p>
+      )}
     </div>
   );
 }

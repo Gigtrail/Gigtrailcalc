@@ -283,8 +283,8 @@ export default function TourStopForm() {
   const handleVenueSelect = (venue: VenueSelection) => {
     form.setValue("venueName", venue.venueName);
     form.setValue("city", venue.destination || venue.suburb || "");
-    form.setValue("cityLat", venue.lat ?? null);
-    form.setValue("cityLng", venue.lng ?? null);
+    form.setValue("cityLat", venue.location?.lat ?? null);
+    form.setValue("cityLng", venue.location?.lng ?? null);
     setSelectedVenueId(venue.venueId ?? null);
   };
 
