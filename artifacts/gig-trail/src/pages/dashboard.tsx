@@ -780,15 +780,114 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
   });
   const venues = venuesQuery.data ?? [];
 
+  // Client-side geocoded coords for venues missing lat/lng on the server.
+  // Keyed by venue id. Cached in sessionStorage to avoid re-geocoding within the
+  // same session and to stay well under Google's per-load quotas.
+  const [geocoded, setGeocoded] = useState<Record<number, { lat: number; lng: number } | null>>(() => {
+    try {
+      const raw = sessionStorage.getItem("gigtrail.venue-geocode.v1");
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object") return parsed as Record<number, { lat: number; lng: number } | null>;
+      return {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    if (mode !== "venues") return;
+    if (!ready) return;
+    if (venues.length === 0) return;
+    const candidates = venues.filter(
+      v =>
+        (v.latitude == null || v.longitude == null) &&
+        !(v.id in geocoded) &&
+        ((v.fullAddress && v.fullAddress.trim().length > 0) ||
+          (v.city && v.city.trim().length > 0)),
+    );
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    const geocoder = new google.maps.Geocoder();
+    const todo = candidates.slice(0, 25); // safety cap
+    (async () => {
+      const results: Record<number, { lat: number; lng: number } | null> = {};
+      for (const v of todo) {
+        if (cancelled) return;
+        const address =
+          (v.fullAddress && v.fullAddress.trim()) ||
+          [v.venueName, v.city, v.state].filter(Boolean).join(", ");
+        try {
+          const r = await geocoder.geocode({ address });
+          const loc = r.results?.[0]?.geometry?.location;
+          if (loc) {
+            results[v.id] = { lat: loc.lat(), lng: loc.lng() };
+          } else {
+            results[v.id] = null;
+          }
+        } catch {
+          results[v.id] = null;
+        }
+        // Light throttle to be polite to the geocoder
+        await new Promise(r2 => setTimeout(r2, 60));
+      }
+      if (cancelled) return;
+      setGeocoded(prev => {
+        const next = { ...prev, ...results };
+        try {
+          sessionStorage.setItem("gigtrail.venue-geocode.v1", JSON.stringify(next));
+        } catch {
+          // ignore quota
+        }
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, ready, venues, geocoded]);
+
+  const venuesWithCoords = useMemo(
+    () =>
+      venues.map(v => {
+        if (v.latitude != null && v.longitude != null) return v;
+        const g = geocoded[v.id];
+        if (g) return { ...v, latitude: g.lat, longitude: g.lng };
+        return v;
+      }),
+    [venues, geocoded],
+  );
+
   const pinned = useMemo(
     () => upcoming.filter(i => i.latitude != null && i.longitude != null),
     [upcoming],
   );
 
   const venuesPinned = useMemo(
-    () => venues.filter(v => v.latitude != null && v.longitude != null),
-    [venues],
+    () => venuesWithCoords.filter(v => v.latitude != null && v.longitude != null),
+    [venuesWithCoords],
   );
+
+  // Dev-only diagnostics so it's easy to see why venues are excluded.
+  useEffect(() => {
+    if (mode !== "venues") return;
+    if (!import.meta.env.DEV) return;
+    if (venuesQuery.isLoading) return;
+    const skipped = venuesWithCoords.filter(
+      v => v.latitude == null || v.longitude == null,
+    );
+    const noAddress = skipped.filter(
+      v => !v.fullAddress && !v.city,
+    );
+    // eslint-disable-next-line no-console
+    console.debug("[Tour View · Venues]", {
+      fetched: venues.length,
+      mapped: venuesPinned.length,
+      skipped: skipped.length,
+      skippedNoAddress: noAddress.length,
+      skippedGeocodeFailed: skipped.length - noAddress.length,
+    });
+  }, [mode, venues.length, venuesPinned.length, venuesWithCoords, venuesQuery.isLoading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1018,7 +1117,9 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
             ? `${pinned.length} mapped show${pinned.length === 1 ? "" : "s"}`
             : venuesQuery.isLoading
             ? "Loading…"
-            : `${venuesPinned.length} venue${venuesPinned.length === 1 ? "" : "s"}`}
+            : venues.length === 0
+            ? "0 venues"
+            : `${venuesPinned.length} mapped of ${venues.length} venue${venues.length === 1 ? "" : "s"}`}
         </span>
       </div>
       {error ? (
@@ -1039,10 +1140,14 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
         <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-center">
           <MapPin className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            No venues with mapped locations yet.
+            {venues.length === 0
+              ? "No venues yet."
+              : "No venues with map coordinates yet."}
           </p>
           <p className="text-xs text-muted-foreground/70">
-            Add a venue or run a calculation to start populating the map.
+            {venues.length === 0
+              ? "Add a venue or run a calculation to start populating the map."
+              : `Found ${venues.length} venue${venues.length === 1 ? "" : "s"} but none had a usable address. Add an address on the venue page to map it.`}
           </p>
         </div>
       ) : (

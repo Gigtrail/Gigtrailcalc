@@ -1,0 +1,62 @@
+Fix the Tour View map so the “Venues” tab loads and displays venue database entries correctly.
+
+Problem:
+- The map renders normally
+- The Venues tab is selected
+- UI shows “0 venues”
+- Venue records do exist in the venue database
+- So the issue is likely in fetch logic, filtering, data mapping, or coordinate handling
+
+What I want:
+1. Audit the Tour View map page and identify exactly where:
+   - Tour markers are loaded
+   - Venue markers are supposed to load
+   - The Venues tab switches data sources
+
+2. Fix the Venues tab so it:
+   - Fetches all venue database entries
+   - Does NOT depend on upcoming shows existing
+   - Displays venue markers on the map
+   - Updates the venue count correctly
+
+3. Check for field mismatches:
+   - lat vs latitude
+   - lng vs longitude
+   - address/location field mismatches
+   - venue ID/name mapping issues
+
+4. If venue coordinates are missing:
+   - Do not silently fail
+   - Add fallback handling
+   - Show only venues with valid coordinates in the map count OR clearly separate:
+     - total venues
+     - mapped venues
+   - Add safe console logging in dev mode so we can see why venues are excluded
+
+5. Verify tab behavior:
+   - “Tour” tab = show current show/tour markers only
+   - “Venues” tab = show venue database markers
+   - No cross-contamination between the two datasets
+
+6. Improve debugging:
+   - Add temporary console logs for:
+     - fetched venue count
+     - mapped venue count
+     - skipped venue count
+     - reasons skipped (missing lat/lng, invalid data, etc.)
+
+7. Make the empty state useful:
+   - If no venues can be shown, display a message like:
+     “No venues with map coordinates yet.”
+   - Not just “0 venues”
+
+8. Keep the fix minimal and clean:
+   - No big refactor unless necessary
+   - Reuse existing map marker components if possible
+   - Do not break the Tour tab
+
+Deliver back:
+- Root cause found
+- Files changed
+- Exact fix made
+- Any venue records skipped because of missing coordinates

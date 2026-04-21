@@ -243,14 +243,24 @@ type RawVenueMapItem = {
   pastShowsCount: number;
 };
 
+function normalizeName(s: string | null | undefined): string {
+  return (s ?? "").trim().toLowerCase();
+}
+
 router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const todayIsoDate = getTodayIsoDateFromRequest(req);
 
-  const [venues, runs] = await Promise.all([
+  const [venues, runs, userTours] = await Promise.all([
     db.select().from(venuesTable).where(eq(venuesTable.userId, userId)),
     db.select().from(runsTable).where(eq(runsTable.userId, userId)),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
   ]);
+
+  const tourIds = userTours.map(t => t.id);
+  const stops = tourIds.length > 0
+    ? await db.select().from(tourStopsTable).where(inArray(tourStopsTable.tourId, tourIds))
+    : [];
 
   const runsByVenueId = new Map<number, typeof runsTable.$inferSelect[]>();
   for (const r of runs) {
@@ -258,6 +268,17 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
     const arr = runsByVenueId.get(r.venueId);
     if (arr) arr.push(r);
     else runsByVenueId.set(r.venueId, [r]);
+  }
+
+  // Tour stops are indexed by normalized venue name as a coordinate fallback.
+  const stopCoordsByName = new Map<string, { lat: number; lng: number }>();
+  for (const s of stops) {
+    const key = normalizeName(s.venueName);
+    if (!key) continue;
+    if (stopCoordsByName.has(key)) continue;
+    if (s.cityLat != null && s.cityLng != null) {
+      stopCoordsByName.set(key, { lat: Number(s.cityLat), lng: Number(s.cityLng) });
+    }
   }
 
   const items: RawVenueMapItem[] = venues.map(v => {
@@ -273,12 +294,19 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
       if (lat == null && r.destinationLat != null) lat = Number(r.destinationLat);
       if (lng == null && r.destinationLng != null) lng = Number(r.destinationLng);
     }
+    if (lat == null || lng == null) {
+      const stopHit = stopCoordsByName.get(normalizeName(v.venueName));
+      if (stopHit) {
+        lat = lat ?? stopHit.lat;
+        lng = lng ?? stopHit.lng;
+      }
+    }
     return {
       id: v.id,
       venueName: v.venueName,
       city: v.city ?? null,
       state: v.state ?? null,
-      fullAddress: v.fullAddress ?? null,
+      fullAddress: v.fullAddress ?? v.address ?? null,
       latitude: lat,
       longitude: lng,
       upcomingShowsCount: upcoming,
