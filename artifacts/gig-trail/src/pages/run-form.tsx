@@ -35,7 +35,7 @@ import { DealTypeInfo } from "@/components/deal-type-info";
 import { usePlan, useWeeklyUsage } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
-import { findFirstCompleteProfile, getFuelPriceForType, inferFuelTypeFromPrices, isProfileComplete } from "@/lib/profile-setup";
+import { findFirstCompleteProfile, getFuelPriceForType, inferFuelTypeFromPrices } from "@/lib/profile-setup";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
@@ -294,16 +294,17 @@ function CompactRunFormLayout({
                           <FormItem className="space-y-1">
                             <Select
                               onValueChange={handleProfileChange}
-                              value={field.value ? field.value.toString() : "none"}
-                              disabled={isLoadingProfiles}
+                              value={field.value ? field.value.toString() : ""}
+                              disabled={isLoadingProfiles || !profiles?.length}
                             >
                               <FormControl>
                                 <SelectTrigger className={compactFieldClass}>
-                                  <SelectValue placeholder="Select profile" />
+                                  <SelectValue
+                                    placeholder={isLoadingProfiles ? "Loading…" : "Select profile"}
+                                  />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
                                 {profiles?.map((profile) => (
                                   <SelectItem key={profile.id} value={profile.id.toString()}>
                                     {profile.name}
@@ -1961,45 +1962,61 @@ export default function RunForm() {
     }
   }, [form]);
 
-  // Prefill from URL search params after onboarding redirect, or auto-select last used / first profile
+  // Prefill from URL search params after onboarding redirect, or auto-select
+  // last used / first profile. Resolution priority for the active profile:
+  //   1. ?profileId=… in the URL (set after onboarding/profile creation)
+  //   2. localStorage[LAST_PROFILE_KEY]
+  //   3. First complete profile in the list
+  //   4. profiles[0]
+  // The calculator must always have an active profile when at least one exists.
   useEffect(() => {
-    if (!isEditing && profiles && profiles.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const urlProfileId = params.get("profileId");
-      const origin = params.get("origin");
-      const fuelPrice = params.get("fuelPrice");
+    if (isEditing || !profiles || profiles.length === 0) return;
 
-      // Apply URL-driven overrides (from onboarding redirect)
-      if (origin) form.setValue("origin", origin);
-      if (fuelPrice) form.setValue("fuelPrice", Number(fuelPrice));
+    const params = new URLSearchParams(window.location.search);
+    const urlProfileId = params.get("profileId");
+    const origin = params.get("origin");
+    const fuelPrice = params.get("fuelPrice");
 
-      // Only auto-select a profile if one isn't already set
-      const currentProfileId = form.getValues("profileId");
-      if (!currentProfileId) {
-        const completeProfiles = profiles.filter((profile) => isProfileComplete(profile));
-        const fallbackProfile = findFirstCompleteProfile(profiles) ?? completeProfiles[0] ?? profiles[0];
-        let autoProfileId: number | null = null;
-        const urlProfile = urlProfileId ? profiles.find((profile) => profile.id === Number(urlProfileId)) : null;
-        if (urlProfile && isProfileComplete(urlProfile)) {
-          autoProfileId = urlProfile.id;
-        } else {
-          const lastUsed = localStorage.getItem(LAST_PROFILE_KEY);
-          const lastUsedNum = lastUsed ? parseInt(lastUsed) : null;
-          const lastUsedProfile = lastUsedNum ? profiles.find((profile) => profile.id === lastUsedNum) : null;
-          if (lastUsedProfile && isProfileComplete(lastUsedProfile)) {
-            autoProfileId = lastUsedNum;
-          } else {
-            autoProfileId = fallbackProfile?.id ?? null;
-          }
-        }
+    // Apply URL-driven overrides (from onboarding redirect)
+    if (origin) form.setValue("origin", origin);
+    if (fuelPrice) form.setValue("fuelPrice", Number(fuelPrice));
 
-        if (autoProfileId) {
-          form.setValue("profileId", autoProfileId);
-          localStorage.setItem(LAST_PROFILE_KEY, autoProfileId.toString());
-          const profile = profiles.find(p => p.id === autoProfileId);
-          if (profile) applyProfileValues(profile);
-        }
-      }
+    const currentProfileId = form.getValues("profileId");
+    const currentStillValid =
+      !!currentProfileId && profiles.some((p) => p.id === currentProfileId);
+
+    // Re-resolve if no profile is set OR the current selection is no longer
+    // in the list (e.g. profile was deleted in another tab).
+    if (currentStillValid) return;
+
+    const urlProfile = urlProfileId
+      ? profiles.find((p) => p.id === Number(urlProfileId))
+      : null;
+    const lastUsedRaw = localStorage.getItem(LAST_PROFILE_KEY);
+    const lastUsedNum = lastUsedRaw ? Number(lastUsedRaw) : NaN;
+    const lastUsedProfile = Number.isFinite(lastUsedNum)
+      ? profiles.find((p) => p.id === lastUsedNum)
+      : null;
+    const firstComplete = findFirstCompleteProfile(profiles);
+
+    const resolved =
+      urlProfile ?? lastUsedProfile ?? firstComplete ?? profiles[0] ?? null;
+
+    if (resolved) {
+      console.info("[RunForm] Auto-selected profile", {
+        id: resolved.id,
+        name: resolved.name,
+        via: urlProfile
+          ? "url"
+          : lastUsedProfile
+            ? "lastUsed"
+            : firstComplete
+              ? "firstComplete"
+              : "firstAvailable",
+      });
+      form.setValue("profileId", resolved.id);
+      localStorage.setItem(LAST_PROFILE_KEY, resolved.id.toString());
+      applyProfileValues(resolved);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles, isEditing]);
@@ -2268,15 +2285,12 @@ export default function RunForm() {
   }, [run, profiles, form]);
 
   const handleProfileChange = (val: string) => {
-    const pId = val === "none" ? null : parseInt(val);
+    const pId = parseInt(val);
+    if (!Number.isFinite(pId)) return;
     form.setValue("profileId", pId);
-    if (pId) {
-      localStorage.setItem(LAST_PROFILE_KEY, pId.toString());
-      const profile = profiles?.find(p => p.id === pId);
-      if (profile) applyProfileValues(profile);
-    } else {
-      localStorage.removeItem(LAST_PROFILE_KEY);
-    }
+    localStorage.setItem(LAST_PROFILE_KEY, pId.toString());
+    const profile = profiles?.find((p) => p.id === pId);
+    if (profile) applyProfileValues(profile);
   };
 
   // Sync local vehicle selection when profile changes
