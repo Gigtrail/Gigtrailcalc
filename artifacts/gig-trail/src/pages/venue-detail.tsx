@@ -514,12 +514,13 @@ function VenueDetailsDashboard({
     setDirty(true);
   };
 
-  const handleAddressSelect = (_text: string, place?: PlaceResult) => {
+  const handleAddressSelect = (text: string, place?: PlaceResult) => {
     if (!place) return;
     const parsed = place.parsed ?? {};
+    const nextAddress = (place.label ?? text ?? "").trim();
     setDraft(current => ({
       ...current,
-      fullAddress: place.name,
+      fullAddress: nextAddress || current.fullAddress,
       suburb: parsed.suburb ?? current.suburb,
       city: parsed.city ?? current.city,
       state: parsed.state ?? current.state,
