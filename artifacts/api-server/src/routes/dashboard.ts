@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable } from "@workspace/db";
+import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable, venuesTable } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
   GetDashboardTourItemsResponse,
+  GetDashboardVenuesResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -228,6 +229,64 @@ router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void>
   });
 
   res.json(GetDashboardTourItemsResponse.parse(items));
+});
+
+type RawVenueMapItem = {
+  id: number;
+  venueName: string;
+  city: string | null;
+  state: string | null;
+  fullAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  upcomingShowsCount: number;
+  pastShowsCount: number;
+};
+
+router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
+  const [venues, runs] = await Promise.all([
+    db.select().from(venuesTable).where(eq(venuesTable.userId, userId)),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
+  ]);
+
+  const runsByVenueId = new Map<number, typeof runsTable.$inferSelect[]>();
+  for (const r of runs) {
+    if (r.venueId == null) continue;
+    const arr = runsByVenueId.get(r.venueId);
+    if (arr) arr.push(r);
+    else runsByVenueId.set(r.venueId, [r]);
+  }
+
+  const items: RawVenueMapItem[] = venues.map(v => {
+    const vRuns = runsByVenueId.get(v.id) ?? [];
+    let upcoming = 0;
+    let past = 0;
+    let lat: number | null = null;
+    let lng: number | null = null;
+    for (const r of vRuns) {
+      const date = (r.showDate ?? "").split("T")[0] ?? "";
+      if (date && date >= todayIsoDate) upcoming += 1;
+      else if (date && date < todayIsoDate) past += 1;
+      if (lat == null && r.destinationLat != null) lat = Number(r.destinationLat);
+      if (lng == null && r.destinationLng != null) lng = Number(r.destinationLng);
+    }
+    return {
+      id: v.id,
+      venueName: v.venueName,
+      city: v.city ?? null,
+      state: v.state ?? null,
+      fullAddress: v.fullAddress ?? null,
+      latitude: lat,
+      longitude: lng,
+      upcomingShowsCount: upcoming,
+      pastShowsCount: past,
+    };
+  });
+
+  res.json(GetDashboardVenuesResponse.parse(items));
 });
 
 export default router;

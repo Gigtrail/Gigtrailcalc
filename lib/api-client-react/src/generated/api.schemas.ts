@@ -532,6 +532,18 @@ export interface TourItem {
   linkPath: string;
 }
 
+export interface VenueMapItem {
+  id: number;
+  venueName: string;
+  city: string | null;
+  state: string | null;
+  fullAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  upcomingShowsCount: number;
+  pastShowsCount: number;
+}
+
 export interface CreateRunBody {
   /** @nullable */
   profileId?: number | null;

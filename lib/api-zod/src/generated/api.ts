@@ -1074,6 +1074,23 @@ export const GetDashboardTourItemsResponse = zod.array(
 );
 
 /**
+ * @summary Venues with upcoming/past metadata for the Tour View map
+ */
+export const GetDashboardVenuesResponse = zod.array(
+  zod.object({
+    id: zod.number(),
+    venueName: zod.string(),
+    city: zod.string().nullable(),
+    state: zod.string().nullable(),
+    fullAddress: zod.string().nullable(),
+    latitude: zod.number().nullable(),
+    longitude: zod.number().nullable(),
+    upcomingShowsCount: zod.number(),
+    pastShowsCount: zod.number(),
+  }),
+);
+
+/**
  * @summary Get recent runs and tours for dashboard
  */
 export const GetDashboardRecentResponse = zod.object({

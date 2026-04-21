@@ -1,0 +1,161 @@
+I want you to enhance the Map View inside Tour View by adding a second mode: Venues.
+
+IMPORTANT:
+Do NOT create a new page.
+Do NOT rebuild the map system.
+Extend the existing map cleanly.
+
+--------------------------------------------------
+CORE CHANGE
+--------------------------------------------------
+
+Inside Map View, add a toggle:
+
+[ Tour ]   [ Venues ]
+
+Default:
+- Tour mode stays default
+
+--------------------------------------------------
+MODE 1 — TOUR (EXISTING)
+--------------------------------------------------
+
+Keep current behaviour:
+
+- Show all upcoming tour items:
+  - standalone shows (runs)
+  - tour stops
+- Use status colours:
+  - Draft (grey)
+  - Pitched (amber)
+  - Confirmed (green)
+  - Cancelled (muted red)
+
+- Clicking a pin:
+  opens the existing detail panel with:
+  - venue
+  - date
+  - status
+  - actions (open, edit, start calc, star)
+
+Ensure:
+Tour mode continues to work exactly as it does now.
+
+--------------------------------------------------
+MODE 2 — VENUES (NEW)
+--------------------------------------------------
+
+This is a discovery / planning view.
+
+Show ALL venues from the venue database.
+
+Each venue pin should include:
+
+- Venue name
+- Location
+- Indicator if:
+  - upcoming show exists at this venue
+  - previously played
+  - no history
+
+--------------------------------------------------
+VENUE PIN STATES
+--------------------------------------------------
+
+Use simple visual hierarchy:
+
+1. VENUE WITH UPCOMING SHOW
+- strong highlight
+- reuse confirmed show colour (green)
+- slightly larger or more prominent
+
+2. VENUE WITH PAST HISTORY
+- medium emphasis
+- neutral / soft colour
+
+3. NEW / UNUSED VENUE
+- light / minimal pin
+
+Keep it visually clean.
+Do NOT overcrowd the map.
+
+--------------------------------------------------
+VENUE CLICK PANEL
+--------------------------------------------------
+
+Clicking a venue should open a panel with:
+
+- Venue name
+- Address / location
+- Upcoming shows at this venue (if any)
+- Past shows count (if available)
+
+Actions:
+- View Venue (existing route if available)
+- Start New Calculation (pre-filled with venue if possible)
+
+IMPORTANT:
+Reuse existing systems.
+Do NOT create a new venue detail system if one exists.
+
+--------------------------------------------------
+DATA LOGIC
+--------------------------------------------------
+
+Reuse existing venue data.
+
+If needed:
+- fetch venues from existing venue endpoint
+- merge lightly with upcoming tour items to determine:
+  - which venues have upcoming shows
+
+DO NOT:
+- create heavy joins
+- rebuild backend unnecessarily
+
+If backend needs small support:
+- add a lightweight endpoint that returns:
+  venues + basic metadata (hasUpcomingShow, hasPastShow)
+
+Keep it minimal.
+
+--------------------------------------------------
+MAP BEHAVIOUR
+--------------------------------------------------
+
+- Same map instance
+- Same zoom/pan behaviour
+- Switching between Tour and Venue mode should NOT reload the map entirely
+- Just switch data layers
+
+--------------------------------------------------
+UX RULES
+--------------------------------------------------
+
+- Fast
+- Clear
+- No clutter
+- No heavy overlays
+- No Google Maps-level complexity
+
+This is a musician tool, not GIS software.
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+After this pass:
+
+In Tour mode:
+- I see my current tour
+
+In Venue mode:
+- I see where I can play
+- I can identify useful venues
+- I can see which venues already have shows booked
+
+Switching between modes feels instant and natural.
+
+FINAL RULE:
+Do not overbuild.
+Extend the current map cleanly and keep everything connected to existing GigTrail systems.

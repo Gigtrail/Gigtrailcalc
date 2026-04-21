@@ -35,6 +35,7 @@ import type {
   SetVehicleActAssignmentsBody,
   Tour,
   TourItem,
+  VenueMapItem,
   TourStop,
   TourVehicleAssignment,
   TourWithStops,
@@ -2946,6 +2947,78 @@ export function useGetDashboardTourItems<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetDashboardTourItemsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Venues with metadata for Tour View map
+ */
+export const getGetDashboardVenuesUrl = () => {
+  return `/api/dashboard/venues`;
+};
+
+export const getDashboardVenues = async (
+  options?: RequestInit,
+): Promise<VenueMapItem[]> => {
+  return customFetch<VenueMapItem[]>(getGetDashboardVenuesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDashboardVenuesQueryKey = () => {
+  return [`/api/dashboard/venues`] as const;
+};
+
+export const getGetDashboardVenuesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDashboardVenues>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDashboardVenues>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetDashboardVenuesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDashboardVenues>>
+  > = ({ signal }) => getDashboardVenues({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDashboardVenues>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDashboardVenuesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDashboardVenues>>
+>;
+export type GetDashboardVenuesQueryError = ErrorType<unknown>;
+
+export function useGetDashboardVenues<
+  TData = Awaited<ReturnType<typeof getDashboardVenues>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDashboardVenues>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDashboardVenuesQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

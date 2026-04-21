@@ -23,6 +23,7 @@ export * from "./tour";
 export * from "./tourItem";
 export * from "./tourStop";
 export * from "./tourWithStops";
+export * from "./venueMapItem";
 export * from "./trackCalculationResponse";
 export * from "./updateProfileBody";
 export * from "./vehicle";

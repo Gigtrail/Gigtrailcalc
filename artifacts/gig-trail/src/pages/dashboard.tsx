@@ -4,7 +4,9 @@ import { addDays, format, isSameDay } from "date-fns";
 import { CalendarDays, MapPin, Plus, Pencil, Calculator, Star, X } from "lucide-react";
 import {
   useGetDashboardTourItems,
+  useGetDashboardVenues,
   type TourItem,
+  type VenueMapItem,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -747,6 +749,22 @@ function EmptyHint() {
   );
 }
 
+type MapMode = "tour" | "venues";
+
+type VenuePinKind = "upcoming" | "past" | "new";
+
+function venuePinKind(v: VenueMapItem): VenuePinKind {
+  if (v.upcomingShowsCount > 0) return "upcoming";
+  if (v.pastShowsCount > 0) return "past";
+  return "new";
+}
+
+const VENUE_PIN_STYLE: Record<VenuePinKind, { color: string; scale: number; strokeWeight: number }> = {
+  upcoming: { color: "#10b981", scale: 10, strokeWeight: 2 },
+  past: { color: "#94a3b8", scale: 8, strokeWeight: 1.5 },
+  new: { color: "#cbd5e1", scale: 6, strokeWeight: 1 },
+};
+
 function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -755,10 +773,21 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
   const [, setLocation] = useLocation();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<MapMode>("tour");
+
+  const venuesQuery = useGetDashboardVenues({
+    query: { enabled: mode === "venues" },
+  });
+  const venues = venuesQuery.data ?? [];
 
   const pinned = useMemo(
     () => upcoming.filter(i => i.latitude != null && i.longitude != null),
     [upcoming],
+  );
+
+  const venuesPinned = useMemo(
+    () => venues.filter(v => v.latitude != null && v.longitude != null),
+    [venues],
   );
 
   useEffect(() => {
@@ -801,9 +830,80 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
 
     markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
+    infoRef.current?.close();
 
     const map = mapRef.current;
     const bounds = new google.maps.LatLngBounds();
+
+    if (mode === "venues") {
+      venuesPinned.forEach(v => {
+        const position = { lat: v.latitude as number, lng: v.longitude as number };
+        const kind = venuePinKind(v);
+        const style = VENUE_PIN_STYLE[kind];
+        const marker = new google.maps.Marker({
+          position,
+          map,
+          title: v.venueName,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: style.scale,
+            fillColor: style.color,
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: style.strokeWeight,
+          },
+        });
+        marker.addListener("click", () => {
+          if (!infoRef.current) return;
+          const loc = v.fullAddress ?? [v.city, v.state].filter(Boolean).join(", ") || "Location not set";
+          const upcomingLine =
+            v.upcomingShowsCount > 0
+              ? `<div style="font-size:12px;color:#10b981;margin-top:4px">${v.upcomingShowsCount} upcoming show${v.upcomingShowsCount === 1 ? "" : "s"}</div>`
+              : "";
+          const pastLine =
+            v.pastShowsCount > 0
+              ? `<div style="font-size:12px;color:#6b7280;margin-top:2px">${v.pastShowsCount} past show${v.pastShowsCount === 1 ? "" : "s"}</div>`
+              : v.upcomingShowsCount === 0
+              ? `<div style="font-size:12px;color:#94a3b8;margin-top:2px">No history yet</div>`
+              : "";
+          infoRef.current.setContent(
+            `<div style="font-family:inherit;min-width:200px">
+              <div style="font-weight:600;font-size:13px;margin-bottom:2px">${escapeHtml(v.venueName)}</div>
+              <div style="font-size:12px;color:#6b7280">${escapeHtml(loc)}</div>
+              ${upcomingLine}
+              ${pastLine}
+              <div style="margin-top:8px;display:flex;gap:10px">
+                <a href="#" data-venueview="${v.id}" style="font-size:12px;font-weight:600;color:#3b82f6">View Venue</a>
+                <a href="#" data-venuecalc="${v.id}" style="font-size:12px;font-weight:600;color:#10b981">New Calc</a>
+              </div>
+            </div>`,
+          );
+          infoRef.current.open({ map, anchor: marker });
+          google.maps.event.addListenerOnce(infoRef.current, "domready", () => {
+            const view = document.querySelector<HTMLAnchorElement>(`a[data-venueview="${v.id}"]`);
+            view?.addEventListener("click", e => {
+              e.preventDefault();
+              setLocation(`/venues/${v.id}`);
+            });
+            const calc = document.querySelector<HTMLAnchorElement>(`a[data-venuecalc="${v.id}"]`);
+            calc?.addEventListener("click", e => {
+              e.preventDefault();
+              setLocation(`/runs/new?venueId=${v.id}`);
+            });
+          });
+        });
+        markersRef.current.push(marker);
+        bounds.extend(position);
+      });
+
+      if (venuesPinned.length === 1) {
+        map.setCenter(bounds.getCenter());
+        map.setZoom(8);
+      } else if (venuesPinned.length > 1) {
+        map.fitBounds(bounds, 60);
+      }
+      return;
+    }
 
     pinned.forEach(item => {
       const position = {
@@ -857,7 +957,7 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
     } else if (pinned.length > 1) {
       map.fitBounds(bounds, 60);
     }
-  }, [ready, pinned, setLocation]);
+  }, [ready, pinned, venuesPinned, mode, setLocation]);
 
   useEffect(() => {
     return () => {
@@ -875,13 +975,54 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
     };
   }, []);
 
+  const showEmptyTour = mode === "tour" && pinned.length === 0;
+  const showEmptyVenues =
+    mode === "venues" && !venuesQuery.isLoading && venuesPinned.length === 0;
+
   return (
     <div className="rounded-2xl border border-border/60 bg-card p-2 shadow-[0_2px_12px_rgba(58,47,38,0.08)] sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-3 px-1">
+        <div className="inline-flex rounded-full border border-border/70 bg-muted/40 p-0.5 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setMode("tour")}
+            className={cn(
+              "rounded-full px-3 py-1.5 transition-colors",
+              mode === "tour"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={mode === "tour"}
+          >
+            Tour
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("venues")}
+            className={cn(
+              "rounded-full px-3 py-1.5 transition-colors",
+              mode === "venues"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={mode === "venues"}
+          >
+            Venues
+          </button>
+        </div>
+        <span className="text-xs text-muted-foreground">
+          {mode === "tour"
+            ? `${pinned.length} mapped show${pinned.length === 1 ? "" : "s"}`
+            : venuesQuery.isLoading
+            ? "Loading…"
+            : `${venuesPinned.length} venue${venuesPinned.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
       {error ? (
         <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
           {error}
         </div>
-      ) : pinned.length === 0 ? (
+      ) : showEmptyTour ? (
         <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-center">
           <MapPin className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
@@ -889,6 +1030,16 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
           </p>
           <p className="text-xs text-muted-foreground/70">
             Add a destination to a show to see it here.
+          </p>
+        </div>
+      ) : showEmptyVenues ? (
+        <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-center">
+          <MapPin className="h-8 w-8 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">
+            No venues with mapped locations yet.
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            Add a venue or run a calculation to start populating the map.
           </p>
         </div>
       ) : (

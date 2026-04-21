@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useCreateOrUpdateVenue, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -1302,6 +1302,37 @@ export default function RunForm() {
   const [runSelectedVenueId, setRunSelectedVenueId] = useState<number | null>(null);
   const previousProfileIdRef = useRef<number | null | undefined>(undefined);
 
+  // Prefill from ?venueId=… (e.g. "New Calc" action from the Tour View map).
+  // Only applies in create mode and only once per venueId.
+  const venuePrefillId = useMemo<number | null>(() => {
+    if (isEditing) return null;
+    const raw = new URLSearchParams(window.location.search).get("venueId");
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [isEditing]);
+  const venuePrefillQuery = useGetVenue(venuePrefillId ?? 0, {
+    query: { enabled: venuePrefillId != null },
+  });
+  const venuePrefillAppliedRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (isEditing) return;
+    if (venuePrefillId == null) return;
+    if (venuePrefillAppliedRef.current === venuePrefillId) return;
+    const v = venuePrefillQuery.data;
+    if (!v) return;
+    const destination =
+      v.fullAddress ||
+      [v.venueName, v.suburb ?? v.city, v.state, v.country].filter(Boolean).join(", ");
+    form.setValue("venueName", v.venueName ?? null);
+    if (destination) form.setValue("destination", destination);
+    form.setValue("city", (v.suburb ?? v.city) || null);
+    form.setValue("state", v.state || null);
+    form.setValue("country", v.country || null);
+    setRunSelectedVenueId(v.id);
+    venuePrefillAppliedRef.current = venuePrefillId;
+  }, [venuePrefillId, venuePrefillQuery.data, isEditing, form]);
+
   const createOrUpdateVenue = useCreateOrUpdateVenue();
   const { data: vehicles } = useGetVehicles();
   const updateProfile = useUpdateProfile();
@@ -1980,6 +2011,8 @@ export default function RunForm() {
     // Apply URL-driven overrides (from onboarding redirect)
     if (origin) form.setValue("origin", origin);
     if (fuelPrice) form.setValue("fuelPrice", Number(fuelPrice));
+    // ?venueId=… is handled in a separate effect because it needs to fetch
+    // the venue record before populating fields.
 
     const currentProfileId = form.getValues("profileId");
     const currentStillValid =
