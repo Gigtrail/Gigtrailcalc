@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
@@ -64,6 +65,7 @@ import {
   buildTourRiskShowSnapshot,
   createTourRiskSnapshot,
   type TourRiskResult,
+  type TourRiskSnapshot,
 } from "@/lib/tour-risk";
 
 export default function TourDetail() {
@@ -83,6 +85,10 @@ export default function TourDetail() {
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
   const [riskAnalysis, setRiskAnalysis] = useState<TourRiskResult | null>(null);
+  const [riskSnapshotForDisplay, setRiskSnapshotForDisplay] = useState<TourRiskSnapshot | null>(null);
+  const [riskAnalysisKey, setRiskAnalysisKey] = useState<string | null>(null);
+  const [activeResultsTab, setActiveResultsTab] = useState<"overview" | "risk">("overview");
+  const [showRiskNumbers, setShowRiskNumbers] = useState(false);
   const toggleDay = (date: string) =>
     setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
@@ -499,7 +505,11 @@ export default function TourDetail() {
   }, [calc, localFuelPriceDiesel, localFuelPriceLpg, localFuelPricePetrol, localFuelType, profile, stops, tourId]);
 
   useEffect(() => {
-    setRiskAnalysis(null);
+    if (riskResetKey === "tour-risk:none") {
+      setRiskAnalysis(null);
+      setRiskSnapshotForDisplay(null);
+      setRiskAnalysisKey(null);
+    }
   }, [riskResetKey]);
 
   if (isLoadingTour || isLoadingStops) {
@@ -841,6 +851,9 @@ export default function TourDetail() {
     if (!riskSnapshot) return;
     const nextRiskAnalysis = analyzeTourRisk(riskSnapshot);
     setRiskAnalysis(nextRiskAnalysis);
+    setRiskSnapshotForDisplay(riskSnapshot);
+    setRiskAnalysisKey(riskResetKey);
+    setActiveResultsTab("risk");
     trackEvent("tour_risk_calculated", {
       tour_id: tourId,
       risk_score: nextRiskAnalysis.riskSummary.overallScore,
@@ -854,13 +867,122 @@ export default function TourDetail() {
 
   const riskCategoryRows = riskAnalysis
     ? [
-        { label: "Concentration", category: riskAnalysis.categoryScores.concentrationRisk },
-        { label: "Liquidity", category: riskAnalysis.categoryScores.liquidityRisk },
-        { label: "Structural", category: riskAnalysis.categoryScores.structuralFragility },
-        { label: "Logistics", category: riskAnalysis.categoryScores.logisticsPressure },
-        { label: "Volatility", category: riskAnalysis.categoryScores.revenueVolatility },
+        { label: "Relies on one show", category: riskAnalysis.categoryScores.concentrationRisk },
+        { label: "Room for error", category: riskAnalysis.categoryScores.liquidityRisk },
+        { label: "Falls apart if hit", category: riskAnalysis.categoryScores.structuralFragility },
+        { label: "Road cost pressure", category: riskAnalysis.categoryScores.logisticsPressure },
+        { label: "Ticket sales pressure", category: riskAnalysis.categoryScores.revenueVolatility },
       ]
     : [];
+
+  const riskIsStale = Boolean(riskAnalysis && riskAnalysisKey && riskAnalysisKey !== riskResetKey);
+  const hasValidRiskInput = Boolean(riskSnapshot && sortedStops.length > 0 && calc);
+  const showLegacyRiskPanel: boolean = false;
+  const displayRiskSnapshot = riskAnalysis ? riskSnapshotForDisplay : riskSnapshot;
+  const riskShowById = new Map((displayRiskSnapshot?.showResults ?? []).map((show) => [String(show.showId), show]));
+  const stopById = new Map(sortedStops.map((stop) => [String(stop.id), stop]));
+  const ticketRecoveryByStopId = new Map(ticketRecovery.rows.map((row) => [String(row.stopId), row]));
+  const weakestShowIds = new Set((riskAnalysis?.weakestShows ?? []).map((show) => String(show.showId)));
+  const anchorShowId = riskAnalysis?.stressTests.anchorCollapse.anchorShowId != null
+    ? String(riskAnalysis.stressTests.anchorCollapse.anchorShowId)
+    : null;
+  const allRiskFlags = riskAnalysis
+    ? [...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags]
+    : [];
+  const musicianRiskCopy = (text: string) =>
+    text
+      .replace(/structural fragility/gi, "not much room for error")
+      .replace(/structurally fragile/gi, "easy to knock over")
+      .replace(/liquidity risk/gi, "not enough cash buffer")
+      .replace(/liquidity/gi, "cash buffer")
+      .replace(/volatility/gi, "sales swing")
+      .replace(/volatile/gi, "uncertain")
+      .replace(/concentration risk/gi, "too reliant on one show")
+      .replace(/speculative backend revenue/gi, "uncertain ticket or merch money")
+      .replace(/speculative revenue/gi, "uncertain income")
+      .replace(/revenue buffer/gi, "sales buffer")
+      .replace(/guarantee coverage/gi, "guaranteed money")
+      .replace(/operating-cost spike/gi, "cost jump")
+      .replace(/logistics spike/gi, "road cost jump")
+      .replace(/structural score/gi, "risk score")
+      .replace(/directional/gi, "a guide")
+      .replace(/diversify/gi, "spread the risk");
+  const topRiskIssue = musicianRiskCopy(riskAnalysis?.riskSummary.primaryConcern ?? allRiskFlags[0]?.label ?? "No major weak spot found.");
+  const nextRiskMove =
+    (riskAnalysis?.recommendations[0]?.mitigation ? musicianRiskCopy(riskAnalysis.recommendations[0].mitigation) : null) ??
+    (riskAnalysis?.insufficientData
+      ? "Add clearer income and ticket details before you make the call."
+      : "Keep this plan as-is, then recheck risk after you add or edit shows.");
+  const formatRiskTimelineDate = (date: string) => {
+    if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+      try {
+        return format(parseISO(date), "EEE MMM d");
+      } catch {
+        return date;
+      }
+    }
+    return date.replace(/-/g, " ");
+  };
+  const musicianRiskVerdict = (() => {
+    if (!riskAnalysis) return "";
+    if (riskAnalysis.insufficientData) return "There is not enough clean data here yet to trust the risk score.";
+    if (profitAfterMemberFees < 0) return "This tour is losing money on the current numbers.";
+    if (riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet < 0) {
+      const anchor = riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "one key show";
+      return `This tour can make money, but it leans hard on ${anchor}.`;
+    }
+    if (riskAnalysis.riskSummary.overallScore >= 70) return "This tour has money in it, but there is not much room for things to go wrong.";
+    if (riskAnalysis.riskSummary.overallScore >= 45) return "This tour can work, but keep an eye on ticket sales and road costs.";
+    return "This tour looks workable on the current numbers.";
+  })();
+  const riskTimelineRows = [...(displayRiskSnapshot?.dayResults ?? [])]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .map((day, index) => {
+      const stop = day.showId != null ? stopById.get(String(day.showId)) : undefined;
+      const show = day.showId != null ? riskShowById.get(String(day.showId)) : undefined;
+      const ticketRow = day.showId != null ? ticketRecoveryByStopId.get(String(day.showId)) : undefined;
+      const isAnchor = day.showId != null && anchorShowId === String(day.showId);
+      const isWeak = day.showId != null && weakestShowIds.has(String(day.showId));
+      const isTicketedShow = stop?.showType === "Ticketed Show" || stop?.showType === "Hybrid";
+      const isLongTravel = day.travelDistance >= DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 80 || day.travelHours >= DEFAULT_MAX_DRIVE_HOURS_PER_DAY;
+      const isBurnDay = !day.hasShow && day.burnCost > 0;
+      const tags: { label: string; className: string }[] = [];
+
+      if (isAnchor) tags.push({ label: "Key show", className: "bg-secondary/10 text-secondary border-secondary/25" });
+      if (isWeak) tags.push({ label: "Weak spot", className: "bg-destructive/10 text-destructive border-destructive/25" });
+      if (isTicketedShow) tags.push({ label: "Ticketed", className: "bg-primary/10 text-primary border-primary/25" });
+      if (!day.hasShow && day.type === "travel_day") tags.push({ label: "Travel day", className: "bg-sky-100 text-sky-800 border-sky-200" });
+      if (!day.hasShow && day.type === "day_off") tags.push({ label: "Day off", className: "bg-muted text-muted-foreground border-border/50" });
+      if (isBurnDay) tags.push({ label: "Burn day", className: "bg-amber-100 text-amber-800 border-amber-200" });
+      if (isLongTravel) tags.push({ label: "Long drive", className: "bg-orange-100 text-orange-800 border-orange-200" });
+      if (day.hasShow && show?.netProfit != null && show.netProfit >= 0 && !isAnchor && !isWeak) {
+        tags.push({ label: "Good buffer", className: "bg-green-100 text-green-800 border-green-200" });
+      }
+
+      let note = "Good buffer here.";
+      if (!day.hasShow) {
+        if (isLongTravel) note = `Long travel day${day.travelDistance > 0 ? ` - ${Math.round(day.travelDistance)} km` : ""}. Keep this one light.`;
+        else if (isBurnDay) note = `Day off - burning ${fmt(day.burnCost)} with no show income.`;
+        else note = "Open day - no show booked.";
+      } else if (isAnchor) {
+        note = "Key show - carrying a lot of the tour result.";
+      } else if (isTicketedShow && (ticketRow || (show?.breakEvenTickets ?? 0) > 0)) {
+        const target = show?.expectedTickets ?? null;
+        const ticketsNeeded = ticketRow?.ticketsNeeded ?? show?.breakEvenTickets ?? 0;
+        note = `Needs ${ticketsNeeded} ticket${ticketsNeeded !== 1 ? "s" : ""} to work${target ? `; target is ${target}` : ""}.`;
+        if (target != null) {
+          note += target >= ticketsNeeded ? " There is breathing room." : " Not much breathing room.";
+        }
+      } else if (isWeak) {
+        note = show?.netProfit != null && show.netProfit < 0 ? "Not pulling its weight yet." : "Low return for the drive.";
+      } else if (show?.travelDistance && show.travelDistance >= 400) {
+        note = "Long drive into this show. Make sure the deal earns its place.";
+      } else if (show?.netProfit != null && show.netProfit < 0) {
+        note = "This date loses money on the current plan.";
+      }
+
+      return { day, stop, show, note, tags, isAnchor, isWeak, isBurnDay, isLongTravel, index };
+    });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto">
@@ -903,6 +1025,27 @@ export default function TourDetail() {
         </div>
       </div>
 
+      <Tabs value={activeResultsTab} onValueChange={(value) => setActiveResultsTab(value as "overview" | "risk")} className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="h-11 w-full justify-start rounded-xl border border-border/50 bg-card/70 p-1 sm:w-auto">
+            <TabsTrigger value="overview" className="h-9 flex-1 px-4 sm:flex-none">
+              Tour Overview
+            </TabsTrigger>
+            <TabsTrigger value="risk" className="h-9 flex-1 px-4 sm:flex-none">
+              Risk Analysis
+              {riskAnalysis && (
+                <span className={cn("ml-2 hidden rounded-full px-2 py-0.5 text-[10px] font-semibold sm:inline-flex", riskBadgeClassName)}>
+                  {riskIsStale ? "Recheck" : riskAnalysis.riskSummary.label}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <p className="text-xs text-muted-foreground">
+            Switch between the money view and the what-could-go-wrong view.
+          </p>
+        </div>
+
+        <TabsContent value="overview" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
 
@@ -1911,10 +2054,10 @@ export default function TourDetail() {
               {calc && sortedStops.length > 0 && (
                 <div className="rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-3 space-y-2">
                   <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Risk Engine
+                    Risk Check
                   </div>
                   <p className="text-xs leading-snug text-muted-foreground">
-                    See how this tour holds up if things don&apos;t go to plan.
+                    See how this tour holds up if one date dips or road costs rise.
                   </p>
                   <Button variant="outline" className="w-full" onClick={handleCalculateRisk}>
                     <BarChart2 className="w-4 h-4 mr-2" />
@@ -1925,7 +2068,7 @@ export default function TourDetail() {
             </CardContent>
           </Card>
 
-          {riskAnalysis && riskSnapshot && (
+          {showLegacyRiskPanel && riskAnalysis && riskSnapshot && (
             <Card className="border-border/50 bg-card/60">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
@@ -2331,6 +2474,251 @@ export default function TourDetail() {
 
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="risk" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="space-y-6">
+            <Card className="overflow-hidden border-border/50 bg-card/70">
+              <CardContent className="p-0">
+                <div className="flex flex-col gap-5 border-b border-border/40 bg-muted/20 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="flex items-center gap-2">
+                      <BarChart2 className="h-5 w-5 text-primary" />
+                      <h2 className="text-2xl font-bold tracking-tight">Risk Analysis</h2>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      See whether this tour still holds up if a key show dips, costs rise, or the road days get heavy.
+                    </p>
+                  </div>
+                  {riskAnalysis ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={riskBadgeClassName}>{riskAnalysis.riskSummary.label}</Badge>
+                      {riskIsStale && (
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                          Tour changed - recalculate risk
+                        </Badge>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                {!hasValidRiskInput && !riskAnalysis ? (
+                  <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background">
+                        <MapPin className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold">Add your dates and finish the tour first.</h3>
+                        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                          Risk needs at least one show and a current tour total before it can say anything useful.
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="secondary" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Stop
+                    </Button>
+                  </div>
+                ) : !riskAnalysis ? (
+                  <div className="grid gap-5 px-5 py-8 lg:grid-cols-[1fr_280px] lg:items-center">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+                        <Ticket className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold">Calculate risk to see what could go wrong.</h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                          We will check key shows, ticket pressure, blank days, road costs, and whether the tour still works if one date underperforms.
+                        </p>
+                      </div>
+                    </div>
+                    <Button size="lg" variant="secondary" onClick={handleCalculateRisk}>
+                      <BarChart2 className="mr-2 h-4 w-4" />
+                      Calculate Risk
+                    </Button>
+                  </div>
+                ) : (
+                  <div className={cn("space-y-6 px-5 py-5", riskIsStale && "opacity-70")}>
+                    {riskIsStale && (
+                      <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div>
+                            <div className="text-sm font-semibold">Tour changed - recalculate risk</div>
+                            <p className="text-xs text-amber-800/85">The notes below are from the previous version of this tour.</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="border-amber-300 bg-background" disabled={!hasValidRiskInput} onClick={handleCalculateRisk}>
+                          Recalculate Risk
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                      <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Plain-English verdict</div>
+                        <p className="mt-2 text-2xl font-bold leading-tight">{musicianRiskVerdict}</p>
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-border/40 bg-muted/20 p-3">
+                            <div className="text-xs font-semibold text-muted-foreground">Biggest issue</div>
+                            <p className="mt-1 text-sm font-medium">{topRiskIssue}</p>
+                          </div>
+                          <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-3">
+                            <div className="text-xs font-semibold text-muted-foreground">Next move</div>
+                            <p className="mt-1 text-sm font-medium">{nextRiskMove}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Risk score</div>
+                          <div className="mt-1 text-3xl font-bold">{riskAnalysis.riskSummary.overallScore}<span className="text-base font-medium text-muted-foreground"> / 100</span></div>
+                        </div>
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Red flags</div>
+                          <div className="mt-1 text-3xl font-bold text-destructive">{riskAnalysis.flags.redFlags.length}</div>
+                        </div>
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Off / travel days</div>
+                          <div className="mt-1 text-3xl font-bold">{riskAnalysis.scheduleMetrics.deadDayCount}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Card className="border-border/50 bg-background/70">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Navigation className="h-4 w-4 text-primary" />
+                          Tour Date Notes
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">A musician-friendly read of the run, date by date.</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {riskTimelineRows.map(({ day, stop, show, note, tags, isAnchor, isWeak, isBurnDay, isLongTravel, index }) => (
+                          <div
+                            key={`${day.date}-${day.showId ?? index}`}
+                            className={cn(
+                              "grid gap-3 rounded-xl border px-4 py-3 transition-colors md:grid-cols-[150px_1fr]",
+                              isAnchor && "border-secondary/40 bg-secondary/[0.06]",
+                              isWeak && "border-destructive/30 bg-destructive/[0.04]",
+                              isBurnDay && "border-amber-200 bg-amber-50/60",
+                              isLongTravel && !isAnchor && !isWeak && "border-orange-200 bg-orange-50/60",
+                              !isAnchor && !isWeak && !isBurnDay && !isLongTravel && "border-border/50 bg-card/70",
+                            )}
+                          >
+                            <div>
+                              <div className="text-sm font-bold">{formatRiskTimelineDate(day.date)}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {day.hasShow ? "Show day" : day.type === "travel_day" ? "Travel day" : "Day off"}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-semibold">
+                                  {stop?.venueName || stop?.city || (day.type === "travel_day" ? "Travel day" : "No show booked")}
+                                </div>
+                                {stop?.city && stop.venueName && stop.city !== stop.venueName && (
+                                  <span className="text-xs text-muted-foreground">{stop.city}</span>
+                                )}
+                                {tags.map((tag) => (
+                                  <span key={tag.label} className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", tag.className)}>
+                                    {tag.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-sm leading-relaxed text-foreground/85">{note}</p>
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                {show && <span>Net {fmt(show.netProfit)}</span>}
+                                {day.travelDistance > 0 && <span>{Math.round(day.travelDistance)} km travel</span>}
+                                {day.burnCost > 0 && <span>{fmt(day.burnCost)} day cost</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex justify-end">
+                      <Button variant="outline" onClick={() => setShowRiskNumbers((value) => !value)}>
+                        {showRiskNumbers ? "Hide the numbers" : "Show the numbers"}
+                      </Button>
+                    </div>
+
+                    {showRiskNumbers && (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <Card className="border-border/50 bg-background/70">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">What Could Go Wrong</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {[...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags].length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No major risk flags triggered from the current tour result.</p>
+                            ) : (
+                              [...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags].map((flag) => (
+                                <div key={flag.code} className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5">
+                                  <div className="text-sm font-semibold">{musicianRiskCopy(flag.label)}</div>
+                                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{musicianRiskCopy(flag.explanation)}</p>
+                                </div>
+                              ))
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50 bg-background/70">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Show Working</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              {riskCategoryRows.map(({ label, category }) => (
+                                <div key={label} className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs text-muted-foreground">{label}</span>
+                                    <span className="font-bold">{category.score}</span>
+                                  </div>
+                                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{musicianRiskCopy(category.explanation)}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                              <div className="font-semibold">Key show test</div>
+                              <p className="mt-1 text-muted-foreground">
+                                Without {riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "the key show"}, the tour lands at {fmt(riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet)}.
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                              <div className="font-semibold">Cost spike test</div>
+                              <p className="mt-1 text-muted-foreground">
+                                If road and accommodation costs rise 20%, the tour lands at {fmt(riskAnalysis.stressTests.logisticsSpike.postSpikeNet)}.
+                              </p>
+                            </div>
+                            {riskAnalysis.recommendations.length > 0 && (
+                              <div className="rounded-lg border border-primary/20 bg-primary/[0.05] px-3 py-2.5 text-xs">
+                                <div className="font-semibold">What to fix first</div>
+                                <p className="mt-1 text-muted-foreground">{musicianRiskCopy(riskAnalysis.recommendations[0].mitigation)}</p>
+                              </div>
+                            )}
+                            {riskAnalysis.weakestShows.length > 0 && (
+                              <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                                <div className="font-semibold">Weakest shows</div>
+                                <p className="mt-1 text-muted-foreground">
+                                  {riskAnalysis.weakestShows.map((show) => show.venueName).join(", ")}
+                                </p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Add Past Show Modal */}
       <Dialog open={showPastShowModal} onOpenChange={open => { if (!open) closePastShowModal(); else setShowPastShowModal(true); }}>
