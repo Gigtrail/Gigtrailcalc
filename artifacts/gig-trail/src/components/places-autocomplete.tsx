@@ -93,6 +93,33 @@ export function onGoogleMapsReady(callback: () => void) {
   readyCallbacks.push(callback);
 }
 
+export function waitForGoogleMapsReady(apiKey?: string, timeoutMs = 4_000): Promise<boolean> {
+  if ((window as typeof window & { google?: typeof google }).google?.maps) {
+    return Promise.resolve(true);
+  }
+
+  if (!apiKey) {
+    return Promise.resolve(false);
+  }
+
+  loadGoogleMaps(apiKey);
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (value: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    onGoogleMapsReady(() => {
+      window.clearTimeout(timer);
+      finish(true);
+    });
+  });
+}
+
 function getComponent(
   components: google.maps.GeocoderAddressComponent[],
   types: string[],
@@ -123,7 +150,20 @@ export function parseAddressComponents(
   };
 }
 
-function reverseGeocodeLocation(lat: number, lng: number): Promise<PlaceResult | null> {
+export function formatPlaceLabel(parsed?: ParsedAddress, fallback?: string): string {
+  if (!parsed) {
+    return fallback?.trim() || "";
+  }
+
+  const locality = parsed.suburb || parsed.city || "";
+  const region = [locality, parsed.state].filter(Boolean).join(" ");
+  const regionalWithPostcode = [region, parsed.postcode].filter(Boolean).join(" ");
+  const country = parsed.country || "";
+
+  return [regionalWithPostcode || region || locality, country].filter(Boolean).join(", ") || fallback?.trim() || "";
+}
+
+export function reverseGeocodeLocation(lat: number, lng: number): Promise<PlaceResult | null> {
   return new Promise((resolve) => {
     if (!(window as typeof window & { google?: typeof google }).google?.maps?.Geocoder) {
       resolve(null);
@@ -139,13 +179,45 @@ function reverseGeocodeLocation(lat: number, lng: number): Promise<PlaceResult |
       }
 
       const first = results[0];
+      const parsed = first.address_components
+        ? parseAddressComponents(first.address_components)
+        : undefined;
       resolve({
-        name: first.formatted_address,
+        name: formatPlaceLabel(parsed, first.formatted_address),
         lat,
         lng,
-        parsed: first.address_components
-          ? parseAddressComponents(first.address_components)
-          : undefined,
+        parsed,
+      });
+    });
+  });
+}
+
+export function geocodeAddress(address: string): Promise<PlaceResult | null> {
+  return new Promise((resolve) => {
+    const query = address.trim();
+    if (!query || !(window as typeof window & { google?: typeof google }).google?.maps?.Geocoder) {
+      resolve(null);
+      return;
+    }
+
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address: query }, (results, status) => {
+      if (status !== "OK" || !results?.length) {
+        logPlacesError("Address geocoding failed", { address: query, status });
+        resolve(null);
+        return;
+      }
+
+      const first = results[0];
+      const parsed = first.address_components
+        ? parseAddressComponents(first.address_components)
+        : undefined;
+
+      resolve({
+        name: formatPlaceLabel(parsed, first.formatted_address),
+        lat: first.geometry?.location?.lat(),
+        lng: first.geometry?.location?.lng(),
+        parsed,
       });
     });
   });
@@ -165,6 +237,7 @@ export function PlacesAutocomplete({
   const onChangeRef = useRef(onChange);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [locationHint, setLocationHint] = useState<string | null>(null);
 
   onChangeRef.current = onChange;
 
@@ -189,6 +262,7 @@ export function PlacesAutocomplete({
         : undefined;
 
       setLocationError(null);
+      setLocationHint(null);
       onChangeRef.current(name, { name, lat, lng, parsed });
     });
 
@@ -214,6 +288,7 @@ export function PlacesAutocomplete({
 
   const handleManualChange = useCallback((nextValue: string) => {
     setLocationError(null);
+    setLocationHint(null);
     onChange(nextValue);
   }, [onChange]);
 
@@ -234,16 +309,20 @@ export function PlacesAutocomplete({
         const lng = position.coords.longitude;
 
         try {
+          await waitForGoogleMapsReady(apiKey);
           const geocodedPlace = await reverseGeocodeLocation(lat, lng);
           if (geocodedPlace) {
+            setLocationHint("Using current location");
             onChangeRef.current(geocodedPlace.name, geocodedPlace);
           } else {
             const fallbackName = `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`;
+            setLocationHint("Using current location");
             onChangeRef.current(fallbackName, { name: fallbackName, lat, lng });
           }
         } catch (error) {
           const fallbackName = `Lat ${lat.toFixed(5)}, Lng ${lng.toFixed(5)}`;
           logPlacesError("Failed to resolve the user's current location", error);
+          setLocationHint("Using current location");
           onChangeRef.current(fallbackName, { name: fallbackName, lat, lng });
         } finally {
           setIsLocating(false);
@@ -260,7 +339,7 @@ export function PlacesAutocomplete({
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
     );
-  }, []);
+  }, [apiKey]);
 
   const input = (
     <Input
@@ -303,6 +382,12 @@ export function PlacesAutocomplete({
       {locationError && (
         <p className="text-xs text-muted-foreground" role="status">
           {locationError}
+        </p>
+      )}
+
+      {!locationError && locationHint && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {locationHint}
         </p>
       )}
     </div>

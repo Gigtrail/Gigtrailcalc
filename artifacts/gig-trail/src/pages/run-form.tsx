@@ -32,10 +32,10 @@ import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { VenueSearch, VenueSelection } from "@/components/venue-search";
 import { VenueIntelligence, type VenueShow } from "@/components/venue-intelligence";
 import { DealTypeInfo } from "@/components/deal-type-info";
-import { usePlan } from "@/hooks/use-plan";
+import { usePlan, useWeeklyUsage } from "@/hooks/use-plan";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeType } from "@/lib/member-utils";
-import { getFuelPriceForType, inferFuelTypeFromPrices } from "@/lib/profile-setup";
+import { findFirstCompleteProfile, getFuelPriceForType, inferFuelTypeFromPrices, isProfileComplete } from "@/lib/profile-setup";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
 import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
@@ -44,6 +44,7 @@ import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VE
 import { getRunLifecycleState, getSavedCalculationStatusForPersist } from "@/lib/run-lifecycle";
 import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import { SliderInput } from "@/components/slider-input";
+import { geocodeAddress, reverseGeocodeLocation, waitForGoogleMapsReady } from "@/components/places-autocomplete";
 import {
   Dialog,
   DialogContent,
@@ -92,7 +93,16 @@ const runSchema = z.object({
 
 type RunFormValues = z.infer<typeof runSchema>;
 
+const WEEKLY_USAGE_QUERY_KEY = ["/api/profiles/weekly-usage"] as const;
+const MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
+function isFiniteCoordinate(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function looksLikeCoordinateLabel(value: string | null | undefined): boolean {
+  return /^Lat\s*-?\d+(\.\d+)?,\s*Lng\s*-?\d+(\.\d+)?$/i.test((value ?? "").trim());
+}
 
 function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -108,7 +118,11 @@ async function calculateGoogleRoute(
 ): Promise<{ distanceKm: number; durationMinutes: number } | null> {
   return new Promise((resolve) => {
     const g = (window as unknown as { google?: { maps?: { DistanceMatrixService?: unknown } } }).google;
-    if (!g?.maps?.DistanceMatrixService) { resolve(null); return; }
+    if (!g?.maps?.DistanceMatrixService) {
+      console.warn("[RunForm] Distance Matrix service unavailable");
+      resolve(null);
+      return;
+    }
     const gm = g.maps as unknown as typeof google.maps;
     const service = new gm.DistanceMatrixService();
     service.getDistanceMatrix({
@@ -127,6 +141,14 @@ async function calculateGoogleRoute(
           return;
         }
       }
+      console.warn("[RunForm] Distance Matrix request failed", {
+        status,
+        elementStatus: result?.rows?.[0]?.elements?.[0]?.status,
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      });
       resolve(null);
     });
   });
@@ -391,7 +413,13 @@ function CompactRunFormLayout({
                     <div className="rounded-xl bg-muted/30 px-3 py-2">
                       <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Travel</div>
                       <div className="truncate text-sm font-medium text-foreground">
-                        {travelDistanceKm > 0 ? `${totalTravelDistanceKm.toFixed(0)} km` : distanceMode === "auto" ? "Maps" : "Manual"}
+                        {travelDistanceKm > 0
+                          ? `${totalTravelDistanceKm.toFixed(0)} km`
+                          : routeCalcFailed && distanceMode === "auto"
+                            ? "Unavailable"
+                            : distanceMode === "auto"
+                              ? "Maps"
+                              : "Manual"}
                       </div>
                     </div>
                   </div>
@@ -488,6 +516,7 @@ function CompactRunFormLayout({
                                       form.setValue("originLng", place?.lng ?? null);
                                     }}
                                     placeholder="Home city"
+                                    enableCurrentLocation
                                   />
                                 </FormControl>
                               </FormItem>
@@ -532,7 +561,11 @@ function CompactRunFormLayout({
 
                             {distanceMode === "auto" ? (
                               <div className="flex min-h-10 flex-1 items-center rounded-md border border-border/50 bg-background/70 px-3 text-sm">
-                                {travelDistanceKm > 0 ? `${travelDistanceKm.toFixed(0)} km one way` : "Maps route on Calculate"}
+                                {travelDistanceKm > 0
+                                  ? `${travelDistanceKm.toFixed(0)} km one way`
+                                  : routeCalcFailed
+                                    ? "Distance unavailable"
+                                    : "Waiting for route"}
                               </div>
                             ) : (
                               <FormField
@@ -566,11 +599,11 @@ function CompactRunFormLayout({
 
                           <div className="text-xs text-muted-foreground">
                             {routeCalcFailed && distanceMode === "auto"
-                              ? "Auto route failed. Switch to manual or reselect both locations."
+                              ? "Distance unavailable - check origin or venue."
                               : travelDistanceKm > 0
                                 ? `Total travel ${totalTravelDistanceKm.toFixed(0)} km${formValues.returnTrip ? " return" : ""}.`
                                 : distanceMode === "auto"
-                                  ? "Distance stays idle until Calculate."
+                                  ? "Distance updates automatically once both locations are ready."
                                   : "Enter the one-way distance."}
                           </div>
                         </div>
@@ -1280,9 +1313,9 @@ export default function RunForm() {
 
   const formValues = useWatch({ control: form.control });
   const { plan, isPro } = usePlan();
+  const { data: weeklyUsage } = useWeeklyUsage();
 
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [calcUsage, setCalcUsage] = useState<{ count: number; limit: number | null } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [routeCalcFailed, setRouteCalcFailed] = useState(false);
   const [overridingCosts, setOverridingCosts] = useState(isEditing);
@@ -1452,6 +1485,9 @@ export default function RunForm() {
 
   const currentCalcKey = buildCalcKey(formValues);
   const isStale = !!calculationResult && lastCalcKey !== null && lastCalcKey !== currentCalcKey;
+  const calcUsage = weeklyUsage
+    ? { count: weeklyUsage.used, limit: weeklyUsage.limit }
+    : null;
   const usageLimit = calcUsage?.limit ?? (isPro ? null : 5);
   const usageReached = !isPro && usageLimit !== null && (calcUsage?.count ?? 0) >= usageLimit;
 
@@ -1489,16 +1525,40 @@ export default function RunForm() {
 
     try {
       if (distanceMode === "auto") {
-        const oLat = vals.originLat, oLng = vals.originLng;
-        const dLat = vals.destinationLat, dLng = vals.destinationLng;
-        if (oLat && oLng && dLat && dLng) {
-          const route = await calculateGoogleRoute(oLat, oLng, dLat, dLng);
+        const resolvedOrigin = await resolveRouteLocation(vals.origin, vals.originLat, vals.originLng);
+        const resolvedDestination = await resolveRouteLocation(vals.destination, vals.destinationLat, vals.destinationLng);
+
+        if (resolvedOrigin && resolvedDestination) {
+          form.setValue("originLat", resolvedOrigin.lat);
+          form.setValue("originLng", resolvedOrigin.lng);
+          form.setValue("destinationLat", resolvedDestination.lat);
+          form.setValue("destinationLng", resolvedDestination.lng);
+          if (looksLikeCoordinateLabel(vals.origin) && resolvedOrigin.label) {
+            form.setValue("origin", resolvedOrigin.label);
+          }
+          if (looksLikeCoordinateLabel(vals.destination) && resolvedDestination.label) {
+            form.setValue("destination", resolvedDestination.label);
+          }
+
+          const route = await calculateGoogleRoute(
+            resolvedOrigin.lat,
+            resolvedOrigin.lng,
+            resolvedDestination.lat,
+            resolvedDestination.lng,
+          );
+
           if (route) {
             form.setValue("distanceKm", route.distanceKm);
             routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
           } else {
             setRouteCalcFailed(true);
           }
+        } else {
+          console.warn("[RunForm] Could not resolve route endpoints during calculate", {
+            origin: vals.origin,
+            destination: vals.destination,
+          });
+          setRouteCalcFailed(true);
         }
       }
 
@@ -1507,7 +1567,18 @@ export default function RunForm() {
       if (profileId) {
         const result = await trackCalculation.mutateAsync({ id: profileId });
         nextCalcUsage = { count: result.count, limit: result.limit ?? null };
-        setCalcUsage(nextCalcUsage);
+        queryClient.setQueryData(WEEKLY_USAGE_QUERY_KEY, (previous: {
+          used?: number;
+          limit?: number | null;
+          resetsIn?: number | null;
+          isPro?: boolean;
+        } | undefined) => ({
+          used: result.count,
+          limit: result.limit ?? previous?.limit ?? null,
+          resetsIn: previous?.resetsIn ?? null,
+          isPro: previous?.isPro ?? isPro,
+        }));
+        queryClient.invalidateQueries({ queryKey: WEEKLY_USAGE_QUERY_KEY });
       }
 
 
@@ -1852,7 +1923,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, runId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
+  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, queryClient, runId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
 
   // Restore form draft saved by the calculator when user clicks "Edit Inputs"
   // on the results page. For new runs (/runs/new) we apply on mount. For edits
@@ -1873,6 +1944,7 @@ export default function RunForm() {
   }, []);
 
   const LAST_PROFILE_KEY = "gigtrail_lastUsedProfileId";
+  const hydratedProfileRef = useRef<number | null>(null);
 
   const applyProfileValues = useCallback((profile: NonNullable<typeof profiles>[number]) => {
     const profileFuelType = inferFuelTypeFromPrices({
@@ -1890,6 +1962,7 @@ export default function RunForm() {
     form.setValue("accommodationRequired", profile.accommodationRequired ?? false);
     form.setValue("singleRooms", profile.singleRoomsDefault ?? 0);
     form.setValue("doubleRooms", profile.doubleRoomsDefault ?? 0);
+    setRunVehicleId(profile.defaultVehicleId ?? null);
     setOverridingCosts(false);
     form.setValue("foodCost", profile.avgFoodPerDay * profile.peopleCount);
     if (profile.expectedGigFee && profile.expectedGigFee > 0) {
@@ -1898,9 +1971,8 @@ export default function RunForm() {
         form.setValue("fee", profile.expectedGigFee);
       }
     }
-    // Note: fuelPrice field is a per-show manual override only.
-    // The profile's fuel assumptions (defaultPetrolPrice / defaultDieselPrice / defaultLpgPrice)
-    // are applied automatically by the calculation engine — no pre-fill needed here.
+    // Seed the calculator with the profile's current fuel assumption so the
+    // first run feels fully hydrated; users can still override it per-show.
     if (profile.homeBase) {
       form.setValue("origin", profile.homeBase);
       form.setValue("originLat", typeof profile.homeBaseLat === "number" ? profile.homeBaseLat : null);
@@ -1909,8 +1981,7 @@ export default function RunForm() {
     if (profileFuelPrice) {
       form.setValue("fuelPrice", profileFuelPrice);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [form]);
 
   // Prefill from URL search params after onboarding redirect, or auto-select last used / first profile
   useEffect(() => {
@@ -1927,16 +1998,20 @@ export default function RunForm() {
       // Only auto-select a profile if one isn't already set
       const currentProfileId = form.getValues("profileId");
       if (!currentProfileId) {
+        const completeProfiles = profiles.filter((profile) => isProfileComplete(profile));
+        const fallbackProfile = findFirstCompleteProfile(profiles) ?? completeProfiles[0] ?? profiles[0];
         let autoProfileId: number | null = null;
-        if (urlProfileId) {
-          autoProfileId = Number(urlProfileId);
+        const urlProfile = urlProfileId ? profiles.find((profile) => profile.id === Number(urlProfileId)) : null;
+        if (urlProfile && isProfileComplete(urlProfile)) {
+          autoProfileId = urlProfile.id;
         } else {
           const lastUsed = localStorage.getItem(LAST_PROFILE_KEY);
           const lastUsedNum = lastUsed ? parseInt(lastUsed) : null;
-          if (lastUsedNum && profiles.find(p => p.id === lastUsedNum)) {
+          const lastUsedProfile = lastUsedNum ? profiles.find((profile) => profile.id === lastUsedNum) : null;
+          if (lastUsedProfile && isProfileComplete(lastUsedProfile)) {
             autoProfileId = lastUsedNum;
           } else {
-            autoProfileId = profiles[0].id;
+            autoProfileId = fallbackProfile?.id ?? null;
           }
         }
 
@@ -1950,6 +2025,204 @@ export default function RunForm() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles, isEditing]);
+
+  useEffect(() => {
+    if (isEditing || !profiles?.length) return;
+
+    const currentProfileId = form.getValues("profileId");
+    if (!currentProfileId || hydratedProfileRef.current === currentProfileId) {
+      return;
+    }
+
+    const profile = profiles.find((item) => item.id === currentProfileId);
+    if (!profile) {
+      return;
+    }
+
+    hydratedProfileRef.current = currentProfileId;
+    applyProfileValues(profile);
+  }, [applyProfileValues, form, isEditing, profiles]);
+
+  async function resolveRouteLocation(
+    label: string | null | undefined,
+    lat: number | null | undefined,
+    lng: number | null | undefined,
+  ) {
+    const trimmedLabel = label?.trim() ?? "";
+    const hasCoordinates = isFiniteCoordinate(lat) && isFiniteCoordinate(lng);
+    const mapsReady = await waitForGoogleMapsReady(MAPS_API_KEY);
+
+    if (hasCoordinates) {
+      if (looksLikeCoordinateLabel(trimmedLabel) && mapsReady) {
+        const readablePlace = await reverseGeocodeLocation(lat, lng);
+        if (readablePlace?.name) {
+          return { label: readablePlace.name, lat, lng };
+        }
+      }
+      return { label: trimmedLabel, lat, lng };
+    }
+
+    if (!trimmedLabel || !mapsReady) {
+      return null;
+    }
+
+    const geocodedPlace = await geocodeAddress(trimmedLabel);
+    if (!geocodedPlace || !isFiniteCoordinate(geocodedPlace.lat) || !isFiniteCoordinate(geocodedPlace.lng)) {
+      return null;
+    }
+
+    return {
+      label: geocodedPlace.name || trimmedLabel,
+      lat: geocodedPlace.lat,
+      lng: geocodedPlace.lng,
+    };
+  }
+
+  useEffect(() => {
+    const candidates = [
+      {
+        field: "origin" as const,
+        latField: "originLat" as const,
+        lngField: "originLng" as const,
+      },
+      {
+        field: "destination" as const,
+        latField: "destinationLat" as const,
+        lngField: "destinationLng" as const,
+      },
+    ];
+
+    let cancelled = false;
+
+    void (async () => {
+      for (const candidate of candidates) {
+        const label = form.getValues(candidate.field);
+        const lat = form.getValues(candidate.latField);
+        const lng = form.getValues(candidate.lngField);
+
+        if (!looksLikeCoordinateLabel(label) || !isFiniteCoordinate(lat) || !isFiniteCoordinate(lng)) {
+          continue;
+        }
+
+        const resolved = await resolveRouteLocation(label, lat, lng);
+        if (cancelled || !resolved?.label || resolved.label === label) {
+          continue;
+        }
+
+        form.setValue(candidate.field, resolved.label);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    form,
+    formValues.destination,
+    formValues.destinationLat,
+    formValues.destinationLng,
+    formValues.origin,
+    formValues.originLat,
+    formValues.originLng,
+  ]);
+
+  const autoRouteKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (distanceMode !== "auto") {
+      autoRouteKeyRef.current = null;
+      return;
+    }
+
+    const originLabel = formValues.origin?.trim() ?? "";
+    const destinationLabel = formValues.destination?.trim() ?? "";
+
+    if (!originLabel || !destinationLabel) {
+      setRouteCalcFailed(false);
+      return;
+    }
+
+    const routeKey = JSON.stringify({
+      originLabel,
+      destinationLabel,
+      originLat: formValues.originLat ?? null,
+      originLng: formValues.originLng ?? null,
+      destinationLat: formValues.destinationLat ?? null,
+      destinationLng: formValues.destinationLng ?? null,
+    });
+
+    if (autoRouteKeyRef.current === routeKey && (Number(formValues.distanceKm) || 0) > 0 && !routeCalcFailed) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const [resolvedOrigin, resolvedDestination] = await Promise.all([
+          resolveRouteLocation(formValues.origin, formValues.originLat, formValues.originLng),
+          resolveRouteLocation(formValues.destination, formValues.destinationLat, formValues.destinationLng),
+        ]);
+
+        if (cancelled) return;
+
+        if (!resolvedOrigin || !resolvedDestination) {
+          console.warn("[RunForm] Route endpoint resolution failed", {
+            origin: formValues.origin,
+            destination: formValues.destination,
+          });
+          autoRouteKeyRef.current = routeKey;
+          setRouteCalcFailed(true);
+          return;
+        }
+
+        form.setValue("originLat", resolvedOrigin.lat);
+        form.setValue("originLng", resolvedOrigin.lng);
+        form.setValue("destinationLat", resolvedDestination.lat);
+        form.setValue("destinationLng", resolvedDestination.lng);
+
+        if (resolvedOrigin.label && looksLikeCoordinateLabel(form.getValues("origin"))) {
+          form.setValue("origin", resolvedOrigin.label);
+        }
+        if (resolvedDestination.label && looksLikeCoordinateLabel(form.getValues("destination"))) {
+          form.setValue("destination", resolvedDestination.label);
+        }
+
+        const route = await calculateGoogleRoute(
+          resolvedOrigin.lat,
+          resolvedOrigin.lng,
+          resolvedDestination.lat,
+          resolvedDestination.lng,
+        );
+
+        if (cancelled) return;
+
+        if (!route) {
+          autoRouteKeyRef.current = routeKey;
+          setRouteCalcFailed(true);
+          return;
+        }
+
+        autoRouteKeyRef.current = routeKey;
+        setRouteCalcFailed(false);
+        form.setValue("distanceKm", route.distanceKm);
+      })();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    distanceMode,
+    form,
+    formValues.destination,
+    formValues.destinationLat,
+    formValues.destinationLng,
+    formValues.distanceKm,
+    formValues.origin,
+    formValues.originLat,
+    formValues.originLng,
+    routeCalcFailed,
+  ]);
 
   useEffect(() => {
     if (run && profiles) {
@@ -2648,6 +2921,7 @@ export default function RunForm() {
                                   form.setValue("originLng", place?.lng ?? null);
                                 }}
                                 placeholder="Home City"
+                                enableCurrentLocation
                               />
                             </FormControl>
                             <FormMessage />
