@@ -855,7 +855,10 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
         });
         marker.addListener("click", () => {
           if (!infoRef.current) return;
-          const loc = v.fullAddress ?? [v.city, v.state].filter(Boolean).join(", ") || "Location not set";
+          const loc =
+            v.fullAddress ||
+            [v.city, v.state].filter(Boolean).join(", ") ||
+            "Location not set";
           const upcomingLine =
             v.upcomingShowsCount > 0
               ? `<div style="font-size:12px;color:#10b981;margin-top:4px">${v.upcomingShowsCount} upcoming show${v.upcomingShowsCount === 1 ? "" : "s"}</div>`
