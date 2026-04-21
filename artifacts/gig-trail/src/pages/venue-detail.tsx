@@ -297,6 +297,10 @@ function ShowCard({ show }: { show: VenueShow }) {
           <p className="font-semibold">{audience != null ? `${audience} pax` : "-"}</p>
         </div>
         <div>
+          <p className="text-xs text-muted-foreground">Ticket sales</p>
+          <p className="font-semibold">{show.actualTicketSales != null ? fmtNumber(show.actualTicketSales) : "-"}</p>
+        </div>
+        <div>
           <p className="text-xs text-muted-foreground">Would play again</p>
           <WouldDoAgainBadge value={show.wouldDoAgain} />
         </div>
@@ -398,12 +402,15 @@ interface DraftForm {
   country: string;
   capacity: string;
   website: string;
+  contactName: string;
   contactEmail: string;
   contactPhone: string;
+  productionContactName: string;
+  productionContactPhone: string;
+  productionContactEmail: string;
   roomNotes: string;
   venueStatus: VenueStatus;
   willPlayAgain: WillPlayAgain;
-  actualTicketSales: string;
   accommodationAvailable: boolean;
   riderProvided: boolean;
   playingDays: string[];
@@ -419,12 +426,15 @@ type VenueDraftSource = {
   country?: string | null;
   capacity?: number | null;
   website?: string | null;
+  contactName?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
+  productionContactName?: string | null;
+  productionContactPhone?: string | null;
+  productionContactEmail?: string | null;
   roomNotes?: string | null;
   venueStatus?: string | null;
   willPlayAgain?: string | null;
-  actualTicketSales?: number | null;
   accommodationAvailable?: boolean | null;
   riderProvided?: boolean | null;
   playingDays?: string[] | null;
@@ -441,12 +451,15 @@ function makeDraft(venue: VenueDraftSource): DraftForm {
     country: venue.country ?? "",
     capacity: venue.capacity != null ? String(venue.capacity) : "",
     website: venue.website ?? "",
+    contactName: venue.contactName ?? "",
     contactEmail: venue.contactEmail ?? "",
     contactPhone: venue.contactPhone ?? "",
+    productionContactName: venue.productionContactName ?? "",
+    productionContactPhone: venue.productionContactPhone ?? "",
+    productionContactEmail: venue.productionContactEmail ?? "",
     roomNotes: venue.roomNotes ?? "",
     venueStatus: normalizeVenueStatus(venue.venueStatus) ?? "untested",
     willPlayAgain: normalizeWillPlayAgain(venue.willPlayAgain) ?? "unsure",
-    actualTicketSales: venue.actualTicketSales != null ? String(venue.actualTicketSales) : "",
     accommodationAvailable: venue.accommodationAvailable ?? false,
     riderProvided: venue.riderProvided ?? false,
     playingDays: venue.playingDays ?? [],
@@ -469,12 +482,15 @@ function VenueDetailsDashboard({
     country: string | null;
     capacity: number | null;
     website: string | null;
+    contactName: string | null;
     contactEmail: string | null;
     contactPhone: string | null;
+    productionContactName: string | null;
+    productionContactPhone: string | null;
+    productionContactEmail: string | null;
     roomNotes: string | null;
     venueStatus: VenueStatus | null;
     willPlayAgain: WillPlayAgain | null;
-    actualTicketSales: number | null;
     accommodationAvailable: boolean | null;
     riderProvided: boolean | null;
     playingDays: string[] | null;
@@ -497,12 +513,15 @@ function VenueDetailsDashboard({
     venue.country,
     venue.capacity,
     venue.website,
+    venue.contactName,
     venue.contactEmail,
     venue.contactPhone,
+    venue.productionContactName,
+    venue.productionContactPhone,
+    venue.productionContactEmail,
     venue.roomNotes,
     venue.venueStatus,
     venue.willPlayAgain,
-    venue.actualTicketSales,
     venue.accommodationAvailable,
     venue.riderProvided,
     venue.playingDays,
@@ -538,7 +557,6 @@ function VenueDetailsDashboard({
 
   const handleSave = () => {
     const trim = (v: string | null | undefined) => (v ?? "").trim();
-    const ticketSales = trim(draft.actualTicketSales);
     const capacityRaw = trim(draft.capacity);
     onSave({
       fullAddress: trim(draft.fullAddress) || null,
@@ -549,12 +567,15 @@ function VenueDetailsDashboard({
       country: trim(draft.country) || null,
       capacity: capacityRaw ? parseInt(capacityRaw, 10) || null : null,
       website: trim(draft.website) || null,
+      contactName: trim(draft.contactName) || null,
       contactEmail: trim(draft.contactEmail) || null,
       contactPhone: trim(draft.contactPhone) || null,
+      productionContactName: trim(draft.productionContactName) || null,
+      productionContactPhone: trim(draft.productionContactPhone) || null,
+      productionContactEmail: trim(draft.productionContactEmail) || null,
       roomNotes: trim(draft.roomNotes) || null,
       venueStatus: draft.venueStatus,
       willPlayAgain: draft.willPlayAgain,
-      actualTicketSales: ticketSales ? parseInt(ticketSales, 10) || null : null,
       accommodationAvailable: draft.accommodationAvailable,
       riderProvided: draft.riderProvided,
       playingDays: draft.playingDays && draft.playingDays.length > 0 ? draft.playingDays : null,
@@ -568,7 +589,7 @@ function VenueDetailsDashboard({
     setDirty(false);
   };
 
-  const field = (label: string, key: keyof Pick<DraftForm, "suburb" | "city" | "state" | "postcode" | "country" | "capacity" | "website" | "contactEmail" | "contactPhone" | "actualTicketSales">, placeholder?: string) => (
+  const field = (label: string, key: keyof Pick<DraftForm, "suburb" | "city" | "state" | "postcode" | "country" | "capacity" | "website" | "contactName" | "contactEmail" | "contactPhone" | "productionContactName" | "productionContactPhone" | "productionContactEmail">, placeholder?: string) => (
     <div className="space-y-1">
       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</Label>
       <Input
@@ -576,7 +597,7 @@ function VenueDetailsDashboard({
         onChange={event => set(key, event.target.value)}
         placeholder={placeholder ?? ""}
         className="h-9 text-sm"
-        inputMode={key === "capacity" || key === "actualTicketSales" ? "numeric" : undefined}
+        inputMode={key === "capacity" ? "numeric" : undefined}
       />
     </div>
   );
@@ -632,8 +653,13 @@ function VenueDetailsDashboard({
       </DashboardSection>
 
       <DashboardSection title="Contact Info" icon={<Phone className="h-4 w-4" />}>
+        {field("Contact name", "contactName", "Booking contact")}
         {field("Contact email", "contactEmail", "booking@thevenue.com")}
         {field("Contact phone", "contactPhone", "04xx xxx xxx")}
+        <div className="border-t border-border/50 pt-3" />
+        {field("Production contact", "productionContactName", "Production contact")}
+        {field("Production phone", "productionContactPhone", "04xx xxx xxx")}
+        {field("Production email", "productionContactEmail", "production@thevenue.com")}
       </DashboardSection>
 
       <DashboardSection title="Musician Notes" icon={<FileText className="h-4 w-4" />}>
@@ -677,8 +703,6 @@ function VenueDetailsDashboard({
             </Select>
           </div>
         </div>
-
-        {field("Actual ticket sales", "actualTicketSales", "140")}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2.5 text-sm">
@@ -813,7 +837,7 @@ export default function VenueDetail() {
     );
   }
 
-  const { stats, shows, upcomingStops = [], pendingStops = [] } = venue;
+  const { stats, shows, upcomingRuns = [], upcomingStops = [], pendingStops = [] } = venue;
   const timesPlayed = stats?.timesPlayed ?? 0;
   const wouldPlayPct = stats?.wouldPlayAgainRatio != null
     ? Math.round(stats.wouldPlayAgainRatio * 100)
@@ -828,9 +852,11 @@ export default function VenueDetail() {
   });
   const safeSuburb = venue.suburb && !/^\d/.test(venue.suburb.trim()) ? venue.suburb : null;
   const locationLine = [safeSuburb, venue.city, venue.state, venue.country].filter(Boolean).join(", ");
-  const nextShow = [...upcomingStops, ...pendingStops]
-    .filter(stop => Boolean(stop.date))
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)))[0];
+  const upcomingItems = [...upcomingRuns, ...upcomingStops, ...pendingStops];
+  const upcomingItemDate = (item: VenueShow | VenueStop) => "date" in item ? item.date : item.showDate;
+  const nextShow = upcomingItems
+    .filter(item => Boolean(upcomingItemDate(item)))
+    .sort((a, b) => String(upcomingItemDate(a) ?? "").localeCompare(String(upcomingItemDate(b) ?? "")))[0];
   const allUpcomingStops = [...upcomingStops, ...pendingStops]
     .sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")));
   const willPlayAgain = normalizeWillPlayAgain(venue.willPlayAgain);
@@ -904,7 +930,7 @@ export default function VenueDetail() {
               <InfoRow label="Last played" value={fmtDate(stats?.lastPlayed)} icon={<Calendar className="h-4 w-4" />} />
               <InfoRow
                 label="Next show"
-                value={nextShow ? `${fmtDate(nextShow.date)} (${nextShow.bookingStatus ?? "confirmed"})` : "-"}
+                value={nextShow ? `${fmtDate(upcomingItemDate(nextShow))} (${"bookingStatus" in nextShow ? nextShow.bookingStatus ?? "confirmed" : nextShow.status ?? "planned"})` : "-"}
                 icon={<Music className="h-4 w-4" />}
               />
               <Button variant="outline" onClick={scrollToEdit}>
@@ -941,7 +967,7 @@ export default function VenueDetail() {
               <SnapshotCard
                 label="Avg Audience"
                 value={fmtNumber(stats?.avgAudience)}
-                helper={venue.actualTicketSales != null ? `Stored sales: ${venue.actualTicketSales}` : undefined}
+                helper={timesPlayed > 0 ? "Average from linked shows" : "No history yet"}
                 icon={<Mic2 className="h-4 w-4" />}
               />
               <SnapshotCard
@@ -980,12 +1006,15 @@ export default function VenueDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {allUpcomingStops.length === 0 ? (
+              {upcomingRuns.length === 0 && allUpcomingStops.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/70 py-8 text-center text-sm text-muted-foreground">
                   No upcoming confirmed, pending, or on-hold shows.
                 </div>
               ) : (
-                allUpcomingStops.map(stop => <VenueStopCard key={stop.id} stop={stop} />)
+                <>
+                  {upcomingRuns.map(show => <ShowCard key={`run-${show.id}`} show={show} />)}
+                  {allUpcomingStops.map(stop => <VenueStopCard key={`stop-${stop.id}`} stop={stop} />)}
+                </>
               )}
             </CardContent>
           </Card>
@@ -1009,8 +1038,10 @@ export default function VenueDetail() {
           <div className="grid grid-cols-2 gap-3">
             <InfoRow label="Accommodation" value={venue.accommodationAvailable ? "Available" : "-"} icon={<Bed className="h-4 w-4" />} />
             <InfoRow label="Rider" value={venue.riderProvided ? "Provided" : "-"} icon={<Utensils className="h-4 w-4" />} />
+            <InfoRow label="Contact" value={venue.contactName || "-"} icon={<Phone className="h-4 w-4" />} />
             <InfoRow label="Email" value={venue.contactEmail || "-"} icon={<Mail className="h-4 w-4" />} />
-            <InfoRow label="Phone" value={venue.contactPhone || "-"} icon={<Phone className="h-4 w-4" />} />
+            <InfoRow label="Production" value={venue.productionContactName || "-"} icon={<Mic2 className="h-4 w-4" />} />
+            <InfoRow label="Production phone" value={venue.productionContactPhone || "-"} icon={<Phone className="h-4 w-4" />} />
           </div>
         </div>
       </div>

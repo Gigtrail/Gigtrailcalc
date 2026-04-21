@@ -911,14 +911,38 @@ components:
           type: ["number", "null"]
         lastStatus:
           type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        suburb:
+          type: ["string", "null"]
+        fullAddress:
+          type: ["string", "null"]
+        postcode:
+          type: ["string", "null"]
+        capacity:
+          type: ["integer", "null"]
+        website:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        productionContactName:
+          type: ["string", "null"]
+        productionContactPhone:
+          type: ["string", "null"]
+        productionContactEmail:
+          type: ["string", "null"]
+        roomNotes:
+          type: ["string", "null"]
         venueStatus:
           type: ["string", "null"]
           enum: ["great", "risky", "avoid", "untested", null]
         willPlayAgain:
           type: ["string", "null"]
           enum: ["yes", "no", "unsure", null]
-        actualTicketSales:
-          type: ["integer", "null"]
         accommodationAvailable:
           type: ["boolean", "null"]
         riderProvided:
@@ -957,14 +981,38 @@ components:
           type: ["number", "null"]
         lastStatus:
           type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        suburb:
+          type: ["string", "null"]
+        fullAddress:
+          type: ["string", "null"]
+        postcode:
+          type: ["string", "null"]
+        capacity:
+          type: ["integer", "null"]
+        website:
+          type: ["string", "null"]
+        contactName:
+          type: ["string", "null"]
+        contactEmail:
+          type: ["string", "null"]
+        contactPhone:
+          type: ["string", "null"]
+        productionContactName:
+          type: ["string", "null"]
+        productionContactPhone:
+          type: ["string", "null"]
+        productionContactEmail:
+          type: ["string", "null"]
+        roomNotes:
+          type: ["string", "null"]
         venueStatus:
           type: ["string", "null"]
           enum: ["great", "risky", "avoid", "untested", null]
         willPlayAgain:
           type: ["string", "null"]
           enum: ["yes", "no", "unsure", null]
-        actualTicketSales:
-          type: ["integer", "null"]
         accommodationAvailable:
           type: ["boolean", "null"]
         riderProvided:
@@ -1057,7 +1105,13 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        soundcheckTime:
+          type: ["string", "null"]
+        playingTime:
+          type: ["string", "null"]
         actualAttendance:
+          type: ["integer", "null"]
+        actualTicketSales:
           type: ["integer", "null"]
         actualTicketIncome:
           type: ["number", "null"]
@@ -1161,7 +1215,13 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        soundcheckTime:
+          type: ["string", "null"]
+        playingTime:
+          type: ["string", "null"]
         actualAttendance:
+          type: ["integer", "null"]
+        actualTicketSales:
           type: ["integer", "null"]
         actualTicketIncome:
           type: ["number", "null"]
@@ -1270,7 +1330,13 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        soundcheckTime:
+          type: ["string", "null"]
+        playingTime:
+          type: ["string", "null"]
         actualAttendance:
+          type: ["integer", "null"]
+        actualTicketSales:
           type: ["integer", "null"]
         actualTicketIncome:
           type: ["number", "null"]

@@ -77,7 +77,13 @@ export interface CreateRunBody {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */

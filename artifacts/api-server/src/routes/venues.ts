@@ -55,6 +55,7 @@ function serializeShow(r: typeof runsTable.$inferSelect) {
     totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
     totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
     actualAttendance: r.actualAttendance ?? null,
+    actualTicketSales: r.actualTicketSales ?? null,
     actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
     merchEstimate: r.merchEstimate != null ? Number(r.merchEstimate) : null,
     actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
@@ -73,6 +74,7 @@ function serializeShow(r: typeof runsTable.$inferSelect) {
 
 router.get("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const today = getTodayIsoDateFromRequest(req);
   const venues = await db.select().from(venuesTable)
     .where(eq(venuesTable.userId, userId))
     .orderBy(desc(venuesTable.updatedAt));
@@ -88,10 +90,14 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
         venueId: runsTable.venueId,
         count: sql<number>`count(*)::int`,
         lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
-        avgProfit: sql<number | null>`avg(${runsTable.totalProfit})::float`,
+        avgProfit: sql<number | null>`avg(coalesce(${runsTable.actualProfit}, ${runsTable.totalProfit}))::float`,
       })
       .from(runsTable)
-      .where(and(eq(runsTable.userId, userId), inArray(runsTable.venueId, venueIds)))
+      .where(and(
+        eq(runsTable.userId, userId),
+        inArray(runsTable.venueId, venueIds),
+        sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${today} or ${runsTable.status} = 'past')`,
+      ))
       .groupBy(runsTable.venueId);
     for (const s of stats) {
       if (s.venueId != null) {
@@ -137,17 +143,22 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     .where(and(eq(venuesTable.id, id), eq(venuesTable.userId, userId)));
   if (!venue) { res.status(404).json({ error: "Venue not found" }); return; }
 
-  const shows = await db.select().from(runsTable)
+  const today = getTodayIsoDateFromRequest(req);
+
+  const linkedRuns = await db.select().from(runsTable)
     .where(and(eq(runsTable.venueId, id), eq(runsTable.userId, userId)))
     .orderBy(desc(runsTable.showDate));
 
-  const timesPlayed = shows.length;
-  const lastPlayed = shows[0]?.showDate ?? null;
-  const fees = shows.map(s => s.fee != null ? Number(s.fee) : (s.guarantee != null ? Number(s.guarantee) : null)).filter((f): f is number => f != null);
-  const profits = shows.map(s => s.actualProfit != null ? Number(s.actualProfit) : (s.totalProfit != null ? Number(s.totalProfit) : null)).filter((p): p is number => p != null);
-  const merches = shows.map(s => s.actualOtherIncome != null ? Number(s.actualOtherIncome) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
-  const audiences = shows.map(s => s.actualAttendance).filter((a): a is number => a != null);
-  const wouldPlayAgainCount = shows.filter(s => s.wouldDoAgain === "yes").length;
+  const historicalShows = linkedRuns.filter(s => !s.showDate || s.showDate < today || s.status === "past");
+  const upcomingRuns = linkedRuns.filter(s => s.showDate && s.showDate >= today && s.status !== "past");
+
+  const timesPlayed = historicalShows.length;
+  const lastPlayed = historicalShows[0]?.showDate ?? null;
+  const fees = historicalShows.map(s => s.fee != null ? Number(s.fee) : (s.guarantee != null ? Number(s.guarantee) : null)).filter((f): f is number => f != null);
+  const profits = historicalShows.map(s => s.actualProfit != null ? Number(s.actualProfit) : (s.totalProfit != null ? Number(s.totalProfit) : null)).filter((p): p is number => p != null);
+  const merches = historicalShows.map(s => s.actualOtherIncome != null ? Number(s.actualOtherIncome) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
+  const audiences = historicalShows.map(s => s.actualAttendance).filter((a): a is number => a != null);
+  const wouldPlayAgainCount = historicalShows.filter(s => s.wouldDoAgain === "yes").length;
 
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 
@@ -160,9 +171,6 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     avgAudience: avg(audiences),
     wouldPlayAgainRatio: timesPlayed > 0 ? wouldPlayAgainCount / timesPlayed : null,
   };
-
-  // Fetch upcoming (confirmed, future) and pending tour stops at this venue
-  const today = getTodayIsoDateFromRequest(req);
 
   const tourStops = await db
     .select({
@@ -200,7 +208,8 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({
     ...serializeVenue(venue),
     stats,
-    shows: shows.map(serializeShow),
+    shows: historicalShows.map(serializeShow),
+    upcomingRuns: upcomingRuns.map(serializeShow),
     upcomingStops,
     pendingStops,
   });
@@ -224,12 +233,15 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     postcode?: string | null;
     capacity?: number | null;
     website?: string | null;
+    contactName?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    productionContactName?: string | null;
+    productionContactPhone?: string | null;
+    productionContactEmail?: string | null;
     roomNotes?: string | null;
     venueStatus?: VenueStatus | null;
     willPlayAgain?: WillPlayAgain | null;
-    actualTicketSales?: number | null;
     accommodationAvailable?: boolean | null;
     riderProvided?: boolean | null;
     playingDays?: string[] | null;
@@ -268,12 +280,15 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   if ('postcode' in body) updateData.postcode = body.postcode;
   if ('capacity' in body) updateData.capacity = body.capacity;
   if ('website' in body) updateData.website = body.website;
+  if ('contactName' in body) updateData.contactName = body.contactName;
   if ('contactEmail' in body) updateData.contactEmail = body.contactEmail;
   if ('contactPhone' in body) updateData.contactPhone = body.contactPhone;
+  if ('productionContactName' in body) updateData.productionContactName = body.productionContactName;
+  if ('productionContactPhone' in body) updateData.productionContactPhone = body.productionContactPhone;
+  if ('productionContactEmail' in body) updateData.productionContactEmail = body.productionContactEmail;
   if ('roomNotes' in body) updateData.roomNotes = body.roomNotes;
   if ('venueStatus' in body) updateData.venueStatus = body.venueStatus;
   if ('willPlayAgain' in body) updateData.willPlayAgain = body.willPlayAgain;
-  if ('actualTicketSales' in body) updateData.actualTicketSales = body.actualTicketSales;
   if ('accommodationAvailable' in body) updateData.accommodationAvailable = body.accommodationAvailable;
   if ('riderProvided' in body) updateData.riderProvided = body.riderProvided;
   if ('playingDays' in body) updateData.playingDays = body.playingDays;
@@ -294,8 +309,10 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const {
     venueName, profileId, city, state, country, lastTotalProfit, lastStatus,
-    address, suburb, fullAddress, postcode, capacity, website, contactEmail, contactPhone, roomNotes,
-    venueStatus, willPlayAgain, actualTicketSales, accommodationAvailable, riderProvided, playingDays, venueNotes,
+    address, suburb, fullAddress, postcode, capacity, website,
+    contactName, contactEmail, contactPhone,
+    productionContactName, productionContactPhone, productionContactEmail,
+    roomNotes, venueStatus, willPlayAgain, accommodationAvailable, riderProvided, playingDays, venueNotes,
   } = req.body as {
     venueName: string;
     profileId?: number | null;
@@ -310,12 +327,15 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     postcode?: string | null;
     capacity?: number | null;
     website?: string | null;
+    contactName?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    productionContactName?: string | null;
+    productionContactPhone?: string | null;
+    productionContactEmail?: string | null;
     roomNotes?: string | null;
     venueStatus?: VenueStatus | null;
     willPlayAgain?: WillPlayAgain | null;
-    actualTicketSales?: number | null;
     accommodationAvailable?: boolean | null;
     riderProvided?: boolean | null;
     playingDays?: string[] | null;
@@ -358,12 +378,15 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
         postcode: postcode ?? existing.postcode,
         capacity: capacity ?? existing.capacity,
         website: website ?? existing.website,
+        contactName: contactName ?? existing.contactName,
         contactEmail: contactEmail ?? existing.contactEmail,
         contactPhone: contactPhone ?? existing.contactPhone,
+        productionContactName: productionContactName ?? existing.productionContactName,
+        productionContactPhone: productionContactPhone ?? existing.productionContactPhone,
+        productionContactEmail: productionContactEmail ?? existing.productionContactEmail,
         roomNotes: roomNotes ?? existing.roomNotes,
         venueStatus: venueStatus ?? existing.venueStatus,
         willPlayAgain: willPlayAgain ?? existing.willPlayAgain,
-        actualTicketSales: actualTicketSales ?? existing.actualTicketSales,
         accommodationAvailable: accommodationAvailable ?? existing.accommodationAvailable,
         riderProvided: riderProvided ?? existing.riderProvided,
         playingDays: playingDays ?? existing.playingDays,
@@ -392,12 +415,15 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     postcode: postcode ?? null,
     capacity: capacity ?? null,
     website: website ?? null,
+    contactName: contactName ?? null,
     contactEmail: contactEmail ?? null,
     contactPhone: contactPhone ?? null,
+    productionContactName: productionContactName ?? null,
+    productionContactPhone: productionContactPhone ?? null,
+    productionContactEmail: productionContactEmail ?? null,
     roomNotes: roomNotes ?? null,
     venueStatus: venueStatus ?? null,
     willPlayAgain: willPlayAgain ?? null,
-    actualTicketSales: actualTicketSales ?? null,
     accommodationAvailable: accommodationAvailable ?? false,
     riderProvided: riderProvided ?? false,
     playingDays: playingDays ?? null,

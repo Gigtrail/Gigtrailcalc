@@ -21,11 +21,35 @@ export interface CreateVenueBody {
   /** @nullable */
   lastStatus?: string | null;
   /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  postcode?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
-  /** @nullable */
-  actualTicketSales?: number | null;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */

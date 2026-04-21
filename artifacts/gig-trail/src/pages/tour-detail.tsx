@@ -343,6 +343,7 @@ export default function TourDetail() {
       {
         tourId,
         data: {
+          venueId: run.venueId ?? null,
           city: run.destination || run.city || "Unknown",
           venueName: run.venueName ?? null,
           date: pendingDate ?? run.showDate ?? null,

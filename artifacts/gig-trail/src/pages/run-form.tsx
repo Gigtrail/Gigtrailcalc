@@ -46,6 +46,7 @@ import type { CalcSnapshot, SnapMember } from "@/lib/snapshot-types";
 import { SliderInput } from "@/components/slider-input";
 import { calculateDrivingRoute, geocodeAddress, reverseGeocodeLocation } from "@/lib/google-maps";
 import { formatCoordinateLabel, isFiniteCoordinate, looksLikeCoordinateLabel, type AppLocation } from "@/lib/location";
+import { buildRunVenueDefaults, stripVenueOutcomeFields } from "@/lib/venue-defaults";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,15 @@ const runSchema = z.object({
   accommodationNights: z.coerce.number().optional().nullable(),
   foodCost: z.coerce.number().optional().nullable(),
   extraCosts: z.coerce.number().optional().nullable(),
+  soundcheckTime: z.string().optional().nullable(),
+  playingTime: z.string().optional().nullable(),
+  actualAttendance: z.coerce.number().optional().nullable(),
+  actualTicketSales: z.coerce.number().optional().nullable(),
+  actualTicketIncome: z.coerce.number().optional().nullable(),
+  actualOtherIncome: z.coerce.number().optional().nullable(),
+  actualExpenses: z.coerce.number().optional().nullable(),
+  actualProfit: z.coerce.number().optional().nullable(),
+  wouldDoAgain: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   city: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
@@ -1057,6 +1067,98 @@ function CompactRunFormLayout({
                 <details className="group rounded-xl border border-border/40 bg-muted/10">
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                    <span className="font-medium">Post-show actuals</span>
+                  </summary>
+                  <div className="space-y-3 px-3 pb-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        control={form.control}
+                        name="soundcheckTime"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs text-muted-foreground">Soundcheck</FormLabel>
+                            <FormControl>
+                              <Input type="time" className={compactFieldClass} {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage className="text-xs" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="playingTime"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs text-muted-foreground">Playing time</FormLabel>
+                            <FormControl>
+                              <Input type="time" className={compactFieldClass} {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage className="text-xs" />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {([
+                        ["actualAttendance", "Audience", "0"],
+                        ["actualTicketSales", "Ticket sales", "0"],
+                        ["actualTicketIncome", "Ticket income", "$0"],
+                        ["actualOtherIncome", "Other income", "$0"],
+                        ["actualExpenses", "Expenses", "$0"],
+                        ["actualProfit", "Profit", "$0"],
+                      ] as const).map(([name, label, placeholder]) => (
+                        <FormField
+                          key={name}
+                          control={form.control}
+                          name={name}
+                          render={({ field }) => (
+                            <FormItem className="space-y-1">
+                              <FormLabel className="text-xs text-muted-foreground">{label}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  className={compactFieldClass}
+                                  placeholder={placeholder}
+                                  value={field.value ?? ""}
+                                  onChange={(event) => field.onChange(event.target.value === "" ? null : Number(event.target.value))}
+                                />
+                              </FormControl>
+                              <FormMessage className="text-xs" />
+                            </FormItem>
+                          )}
+                        />
+                      ))}
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="wouldDoAgain"
+                      render={({ field }) => (
+                        <FormItem className="space-y-1">
+                          <FormLabel className="text-xs text-muted-foreground">Would do again</FormLabel>
+                          <Select value={field.value || "unsure"} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger className={compactFieldClass}>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="yes">Yes</SelectItem>
+                              <SelectItem value="unsure">Unsure</SelectItem>
+                              <SelectItem value="no">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage className="text-xs" />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </details>
+
+                <details className="group rounded-xl border border-border/40 bg-muted/10">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
                     <span className="font-medium">Notes</span>
                   </summary>
                   <div className="px-3 pb-3">
@@ -1270,6 +1372,15 @@ export default function RunForm() {
       accommodationNights: 1,
       foodCost: 0,
       extraCosts: 0,
+      soundcheckTime: "",
+      playingTime: "",
+      actualAttendance: null,
+      actualTicketSales: null,
+      actualTicketIncome: null,
+      actualOtherIncome: null,
+      actualExpenses: null,
+      actualProfit: null,
+      wouldDoAgain: "unsure",
       notes: "",
       city: "",
       state: "",
@@ -1301,6 +1412,7 @@ export default function RunForm() {
   const [runVehicleId, setRunVehicleId] = useState<number | null>(null);
   const [runSelectedVenueId, setRunSelectedVenueId] = useState<number | null>(null);
   const previousProfileIdRef = useRef<number | null | undefined>(undefined);
+  const venueDefaultsAppliedRef = useRef<number | null>(null);
 
   // Prefill from ?venueId=… (e.g. "New Calc" action from the Tour View map).
   // Only applies in create mode and only once per venueId.
@@ -1321,17 +1433,44 @@ export default function RunForm() {
     if (venuePrefillAppliedRef.current === venuePrefillId) return;
     const v = venuePrefillQuery.data;
     if (!v) return;
-    const destination =
-      v.fullAddress ||
-      [v.venueName, v.suburb ?? v.city, v.state, v.country].filter(Boolean).join(", ");
-    form.setValue("venueName", v.venueName ?? null);
-    if (destination) form.setValue("destination", destination);
-    form.setValue("city", (v.suburb ?? v.city) || null);
-    form.setValue("state", v.state || null);
-    form.setValue("country", v.country || null);
     setRunSelectedVenueId(v.id);
+    const defaults = buildRunVenueDefaults(v, form.getValues("notes"));
+    if (defaults.venueName !== undefined) form.setValue("venueName", defaults.venueName);
+    if (defaults.destination) form.setValue("destination", defaults.destination);
+    if (defaults.city !== undefined) form.setValue("city", defaults.city);
+    if (defaults.state !== undefined) form.setValue("state", defaults.state);
+    if (defaults.country !== undefined) form.setValue("country", defaults.country);
+    if (defaults.capacity != null) form.setValue("capacity", defaults.capacity);
+    if (defaults.accommodationRequired !== undefined) form.setValue("accommodationRequired", defaults.accommodationRequired);
+    if (defaults.notes !== undefined) form.setValue("notes", defaults.notes);
     venuePrefillAppliedRef.current = venuePrefillId;
+    venueDefaultsAppliedRef.current = venuePrefillId;
   }, [venuePrefillId, venuePrefillQuery.data, isEditing, form]);
+
+  const selectedVenueDetailQuery = useGetVenue(runSelectedVenueId ?? 0, {
+    query: { enabled: !isEditing && runSelectedVenueId != null && runSelectedVenueId > 0 },
+  });
+
+  useEffect(() => {
+    if (isEditing) return;
+    if (!runSelectedVenueId || venueDefaultsAppliedRef.current === runSelectedVenueId) return;
+    const venue = selectedVenueDetailQuery.data;
+    if (!venue) return;
+
+    const defaults = buildRunVenueDefaults(venue, form.getValues("notes"));
+    if (defaults.venueName !== undefined) form.setValue("venueName", defaults.venueName);
+    if (defaults.destination) form.setValue("destination", defaults.destination);
+    if (defaults.city !== undefined) form.setValue("city", defaults.city);
+    if (defaults.state !== undefined) form.setValue("state", defaults.state);
+    if (defaults.country !== undefined) form.setValue("country", defaults.country);
+    if (defaults.capacity != null) {
+      form.setValue("capacity", defaults.capacity);
+      setAttendanceCount(current => current || Math.round(defaults.capacity! * ((Number(form.getValues("expectedAttendancePct")) || 0) / 100)));
+    }
+    if (defaults.accommodationRequired !== undefined) form.setValue("accommodationRequired", defaults.accommodationRequired);
+    if (defaults.notes !== undefined) form.setValue("notes", defaults.notes);
+    venueDefaultsAppliedRef.current = runSelectedVenueId;
+  }, [form, isEditing, runSelectedVenueId, selectedVenueDetailQuery.data]);
 
   const createOrUpdateVenue = useCreateOrUpdateVenue();
   const { data: vehicles } = useGetVehicles();
@@ -1860,6 +1999,7 @@ export default function RunForm() {
 
         const payload = {
           ...vals,
+          venueId: runSelectedVenueId,
           vehicleId: runVehicleId,
           originLat: toNumOrNull(vals.originLat),
           originLng: toNumOrNull(vals.originLng),
@@ -1933,7 +2073,7 @@ export default function RunForm() {
     } finally {
       setIsCalculating(false);
     }
-  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, queryClient, runId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
+  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, queryClient, runId, runSelectedVenueId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
 
   // Restore form draft saved by the calculator when user clicks "Edit Inputs"
   // on the results page. For new runs (/runs/new) we apply on mount. For edits
@@ -2285,12 +2425,22 @@ export default function RunForm() {
         accommodationNights: run.accommodationNights ? Number(run.accommodationNights) : 1,
         foodCost: run.foodCost,
         extraCosts: run.extraCosts,
+        soundcheckTime: run.soundcheckTime ?? "",
+        playingTime: run.playingTime ?? "",
+        actualAttendance: run.actualAttendance ?? null,
+        actualTicketSales: run.actualTicketSales ?? null,
+        actualTicketIncome: run.actualTicketIncome ?? null,
+        actualOtherIncome: run.actualOtherIncome ?? null,
+        actualExpenses: run.actualExpenses ?? null,
+        actualProfit: run.actualProfit ?? null,
+        wouldDoAgain: run.wouldDoAgain ?? "unsure",
         notes: run.notes,
         city: run.city ?? "",
         state: run.state ?? "",
         country: run.country ?? "",
       });
       setRunVehicleId(run.vehicleId ?? hydratedProfile?.defaultVehicleId ?? null);
+      setRunSelectedVenueId(run.venueId ?? null);
       // Convert stored % back to a headcount for the UI
       const cap = Number(run.capacity) || 0;
       const pct = Number(run.expectedAttendancePct) || 0;
@@ -2473,6 +2623,7 @@ export default function RunForm() {
       };
       const payload = {
         ...submissionData,
+        venueId: runSelectedVenueId,
         vehicleId: runVehicleId,
         accommodationCost: computed.accommodationCost,
         totalCost: computed.totalCost,
@@ -2485,7 +2636,7 @@ export default function RunForm() {
         const venueName = data.venueName?.trim();
         if (venueName) {
           await createOrUpdateVenue.mutateAsync({
-            data: { venueName, city: data.city || data.destination || "" },
+            data: stripVenueOutcomeFields({ venueName, city: data.city || data.destination || "" }),
           });
         }
 

@@ -48,6 +48,8 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
     totalCost: r.totalCost != null ? Number(r.totalCost) : null,
     totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
     totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
+    soundcheckTime: r.soundcheckTime ?? null,
+    playingTime: r.playingTime ?? null,
     actualTicketIncome: r.actualTicketIncome != null ? Number(r.actualTicketIncome) : null,
     actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
     actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,

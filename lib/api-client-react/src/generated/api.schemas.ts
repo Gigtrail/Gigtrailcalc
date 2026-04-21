@@ -234,11 +234,17 @@ export interface Venue {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
-  /** @nullable */
-  actualTicketSales?: number | null;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */
@@ -304,6 +310,8 @@ export interface VenueShow {
   /** @nullable */
   actualAttendance?: number | null;
   /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
   actualProfit?: number | null;
   /** @nullable */
   merchEstimate?: number | null;
@@ -350,6 +358,7 @@ export interface VenueStop {
 export interface VenueDetail extends Venue {
   stats: VenueStats;
   shows: VenueShow[];
+  upcomingRuns?: VenueShow[];
   upcomingStops: VenueStop[];
   pendingStops: VenueStop[];
 }
@@ -387,11 +396,17 @@ export interface CreateVenueBody {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
-  /** @nullable */
-  actualTicketSales?: number | null;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */
@@ -430,11 +445,17 @@ export interface PatchVenueBody {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
   venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
   /** @nullable */
   willPlayAgain?: "yes" | "no" | "unsure" | null;
-  /** @nullable */
-  actualTicketSales?: number | null;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */
@@ -526,7 +547,13 @@ export interface Run {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
@@ -669,7 +696,13 @@ export interface CreateRunBody {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
@@ -772,7 +805,13 @@ export interface UpdateRunBody {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
