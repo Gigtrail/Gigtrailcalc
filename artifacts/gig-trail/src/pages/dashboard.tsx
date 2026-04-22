@@ -492,30 +492,57 @@ function TourDayButton({
     modifiers: Record<string, boolean>;
   };
 
+  const hasShow = !!meta && meta.count > 0;
+  const inTour = !!meta?.inTour;
+
   return (
     <button
       {...buttonProps}
       className={cn(
-        "relative flex aspect-square w-full flex-col items-center justify-center rounded-md text-sm transition-colors",
+        "relative flex aspect-square w-full flex-col items-center justify-start overflow-hidden rounded-md pt-1 pb-1 text-sm transition-colors",
         "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        "data-[selected-single=true]:ring-2 data-[selected-single=true]:ring-primary data-[selected-single=true]:ring-offset-1",
-        meta && meta.count > 0 && STATUS_TINT_BG[meta.primaryStatus],
-        meta?.inTour && "before:pointer-events-none before:absolute before:inset-x-0 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-foreground/15",
-        meta?.tourBandLeft && "rounded-l-none",
-        meta?.tourBandRight && "rounded-r-none",
+        "data-[selected-single=true]:bg-primary/5 data-[selected-single=true]:ring-2 data-[selected-single=true]:ring-primary data-[selected-single=true]:ring-offset-1",
+        hasShow && STATUS_TINT_BG[meta!.primaryStatus],
         className,
       )}
     >
       <span className="relative z-10 leading-none">{children}</span>
-      {meta && meta.count > 0 && (
+
+      {inTour && (
+        <span
+          aria-hidden
+          className="pointer-events-none relative mt-0.5 flex h-1.5 w-full items-center justify-center"
+        >
+          <span
+            className={cn(
+              "absolute top-1/2 h-px -translate-y-1/2 bg-foreground/30",
+              meta!.tourBandLeft ? "-left-px" : "left-1/2",
+              meta!.tourBandRight ? "-right-px" : "right-1/2",
+            )}
+          />
+          <span
+            className={cn(
+              "relative z-10 inline-block rounded-full ring-2 ring-card",
+              hasShow
+                ? cn("h-1.5 w-1.5", STATUS_DOT[meta!.primaryStatus])
+                : "h-1 w-1 bg-foreground/40",
+            )}
+          />
+        </span>
+      )}
+
+      {hasShow && (
         <span className="relative z-10 mt-0.5 flex items-center gap-0.5">
           <span
-            className={cn("inline-block h-1.5 w-1.5 rounded-full", STATUS_DOT[meta.primaryStatus])}
             aria-hidden
+            className={cn(
+              "inline-block h-2 w-2 rounded-[3px] shadow-sm",
+              STATUS_DOT[meta!.primaryStatus],
+            )}
           />
-          {meta.count > 1 && (
+          {meta!.count > 1 && (
             <span className="text-[9px] font-semibold leading-none text-foreground/70">
-              +{meta.count - 1}
+              +{meta!.count - 1}
             </span>
           )}
         </span>
