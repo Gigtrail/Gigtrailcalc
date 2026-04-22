@@ -63,7 +63,22 @@ if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Don't retry 4xx (client errors) — those won't recover.
+      // Only retry network/5xx once to avoid hammering the server.
+      retry: (failureCount, error: unknown) => {
+        const status = (error as { status?: number; response?: { status?: number } })?.status
+          ?? (error as { response?: { status?: number } })?.response?.status;
+        if (typeof status === "number" && status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
+      retryDelay: 1500,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();

@@ -55,6 +55,21 @@ export const runsTable = pgTable("runs", {
   importedFromTour: boolean("imported_from_tour").notNull().default(false),
   importedAt: timestamp("imported_at", { withTimezone: true }),
   tourName: text("tour_name"),
+  // Legacy columns retained so historical data isn't dropped on db push.
+  // Routes read from the new field first, falling back to the legacy column.
+  notes: text("notes"),
+  totalIncome: numeric("total_income", { precision: 10, scale: 2 }),
+  totalCost: numeric("total_cost", { precision: 10, scale: 2 }),
+  totalProfit: numeric("total_profit", { precision: 10, scale: 2 }),
+  actualAttendance: integer("actual_attendance"),
+  actualTicketIncome: numeric("actual_ticket_income", { precision: 10, scale: 2 }),
+  actualOtherIncome: numeric("actual_other_income", { precision: 10, scale: 2 }),
+  actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
+  calculationSnapshot: text("calculation_snapshot"),
+  country: text("country"),
+  venueName: text("venue_name"),
+  city: text("city"),
+  state: text("state"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

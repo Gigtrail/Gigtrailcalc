@@ -192,7 +192,7 @@ async function syncStopVenue(
   } else {
     const [created] = await db.insert(venuesTable).values({
       userId,
-      venueName: venueName.trim(),
+      name: venueName.trim(),
       normalizedVenueName: normalized,
       city: city ?? null,
     }).returning();
