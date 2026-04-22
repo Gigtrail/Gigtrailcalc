@@ -13,6 +13,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { loadGoogleMaps, getGoogleMapsApiKey } from "@/lib/google-maps";
+import {
+  CalendarLanesProvider,
+  WeekRowWithLanes,
+  tourColorFor,
+  type CalendarLanesData,
+  type TourLaneEntry,
+  type DrivingLaneEntry,
+} from "@/components/calendar-lanes";
 
 type Status = TourItem["status"];
 
@@ -163,6 +171,60 @@ export default function Dashboard() {
     return grouped;
   }, [upcoming]);
 
+  /**
+   * Lane data for the calendar tracks.
+   *
+   * - `tourByDate`: every day inside any tour's full date range gets a touring
+   *   lane entry (color is per-tour). Days that contain an actual show/stop
+   *   are flagged `isStop: true` so the lane renders a node there.
+   * - `drivingByDate`: derived fallback from existing data. A date is a
+   *   driving day when it sits *between* two show dates within the same tour
+   *   (no show on the day itself). This approximates transit days without
+   *   requiring a dedicated drivingSegments API.
+   */
+  const lanesData: CalendarLanesData = useMemo(() => {
+    const tourByDate = new Map<string, TourLaneEntry>();
+    const drivingByDate = new Map<string, DrivingLaneEntry>();
+
+    // Touring lane: paint every day in each tour's range with the tour color.
+    for (const [tourId, dates] of tourBands.entries()) {
+      const color = tourColorFor(tourId);
+      for (const k of dates) {
+        const isStop = (itemsByDate.get(k) ?? []).some(it => it.tourId === tourId);
+        const existing = tourByDate.get(k);
+        // If two tours overlap on the same day, prefer the one with a stop.
+        if (!existing || (isStop && !existing.isStop)) {
+          tourByDate.set(k, { tourId, color, isStop });
+        }
+      }
+    }
+
+    // Driving lane: per tour, sort the actual show dates and mark every
+    // strictly-in-between day as a driving day.
+    const showsByTour = new Map<number, Date[]>();
+    for (const item of upcoming) {
+      if (item.tourId == null) continue;
+      const arr = showsByTour.get(item.tourId);
+      if (arr) arr.push(item._date);
+      else showsByTour.set(item.tourId, [item._date]);
+    }
+    for (const dates of showsByTour.values()) {
+      const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const start = sorted[i];
+        const end = sorted[i + 1];
+        for (let d = addDays(start, 1); d < end; d = addDays(d, 1)) {
+          const k = isoKey(d);
+          if (!itemsByDate.has(k)) {
+            drivingByDate.set(k, {});
+          }
+        }
+      }
+    }
+
+    return { tourByDate, drivingByDate };
+  }, [tourBands, itemsByDate, upcoming]);
+
   const showsForSelected = useMemo(() => {
     if (!selectedDate) return [];
     const k = isoKey(selectedDate);
@@ -214,6 +276,7 @@ export default function Dashboard() {
         <CalendarView
           itemsByDate={itemsByDate}
           tourBands={tourBands}
+          lanesData={lanesData}
           selectedDate={selectedDate}
           onSelect={handleSelectDate}
           showsForSelected={showsForSelected}
@@ -393,6 +456,7 @@ function statusPriority(s: Status): number {
 function CalendarView({
   itemsByDate,
   tourBands,
+  lanesData,
   selectedDate,
   onSelect,
   showsForSelected,
@@ -404,6 +468,7 @@ function CalendarView({
 }: {
   itemsByDate: Map<string, ItemWithDate[]>;
   tourBands: Map<number, Set<string>>;
+  lanesData: CalendarLanesData;
   selectedDate: Date | undefined;
   onSelect: (d: Date | undefined) => void;
   showsForSelected: ItemWithDate[];
@@ -446,6 +511,7 @@ function CalendarView({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="rounded-2xl border border-border/60 bg-card p-2 shadow-[0_2px_12px_rgba(58,47,38,0.08)] sm:p-4">
+        <CalendarLanesProvider value={lanesData}>
         <Calendar
           mode="single"
           selected={selectedDate}
@@ -456,24 +522,16 @@ function CalendarView({
               "h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-border/60 bg-card hover:bg-muted",
             button_next:
               "h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-border/60 bg-card hover:bg-muted",
-            // Two-lane track system above each week row.
-            // Top lane = touring, bottom lane = driving (road-like).
-            // Future data layers fill segments / change color / add markers.
-            week: cn(
-              "relative mt-3 flex w-full pt-[18px]",
-              // Touring lane (top)
-              "before:pointer-events-none before:absolute before:left-1 before:right-1 before:top-1 before:h-[5px] before:rounded-full before:bg-foreground/12 before:content-['']",
-              // Driving lane (bottom) — dark/road feel at ~60% strength,
-              // with a subtle inner highlight to read as a road surface.
-              "after:pointer-events-none after:absolute after:left-1 after:right-1 after:top-[10px] after:h-[5px] after:rounded-full after:bg-foreground/60 after:shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] after:content-['']",
-            ),
+            week: "mt-2 flex w-full",
           }}
           components={{
             DayButton: props => (
               <TourDayButton {...props} meta={dayMeta(props.day.date)} />
             ),
+            Week: WeekRowWithLanes,
           }}
         />
+        </CalendarLanesProvider>
       </div>
       <DayPanel
         selectedDate={selectedDate}

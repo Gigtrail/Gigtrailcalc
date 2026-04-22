@@ -1,0 +1,169 @@
+You are working in the GigTrail app.
+
+I need you to IMPLEMENT a proper calendar lane system for touring and driving in the month calendar view.
+
+This is not a visual mock only.
+Build the actual component structure and rendering logic so it works with app data.
+
+GOAL
+Turn the calendar into a month-view planner where each week row can show:
+1. a touring lane
+2. a driving lane
+
+These lanes should only appear on week rows where there is actual tour/driving data.
+
+-----------------------------------
+CORE BEHAVIOUR
+-----------------------------------
+
+For each week row in the month calendar:
+
+- Detect whether that row contains any tour/show data
+- Detect whether that row contains any driving/travel data
+- Only render the relevant lane(s) for that row
+- If neither exists, render no lanes for that row
+
+Each visible week row can have:
+- Touring lane above the dates
+- Driving lane just below the touring lane
+- Then the actual date cells below
+
+This should feel like two mini highways above the dates.
+
+-----------------------------------
+VISUAL RULES
+-----------------------------------
+
+TOURING LANE
+- Same thickness as the current thicker highway style
+- Solid colored line
+- Tour color should come from a configurable variable / prop / theme token
+- Add circular nodes at active dates or segment points
+- It should feel polished and intentional, not like a thin divider
+
+DRIVING LANE
+- Same thickness as touring lane
+- Styled like a small road / highway
+- Dark color at about 60% opacity
+- Include a subtle dashed center line or inner road marking
+- Rounded ends and clean joins
+- Should visually read like a road, not just a black line
+
+SPACING
+- Touring lane sits above driving lane
+- Driving lane sits above date numbers / date cards
+- Consistent spacing between lanes and date cells
+- Keep lines perfectly straight across the row unless data requires a connecting angle to next week
+
+-----------------------------------
+RENDERING LOGIC
+-----------------------------------
+
+I want this built as real app logic, not hardcoded shapes.
+
+For each calendar week row:
+- determine visible days in that row
+- map shows/tour stops into that row
+- map travel/driving segments into that row
+- render only the lane segments that are relevant
+
+Touring lane:
+- render colored segments where there are show/tour connections
+- render nodes on dates that contain tour stops
+
+Driving lane:
+- render dark road segments for travel days / driving spans
+- render road nodes or markers at relevant dates
+- use a road style with an inner dashed center line
+
+Do not draw full-width placeholder lines across all rows.
+Only show lanes on rows where data exists.
+
+-----------------------------------
+ARCHITECTURE
+-----------------------------------
+
+Please refactor this cleanly into reusable pieces.
+
+Suggested structure:
+- CalendarMonthView
+- CalendarWeekRow
+- TourLane
+- DrivingLane
+- DateGridRow or WeekDateCells
+
+Inside each CalendarWeekRow:
+- calculate row days
+- calculate lane visibility
+- calculate tour segments
+- calculate driving segments
+- render lanes conditionally
+- render date cells underneath
+
+-----------------------------------
+DATA MODEL EXPECTATION
+-----------------------------------
+
+Support data in this kind of shape, or adapt current app data to it:
+
+shows: [
+  {
+    id,
+    date,
+    status,
+    venueName,
+    isTourStop
+  }
+]
+
+drivingSegments: [
+  {
+    id,
+    startDate,
+    endDate,
+    type: "drive",
+    durationHours,
+    fromVenueId,
+    toVenueId
+  }
+]
+
+The implementation should work even if current data is incomplete by using fallback logic.
+
+-----------------------------------
+IMPORTANT
+-----------------------------------
+
+Do not fake this with static CSS bars.
+Do not hardcode one specific month.
+Do not hardcode one specific week.
+
+Build it so the month calendar can render dynamic touring and driving lanes from real data.
+
+-----------------------------------
+UI DETAILS
+-----------------------------------
+
+Driving lane road style idea:
+- outer dark rounded bar
+- lighter inner dashed center line
+- lower opacity dark surface
+- circular junction markers at key dates
+
+Tour lane style idea:
+- thick solid colored rounded bar
+- same visual weight as driving lane
+- slightly cleaner/simpler than road lane
+- nodes use the same tour color
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Please:
+1. inspect the existing calendar/month view files first
+2. identify the right place to implement this
+3. refactor the calendar row rendering if needed
+4. implement the lane system properly
+5. keep the code clean and reusable
+6. explain what files were changed and why
