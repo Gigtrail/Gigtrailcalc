@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { hasProAccess } from "@workspace/entitlements";
 
 const mockUsers = [
   { id: "user_2aXbYcZ1", email: "alice@example.com", role: "admin" },
@@ -90,7 +91,7 @@ export function SplitPane() {
               >
                 <div className="flex items-center justify-between w-full mb-1">
                   <span className="font-medium text-sm truncate">{user.email}</span>
-                  <Badge variant={user.role === "admin" ? "default" : user.role === "pro" ? "secondary" : "outline"} className={user.role === "admin" ? "bg-amber-500 hover:bg-amber-600" : ""}>
+                  <Badge variant={user.role === "admin" ? "default" : hasProAccess(user.role) ? "secondary" : "outline"} className={user.role === "admin" ? "bg-amber-500 hover:bg-amber-600" : ""}>
                     {user.role}
                   </Badge>
                 </div>
@@ -178,7 +179,7 @@ export function SplitPane() {
                         </SelectContent>
                       </Select>
                       
-                      <Badge variant={selectedUser.role === "admin" ? "default" : selectedUser.role === "pro" ? "secondary" : "outline"} className={selectedUser.role === "admin" ? "bg-amber-500 hover:bg-amber-600" : ""}>
+                      <Badge variant={selectedUser.role === "admin" ? "default" : hasProAccess(selectedUser.role) ? "secondary" : "outline"} className={selectedUser.role === "admin" ? "bg-amber-500 hover:bg-amber-600" : ""}>
                         {selectedUser.role} active
                       </Badge>
                     </div>

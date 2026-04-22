@@ -220,5 +220,4 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
   res.json(TrackCalculationResponse.parse({ allowed: true, count, limit: FREE_CALC_LIMIT }));
 });
 
-// ─── GET weekly usage (read-only, no increment) ───────────────────────────────
 export default router;

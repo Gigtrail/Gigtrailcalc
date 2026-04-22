@@ -67,9 +67,7 @@ import { Link } from "wouter";
 import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { usePlan } from "@/hooks/use-plan";
-import { canUseAdvancedDriving } from "@/lib/plan-limits";
 import { trackEvent } from "@/lib/analytics";
-import type { Plan } from "@/lib/plan-limits";
 import type { Member } from "@/types/member";
 import {
   migrateOldMembers,
@@ -522,7 +520,7 @@ export default function ProfileForm() {
   const [location, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
-  const { plan, isPro } = usePlan();
+  const { isPro, entitlements } = usePlan();
 
   const isEditing = !!id;
   const profileId = isEditing ? parseInt(id) : 0;
@@ -1232,7 +1230,7 @@ export default function ProfileForm() {
                   </div>
                 </div>
 
-                {isPro && canUseAdvancedDriving(plan as Plan) && (
+                {isPro && entitlements.canUseAdvancedDriving && (
                   <FormField control={form.control} name="maxDriveHoursPerDay" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Max Drive Hours Per Day</FormLabel>
@@ -1910,7 +1908,7 @@ export default function ProfileForm() {
                 </div>
               )}
 
-              {isPro && canUseAdvancedDriving(plan as Plan) && (
+              {isPro && entitlements.canUseAdvancedDriving && (
                 <FormField control={form.control} name="maxDriveHoursPerDay" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Max drive hours per day <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>

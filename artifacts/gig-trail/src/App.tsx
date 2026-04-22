@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, useUser } from "@clerk/react";
 import { initAnalytics, identifyUser, resetAnalytics, trackEvent } from "@/lib/analytics";
-import { usePlan } from "@/hooks/use-plan";
+import { PROMO_SESSION_KEY, usePlan, useRedeemPromo } from "@/hooks/use-plan";
 import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/hooks/use-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/layout";
 import Landing from "@/pages/landing";
@@ -50,6 +51,9 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const DevUserStatePanel = import.meta.env.DEV
+  ? lazy(() => import("@/components/dev-user-state-panel"))
+  : null;
 
 // Clerk passes full paths to routerPush/routerReplace, but wouter's
 // setLocation prepends the base — strip it to avoid doubling.
@@ -130,6 +134,47 @@ function AnalyticsIdentifier() {
       prevUserIdRef.current = null;
     }
   }, [isSignedIn, user?.id, role, accessSource]);
+
+  return null;
+}
+
+function PendingPromoRedeemer() {
+  const { isLoaded, isSignedIn } = useUser();
+  const redeemPromo = useRedeemPromo();
+  const { toast } = useToast();
+  const redeemingRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || typeof window === "undefined") return;
+
+    const pendingCode = sessionStorage.getItem(PROMO_SESSION_KEY)?.trim().toUpperCase();
+    if (!pendingCode || redeemingRef.current === pendingCode) return;
+
+    redeemingRef.current = pendingCode;
+    console.log("[PendingPromoRedeemer] redeeming pending promo code", { code: pendingCode });
+
+    void redeemPromo.mutateAsync(pendingCode)
+      .then((response) => {
+        sessionStorage.removeItem(PROMO_SESSION_KEY);
+        console.log("[PendingPromoRedeemer] promo redeemed", response);
+        toast({
+          title: "Promo code redeemed",
+          description: response.accessSource === "promo" ? "Tester access is active." : "Your access has been updated.",
+        });
+      })
+      .catch((error: unknown) => {
+        sessionStorage.removeItem(PROMO_SESSION_KEY);
+        console.error("[PendingPromoRedeemer] promo redemption failed", error);
+        toast({
+          title: "Promo code could not be redeemed",
+          description: error instanceof Error ? error.message : "Please try again after signing in.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        redeemingRef.current = null;
+      });
+  }, [isLoaded, isSignedIn, redeemPromo, toast]);
 
   return null;
 }
@@ -273,8 +318,14 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkTokenProvider />
         <ClerkQueryClientCacheInvalidator />
+        <PendingPromoRedeemer />
         <AnalyticsIdentifier />
         <TooltipProvider>
+          {DevUserStatePanel && (
+            <Suspense fallback={null}>
+              <DevUserStatePanel />
+            </Suspense>
+          )}
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />

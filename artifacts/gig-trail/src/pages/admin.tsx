@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import {
   usePlan,
+  hasProAccess,
   useAdminUsers,
   useUpdateUserRole,
   useAdminPromoCodes,
@@ -221,7 +222,7 @@ function UsersSection() {
 
   const counts = useMemo(() => {
     const free = allUsers.filter((u) => u.role === "free").length;
-    const pro = allUsers.filter((u) => u.role === "pro").length;
+    const pro = allUsers.filter((u) => hasProAccess(u.role)).length;
     const testerAdmin = allUsers.filter((u) => u.role === "tester" || u.role === "admin").length;
     return { total: allUsers.length, free, pro, testerAdmin };
   }, [allUsers]);

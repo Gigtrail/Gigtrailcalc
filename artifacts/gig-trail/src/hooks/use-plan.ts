@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser, useAuth } from "@clerk/react";
 
 /**
@@ -56,16 +56,25 @@ export interface MeResponse {
 
 const FREE_ENTITLEMENTS = getEntitlements("free");
 
+async function fetchMe(getToken: () => Promise<string | null>): Promise<MeResponse> {
+  const res = await authedFetch("/api/me", () => getToken());
+  if (!res.ok) throw new Error(`Failed to fetch plan (${res.status})`);
+  const data = await res.json() as MeResponse;
+  console.log("[usePlan] /api/me response", {
+    role: data.role,
+    plan: data.plan,
+    accessSource: data.accessSource,
+    entitlements: data.entitlements,
+  });
+  return data;
+}
+
 export function usePlan() {
   const { isSignedIn } = useUser();
   const { getToken } = useAuth();
   const { data, isLoading, refetch } = useQuery<MeResponse>({
     queryKey: ["/api/me"],
-    queryFn: async () => {
-      const res = await authedFetch("/api/me", () => getToken());
-      if (!res.ok) throw new Error(`Failed to fetch plan (${res.status})`);
-      return res.json();
-    },
+    queryFn: () => fetchMe(getToken),
     enabled: !!isSignedIn,
     staleTime: 30_000,
   });
@@ -341,6 +350,7 @@ export function usePromoCodeRedemptions(id: number | null) {
 
 export function useRedeemPromo() {
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (code: string) => {
       const res = await authedFetch("/api/me/redeem-promo", () => getToken(), {
@@ -350,7 +360,27 @@ export function useRedeemPromo() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to redeem promo code");
-      return data as { role: string; plan: string };
+      console.log("[useRedeemPromo] promo redemption response", data);
+      return data as { role: string; plan: string; accessSource?: string };
+    },
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/profiles/weekly-usage"] });
+        const me = await queryClient.fetchQuery({
+          queryKey: ["/api/me"],
+          queryFn: () => fetchMe(getToken),
+          staleTime: 0,
+        });
+        console.log("[useRedeemPromo] /api/me after redeem", {
+          role: me.role,
+          plan: me.plan,
+          accessSource: me.accessSource,
+          entitlements: me.entitlements,
+        });
+      } catch (error) {
+        console.error("[useRedeemPromo] Failed to refetch /api/me after redeem", error);
+      }
     },
   });
 }
