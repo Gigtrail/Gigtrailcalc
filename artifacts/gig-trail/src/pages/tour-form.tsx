@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateTour, useUpdateTour, useGetTour, useGetProfiles, useGetVehicles } from "@workspace/api-client-react";
+import { useCreateTour, useUpdateTour, useGetTour, useGetProfiles, useGetVehicles, useCreateVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,8 +39,11 @@ import {
   Pencil,
   RotateCcw,
   CloudOff,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { STANDARD_VEHICLES, type StandardVehicle } from "@/lib/garage-constants";
 import { SYSTEM_FUEL_DEFAULTS, normalizeFuelType } from "@/lib/fuel-price-provider";
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -321,6 +324,9 @@ export default function TourForm() {
 
   const createTour = useCreateTour();
   const updateTour = useUpdateTour();
+  const createVehicleMutation = useCreateVehicle();
+  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+  const [creatingPresetKey, setCreatingPresetKey] = useState<string | null>(null);
 
   const invalidateTourSummaryQueries = (nextTourId: number) => {
     queryClient.invalidateQueries({ queryKey: ["tour", nextTourId] });
@@ -381,6 +387,86 @@ export default function TourForm() {
     returnHome, daysOnTour, defaultFoodCost, fuelType, fuelPricePetrol,
     fuelPriceDiesel, fuelPriceLpg,
   } = watchedValues;
+
+  // ── Step 3 helpers: navigate to add-vehicle, save tour draft first ──────
+  const goAddVehicle = useCallback(() => {
+    // Persist current wizard state so the user comes back to Step 3 with
+    // their inputs intact, and tell the garage form where to send them
+    // after a successful save (with the new vehicle id).
+    saveTourDraft(3, form.getValues());
+    const returnTo = isEditing ? `/tours/edit/${tourId}` : "/tours/new";
+    setLocation(`/garage/new?returnTo=${encodeURIComponent(returnTo)}&autoSelectVehicle=1`);
+  }, [form, setLocation, isEditing, tourId]);
+
+  // ── Auto-select vehicle when returning from /garage/new with ?selectVehicleId=N
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("selectVehicleId");
+    if (!raw) return;
+    const id = parseInt(raw, 10);
+    if (!Number.isFinite(id)) return;
+    // Wait until vehicles list has loaded so the auto-selected id matches
+    // a real entry (and the fuel-type sync effect can use it).
+    if (!vehicles?.some((v) => v.id === id)) return;
+    form.setValue("vehicleId", id, { shouldDirty: true });
+    setStep(3);
+    // Clean the query string so a refresh doesn't re-trigger this.
+    params.delete("selectVehicleId");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    toast({ title: "Vehicle selected for this tour" });
+  }, [vehicles, form, toast]);
+
+  // ── Step 3 helpers: turn a preset into a real saved garage vehicle ──────
+  const handleChoosePreset = useCallback(
+    (preset: StandardVehicle) => {
+      if (creatingPresetKey) return;
+      setCreatingPresetKey(preset.key);
+      createVehicleMutation.mutate(
+        {
+          data: {
+            name: preset.displayName,
+            vehicleType: preset.key,
+            fuelType: preset.defaultFuelType,
+            avgConsumption: preset.fuelConsumptionL100km,
+            tankSizeLitres: preset.tankSizeLitres,
+            maxPassengers: null,
+            notes: `Added from tour setup preset (${preset.displayName})`,
+            isDefault: false,
+            actIds: [],
+            defaultForActIds: [],
+          },
+        },
+        {
+          onSuccess: (created) => {
+            queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+            // Auto-select the newly created vehicle for this tour.
+            if (created?.id) {
+              form.setValue("vehicleId", created.id, { shouldDirty: true });
+            }
+            setPresetPickerOpen(false);
+            trackEvent("vehicle_added");
+            toast({
+              title: "Vehicle added to your garage",
+              description: `${preset.displayName} is selected for this tour. You can edit it later in Settings.`,
+            });
+          },
+          onError: (err: unknown) => {
+            const status = (err as { status?: number } | undefined)?.status;
+            const description = status === 403
+              ? "You've hit your plan's vehicle limit. Upgrade or remove a vehicle to continue."
+              : "Could not save the vehicle. Please try again.";
+            toast({ title: "Couldn't add vehicle", description, variant: "destructive" });
+          },
+          onSettled: () => {
+            setCreatingPresetKey(null);
+          },
+        },
+      );
+    },
+    [creatingPresetKey, createVehicleMutation, form, queryClient, toast],
+  );
 
   // ── Auto-sync fuel type when vehicle is selected in Step 3 ──────────────
   const prevVehicleIdRef = useRef<number | null | undefined>(undefined);
@@ -997,12 +1083,89 @@ export default function TourForm() {
               nextLabel={vehicleId ? "Next" : "Skip — no vehicle"}
             >
               {!vehicles?.length ? (
-                <div className="text-center py-8 text-muted-foreground space-y-3">
-                  <Car className="w-10 h-10 mx-auto opacity-30" />
-                  <div>
-                    <p className="text-sm font-medium">No vehicles in your garage</p>
-                    <p className="text-xs mt-1">Add vehicles in Settings → Vehicles, or skip this step.</p>
+                <div className="space-y-4">
+                  <div className="text-center py-6 space-y-2">
+                    <Car className="w-10 h-10 mx-auto text-primary/60" />
+                    <p className="text-base font-semibold text-foreground">
+                      Add a vehicle to estimate fuel costs
+                    </p>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      Your vehicle helps GigTrail estimate fuel costs and tour profit. Add one now or
+                      choose a preset to get started.
+                    </p>
                   </div>
+
+                  {!presetPickerOpen ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                      <Button
+                        type="button"
+                        onClick={goAddVehicle}
+                        className="gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Vehicle
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPresetPickerOpen(true)}
+                        className="gap-2"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Choose Preset
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => goToStep(4)}
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 rounded-xl border border-border/40 bg-card/40 p-3">
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Pick a preset — we'll save it to your garage
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setPresetPickerOpen(false)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          disabled={!!creatingPresetKey}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {STANDARD_VEHICLES.map((preset) => {
+                          const PresetIcon = preset.Icon;
+                          const isCreating = creatingPresetKey === preset.key;
+                          const disabled = !!creatingPresetKey;
+                          return (
+                            <button
+                              key={preset.key}
+                              type="button"
+                              onClick={() => handleChoosePreset(preset)}
+                              disabled={disabled}
+                              className="flex items-start gap-3 px-3 py-2.5 rounded-lg border-2 border-border/40 bg-card/60 text-left transition-all hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <PresetIcon className="w-5 h-5 shrink-0 text-primary mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground">{preset.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {preset.fuelConsumptionL100km} L/100km · {preset.tankSizeLitres}L tank
+                                </p>
+                                <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                                  {isCreating ? "Saving…" : preset.shortDescription}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2">

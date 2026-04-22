@@ -8,6 +8,8 @@ export interface StandardVehicle {
   displayName: string;
   fuelConsumptionL100km: number;
   tankSizeLitres: number;
+  /** Most common fuel type for this class — used as a sensible default when the preset is saved. */
+  defaultFuelType: "petrol" | "diesel";
   shortDescription: string;
   Icon: LucideIcon;
 }
@@ -18,6 +20,7 @@ export const STANDARD_VEHICLES: StandardVehicle[] = [
     displayName: "Small Car",
     fuelConsumptionL100km: 7.5,
     tankSizeLitres: 50,
+    defaultFuelType: "petrol",
     shortDescription: "Best for solo or light touring.",
     Icon: Car,
   },
@@ -26,6 +29,7 @@ export const STANDARD_VEHICLES: StandardVehicle[] = [
     displayName: "SUV / Wagon",
     fuelConsumptionL100km: 10.0,
     tankSizeLitres: 65,
+    defaultFuelType: "petrol",
     shortDescription: "More room for gear and short regional runs.",
     Icon: Compass,
   },
@@ -34,6 +38,7 @@ export const STANDARD_VEHICLES: StandardVehicle[] = [
     displayName: "Van",
     fuelConsumptionL100km: 11.5,
     tankSizeLitres: 70,
+    defaultFuelType: "diesel",
     shortDescription: "A practical touring setup for duo and band travel.",
     Icon: Truck,
   },
@@ -42,6 +47,7 @@ export const STANDARD_VEHICLES: StandardVehicle[] = [
     displayName: "Bus",
     fuelConsumptionL100km: 16.0,
     tankSizeLitres: 100,
+    defaultFuelType: "diesel",
     shortDescription: "Best for larger touring setups and long runs.",
     Icon: Bus,
   },

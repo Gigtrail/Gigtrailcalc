@@ -165,14 +165,26 @@ export default function GarageVehicleForm() {
       createVehicle.mutate(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (created) => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
             trackEvent("vehicle_added");
             toast({ title: "Vehicle added to garage" });
-            setLocation("/garage");
+            // If we were sent here from another flow (e.g. Tour Builder Step 3),
+            // honour the round-trip and pass the new vehicle id back so the
+            // caller can auto-select it.
+            const params = new URLSearchParams(window.location.search);
+            const returnTo = params.get("returnTo");
+            const autoSelect = params.get("autoSelectVehicle") === "1";
+            if (returnTo) {
+              const sep = returnTo.includes("?") ? "&" : "?";
+              const idPart = autoSelect && created?.id ? `${sep}selectVehicleId=${created.id}` : "";
+              setLocation(`${returnTo}${idPart}`);
+            } else {
+              setLocation("/garage");
+            }
           },
           onError: () => {
             toast({ title: "Failed to add vehicle", variant: "destructive" });
