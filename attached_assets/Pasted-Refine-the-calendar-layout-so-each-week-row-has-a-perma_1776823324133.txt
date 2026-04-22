@@ -1,0 +1,59 @@
+Refine the calendar layout so each week row has a permanent two-lane track system above the dates.
+
+CORE IDEA:
+Do not treat the driving line and touring line as custom overlays that get placed manually per event.
+Instead, build the calendar so that every row of dates already contains two dedicated horizontal lanes above the date numbers.
+
+GOAL:
+Make the calendar structurally ready for tour data.
+
+REQUIREMENTS:
+
+1. For every week row in the month view, add a fixed “track area” above the date cells.
+
+2. Inside that track area, include exactly two horizontal lanes:
+   - Top lane = Touring lane
+   - Bottom lane = Driving lane
+
+3. These two lanes must exist across the full width of every week row, even when there is no data on that row.
+
+4. The lanes should be:
+   - perfectly straight
+   - consistent thickness
+   - aligned the same way on every row
+   - evenly spaced from each other
+   - visually subtle when empty
+
+5. Date numbers and event blocks should sit below these lanes, not mixed into them.
+
+6. Tour and driving data should later plug into these lanes by:
+   - filling segments
+   - changing color
+   - adding markers/nodes
+   - highlighting active dates
+   But the lanes themselves must always exist as part of the layout.
+
+7. Touring lane:
+   - same thickness as the current thicker highway style
+   - color should be data-driven / selectable later
+   - default empty state should be light and neutral
+
+8. Driving lane:
+   - same thickness as touring lane
+   - styled like a road/highway
+   - dark/black appearance but reduced to roughly 60% visual strength in default state
+   - should feel like a road, not just a plain line
+
+9. Build this as a reusable calendar row structure, not one-off styling for a single week.
+
+10. Keep the layout clean and musician-friendly:
+   - easy to scan
+   - not cluttered
+   - clear separation between track system and date content
+
+DESIGN INTENT:
+The calendar should feel like it has two built-in highways above each row of dates:
+- one for touring/show flow
+- one for driving/travel flow
+
+This should be part of the base calendar architecture so later logic is just a matter of feeding data into the lanes.

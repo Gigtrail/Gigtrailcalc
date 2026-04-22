@@ -456,6 +456,17 @@ function CalendarView({
               "h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-border/60 bg-card hover:bg-muted",
             button_next:
               "h-10 w-10 sm:h-11 sm:w-11 rounded-lg border border-border/60 bg-card hover:bg-muted",
+            // Two-lane track system above each week row.
+            // Top lane = touring, bottom lane = driving (road-like).
+            // Future data layers fill segments / change color / add markers.
+            week: cn(
+              "relative mt-3 flex w-full pt-[18px]",
+              // Touring lane (top)
+              "before:pointer-events-none before:absolute before:left-1 before:right-1 before:top-1 before:h-[5px] before:rounded-full before:bg-foreground/12 before:content-['']",
+              // Driving lane (bottom) — dark/road feel at ~60% strength,
+              // with a subtle inner highlight to read as a road surface.
+              "after:pointer-events-none after:absolute after:left-1 after:right-1 after:top-[10px] after:h-[5px] after:rounded-full after:bg-foreground/60 after:shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] after:content-['']",
+            ),
           }}
           components={{
             DayButton: props => (
@@ -493,13 +504,12 @@ function TourDayButton({
   };
 
   const hasShow = !!meta && meta.count > 0;
-  const inTour = !!meta?.inTour;
 
   return (
     <button
       {...buttonProps}
       className={cn(
-        "relative flex aspect-square w-full flex-col items-center justify-start overflow-hidden rounded-md pt-1 pb-1 text-sm transition-colors",
+        "relative flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-md text-sm transition-colors",
         "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         "data-[selected-single=true]:bg-primary/5 data-[selected-single=true]:ring-2 data-[selected-single=true]:ring-primary data-[selected-single=true]:ring-offset-1",
         hasShow && STATUS_TINT_BG[meta!.primaryStatus],
@@ -507,32 +517,8 @@ function TourDayButton({
       )}
     >
       <span className="relative z-10 leading-none">{children}</span>
-
-      {inTour && (
-        <span
-          aria-hidden
-          className="pointer-events-none relative mt-0.5 flex h-1.5 w-full items-center justify-center"
-        >
-          <span
-            className={cn(
-              "absolute top-1/2 h-px -translate-y-1/2 bg-foreground/30",
-              meta!.tourBandLeft ? "-left-px" : "left-1/2",
-              meta!.tourBandRight ? "-right-px" : "right-1/2",
-            )}
-          />
-          <span
-            className={cn(
-              "relative z-10 inline-block rounded-full ring-2 ring-card",
-              hasShow
-                ? cn("h-1.5 w-1.5", STATUS_DOT[meta!.primaryStatus])
-                : "h-1 w-1 bg-foreground/40",
-            )}
-          />
-        </span>
-      )}
-
       {hasShow && (
-        <span className="relative z-10 mt-0.5 flex items-center gap-0.5">
+        <span className="relative z-10 flex items-center gap-0.5">
           <span
             aria-hidden
             className={cn(
