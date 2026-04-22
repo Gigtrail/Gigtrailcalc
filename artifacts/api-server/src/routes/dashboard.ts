@@ -307,7 +307,7 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
     const vRuns = runsByVenueId.get(v.id) ?? [];
     const vStops = [
       ...(stopsByVenueId.get(v.id) ?? []),
-      ...(stopsByVenueName.get(normalizeName(v.venueName)) ?? []).filter(s => s.venueId == null),
+      ...(stopsByVenueName.get(normalizeName(v.name)) ?? []).filter(s => s.venueId == null),
     ];
     let upcoming = 0;
     let past = 0;
@@ -328,7 +328,7 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
       if (lng == null && s.cityLng != null) lng = Number(s.cityLng);
     }
     if (lat == null || lng == null) {
-      const stopHit = stopCoordsByName.get(normalizeName(v.venueName));
+      const stopHit = stopCoordsByName.get(normalizeName(v.name));
       if (stopHit) {
         lat = lat ?? stopHit.lat;
         lng = lng ?? stopHit.lng;
@@ -336,7 +336,7 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
     }
     return {
       id: v.id,
-      venueName: v.venueName,
+      venueName: v.name,
       city: v.city ?? null,
       state: v.state ?? null,
       fullAddress: v.fullAddress ?? v.address ?? null,

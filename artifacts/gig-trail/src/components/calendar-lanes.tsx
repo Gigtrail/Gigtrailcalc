@@ -34,6 +34,9 @@ export type TourLaneEntry = {
   showInfo?: TourLaneShowInfo;
 };
 
+export type DrivingSegmentStatus = "exact" | "approximate" | "missing-location-data";
+export type DrivingMissingSide = "origin" | "destination" | "both";
+
 export type DrivingLaneEntry = {
   fromVenue?: string | null;
   fromLocation?: string | null;
@@ -45,6 +48,10 @@ export type DrivingLaneEntry = {
   hasExactRouteData?: boolean;
   /** True when distance/time are derived from straight-line + factor. */
   isApproximate?: boolean;
+  /** Quality status — drives the popover messaging. */
+  status?: DrivingSegmentStatus;
+  /** Which side(s) of the leg are missing location data, if any. */
+  missingSide?: DrivingMissingSide;
   /** IDs of the shows this drive connects (origin → destination). */
   linkedShowIds?: string[];
 };
@@ -386,23 +393,50 @@ export function DriveSegmentDetails({ segment }: { segment: DrivingSegment }) {
         </div>
       )}
       {(totalHours > 0 || totalKm > 0) && (
-        <div className="flex flex-wrap gap-1.5 text-xs">
+        <div className="space-y-1.5 text-sm">
           {totalHours > 0 && (
-            <Badge variant="outline">
-              {formatDriveHours(totalHours)} drive
-            </Badge>
+            <div className="flex items-baseline gap-2">
+              <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
+                Drive
+              </span>
+              <span className="font-medium">{formatDriveHours(totalHours)}</span>
+            </div>
           )}
           {totalKm > 0 && (
-            <Badge variant="outline">~{Math.round(totalKm)} km</Badge>
+            <div className="flex items-baseline gap-2">
+              <span className="w-12 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
+                Distance
+              </span>
+              <span className="font-medium">{Math.round(totalKm)} km</span>
+            </div>
           )}
           {segment.days.some(d => d.entry.isApproximate) && (
-            <Badge variant="secondary">Approximate estimate</Badge>
+            <div className="pt-1">
+              <Badge variant="secondary">Approximate estimate</Badge>
+            </div>
           )}
         </div>
       )}
       {totalHours === 0 && totalKm === 0 && (
-        <div className="text-xs text-muted-foreground">
-          Estimated drive time will appear here once route data is available.
+        <div className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 p-2 text-xs text-muted-foreground">
+          {(() => {
+            const sides = new Set(
+              segment.days.map(d => d.entry.missingSide).filter(Boolean) as DrivingMissingSide[],
+            );
+            if (sides.has("both")) {
+              return "No drive estimate yet — both venues need location data.";
+            }
+            if (sides.has("origin") && sides.has("destination")) {
+              return "No drive estimate yet — origin and destination venues need location data.";
+            }
+            if (sides.has("origin")) {
+              return "No drive estimate yet — the origin venue needs location data.";
+            }
+            if (sides.has("destination")) {
+              return "No drive estimate yet — the destination venue needs location data.";
+            }
+            return "No drive estimate yet — this leg needs more location data.";
+          })()}
         </div>
       )}
     </div>
