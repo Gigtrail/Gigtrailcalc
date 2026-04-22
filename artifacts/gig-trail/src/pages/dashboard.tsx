@@ -99,6 +99,40 @@ function isoKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Great-circle distance between two lat/lng points in kilometres.
+ * Returns null if either point is missing or invalid.
+ */
+function haversineKm(
+  aLat: number | null | undefined,
+  aLng: number | null | undefined,
+  bLat: number | null | undefined,
+  bLng: number | null | undefined,
+): number | null {
+  if (aLat == null || aLng == null || bLat == null || bLng == null) return null;
+  if (
+    !Number.isFinite(aLat) || !Number.isFinite(aLng) ||
+    !Number.isFinite(bLat) || !Number.isFinite(bLng)
+  ) {
+    return null;
+  }
+  const R = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const lat1 = toRad(aLat);
+  const lat2 = toRad(bLat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** Average road-speed assumption for converting straight-line km to drive hours. */
+const AVG_DRIVE_KMH = 85;
+/** Inflate haversine straight-line distance to approximate road distance. */
+const ROAD_FACTOR = 1.25;
+
 type ItemWithDate = TourItem & { _date: Date };
 
 function itemTitle(item: TourItem): string {
@@ -222,33 +256,45 @@ export default function Dashboard() {
       }
     }
 
-    // Driving lane: per tour, sort the actual shows chronologically and mark
-    // every strictly-in-between day as a driving day, attaching from/to
-    // venue info so the popover can describe the leg.
-    const showsByTour = new Map<number, ItemWithDate[]>();
-    for (const item of upcoming) {
-      if (item.tourId == null) continue;
-      const arr = showsByTour.get(item.tourId);
-      if (arr) arr.push(item);
-      else showsByTour.set(item.tourId, [item]);
-    }
-    for (const items of showsByTour.values()) {
-      const sorted = [...items].sort((a, b) => a._date.getTime() - b._date.getTime());
-      for (let i = 0; i < sorted.length - 1; i++) {
-        const from = sorted[i];
-        const to = sorted[i + 1];
-        for (let d = addDays(from._date, 1); d < to._date; d = addDays(d, 1)) {
-          const k = isoKey(d);
-          if (!itemsByDate.has(k) && !drivingByDate.has(k)) {
-            drivingByDate.set(k, {
-              fromVenue: from.venueName,
-              fromLocation: from.location,
-              toVenue: to.venueName,
-              toLocation: to.location,
-              linkedShowIds: [from.id, to.id],
-            });
-          }
-        }
+    // Driving lane: sort ALL upcoming shows chronologically (regardless of
+    // tour membership — many shows are standalone runs with no tourId) and
+    // mark every day strictly between consecutive shows as a travel day.
+    // For each leg we compute an estimated drive distance/time using the
+    // haversine of the two coordinates; if either coordinate is missing we
+    // still create the segment but with no distance/time (graceful fallback).
+    const sortedShows = [...upcoming].sort(
+      (a, b) => a._date.getTime() - b._date.getTime(),
+    );
+    for (let i = 0; i < sortedShows.length - 1; i++) {
+      const from = sortedShows[i];
+      const to = sortedShows[i + 1];
+      // Same-day: no travel day to render.
+      if (isoKey(from._date) === isoKey(to._date)) continue;
+
+      const straightKm = haversineKm(from.latitude, from.longitude, to.latitude, to.longitude);
+      const distanceKm = straightKm != null ? straightKm * ROAD_FACTOR : undefined;
+      const driveHours = distanceKm != null ? distanceKm / AVG_DRIVE_KMH : undefined;
+      // Spread total drive time across the in-between days (cap at 8h/day).
+      const inBetweenDays: Date[] = [];
+      for (let d = addDays(from._date, 1); d < to._date; d = addDays(d, 1)) {
+        if (!itemsByDate.has(isoKey(d))) inBetweenDays.push(d);
+      }
+      if (inBetweenDays.length === 0) continue;
+      const perDayHours = driveHours != null ? driveHours / inBetweenDays.length : undefined;
+      const perDayKm = distanceKm != null ? distanceKm / inBetweenDays.length : undefined;
+
+      for (const d of inBetweenDays) {
+        const k = isoKey(d);
+        if (drivingByDate.has(k)) continue;
+        drivingByDate.set(k, {
+          fromVenue: from.venueName,
+          fromLocation: from.location,
+          toVenue: to.venueName,
+          toLocation: to.location,
+          estimatedHours: perDayHours,
+          estimatedDistanceKm: perDayKm,
+          linkedShowIds: [from.id, to.id],
+        });
       }
     }
 
