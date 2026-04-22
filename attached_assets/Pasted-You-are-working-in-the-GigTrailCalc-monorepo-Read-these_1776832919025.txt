@@ -1,0 +1,115 @@
+You are working in the GigTrailCalc monorepo.
+
+Read these files first before changing anything:
+- artifacts/gig-trail/src/pages/single-show-calc.tsx
+- artifacts/gig-trail/src/pages/saved-calculations.tsx
+- artifacts/gig-trail/src/pages/venues.tsx
+- artifacts/gig-trail/src/pages/venue-detail.tsx
+- artifacts/api-server/src/routes/venues.ts
+- artifacts/api-server/src/routes/dashboard.ts
+- artifacts/api-server/src/routes/runs.ts
+- lib/db/src/schema/venues.ts
+- lib/db/src/schema/runs.ts
+- lib/db/src/schema/tourStops.ts
+
+Goal:
+Fix the Single Show Calculator save flow end-to-end.
+
+CURRENT PROBLEMS
+1. A completed calc is not appearing in Saved Calculations.
+2. Venue data used in the calc is not saving/linking properly.
+3. Venue selection should become a reusable shared selector anywhere a venue is needed.
+
+THIS IS NOW A FULL SAVE-FLOW DEBUG TASK, NOT JUST A UI PATCH.
+
+PART 1 — FIX CALC SAVE FLOW
+Trace the full save path for Single Show Calculator:
+- user enters/show data
+- user calculates/saves
+- frontend mutation fires
+- API receives payload
+- DB write succeeds
+- saved calculations query reloads
+- record appears in Saved Calculations UI
+
+Find the actual failure point.
+
+Check for:
+- no save mutation firing
+- wrong endpoint being called
+- payload shape mismatch
+- validation rejecting payload
+- DB insert failing silently
+- save succeeds but query/cache not invalidated
+- saved calculations page reading a different table/shape than the calc writes
+- optimistic UI masking a failed save
+- profile/user scoping issue hiding saved records
+- date/profile required fields blocking persistence
+
+Fix it fully.
+
+PART 2 — SAVED CALCULATIONS MUST WORK RELIABLY
+After save:
+- calc should appear in Saved Calculations
+- it should persist after refresh
+- it should be tied to the correct user/profile
+- key fields should show correctly:
+  - date
+  - venue
+  - deal/income
+  - travel basics
+  - result/profit if applicable
+
+If Saved Calculations is using different terminology or data shape than the calc save flow, normalize it.
+
+PART 3 — FIX VENUE HANDLING IN THE SAVE FLOW
+Current issue:
+- venue entered/selected in Single Show Calculator is not being saved or linked correctly
+
+Implement proper venue behavior:
+- if existing venue selected -> save venueId reference with calc/run
+- if manual venue entered -> keep text fallback, but support saving it into venues database
+- do not lose venue info after save
+- persist venue name/location/lat/lng when available
+- if enough data exists, allow clean “Save venue” behavior
+
+PART 4 — BUILD SHARED VENUE SELECTOR
+Create a reusable venue selector component for:
+- Single Show Calculator
+- tour stop creation/edit
+- future venue-linked forms
+
+Requirements:
+- search saved venues by venue name and city/location
+- select existing venue
+- allow manual entry
+- allow create/save venue path
+- return display label + venueId when linked
+- simple musician-friendly UX
+
+PART 5 — STANDARDIZE SAVE/LOAD BEHAVIOR
+Make sure the app uses a stable pattern:
+- save action gives clear success/failure feedback
+- failures are not silent
+- after successful save, relevant queries refresh
+- user can trust that “saved” means actually saved
+
+PART 6 — VALIDATION / TESTING
+Manually verify this exact flow:
+1. open Single Show Calculator
+2. fill required fields
+3. save calculation
+4. confirm it appears in Saved Calculations immediately
+5. refresh browser
+6. confirm it still appears
+7. confirm venue info still exists
+8. if venue is saved, confirm it appears in Venues / selector results as expected
+
+OUTPUT REQUIRED
+At the end provide:
+1. exact root cause(s)
+2. files changed
+3. whether calc save now persists to Saved Calculations
+4. whether venue linking/saving now works
+5. where the new shared venue selector is used
+6. any remaining edge cases still not solved

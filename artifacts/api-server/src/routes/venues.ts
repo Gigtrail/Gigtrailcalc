@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ilike, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, desc, sql, inArray } from "drizzle-orm";
 import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
@@ -264,10 +264,21 @@ router.get("/venues/search", requireAuth, async (req, res): Promise<void> => {
     res.json([]);
     return;
   }
+  // Match against venue name OR city/state so musicians can find a saved venue
+  // by either "Oodies" or "Bundaberg". Limit raised modestly so location-only
+  // queries return a useful set.
+  const like = `%${q}%`;
   const venues = await db.select().from(venuesTable)
-    .where(and(eq(venuesTable.userId, userId), ilike(venuesTable.name, `%${q}%`)))
+    .where(and(
+      eq(venuesTable.userId, userId),
+      or(
+        ilike(venuesTable.name, like),
+        ilike(venuesTable.city, like),
+        ilike(venuesTable.state, like),
+      ),
+    ))
     .orderBy(desc(venuesTable.updatedAt))
-    .limit(6);
+    .limit(8);
   res.json(venues.map(serializeVenue));
 });
 

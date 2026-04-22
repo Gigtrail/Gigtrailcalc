@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, boolean, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, boolean, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -65,7 +65,7 @@ export const runsTable = pgTable("runs", {
   actualTicketIncome: numeric("actual_ticket_income", { precision: 10, scale: 2 }),
   actualOtherIncome: numeric("actual_other_income", { precision: 10, scale: 2 }),
   actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
-  calculationSnapshot: text("calculation_snapshot"),
+  calculationSnapshot: jsonb("calculation_snapshot").$type<Record<string, unknown>>(),
   country: text("country"),
   venueName: text("venue_name"),
   city: text("city"),

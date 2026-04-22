@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, runsTable } from "@workspace/db";
+import { db, runsTable, venuesTable } from "@workspace/db";
+import { normalizeVenueName } from "./venues";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateRunBody,
@@ -87,6 +88,8 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
 
 function toDbRun(data: Record<string, unknown>) {
   const normalizedData: Record<string, unknown> = { ...data };
+  // Map client-side aliases to their canonical DB columns. The aliases themselves
+  // are NOT real columns and must be removed before insert.
   if (normalizedData.totalCost === undefined && normalizedData.totalExpenses !== undefined) {
     normalizedData.totalCost = normalizedData.totalExpenses;
   }
@@ -96,6 +99,9 @@ function toDbRun(data: Record<string, unknown>) {
   if (normalizedData.totalProfit === undefined && normalizedData.profit !== undefined) {
     normalizedData.totalProfit = normalizedData.profit;
   }
+  // Legacy → canonical column remaps. Both sides are real columns; we want to
+  // write to the canonical column only (and drop the legacy alias from the
+  // payload) so that reads are unambiguous.
   if (normalizedData.attendance === undefined && normalizedData.actualAttendance !== undefined) {
     normalizedData.attendance = normalizedData.actualAttendance;
   }
@@ -108,22 +114,20 @@ function toDbRun(data: Record<string, unknown>) {
   if (normalizedData.showNotes === undefined && normalizedData.notes !== undefined) {
     normalizedData.showNotes = normalizedData.notes;
   }
-  for (const staleField of [
-    "venueName",
-    "city",
-    "state",
-    "country",
-    "totalCost",
-    "totalIncome",
-    "totalProfit",
+  // Strip ONLY the alias source fields. Everything else here is a real column
+  // (venueName, city, state, country, totalCost, totalIncome, totalProfit,
+  // actualProfit, calculationSnapshot, etc.) and must be allowed through so the
+  // calc save actually persists what the user entered/calculated.
+  for (const aliasOnly of [
+    "totalExpenses",
+    "netProfit",
+    "profit",
     "actualAttendance",
     "actualTicketIncome",
     "actualOtherIncome",
-    "actualProfit",
     "notes",
-    "calculationSnapshot",
   ]) {
-    delete normalizedData[staleField];
+    delete normalizedData[aliasOnly];
   }
 
   const result: Record<string, unknown> = {};
@@ -133,6 +137,7 @@ function toDbRun(data: Record<string, unknown>) {
     'accommodationNights', 'accommodationCost',
     'foodCost', 'extraCosts',
     'actualIncome', 'actualExpenses', 'merch',
+    'totalCost', 'totalIncome', 'totalProfit', 'actualProfit',
   ]);
   const dateFields = new Set(['showDate']);
   for (const [k, v] of Object.entries(normalizedData)) {
@@ -197,10 +202,28 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
 
   const todayIsoDate = getTodayIsoDateFromRequest(req);
   const derivedStatus = getDefaultSavedCalculationStatus(parsed.data.showDate, todayIsoDate);
-  const runData = {
+  const runData: Record<string, unknown> = {
     ...parsed.data,
     status: derivedStatus,
   };
+
+  // Auto-link manual venue entries to an existing venue when the user typed
+  // a name that matches one of their saved venues. This makes the run show up
+  // on the venue detail page and feeds the venue's performance stats — without
+  // requiring the user to remember to click an autocomplete result.
+  if (!runData.venueId && typeof runData.venueName === "string" && runData.venueName.trim()) {
+    const normalized = normalizeVenueName(runData.venueName);
+    if (normalized) {
+      const [match] = await db
+        .select({ id: venuesTable.id })
+        .from(venuesTable)
+        .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)))
+        .limit(1);
+      if (match) {
+        runData.venueId = match.id;
+      }
+    }
+  }
 
   // Duplicate detection: auto-saved draft/planned calculations should update in place.
   if (derivedStatus !== "past" && runData.venueId && runData.profileId && runData.showDate) {
