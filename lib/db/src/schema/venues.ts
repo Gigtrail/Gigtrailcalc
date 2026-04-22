@@ -8,7 +8,7 @@ export const venuesTable = pgTable("venues", {
   profileId: integer("profile_id"),
   name: text("venue_name").notNull(),
   normalizedVenueName: text("normalized_venue_name").notNull(),
-  city: text("city").notNull(),
+  city: text("city"),
   state: text("state"),
   country: text("country"),
   address: text("address"),
@@ -34,6 +34,12 @@ export const venuesTable = pgTable("venues", {
   productionNotes: text("production_notes"),
   techSpecs: text("tech_specs"),
   stagePlotNotes: text("stage_plot_notes"),
+  // Legacy columns retained so historical data isn't dropped on db push.
+  // `roomNotes` predates `generalNotes`; routes mirror writes to both.
+  // `lastTotalProfit`/`lastStatus` cache the most recent calc result.
+  roomNotes: text("room_notes"),
+  lastTotalProfit: text("last_total_profit"),
+  lastStatus: text("last_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

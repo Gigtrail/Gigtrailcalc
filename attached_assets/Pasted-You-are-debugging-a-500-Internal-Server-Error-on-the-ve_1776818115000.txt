@@ -1,0 +1,92 @@
+You are debugging a 500 Internal Server Error on the venues page in the GigTrailCalc monorepo.
+
+Problem:
+- Frontend `/venues` page is repeatedly failing
+- Network error shows:
+  - `/api/venues` → 500 Internal Server Error
+- Browser spam shows repeated failed requests to the venues endpoint
+- There was recent work adding/changing venue database fields and venue detail UI, so this may be a schema/query mismatch, migration issue, or route serialization failure
+
+Your job:
+Find the root cause and fix it properly, not with a band-aid.
+
+Read these files first:
+- artifacts/api-server/src/routes/venues.ts
+- lib/db/src/schema/venues.ts
+- artifacts/gig-trail/src/pages/venues.tsx
+- artifacts/gig-trail/src/pages/venue-detail.tsx
+- any shared API/types file used by venues
+- any db migration files related to venues
+- any validation schemas used by venue create/update/list routes
+
+What to investigate:
+1. Check the server error for `/api/venues`
+   - Add temporary logging if needed
+   - Identify the exact failing line and exact error message
+   - Do not guess
+
+2. Confirm whether the venues table schema and the actual database are out of sync
+   - Recent fields may include things like:
+     - venueStatus
+     - willPlayAgain
+     - actualTicketSales
+     - accommodationAvailable
+     - riderProvided
+     - playingDays
+     - contactName
+     - phone
+     - email
+     - productionContact
+     - soundCheck
+     - playingTime
+   - If route code selects or maps fields that do not exist in the DB yet, fix that safely
+   - If migrations are missing, create the proper migration
+   - If the code expects non-null values for nullable fields, fix that
+
+3. Inspect the GET `/api/venues` route carefully
+   - Look for:
+     - selecting columns that do not exist
+     - invalid enum/text assumptions
+     - parsing JSON from nullable columns
+     - calling `.map()` on null/undefined
+     - response validation failing because returned data shape changed
+     - joins or computed fields failing on old records
+     - ordering/filtering on missing columns
+
+4. Make the route resilient for old venue records
+   - Existing rows may not have the new fields populated
+   - Use sensible defaults where needed
+   - Avoid crashing the whole endpoint because one venue has partial/legacy data
+
+5. Check frontend polling/retry behavior
+   - If the page is re-requesting aggressively after a 500, reduce noisy retries
+   - Prevent infinite spam in the UI if the endpoint fails
+   - Show a useful error state instead of hammering the server
+
+6. If this is a migration issue:
+   - Generate the correct migration
+   - Update schema/types
+   - Make sure the route works both with fresh data and legacy rows where possible
+
+Implementation rules:
+- Fix root cause, not just symptoms
+- Keep types strict
+- Do not break existing venue records
+- Do not remove the new venue fields unless absolutely necessary
+- Prefer backward-compatible fixes
+- Add defensive null handling where appropriate
+- Keep output clean and production-friendly
+
+Deliverables:
+1. Root cause summary
+2. Files changed
+3. Exact fix applied
+4. Any migration required
+5. Any follow-up actions I need to run in Replit
+6. Confirm that `/api/venues` returns 200 and venues page loads again
+
+Bonus:
+- If the issue is caused by new optional fields, make sure both:
+  - venue list page
+  - venue detail page
+  can load even when those fields are empty on older records
