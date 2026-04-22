@@ -186,37 +186,67 @@ export default function Dashboard() {
     const tourByDate = new Map<string, TourLaneEntry>();
     const drivingByDate = new Map<string, DrivingLaneEntry>();
 
+    // Lookup: tourId -> tourName (first non-null wins).
+    const tourNames = new Map<number, string | null>();
+    for (const item of upcoming) {
+      if (item.tourId == null) continue;
+      if (!tourNames.has(item.tourId)) tourNames.set(item.tourId, item.tourName);
+    }
+
     // Touring lane: paint every day in each tour's range with the tour color.
     for (const [tourId, dates] of tourBands.entries()) {
       const color = tourColorFor(tourId);
+      const tourName = tourNames.get(tourId) ?? null;
       for (const k of dates) {
-        const isStop = (itemsByDate.get(k) ?? []).some(it => it.tourId === tourId);
+        const dayItems = itemsByDate.get(k) ?? [];
+        const stop = dayItems.find(it => it.tourId === tourId);
+        const isStop = !!stop;
         const existing = tourByDate.get(k);
         // If two tours overlap on the same day, prefer the one with a stop.
         if (!existing || (isStop && !existing.isStop)) {
-          tourByDate.set(k, { tourId, color, isStop });
+          tourByDate.set(k, {
+            tourId,
+            tourName,
+            color,
+            isStop,
+            showInfo: stop
+              ? {
+                  id: stop.id,
+                  venueName: stop.venueName,
+                  location: stop.location,
+                  status: stop.status,
+                }
+              : undefined,
+          });
         }
       }
     }
 
-    // Driving lane: per tour, sort the actual show dates and mark every
-    // strictly-in-between day as a driving day.
-    const showsByTour = new Map<number, Date[]>();
+    // Driving lane: per tour, sort the actual shows chronologically and mark
+    // every strictly-in-between day as a driving day, attaching from/to
+    // venue info so the popover can describe the leg.
+    const showsByTour = new Map<number, ItemWithDate[]>();
     for (const item of upcoming) {
       if (item.tourId == null) continue;
       const arr = showsByTour.get(item.tourId);
-      if (arr) arr.push(item._date);
-      else showsByTour.set(item.tourId, [item._date]);
+      if (arr) arr.push(item);
+      else showsByTour.set(item.tourId, [item]);
     }
-    for (const dates of showsByTour.values()) {
-      const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+    for (const items of showsByTour.values()) {
+      const sorted = [...items].sort((a, b) => a._date.getTime() - b._date.getTime());
       for (let i = 0; i < sorted.length - 1; i++) {
-        const start = sorted[i];
-        const end = sorted[i + 1];
-        for (let d = addDays(start, 1); d < end; d = addDays(d, 1)) {
+        const from = sorted[i];
+        const to = sorted[i + 1];
+        for (let d = addDays(from._date, 1); d < to._date; d = addDays(d, 1)) {
           const k = isoKey(d);
-          if (!itemsByDate.has(k)) {
-            drivingByDate.set(k, {});
+          if (!itemsByDate.has(k) && !drivingByDate.has(k)) {
+            drivingByDate.set(k, {
+              fromVenue: from.venueName,
+              fromLocation: from.location,
+              toVenue: to.venueName,
+              toLocation: to.location,
+              linkedShowIds: [from.id, to.id],
+            });
           }
         }
       }

@@ -1,0 +1,127 @@
+Refine the Tour View calendar so the touring lines and driving lines are interactive.
+
+GOAL
+When a user hovers or clicks on a tour segment or driving segment, they should see useful details about that segment.
+
+I do not want the lines to be decorative only.
+They should function like interactive timeline elements.
+
+-----------------------------------
+INTERACTION RULES
+-----------------------------------
+
+1. TOUR SEGMENT INTERACTION
+When hovering or clicking a touring line segment, show a tooltip / popover / detail card with relevant tour info such as:
+- tour name
+- segment date range
+- number of shows in that segment
+- show names or venues included in that segment
+- status summary if relevant
+
+2. DRIVING SEGMENT INTERACTION
+When hovering or clicking a driving line segment, show a tooltip / popover / detail card with:
+- drive start date
+- drive end date
+- origin venue / city
+- destination venue / city
+- estimated driving time
+- estimated distance if available
+- whether it is a travel day / travel block
+
+3. NODE INTERACTION
+If the user hovers or clicks a node on the lane, show details for that exact point/date:
+- for touring node: show name, venue, status, city, date
+- for driving node: drive checkpoint / segment boundary / route point details if available
+
+-----------------------------------
+UX BEHAVIOUR
+-----------------------------------
+
+Desktop:
+- hover should show a lightweight tooltip
+- click should open a more stable popover/card if needed
+
+Mobile:
+- tap should open the detail card / popover
+- no hover-only behaviour on touch devices
+
+Accessibility:
+- interactive segments and nodes must be keyboard focusable
+- support focus states
+- tooltip/popover should also appear on focus
+
+-----------------------------------
+VISUAL RULES
+-----------------------------------
+
+- Hovered segment should get a clear visual highlight
+- Cursor should indicate interactivity
+- Active segment/node should feel deliberate but not noisy
+- Keep the design clean and lightweight
+- Do not let the tooltip cover the whole calendar
+- Prefer a compact floating card near the segment, or a small anchored popover
+
+-----------------------------------
+DATA EXPECTATIONS
+-----------------------------------
+
+Tour segment data should support fields like:
+- id
+- tourId
+- tourName
+- startDate
+- endDate
+- shows[]
+- statusSummary
+
+Driving segment data should support fields like:
+- id
+- startDate
+- endDate
+- fromLocation
+- toLocation
+- estimatedDriveTime
+- estimatedDistance
+- linkedShowIds[]
+
+If some of this data is not currently available, use graceful fallbacks and wire the component so richer data can be added later.
+
+-----------------------------------
+IMPLEMENTATION NOTES
+-----------------------------------
+
+Please inspect the current Tour View calendar implementation first.
+
+Then:
+1. identify where the touring lane segments and driving lane segments are rendered
+2. make those rendered elements interactive
+3. attach tooltip/popover logic
+4. ensure interactions work for both line segments and nodes
+5. keep the code reusable and component-based
+
+Suggested components if useful:
+- LaneSegmentTooltip
+- LaneSegmentPopover
+- TourSegmentDetails
+- DriveSegmentDetails
+
+-----------------------------------
+IMPORTANT
+-----------------------------------
+
+Do not fake this with static title attributes only.
+Implement proper UI interactions.
+
+At minimum:
+- hover/focus = tooltip
+- click/tap = anchored detail popover or panel
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Please:
+- implement the interactive behaviour
+- explain what files changed
+- explain how the segment data is being passed into the tooltip/popover
+- note any missing backend/data fields that are currently using fallback values
