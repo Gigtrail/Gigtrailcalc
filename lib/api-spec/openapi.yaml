@@ -1383,6 +1383,26 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        fuelType:
+          type: ["string", "null"]
+        fuelConsumption:
+          type: ["number", "null"]
+        fuelPrice:
+          type: ["number", "null"]
+        travelingWithPa:
+          type: boolean
+        extraCrew:
+          type: boolean
+        towingTrailer:
+          type: boolean
+        flightsCost:
+          type: ["number", "null"]
+        ferriesTollsCost:
+          type: ["number", "null"]
+        gearHireCost:
+          type: ["number", "null"]
+        otherCosts:
+          type: ["number", "null"]
         totalDistance:
           type: ["number", "null"]
         totalCost:
@@ -1434,6 +1454,26 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        fuelType:
+          type: ["string", "null"]
+        fuelConsumption:
+          type: ["number", "null"]
+        fuelPrice:
+          type: ["number", "null"]
+        travelingWithPa:
+          type: boolean
+        extraCrew:
+          type: boolean
+        towingTrailer:
+          type: boolean
+        flightsCost:
+          type: ["number", "null"]
+        ferriesTollsCost:
+          type: ["number", "null"]
+        gearHireCost:
+          type: ["number", "null"]
+        otherCosts:
+          type: ["number", "null"]
       required:
         - name
 
@@ -1590,6 +1630,24 @@ components:
         totalIncome:
           type: ["number", "null"]
         totalProfit:
+          type: ["number", "null"]
+        fuelConsumption:
+          type: ["number", "null"]
+        fuelPrice:
+          type: ["number", "null"]
+        travelingWithPa:
+          type: boolean
+        extraCrew:
+          type: boolean
+        towingTrailer:
+          type: boolean
+        flightsCost:
+          type: ["number", "null"]
+        ferriesTollsCost:
+          type: ["number", "null"]
+        gearHireCost:
+          type: ["number", "null"]
+        otherCosts:
           type: ["number", "null"]
         createdAt:
           type: string

@@ -927,6 +927,21 @@ export interface Tour {
   fuelPriceDiesel?: number | null;
   /** @nullable */
   fuelPriceLpg?: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   stopCount: number;
   createdAt: string;
 }
@@ -967,6 +982,21 @@ export interface CreateTourBody {
   fuelPriceDiesel?: number | null;
   /** @nullable */
   fuelPriceLpg?: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   /** @nullable */
   totalDistance?: number | null;
   /** @nullable */
@@ -1121,6 +1151,21 @@ export interface TourWithStops {
   fuelPriceDiesel?: number | null;
   /** @nullable */
   fuelPriceLpg?: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   createdAt: string;
   stops: TourStop[];
 }

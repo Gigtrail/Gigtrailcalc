@@ -1,0 +1,145 @@
+Goal:
+Fix vehicle → fuel flow and redesign Step 6 so fuel type is derived from vehicle selection, removing duplication and null states.
+
+PART 1 — VEHICLE STEP (STEP 3)
+
+When a vehicle is selected:
+
+- Immediately assign:
+  - fuelType (petrol / diesel / LPG / electric)
+  - fuelConsumption (e.g. L/100km)
+
+- Persist this data to the tour:
+  tour.vehicleId
+  tour.fuelType
+  tour.fuelConsumption
+
+- If vehicle preset exists, auto-fill these values
+- If missing fuel data, block progression with message:
+  "This vehicle needs fuel info before continuing"
+
+Remove any need to re-select fuel type later.
+
+---
+
+PART 2 — REMOVE FUEL TYPE FROM STEP 6
+
+In Step 6:
+
+- Remove:
+  - fuel type dropdown
+  - multiple fuel price inputs (petrol/diesel/LPG all at once)
+  - “auto-set from vehicle” messaging
+
+- Replace with:
+  Single fuel price input based on selected fuelType
+
+Example:
+If fuelType = petrol:
+  show "Petrol $/L"
+
+---
+
+PART 3 — REDESIGN STEP 6
+
+Rename step:
+"Fuel & defaults" → "Tour Setup & Notes"
+
+SECTION 1 — Fuel Price (Optional)
+- Label: "Fuel price for this tour"
+- Pre-fill from:
+  - last known value OR
+  - regional average
+- Editable
+- Optional override only
+
+---
+
+SECTION 2 — Touring Setup
+
+Add toggles:
+- travelingWithPA (boolean)
+- extraCrew (boolean)
+- towingTrailer (boolean)
+
+Store on tour object
+
+---
+
+SECTION 3 — Other Tour Costs
+
+Add optional numeric inputs:
+- flightsCost
+- ferriesTollsCost
+- gearHireCost
+- otherCosts
+
+These should:
+- default to 0
+- be included in total tour cost calculations
+
+---
+
+SECTION 4 — Tour Notes
+
+Rename:
+"Trail Notes" → "Tour Notes"
+
+Keep as free text field
+
+---
+
+PART 4 — DATA MODEL UPDATES
+
+Ensure tour schema includes:
+
+- fuelType (string)
+- fuelConsumption (number)
+- fuelPrice (number | null)
+
+- travelingWithPA (boolean)
+- extraCrew (boolean)
+- towingTrailer (boolean)
+
+- flightsCost (number)
+- ferriesTollsCost (number)
+- gearHireCost (number)
+- otherCosts (number)
+
+- tourNotes (string)
+
+Important:
+Do NOT rely on profile for fuel once tour is created
+
+---
+
+PART 5 — CALCULATION LOGIC
+
+Fuel cost should be calculated using:
+
+distance × fuelConsumption × fuelPrice
+
+Where:
+- fuelType comes from vehicle
+- fuelConsumption comes from vehicle
+- fuelPrice comes from Step 6 (or fallback default)
+
+---
+
+PART 6 — UX RULES
+
+- No duplicate inputs
+- No conflicting sources of truth
+- Vehicle defines fuel type
+- Step 6 is for overrides + real-world touring variables
+- Keep language simple and musician-friendly
+
+---
+
+SUCCESS CRITERIA
+
+- Selecting a vehicle fully defines fuel behavior
+- No null fuel states
+- Step 6 feels useful (not redundant)
+- Users can add real-world costs beyond fuel
+- Flow feels logical: Vehicle → Fuel auto → Costs tweak → Done

@@ -135,20 +135,14 @@ export default function TourDetail() {
     includeNotes: false,
   });
 
-  const [localFuelType, setLocalFuelType] = useState("petrol");
-  const [localFuelPricePetrol, setLocalFuelPricePetrol] = useState("1.90");
-  const [localFuelPriceDiesel, setLocalFuelPriceDiesel] = useState("1.95");
-  const [localFuelPriceLpg, setLocalFuelPriceLpg] = useState("0.95");
+  const [localFuelPrice, setLocalFuelPrice] = useState("");
   const [fuelBreakdownOpen, setFuelBreakdownOpen] = useState(false);
   const fuelSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fuelInitialised = useRef(false);
 
   useEffect(() => {
     if (!tour) return;
-    setLocalFuelType(tour.fuelType ?? "petrol");
-    setLocalFuelPricePetrol(String(tour.fuelPricePetrol ?? "1.90"));
-    setLocalFuelPriceDiesel(String(tour.fuelPriceDiesel ?? "1.95"));
-    setLocalFuelPriceLpg(String(tour.fuelPriceLpg ?? "0.95"));
+    setLocalFuelPrice(tour.fuelPrice != null ? String(tour.fuelPrice) : "");
     fuelInitialised.current = true;
   }, [tour?.id]);
 
@@ -156,15 +150,13 @@ export default function TourDetail() {
     if (!fuelInitialised.current || !tour) return;
     if (fuelSaveTimerRef.current) clearTimeout(fuelSaveTimerRef.current);
     fuelSaveTimerRef.current = setTimeout(() => {
+      const parsed = parseFloat(localFuelPrice);
       updateTour.mutate(
         {
           id: tourId,
           data: {
             name: tour.name,
-            fuelType: localFuelType,
-            fuelPricePetrol: parseFloat(localFuelPricePetrol) || 1.90,
-            fuelPriceDiesel: parseFloat(localFuelPriceDiesel) || 1.95,
-            fuelPriceLpg: parseFloat(localFuelPriceLpg) || 0.95,
+            fuelPrice: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
           },
         },
         {
@@ -176,7 +168,7 @@ export default function TourDetail() {
       if (fuelSaveTimerRef.current) clearTimeout(fuelSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
+  }, [localFuelPrice]);
 
   const deleteStop = useDeleteTourStop();
   const createStop = useCreateTourStop();
@@ -406,12 +398,33 @@ export default function TourDetail() {
         avgConsumption: Number(legacyVehicle.avgConsumption),
       }];
     }
+    // Active fuel type comes from the (first) vehicle if present; otherwise legacy tour.fuelType.
+    const activeFuelType = (
+      vehicles?.[0]?.fuelType
+      ?? tour?.fuelType
+      ?? "petrol"
+    ).toString().toLowerCase();
+    const parsedSingle = parseFloat(localFuelPrice);
+    const fallback =
+      activeFuelType === "diesel" ? 1.95
+      : activeFuelType === "lpg" ? 0.95
+      : 1.90;
+    const priceForActive =
+      Number.isFinite(parsedSingle) && parsedSingle > 0
+        ? parsedSingle
+        : (tour?.fuelPrice != null ? Number(tour.fuelPrice) : fallback);
     const fuelPrices = {
-      petrol: parseFloat(localFuelPricePetrol) || 1.90,
-      diesel: parseFloat(localFuelPriceDiesel) || 1.95,
-      lpg: parseFloat(localFuelPriceLpg) || 0.95,
+      petrol: activeFuelType === "petrol" ? priceForActive : 1.90,
+      diesel: activeFuelType === "diesel" ? priceForActive : 1.95,
+      lpg: activeFuelType === "lpg" ? priceForActive : 0.95,
     };
-    return calculateTour(
+    // Tour-level extras are added on top of calculateTour's totalCost.
+    const tourExtras =
+      Number(tour?.flightsCost ?? 0) +
+      Number(tour?.ferriesTollsCost ?? 0) +
+      Number(tour?.gearHireCost ?? 0) +
+      Number(tour?.otherCosts ?? 0);
+    const baseCalc = calculateTour(
       stops,
       tour?.startLocation,
       tour?.endLocation,
@@ -428,10 +441,16 @@ export default function TourDetail() {
       tour?.startLocationLng ?? null,
       tour?.endLocationLat ?? null,
       tour?.endLocationLng ?? null,
-      localFuelType,
+      activeFuelType,
       fuelPrices,
     );
-  }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
+    return {
+      ...baseCalc,
+      tourExtras,
+      totalExpenses: baseCalc.totalExpenses + tourExtras,
+      netProfit: baseCalc.netProfit - tourExtras,
+    };
+  }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelPrice]);
 
   // ── Persist computed financial totals so the tours list stays accurate ─────
   // Always save the latest calc result (including on first load) so the tours
@@ -509,10 +528,7 @@ export default function TourDetail() {
       totalDriveTimeMinutes: calc.totalDriveTimeMinutes,
       totalFuelCost: calc.totalFuelCost,
       totalAccommodation: calc.totalAccommodation,
-      localFuelType,
-      localFuelPricePetrol,
-      localFuelPriceDiesel,
-      localFuelPriceLpg,
+      localFuelPrice,
       profilePayouts: profile
         ? {
             bandMembers: profile.bandMembers,
@@ -535,7 +551,7 @@ export default function TourDetail() {
         ticketPrice: stop.ticketPrice,
       })),
     });
-  }, [calc, localFuelPriceDiesel, localFuelPriceLpg, localFuelPricePetrol, localFuelType, profile, stops, tourId]);
+  }, [calc, localFuelPrice, profile, stops, tourId]);
 
   useEffect(() => {
     if (riskResetKey === "tour-risk:none") {
@@ -1542,19 +1558,26 @@ export default function TourDetail() {
                         )}
                       </div>
 
-                      {/* Fuel Settings — always visible, no tab switching */}
+                      {/* Fuel Settings — always visible, single price keyed off vehicle */}
                       {(() => {
-                        // Derive active vehicles for fuel display
                         const activeVehicles = tourVehicles && tourVehicles.length > 0
                           ? tourVehicles
                           : legacyVehicle ? [{ vehicle: legacyVehicle }] : [];
                         const hasVehicles = activeVehicles.length > 0;
+                        const activeFuelType = (
+                          activeVehicles[0]?.vehicle?.fuelType
+                          ?? tour?.fuelType
+                          ?? "petrol"
+                        ).toString().toLowerCase();
+                        const fallback =
+                          activeFuelType === "diesel" ? 1.95
+                          : activeFuelType === "lpg" ? 0.95
+                          : 1.90;
 
                         return (
                           <div className="px-4 pt-3 pb-3 border-b border-border/30 space-y-2.5">
                             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Fuel Settings</p>
 
-                            {/* Vehicle fuel source — replaces manual dropdown when vehicle present */}
                             {hasVehicles ? (
                               <div className="space-y-1.5">
                                 {activeVehicles.map(tv => (
@@ -1572,56 +1595,26 @@ export default function TourDetail() {
                                 </p>
                               </div>
                             ) : (
-                              /* No vehicle — manual fallback */
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Fuel Type</label>
-                                <select
-                                  value={localFuelType}
-                                  onChange={e => setLocalFuelType(e.target.value)}
-                                  className="h-8 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                  <option value="petrol">Petrol</option>
-                                  <option value="diesel">Diesel</option>
-                                  <option value="lpg">LPG</option>
-                                </select>
-                              </div>
-                            )}
-
-                            {/* Fuel price inputs — always shown, only the matching type is used */}
-                            <div className="flex flex-wrap gap-3 items-end">
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Petrol $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPricePetrol}
-                                  onChange={e => setLocalFuelPricePetrol(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Diesel $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPriceDiesel}
-                                  onChange={e => setLocalFuelPriceDiesel(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">LPG $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPriceLpg}
-                                  onChange={e => setLocalFuelPriceLpg(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                            </div>
-                            {hasVehicles && (
-                              <p className="text-[11px] text-muted-foreground/60">
-                                Only the price matching your vehicle's fuel type is used in calculations.
+                              <p className="text-[11px] text-amber-600">
+                                No vehicle on this tour — fuel calc uses regional averages.
                               </p>
                             )}
+
+                            <div className="flex items-end gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground capitalize">{activeFuelType} $/L</label>
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  placeholder={fallback.toFixed(2)}
+                                  value={localFuelPrice}
+                                  onChange={e => setLocalFuelPrice(e.target.value)}
+                                  className="h-8 text-sm w-24"
+                                />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground/60 pb-1.5">
+                                Leave blank to use the AU average (${fallback.toFixed(2)}).
+                              </p>
+                            </div>
                           </div>
                         );
                       })()}
@@ -1968,7 +1961,7 @@ export default function TourDetail() {
           {tour.notes && (
             <Card className="border-border/50 bg-card/50">
               <CardHeader>
-                <CardTitle>Trail Notes</CardTitle>
+                <CardTitle>Tour Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-muted-foreground">{tour.notes}</p>

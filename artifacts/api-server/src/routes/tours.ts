@@ -54,6 +54,12 @@ function serializeTour(
     fuelPricePetrol: t.fuelPricePetrol != null ? Number(t.fuelPricePetrol) : null,
     fuelPriceDiesel: t.fuelPriceDiesel != null ? Number(t.fuelPriceDiesel) : null,
     fuelPriceLpg: t.fuelPriceLpg != null ? Number(t.fuelPriceLpg) : null,
+    fuelConsumption: t.fuelConsumption != null ? Number(t.fuelConsumption) : null,
+    fuelPrice: t.fuelPrice != null ? Number(t.fuelPrice) : null,
+    flightsCost: t.flightsCost != null ? Number(t.flightsCost) : 0,
+    ferriesTollsCost: t.ferriesTollsCost != null ? Number(t.ferriesTollsCost) : 0,
+    gearHireCost: t.gearHireCost != null ? Number(t.gearHireCost) : 0,
+    otherCosts: t.otherCosts != null ? Number(t.otherCosts) : 0,
     createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
   };
 }
@@ -137,7 +143,7 @@ function estimatePastShowFinancialsFromStop(stop: typeof tourStopsTable.$inferSe
     : null;
 }
 
-const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg'];
+const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg', 'fuelConsumption', 'fuelPrice', 'flightsCost', 'ferriesTollsCost', 'gearHireCost', 'otherCosts'];
 const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
 async function getOwnedTour(userId: string, tourId: number) {

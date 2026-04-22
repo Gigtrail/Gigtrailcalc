@@ -478,8 +478,10 @@ function calculateTourMetrics(
     diesel: n(tour.fuelPriceDiesel) || DEFAULT_DIESEL_PRICE,
     lpg: n(tour.fuelPriceLpg) || DEFAULT_LPG_PRICE,
   };
-  const tourFuelPrice =
-    activeFuelType === "diesel"
+  const singleFuelPrice = n(tour.fuelPrice);
+  const tourFuelPrice = singleFuelPrice > 0
+    ? singleFuelPrice
+    : activeFuelType === "diesel"
       ? fuelPrices.diesel
       : activeFuelType === "lpg"
         ? fuelPrices.lpg
@@ -554,7 +556,15 @@ function calculateTourMetrics(
   }
 
   const totalAccommodationCost = totalStopAccommodation + blankDayAccommodation;
-  const totalCost = totalFuelCost + totalAccommodationCost + totalFoodCost + totalMarketingCost + totalExtraCosts;
+  const tourLevelOtherCosts =
+    n(tour.flightsCost) + n(tour.ferriesTollsCost) + n(tour.gearHireCost) + n(tour.otherCosts);
+  const totalCost =
+    totalFuelCost +
+    totalAccommodationCost +
+    totalFoodCost +
+    totalMarketingCost +
+    totalExtraCosts +
+    tourLevelOtherCosts;
   const totalProfit = grossIncome - totalCost;
 
   return {
