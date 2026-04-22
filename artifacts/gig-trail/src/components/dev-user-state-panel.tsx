@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/react";
-import { RefreshCw } from "lucide-react";
+import { Bug, ChevronDown, RefreshCw } from "lucide-react";
 import { usePlan, type Entitlements } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +24,7 @@ function formatValue(value: unknown): string {
 export default function DevUserStatePanel() {
   const { isSignedIn } = useUser();
   const { me, role, plan, accessSource, entitlements, isLoading, refetch } = usePlan();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
   const [changes, setChanges] = useState<string[]>([]);
   const previousSnapshotRef = useRef<Record<string, unknown> | null>(null);
@@ -84,35 +84,44 @@ export default function DevUserStatePanel() {
   if (!isSignedIn) return null;
 
   return (
-    <aside className="fixed bottom-3 right-3 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-md border border-amber-300 bg-background/95 text-foreground shadow-xl backdrop-blur">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+    <aside
+      className={`fixed right-3 top-16 z-50 rounded-md border border-amber-300 bg-background/95 text-foreground shadow-lg backdrop-blur transition-all ${
+        isOpen ? "w-[min(18rem,calc(100vw-1.5rem))]" : "w-auto"
+      }`}
+    >
+      <div className={`flex items-center justify-between gap-2 ${isOpen ? "border-b border-border px-2.5 py-2" : "px-2 py-1.5"}`}>
         <button
           type="button"
-          className="text-left text-[11px] font-bold uppercase tracking-widest text-amber-700"
+          className="flex items-center gap-1.5 text-left text-[10px] font-bold uppercase tracking-widest text-amber-700"
           onClick={() => setIsOpen((value) => !value)}
+          title="Toggle dev user state"
         >
-          Dev user state
+          <Bug className="h-3.5 w-3.5" />
+          {isOpen ? "Dev user" : role}
+          <ChevronDown className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
         </button>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground">
-            {lastReadAt ? `read ${lastReadAt}` : "waiting"}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={refreshState}
-            disabled={isLoading}
-            title="Refresh /api/me"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
+        {isOpen && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">
+              {lastReadAt ? `read ${lastReadAt}` : "waiting"}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-6 w-6"
+              onClick={refreshState}
+              disabled={isLoading}
+              title="Refresh /api/me"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        )}
       </div>
 
       {isOpen && (
-        <div className="space-y-3 px-3 py-3 text-xs">
+        <div className="max-h-[70vh] space-y-2 overflow-auto px-2.5 py-2.5 text-[11px]">
           <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
             <dt className="text-muted-foreground">userId</dt>
             <dd className="truncate font-mono" title={me?.userId ?? undefined}>
@@ -130,9 +139,9 @@ export default function DevUserStatePanel() {
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Key entitlements
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-1 gap-1">
               {ENTITLEMENT_FLAGS.map(([label, key]) => (
-                <div key={key} className="flex items-center justify-between rounded border border-border/70 px-2 py-1">
+                <div key={key} className="flex items-center justify-between rounded border border-border/70 px-2 py-0.5">
                   <span className="truncate">{label}</span>
                   <span className="font-mono">{formatValue(entitlements[key])}</span>
                 </div>
@@ -140,9 +149,9 @@ export default function DevUserStatePanel() {
             </div>
           </div>
 
-          <div className="rounded border border-border/70 bg-muted/30 px-2 py-2">
+          <div className="rounded border border-border/70 bg-muted/30 px-2 py-1.5">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Changed since previous /api/me
+              Changed
             </div>
             {changes.length > 0 ? (
               <ul className="space-y-1 font-mono text-[11px]">
