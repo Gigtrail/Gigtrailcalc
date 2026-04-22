@@ -259,9 +259,41 @@ export default function Dashboard() {
     // Driving lane: sort ALL upcoming shows chronologically (regardless of
     // tour membership — many shows are standalone runs with no tourId) and
     // mark every day strictly between consecutive shows as a travel day.
-    // For each leg we compute an estimated drive distance/time using the
-    // haversine of the two coordinates; if either coordinate is missing we
-    // still create the segment but with no distance/time (graceful fallback).
+    //
+    // Coordinate resolution: many shows have null lat/lng on the API even
+    // though OTHER occurrences of the same venue/location in the dataset
+    // do carry coordinates (e.g. "Wagga Wagga" appears multiple times,
+    // only some rows are geocoded). Build a venue/location → coord index
+    // across all upcoming items so that null-coord legs can borrow coords
+    // from a sibling occurrence and still produce a useful estimate.
+    const coordIndex = new Map<string, { lat: number; lng: number }>();
+    const indexCoord = (key: string | null | undefined, lat: unknown, lng: unknown) => {
+      if (!key) return;
+      const k = key.trim().toLowerCase();
+      if (!k) return;
+      if (coordIndex.has(k)) return;
+      if (typeof lat !== "number" || typeof lng !== "number") return;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      coordIndex.set(k, { lat, lng });
+    };
+    for (const it of upcoming) {
+      indexCoord(it.venueName, it.latitude, it.longitude);
+      indexCoord(it.location, it.latitude, it.longitude);
+    }
+    const resolveCoord = (
+      it: ItemWithDate,
+    ): { lat: number; lng: number } | null => {
+      if (typeof it.latitude === "number" && typeof it.longitude === "number" &&
+          Number.isFinite(it.latitude) && Number.isFinite(it.longitude)) {
+        return { lat: it.latitude, lng: it.longitude };
+      }
+      const byVenue = it.venueName ? coordIndex.get(it.venueName.trim().toLowerCase()) : undefined;
+      if (byVenue) return byVenue;
+      const byLocation = it.location ? coordIndex.get(it.location.trim().toLowerCase()) : undefined;
+      if (byLocation) return byLocation;
+      return null;
+    };
+
     const sortedShows = [...upcoming].sort(
       (a, b) => a._date.getTime() - b._date.getTime(),
     );
@@ -271,7 +303,11 @@ export default function Dashboard() {
       // Same-day: no travel day to render.
       if (isoKey(from._date) === isoKey(to._date)) continue;
 
-      const straightKm = haversineKm(from.latitude, from.longitude, to.latitude, to.longitude);
+      const fromCoord = resolveCoord(from);
+      const toCoord = resolveCoord(to);
+      const straightKm = fromCoord && toCoord
+        ? haversineKm(fromCoord.lat, fromCoord.lng, toCoord.lat, toCoord.lng)
+        : null;
       const distanceKm = straightKm != null ? straightKm * ROAD_FACTOR : undefined;
       const driveHours = distanceKm != null ? distanceKm / AVG_DRIVE_KMH : undefined;
       // Spread total drive time across the in-between days (cap at 8h/day).
@@ -293,6 +329,8 @@ export default function Dashboard() {
           toLocation: to.location,
           estimatedHours: perDayHours,
           estimatedDistanceKm: perDayKm,
+          hasExactRouteData: false,
+          isApproximate: distanceKm != null,
           linkedShowIds: [from.id, to.id],
         });
       }

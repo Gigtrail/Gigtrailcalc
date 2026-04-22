@@ -41,6 +41,10 @@ export type DrivingLaneEntry = {
   toLocation?: string | null;
   estimatedHours?: number;
   estimatedDistanceKm?: number;
+  /** True when distance/time were derived from a real routing API. */
+  hasExactRouteData?: boolean;
+  /** True when distance/time are derived from straight-line + factor. */
+  isApproximate?: boolean;
   /** IDs of the shows this drive connects (origin → destination). */
   linkedShowIds?: string[];
 };
@@ -93,6 +97,16 @@ function fmtDate(d: Date): string {
 function fmtRange(a: Date, b: Date): string {
   if (isoKey(a) === isoKey(b)) return fmtDate(a);
   return `${fmtDate(a)} – ${fmtDate(b)}`;
+}
+
+function formatDriveHours(hours: number): string {
+  if (!Number.isFinite(hours) || hours <= 0) return "—";
+  const totalMin = Math.round(hours * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -375,11 +389,14 @@ export function DriveSegmentDetails({ segment }: { segment: DrivingSegment }) {
         <div className="flex flex-wrap gap-1.5 text-xs">
           {totalHours > 0 && (
             <Badge variant="outline">
-              ~{totalHours.toFixed(1)}h drive
+              {formatDriveHours(totalHours)} drive
             </Badge>
           )}
           {totalKm > 0 && (
             <Badge variant="outline">~{Math.round(totalKm)} km</Badge>
+          )}
+          {segment.days.some(d => d.entry.isApproximate) && (
+            <Badge variant="secondary">Approximate estimate</Badge>
           )}
         </div>
       )}
