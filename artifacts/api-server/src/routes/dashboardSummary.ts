@@ -80,8 +80,6 @@ export interface DashboardUpcomingTour {
 export interface DashboardSummaryInput {
   runs: RunRecord[];
   tours: TourRecord[];
-  stopsByTourId: Map<number, TourStopRecord[]>;
-  metricsByTourId: Map<number, DerivedTourMetrics>;
   totalProfiles: number;
   totalVehicles: number;
   todayIsoDate: string;
@@ -413,70 +411,32 @@ export function getUpcomingTourCandidates(
 
 export function buildFuturePotentialSummary(
   tours: TourRecord[],
-  stopsByTourId: Map<number, TourStopRecord[]>,
-  metricsByTourId: Map<number, DerivedTourMetrics>,
-  todayIsoDate: string,
 ): DashboardFuturePotential {
-  const candidates = getUpcomingTourCandidates(tours, stopsByTourId, todayIsoDate);
-
-  let projectedShows = 0;
-  let projectedIncome = 0;
-  let projectedProfit = 0;
-  let projectedExpenses = 0;
-  let projectedKm = 0;
-  let profitSum = 0;
-  let bestProjectedTourProfit: number | null = null;
-  let worstProjectedTourProfit: number | null = null;
-
-  for (const candidate of candidates) {
-    const metrics = metricsByTourId.get(candidate.tour.id);
-    if (!metrics) continue;
-
-    projectedShows += candidate.projectedShows;
-    projectedIncome += metrics.totalIncome;
-    projectedProfit += metrics.totalProfit;
-    projectedExpenses += metrics.totalCost;
-    projectedKm += metrics.totalDistance;
-    profitSum += metrics.totalProfit;
-
-    if (bestProjectedTourProfit === null || metrics.totalProfit > bestProjectedTourProfit) {
-      bestProjectedTourProfit = metrics.totalProfit;
-    }
-    if (worstProjectedTourProfit === null || metrics.totalProfit < worstProjectedTourProfit) {
-      worstProjectedTourProfit = metrics.totalProfit;
-    }
-  }
-
-  const projectedTours = candidates.filter(candidate => metricsByTourId.has(candidate.tour.id)).length;
-
   return {
     label: "Future Potential",
-    helperText: "Projected numbers from upcoming tours only - estimates, not actuals.",
+    helperText: "Tours are planning objects here; dashboard financial totals come from past shows only.",
     totalsBasis: "upcoming_tours",
     totalsRule: "Projected from upcoming tours only",
-    projectedTours,
-    projectedShows,
-    projectedIncome,
-    projectedProfit,
-    projectedExpenses,
-    projectedKm,
-    avgProjectedTourProfit: projectedTours > 0 ? profitSum / projectedTours : 0,
-    bestProjectedTourProfit: bestProjectedTourProfit ?? 0,
-    worstProjectedTourProfit: worstProjectedTourProfit ?? 0,
+    projectedTours: tours.length,
+    projectedShows: 0,
+    projectedIncome: 0,
+    projectedProfit: 0,
+    projectedExpenses: 0,
+    projectedKm: 0,
+    avgProjectedTourProfit: 0,
+    bestProjectedTourProfit: 0,
+    worstProjectedTourProfit: 0,
   };
 }
 
 export function buildDashboardSummary(input: DashboardSummaryInput): DashboardSummaryResult {
+  // Runs are the historical financial truth; tours are planning objects and
+  // are count-only in the dashboard summary to avoid double-counting totals.
   return {
     totalProfiles: input.totalProfiles,
     totalVehicles: input.totalVehicles,
     actualPerformance: buildActualPerformanceSummary(input.runs, input.todayIsoDate),
-    futurePotential: buildFuturePotentialSummary(
-      input.tours,
-      input.stopsByTourId,
-      input.metricsByTourId,
-      input.todayIsoDate,
-    ),
+    futurePotential: buildFuturePotentialSummary(input.tours),
   };
 }
 

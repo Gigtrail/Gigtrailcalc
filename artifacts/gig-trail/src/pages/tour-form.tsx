@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateTour, useUpdateTour, useGetTour, useGetProfiles, useGetVehicles, useCreateVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
+import { useCreateTour, useUpdateTour, useGetTour, useGetTours, useGetProfiles, useGetVehicles, useCreateVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +56,12 @@ import {
   getGetDashboardSummaryQueryKey,
   getGetDashboardRecentQueryKey,
 } from "@workspace/api-client-react";
+import {
+  findDuplicateTourName,
+  formatTourLabel,
+  formatVehicleLabel,
+  getTourRenameSuggestions,
+} from "@/lib/duplicate-protection";
 
 // ─── Tour draft persistence ──────────────────────────────────────────────────
 
@@ -340,6 +346,7 @@ export default function TourForm() {
   });
   const { data: profiles, isLoading: isLoadingProfiles } = useGetProfiles();
   const { data: vehicles, isLoading: isLoadingVehicles } = useGetVehicles();
+  const { data: tours } = useGetTours();
 
   const createTour = useCreateTour();
   const updateTour = useUpdateTour();
@@ -619,6 +626,8 @@ export default function TourForm() {
 
   const selectedProfile = profiles?.find(p => p.id === profileId);
   const selectedVehicle = vehicles?.find(v => v.id === vehicleId);
+  const duplicateTour = findDuplicateTourName(tours, name, isEditing ? tourId : undefined);
+  const tourRenameSuggestions = duplicateTour ? getTourRenameSuggestions(name ?? "", startDate) : [];
 
   const handleProfileChange = (val: string) => {
     const pId = val === "none" ? null : parseInt(val);
@@ -748,6 +757,24 @@ export default function TourForm() {
                 <FormItem>
                   <FormLabel>Tour Name</FormLabel>
                   <FormControl><Input placeholder="Summer Run 2025" {...field} /></FormControl>
+                  {duplicateTour && (
+                    <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="font-semibold">You already have a tour with this name.</p>
+                      <p className="mt-1">Existing: {formatTourLabel(duplicateTour)}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {tourRenameSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => form.setValue("name", suggestion, { shouldDirty: true })}
+                            className="rounded-md border border-amber-300/70 bg-white/70 px-2 py-1 text-[11px] font-medium text-amber-950 hover:bg-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -772,7 +799,7 @@ export default function TourForm() {
                       <FormControl><SelectTrigger><SelectValue placeholder="Select vehicle" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {vehicles?.map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>)}
+                        {vehicles?.map(v => <SelectItem key={v.id} value={v.id.toString()}>{formatVehicleLabel(v)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -1066,6 +1093,24 @@ export default function TourForm() {
                       autoFocus
                     />
                   </FormControl>
+                  {duplicateTour && (
+                    <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="font-semibold">You already have a tour with this name.</p>
+                      <p className="mt-1">Existing: {formatTourLabel(duplicateTour)}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {tourRenameSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => form.setValue("name", suggestion, { shouldDirty: true })}
+                            className="rounded-md border border-amber-300/70 bg-white/70 px-2 py-1 text-[11px] font-medium text-amber-950 hover:bg-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -1318,7 +1363,7 @@ export default function TourForm() {
                         <Car className={`w-5 h-5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-medium truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{v.name}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{v.fuelType} · {v.avgConsumption} L/100km</p>
+                          <p className="text-xs text-muted-foreground capitalize">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</p>
                         </div>
                         {isSelected && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
                       </button>

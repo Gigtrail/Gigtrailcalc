@@ -14,6 +14,7 @@ import {
   SetVehicleActAssignmentsParams,
   SetVehicleActAssignmentsBody,
 } from "@workspace/api-zod";
+import { checkLikelyVehicleDuplicate } from "../lib/duplicate-protection";
 
 const router: IRouter = Router();
 
@@ -147,6 +148,7 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
+  const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData);
   if (vehicleData.isDefault) {
     await db.update(vehiclesTable).set({ isDefault: false }).where(eq(vehiclesTable.userId, userId));
   }
@@ -162,7 +164,8 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
   await setActAssignments(vehicle.id, userId, resolvedActIds, resolvedDefaultForActIds);
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  res.status(201).json(GetVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds)));
+  const response = GetVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds));
+  res.status(201).json({ ...response, duplicateProtection });
 });
 
 router.get("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -194,6 +197,7 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
+  const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData, params.data.id);
   const updateData: Record<string, unknown> = { ...vehicleData };
   if (vehicleData.avgConsumption != null) updateData.avgConsumption = String(vehicleData.avgConsumption);
   if (vehicleData.tankSizeLitres != null) updateData.tankSizeLitres = String(vehicleData.tankSizeLitres);
@@ -213,7 +217,8 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  res.json(UpdateVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds)));
+  const response = UpdateVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds));
+  res.json({ ...response, duplicateProtection });
 });
 
 router.put("/vehicles/:id/act-assignments", requireAuth, async (req, res): Promise<void> => {

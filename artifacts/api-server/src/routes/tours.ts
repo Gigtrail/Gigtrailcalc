@@ -28,6 +28,7 @@ import {
 } from "@workspace/api-zod";
 import { loadTourDerivations } from "../lib/tour-derivations";
 import { getDefaultSavedCalculationStatus, getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
+import { checkTourDuplicateName } from "../lib/duplicate-protection";
 
 const router: IRouter = Router();
 
@@ -243,8 +244,10 @@ router.post("/tours", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const duplicateProtection = await checkTourDuplicateName(userId, parsed.data.name);
   const [tour] = await db.insert(toursTable).values({ ...toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as typeof toursTable.$inferInsert, userId }).returning();
-  res.status(201).json(GetTourResponse.parse({ ...serializeTour(tour), stops: [] }));
+  const response = GetTourResponse.parse({ ...serializeTour(tour), stops: [] });
+  res.status(201).json({ ...response, duplicateProtection });
 });
 
 router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
@@ -288,6 +291,7 @@ router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     totalProfit: _ignoredTotalProfit,
     ...mutableTourFields
   } = parsed.data;
+  const duplicateProtection = await checkTourDuplicateName(userId, parsed.data.name, params.data.id);
   const [tour] = await db
     .update(toursTable)
     .set(toDbNumeric(mutableTourFields as Record<string, unknown>, TOUR_NUMERIC) as Partial<typeof toursTable.$inferInsert>)
@@ -298,7 +302,8 @@ router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { metricsByTourId } = await loadTourDerivations(userId, [tour]);
-  res.json(UpdateTourResponse.parse(serializeTour(tour, metricsByTourId.get(tour.id))));
+  const response = UpdateTourResponse.parse(serializeTour(tour, metricsByTourId.get(tour.id)));
+  res.json({ ...response, duplicateProtection });
 });
 
 router.delete("/tours/:id", requireAuth, async (req, res): Promise<void> => {

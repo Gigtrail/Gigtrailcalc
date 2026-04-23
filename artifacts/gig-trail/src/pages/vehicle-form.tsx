@@ -6,6 +6,7 @@ import {
   useCreateVehicle,
   useUpdateVehicle,
   useGetVehicle,
+  useGetVehicles,
   useGetProfiles,
   useSetVehicleActAssignments,
   getGetVehiclesQueryKey,
@@ -41,6 +42,7 @@ import { useEffect, useState } from "react";
 import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
 import { trackEvent } from "@/lib/analytics";
 import { useQueryClient } from "@tanstack/react-query";
+import { findLikelyDuplicateVehicle, formatVehicleLabel } from "@/lib/duplicate-protection";
 
 const garageVehicleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -68,6 +70,7 @@ export default function GarageVehicleForm() {
   const { data: vehicle, isLoading: isLoadingVehicle } = useGetVehicle(vehicleId, {
     query: { enabled: isEditing, queryKey: ["vehicle", vehicleId] },
   });
+  const { data: vehicles } = useGetVehicles();
   const { data: profiles } = useGetProfiles();
 
   const createVehicle = useCreateVehicle();
@@ -92,6 +95,19 @@ export default function GarageVehicleForm() {
   });
 
   const vehicleTypeWatch = form.watch("vehicleType");
+  const watchedVehicleName = form.watch("name");
+  const watchedFuelType = form.watch("fuelType");
+  const watchedAvgConsumption = form.watch("avgConsumption");
+  const likelyDuplicateVehicle = findLikelyDuplicateVehicle(
+    vehicles,
+    {
+      name: watchedVehicleName,
+      fuelType: watchedFuelType,
+      avgConsumption: watchedAvgConsumption,
+      vehicleType: vehicleTypeWatch,
+    },
+    isEditing ? vehicleId : undefined,
+  );
 
   useEffect(() => {
     if (vehicle) {
@@ -262,6 +278,25 @@ export default function GarageVehicleForm() {
                       <FormControl>
                         <Input placeholder="Tour Van, The Beast..." {...field} />
                       </FormControl>
+                      {likelyDuplicateVehicle && (
+                        <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          <p className="font-semibold">Looks like you may already have this vehicle saved.</p>
+                          <p className="mt-1">Existing: {formatVehicleLabel(likelyDuplicateVehicle.vehicle)}</p>
+                          <p className="mt-1">Matched on {likelyDuplicateVehicle.reasons.join(", ")}.</p>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 border-amber-300 bg-white/70 px-2 text-xs text-amber-950 hover:bg-white"
+                              onClick={() => setLocation(`/garage/${likelyDuplicateVehicle.vehicle.id}/edit`)}
+                            >
+                              Use existing
+                            </Button>
+                            <span className="self-center text-[11px] text-amber-800">Save anyway is allowed.</span>
+                          </div>
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

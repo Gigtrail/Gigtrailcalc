@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, useCreateOrUpdateVenue, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,7 @@ import { migrateOldMembers, resolveActiveMembers, derivePeopleCount, resolveFeeT
 import { findFirstCompleteProfile, getFuelPriceForType, inferFuelTypeFromPrices } from "@/lib/profile-setup";
 import { DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
 import { getStandardVehicle, STANDARD_VEHICLES } from "@/lib/garage-constants";
+import { formatVehicleLabel } from "@/lib/duplicate-protection";
 import { resolveFuelPriceForVehicle, type FuelPriceSource } from "@/lib/fuel-price";
 import { trackEvent } from "@/lib/analytics";
 import { calculateSingleShow, SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION } from "@/lib/calculations";
@@ -478,7 +479,7 @@ function CompactRunFormLayout({
                                       </SelectItem>
                                       {activeVehicles.map((vehicle) => (
                                         <SelectItem key={vehicle.id} value={vehicle.id.toString()}>
-                                          {vehicle.name} - {vehicle.avgConsumption} L/100km
+                                          {formatVehicleLabel(vehicle)}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -1397,6 +1398,7 @@ export default function RunForm() {
   
   const createRun = useCreateRun();
   const updateRun = useUpdateRun();
+  const createOrUpdateVenue = useCreateOrUpdateVenue();
   
   const form = useForm<RunFormValues>({
     resolver: zodResolver(runSchema),
@@ -1541,6 +1543,7 @@ export default function RunForm() {
   const queryClient = useQueryClient();
   const invalidateRunDashboardQueries = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
   }, [queryClient]);
@@ -2683,18 +2686,41 @@ export default function RunForm() {
         calculatedAt: new Date().toISOString(),
         snapshotMembers,
       };
-      const payload = {
-        ...submissionData,
-        venueId: runSelectedVenueId,
-        vehicleId: runVehicleId,
-        accommodationCost: computed.accommodationCost,
-        totalCost: computed.totalCost,
-        totalIncome: computed.totalIncome,
-        totalProfit: computed.netProfit,
-        calculationSnapshot,
-      };
 
       try {
+        let venueId = runSelectedVenueId;
+        const venueName = submissionData.venueName?.trim();
+        if (venueName) {
+          const fallbackCity = (() => {
+            const city = submissionData.city?.trim();
+            if (city) return city;
+            const destination = submissionData.destination?.trim();
+            const firstPart = destination?.split(",")[0]?.trim();
+            return firstPart || "Unknown";
+          })();
+          const venue = await createOrUpdateVenue.mutateAsync({
+            data: {
+              venueName,
+              profileId: submissionData.profileId ?? null,
+              city: fallbackCity,
+              state: submissionData.state || null,
+              country: submissionData.country || null,
+            },
+          });
+          venueId = venue.id;
+          setRunSelectedVenueId(venue.id);
+        }
+        const payload = {
+          ...submissionData,
+          venueId,
+          vehicleId: runVehicleId,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+          calculationSnapshot,
+        };
+
         if (isEditing) {
           await updateRun.mutateAsync({ id: runId, data: payload });
           invalidateRunDashboardQueries();
@@ -2722,7 +2748,7 @@ export default function RunForm() {
     })();
   };
 
-  const isPending = createRun.isPending || updateRun.isPending;
+  const isPending = createRun.isPending || updateRun.isPending || createOrUpdateVenue.isPending;
   const isTicketed = formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid";
 
   if (isEditing && isLoadingRun) {
@@ -3142,7 +3168,7 @@ export default function RunForm() {
                                   </SelectItem>
                                   {actVehicles.map(v => (
                                     <SelectItem key={v.id} value={v.id.toString()}>
-                                      {v.name} — {v.avgConsumption} L/100km
+                                      {formatVehicleLabel(v)}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

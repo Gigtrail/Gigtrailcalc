@@ -64,12 +64,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)),
   ]);
 
-  const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, tours);
   const summary = buildDashboardSummary({
     runs,
     tours,
-    stopsByTourId,
-    metricsByTourId,
     totalProfiles: profiles.length,
     totalVehicles: vehicles.length,
     todayIsoDate,

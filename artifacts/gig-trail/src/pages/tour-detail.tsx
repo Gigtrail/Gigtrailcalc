@@ -22,6 +22,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatVehicleLabel } from "@/lib/duplicate-protection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -3069,7 +3070,7 @@ export default function TourDetail() {
                 >
                   <div>
                     <div className="text-sm font-medium">{v.name}</div>
-                    <div className="text-xs text-muted-foreground">{v.fuelType} · {Number(v.avgConsumption)} L/100km</div>
+                    <div className="text-xs text-muted-foreground">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</div>
                   </div>
                   <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
                 </button>

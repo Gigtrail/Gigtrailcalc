@@ -540,10 +540,6 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "venueName is required" });
     return;
   }
-  if (!cleanedCity) {
-    res.status(400).json({ error: "city is required" });
-    return;
-  }
   if (hasInvalidVenueStatus(venueStatus)) {
     res.status(400).json({ error: "Invalid venueStatus" });
     return;
@@ -563,11 +559,29 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
 
   if (existing) {
-    res.status(409).json({
-      error: "Venue already exists. Edit it from the venue page to change venue defaults.",
-      code: "VENUE_ALREADY_EXISTS",
-      venue: serializeVenue(existing),
-    });
+    const updateData: Partial<typeof venuesTable.$inferInsert> = {
+      name: cleanedVenueName,
+      updatedAt: new Date(),
+    };
+    if (profileId !== undefined) updateData.profileId = profileId ?? existing.profileId;
+    if (cleanedCity && cleanedCity !== "Unknown") updateData.city = cleanedCity;
+    if (cleanText(state)) updateData.state = cleanText(state);
+    if (cleanText(country)) updateData.country = cleanText(country);
+    if (cleanText(address)) updateData.address = cleanText(address);
+    if (cleanText(suburb)) updateData.suburb = cleanText(suburb);
+    if (cleanText(fullAddress)) updateData.fullAddress = cleanText(fullAddress);
+    if (cleanText(postcode)) updateData.postcode = cleanText(postcode);
+
+    const [venue] = await db.update(venuesTable)
+      .set(updateData)
+      .where(and(eq(venuesTable.id, existing.id), eq(venuesTable.userId, userId)))
+      .returning();
+    res.json(serializeVenue(venue));
+    return;
+  }
+
+  if (!cleanedCity) {
+    res.status(400).json({ error: "city is required" });
     return;
   }
 

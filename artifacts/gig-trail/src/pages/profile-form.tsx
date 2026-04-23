@@ -83,6 +83,7 @@ import {
   getRequiredMemberCount,
   inferFuelTypeFromPrices,
 } from "@/lib/profile-setup";
+import { formatVehicleLabel } from "@/lib/duplicate-protection";
 
 // ─── Draft persistence ───────────────────────────────────────────────────────
 
@@ -1157,7 +1158,7 @@ export default function ProfileForm() {
                                 {isSelected ? <Star className="w-4 h-4 shrink-0 fill-primary" /> : <div className="w-4 h-4 rounded-full border border-muted-foreground/40 shrink-0" />}
                                 <div className="flex-1 min-w-0">
                                   <div className="font-semibold truncate">{v.name}</div>
-                                  <div className="text-[11px] opacity-70">{v.fuelType} · {v.avgConsumption} L/100km</div>
+                                  <div className="text-[11px] opacity-70">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</div>
                                 </div>
                                 {isSelected && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/20 text-primary shrink-0">Default</span>}
                               </button>
@@ -1878,7 +1879,7 @@ export default function ProfileForm() {
                             <Car className={`w-5 h-5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-medium truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{v.name}</p>
-                              <p className="text-xs text-muted-foreground capitalize">{v.fuelType} · {v.avgConsumption} L/100km</p>
+                              <p className="text-xs text-muted-foreground capitalize">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</p>
                             </div>
                             {isSelected && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
                           </button>

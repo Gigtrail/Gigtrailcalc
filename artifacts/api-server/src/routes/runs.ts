@@ -177,6 +177,20 @@ function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferS
   );
 }
 
+async function findVenueIdByName(userId: string, venueName: unknown): Promise<number | null> {
+  if (typeof venueName !== "string" || !venueName.trim()) return null;
+  const normalized = normalizeVenueName(venueName);
+  if (!normalized) return null;
+
+  const [match] = await db
+    .select({ id: venuesTable.id })
+    .from(venuesTable)
+    .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)))
+    .limit(1);
+
+  return match?.id ?? null;
+}
+
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const todayIsoDate = getTodayIsoDateFromRequest(req);
@@ -212,42 +226,18 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
   // on the venue detail page and feeds the venue's performance stats — without
   // requiring the user to remember to click an autocomplete result.
   if (!runData.venueId && typeof runData.venueName === "string" && runData.venueName.trim()) {
-    const normalized = normalizeVenueName(runData.venueName);
-    if (normalized) {
-      const [match] = await db
-        .select({ id: venuesTable.id })
-        .from(venuesTable)
-        .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)))
-        .limit(1);
-      if (match) {
-        runData.venueId = match.id;
-      }
+    const fallbackVenueId = await findVenueIdByName(userId, runData.venueName);
+    if (fallbackVenueId != null) {
+      runData.venueId = fallbackVenueId;
     }
   }
 
-  // Duplicate detection: auto-saved draft/planned calculations should update in place.
-  if (derivedStatus !== "past" && runData.venueId && runData.profileId && runData.showDate) {
-    const [existing] = await db.select().from(runsTable).where(
-      and(
-        eq(runsTable.userId, userId),
-        eq(runsTable.profileId, runData.profileId),
-        eq(runsTable.venueId, runData.venueId),
-        eq(runsTable.showDate, runData.showDate),
-        eq(runsTable.status, runData.status)
-      )
-    ).limit(1);
-    if (existing) {
-      const [updated] = await db.update(runsTable)
-        .set(toDbRun(runData as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
-        .where(eq(runsTable.id, existing.id))
-        .returning();
-      logSavedRun("updated", updated);
-      res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
-      return;
-    }
-  }
-
-  const [run] = await db.insert(runsTable).values({ ...toDbRun(runData as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
+  // Multiple runs for the same venue/date are valid GigTrail scenarios.
+  // Preserve them instead of auto-collapsing drafts.
+  const [run] = await db
+    .insert(runsTable)
+    .values({ ...toDbRun(runData as Record<string, unknown>) as typeof runsTable.$inferInsert, userId })
+    .returning();
   logSavedRun("created", run);
   res.status(201).json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
@@ -305,10 +295,18 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
       ? parsed.data.showDate
       : existingRun.showDate;
 
+  const runData: Record<string, unknown> = { ...parsed.data };
+  if (!runData.venueId && typeof runData.venueName === "string" && runData.venueName.trim()) {
+    const fallbackVenueId = await findVenueIdByName(userId, runData.venueName);
+    if (fallbackVenueId != null) {
+      runData.venueId = fallbackVenueId;
+    }
+  }
+
   const [run] = await db.update(runsTable)
     .set(
       toDbRun({
-        ...parsed.data,
+        ...runData,
         status: getDefaultSavedCalculationStatus(effectiveShowDate, todayIsoDate),
       } as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>,
     )
