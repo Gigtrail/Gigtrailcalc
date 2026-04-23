@@ -29,6 +29,7 @@ import {
 import { loadTourDerivations } from "../lib/tour-derivations";
 import { getDefaultSavedCalculationStatus, getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 import { checkTourDuplicateName } from "../lib/duplicate-protection";
+import { parseIntegerParam } from "../lib/request-params";
 
 const router: IRouter = Router();
 
@@ -145,7 +146,7 @@ function estimatePastShowFinancialsFromStop(stop: typeof tourStopsTable.$inferSe
 }
 
 const TOUR_NUMERIC = ['defaultFoodCost', 'totalDistance', 'totalCost', 'totalIncome', 'totalProfit', 'startLocationLat', 'startLocationLng', 'endLocationLat', 'endLocationLng', 'fuelPricePetrol', 'fuelPriceDiesel', 'fuelPriceLpg', 'fuelConsumption', 'fuelPrice', 'flightsCost', 'ferriesTollsCost', 'gearHireCost', 'otherCosts'];
-const STOP_NUMERIC = ['fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
+const STOP_NUMERIC = ['cityLat', 'cityLng', 'fee', 'ticketPrice', 'expectedAttendancePct', 'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'accommodationCost', 'extraCosts', 'distanceOverride', 'fuelPriceOverride'];
 
 async function getOwnedTour(userId: string, tourId: number) {
   const [tour] = await db
@@ -450,8 +451,8 @@ router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Pro
 
 router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const tourId = parseInt(req.params.tourId);
-  const stopId = parseInt(req.params.stopId);
+  const tourId = parseIntegerParam(req.params.tourId);
+  const stopId = parseIntegerParam(req.params.stopId);
   if (isNaN(tourId) || isNaN(stopId)) {
     res.status(400).json({ error: "Invalid ids" });
     return;

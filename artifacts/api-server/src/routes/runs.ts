@@ -132,6 +132,7 @@ function toDbRun(data: Record<string, unknown>) {
 
   const result: Record<string, unknown> = {};
   const numericFields = new Set([
+    'originLat', 'originLng', 'destinationLat', 'destinationLng',
     'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
     'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'bookingFeePerTicket', 'supportActCost',
     'accommodationNights', 'accommodationCost',

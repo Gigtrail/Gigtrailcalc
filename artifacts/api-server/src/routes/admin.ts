@@ -3,6 +3,8 @@ import { requireAuth, requireAdmin, isPermanentAdminEmail, derivePlanFromRole, t
 import { VALID_ROLES } from "@workspace/entitlements";
 import { db, usersTable, promoCodesTable, promoCodeRedemptionsTable, feedbackPostsTable, feedbackVotesTable } from "@workspace/db";
 import { eq, ilike, desc, asc, sql, isNull, isNotNull, and, or } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { firstParam, parseIntegerParam } from "../lib/request-params";
 
 const FEEDBACK_CATEGORIES = new Set(["bug", "feature_request", "improvement", "ux_issue"]);
 const FEEDBACK_STATUSES = new Set(["planned", "in_progress", "released"]);
@@ -10,10 +12,14 @@ const FEEDBACK_SORTS = new Set(["newest", "oldest", "top_voted"]);
 
 const router: IRouter = Router();
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+}
+
 // ─── User management ─────────────────────────────────────────────────────────
 
 router.get("/admin/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const q = (req.query.q as string | undefined)?.trim() ?? "";
+  const q = firstParam(req.query.q)?.trim() ?? "";
 
   const users = q.length >= 2
     ? await db
@@ -44,7 +50,11 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res): Promise<
 
 router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { userId: actingAdminId } = req as AuthenticatedRequest;
-  const { id } = req.params;
+  const id = firstParam(req.params.id);
+  if (!id) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
   const { role } = req.body as { role?: string };
 
   if (!role || !VALID_ROLES.includes(role as UserRole)) {
@@ -137,8 +147,8 @@ router.post("/admin/promo-codes", requireAuth, requireAdmin, async (req, res): P
       .returning();
 
     res.status(201).json({ code: created });
-  } catch (e: any) {
-    if (e?.code === "23505") {
+  } catch (e) {
+    if (isUniqueViolation(e)) {
       res.status(409).json({ error: "A promo code with this name already exists" });
     } else {
       throw e;
@@ -147,7 +157,11 @@ router.post("/admin/promo-codes", requireAuth, requireAdmin, async (req, res): P
 });
 
 router.patch("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
+  const id = parseIntegerParam(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid promo code id" });
+    return;
+  }
   const updates = req.body as {
     isActive?: boolean;
     grantsRole?: string;
@@ -161,7 +175,7 @@ router.patch("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, re
     return;
   }
 
-  const setValues: Record<string, any> = { updatedAt: new Date() };
+  const setValues: Partial<typeof promoCodesTable.$inferInsert> = { updatedAt: new Date() };
   if (updates.isActive !== undefined) setValues.isActive = updates.isActive;
   if (updates.grantsRole !== undefined) setValues.grantsRole = updates.grantsRole;
   if (updates.maxUses !== undefined) setValues.maxUses = updates.maxUses ?? null;
@@ -183,7 +197,11 @@ router.patch("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, re
 });
 
 router.delete("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
+  const id = parseIntegerParam(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid promo code id" });
+    return;
+  }
 
   const [deleted] = await db
     .delete(promoCodesTable)
@@ -201,14 +219,14 @@ router.delete("/admin/promo-codes/:id", requireAuth, requireAdmin, async (req, r
 // ─── Admin feedback management ────────────────────────────────────────────────
 
 router.get("/admin/feedback", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const search = (req.query.search as string | undefined)?.trim() ?? "";
-  const status = req.query.status as string | undefined;
-  const category = req.query.category as string | undefined;
-  const sort = (req.query.sort as string | undefined) ?? "newest";
-  const includeDeleted = req.query.includeDeleted === "true";
-  const needsReply = req.query.needsReply === "true";
+  const search = firstParam(req.query.search)?.trim() ?? "";
+  const status = firstParam(req.query.status);
+  const category = firstParam(req.query.category);
+  const sort = firstParam(req.query.sort) ?? "newest";
+  const includeDeleted = firstParam(req.query.includeDeleted) === "true";
+  const needsReply = firstParam(req.query.needsReply) === "true";
 
-  const conditions = [];
+  const conditions: SQL[] = [];
   if (!includeDeleted) conditions.push(isNull(feedbackPostsTable.deletedAt));
   if (status && FEEDBACK_STATUSES.has(status)) conditions.push(eq(feedbackPostsTable.status, status));
   if (category && FEEDBACK_CATEGORIES.has(category)) conditions.push(eq(feedbackPostsTable.category, category));
@@ -275,7 +293,7 @@ router.get("/admin/feedback", requireAuth, requireAdmin, async (req, res): Promi
 });
 
 router.get("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;
@@ -329,14 +347,14 @@ router.get("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res): P
 });
 
 router.patch("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;
   }
 
   const { status, category, adminReply, internalNotes } = req.body ?? {};
-  const updates: Record<string, string | Date | null> = {};
+  const updates: Partial<typeof feedbackPostsTable.$inferInsert> = {};
 
   if (status !== undefined) {
     if (typeof status !== "string" || !FEEDBACK_STATUSES.has(status)) {
@@ -418,7 +436,7 @@ router.patch("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res):
 
 router.delete("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;
@@ -453,7 +471,7 @@ router.delete("/admin/feedback/:id", requireAuth, requireAdmin, async (req, res)
 });
 
 router.post("/admin/feedback/:id/restore", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;
@@ -486,7 +504,11 @@ router.post("/admin/feedback/:id/restore", requireAuth, requireAdmin, async (req
 // ─── Promo code redemptions ───────────────────────────────────────────────────
 
 router.get("/admin/promo-codes/:id/redemptions", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const id = Number(req.params.id);
+  const id = parseIntegerParam(req.params.id);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid promo code id" });
+    return;
+  }
 
   const redemptions = await db
     .select()

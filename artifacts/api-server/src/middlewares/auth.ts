@@ -1,5 +1,5 @@
 import { getAuth, clerkClient } from "@clerk/express";
-import { db, usersTable } from "@workspace/db";
+import { db, profilesTable, runsTable, usersTable, vehiclesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import {
@@ -177,7 +177,9 @@ async function ensureUser(userId: string, email?: string) {
 
 // ─── Misc helpers ─────────────────────────────────────────────────────────────
 
-export async function countUserRecords(table: any, userId: string): Promise<number> {
+type UserScopedTable = typeof profilesTable | typeof runsTable | typeof vehiclesTable;
+
+export async function countUserRecords(table: UserScopedTable, userId: string): Promise<number> {
   const result = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(table)

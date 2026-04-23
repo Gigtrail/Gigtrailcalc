@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import { FREE_CALC_LIMIT_PER_WEEK, getPlanLimits, hasProAccess } from "@workspace/entitlements";
+import { parseIntegerParam } from "../lib/request-params";
 
 const FREE_CALC_LIMIT = FREE_CALC_LIMIT_PER_WEEK;
 
@@ -99,6 +100,8 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     fuelConsumption: String(parsed.data.fuelConsumption ?? 10),
     expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
     minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
+    homeBaseLat: parsed.data.homeBaseLat != null ? String(parsed.data.homeBaseLat) : null,
+    homeBaseLng: parsed.data.homeBaseLng != null ? String(parsed.data.homeBaseLng) : null,
     defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
     defaultPetrolPrice: parsed.data.defaultPetrolPrice != null ? String(parsed.data.defaultPetrolPrice) : null,
     defaultDieselPrice: parsed.data.defaultDieselPrice != null ? String(parsed.data.defaultDieselPrice) : null,
@@ -142,12 +145,16 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const updateData: Record<string, unknown> = { ...parsed.data };
+  const updateData = { ...parsed.data } as Partial<typeof profilesTable.$inferInsert>;
   if (parsed.data.fuelConsumption != null) updateData.fuelConsumption = String(parsed.data.fuelConsumption);
   if (parsed.data.expectedGigFee != null) updateData.expectedGigFee = String(parsed.data.expectedGigFee);
   if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
   if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
   if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
+  if (parsed.data.homeBaseLat != null) updateData.homeBaseLat = String(parsed.data.homeBaseLat);
+  else if (parsed.data.homeBaseLat === null) updateData.homeBaseLat = null;
+  if (parsed.data.homeBaseLng != null) updateData.homeBaseLng = String(parsed.data.homeBaseLng);
+  else if (parsed.data.homeBaseLng === null) updateData.homeBaseLng = null;
   if (parsed.data.defaultFuelPrice != null) updateData.defaultFuelPrice = String(parsed.data.defaultFuelPrice);
   else if (parsed.data.defaultFuelPrice === null) updateData.defaultFuelPrice = null;
   if (parsed.data.defaultPetrolPrice != null) updateData.defaultPetrolPrice = String(parsed.data.defaultPetrolPrice);
@@ -181,7 +188,7 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole } = req as AuthenticatedRequest;
-  const id = parseInt(req.params.id);
+  const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid profile id" });
     return;

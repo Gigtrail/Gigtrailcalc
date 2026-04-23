@@ -12,6 +12,7 @@ import {
 import { db, promoCodesTable, promoCodeRedemptionsTable, usersTable } from "@workspace/db";
 import { serializeEntitlements } from "@workspace/entitlements";
 import { eq } from "drizzle-orm";
+import { firstParam } from "../lib/request-params";
 
 const router: IRouter = Router();
 
@@ -28,7 +29,7 @@ function promoAccessResponse(role: UserRole, accessSource: "default" | "stripe" 
 
 /** Validate a promo code without redeeming it (public — no auth required). */
 router.get("/promo-codes/validate", async (req, res): Promise<void> => {
-  const rawCode = (req.query.code as string | undefined)?.trim().toUpperCase();
+  const rawCode = firstParam(req.query.code)?.trim().toUpperCase();
   if (!rawCode) {
     res.status(400).json({ valid: false, error: "Code is required" });
     return;

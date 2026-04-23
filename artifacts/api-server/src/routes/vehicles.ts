@@ -155,6 +155,7 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
   const [vehicle] = await db.insert(vehiclesTable).values({
     ...vehicleData,
     userId,
+    isDefault: vehicleData.isDefault ?? undefined,
     avgConsumption: String(vehicleData.avgConsumption),
     tankSizeLitres: vehicleData.tankSizeLitres != null ? String(vehicleData.tankSizeLitres) : null,
   }).returning();
@@ -198,7 +199,10 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
   const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData, params.data.id);
-  const updateData: Record<string, unknown> = { ...vehicleData };
+  const updateData = {
+    ...vehicleData,
+    isDefault: vehicleData.isDefault ?? undefined,
+  } as Partial<typeof vehiclesTable.$inferInsert>;
   if (vehicleData.avgConsumption != null) updateData.avgConsumption = String(vehicleData.avgConsumption);
   if (vehicleData.tankSizeLitres != null) updateData.tankSizeLitres = String(vehicleData.tankSizeLitres);
   if (vehicleData.isDefault) {

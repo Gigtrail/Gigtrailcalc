@@ -3,6 +3,7 @@ import { eq, and, or, ilike, desc, sql, inArray } from "drizzle-orm";
 import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
+import { firstParam, parseIntegerParam } from "../lib/request-params";
 
 const router: IRouter = Router();
 
@@ -259,7 +260,8 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
 
 router.get("/venues/search", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const q = (req.query.q as string) || "";
+  const rawQ = firstParam(req.query.q);
+  const q = typeof rawQ === "string" ? rawQ : "";
   if (!q || q.length < 1) {
     res.json([]);
     return;
@@ -286,7 +288,7 @@ router.get("/venues/search", requireAuth, async (req, res): Promise<void> => {
 
 router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const id = parseInt(req.params.id);
+  const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const [venue] = await db.select().from(venuesTable)
@@ -373,7 +375,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const id = parseInt(req.params.id);
+  const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const body = req.body as {
@@ -468,10 +470,10 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   if ('typicalSetTime' in body) updateData.typicalSetTime = cleanText(body.typicalSetTime);
   if ('venueStatus' in body) updateData.venueStatus = parseVenueStatus(body.venueStatus) ?? "untested";
   if ('willPlayAgain' in body) updateData.willPlayAgain = parseWillPlayAgain(body.willPlayAgain) ?? "unsure";
-  if ('accommodationAvailable' in body) updateData.accommodationAvailable = body.accommodationAvailable;
-  if ('riderProvided' in body) updateData.riderFriendly = body.riderProvided;
-  if ('riderFriendly' in body) updateData.riderFriendly = body.riderFriendly;
-  if ('playingDays' in body) updateData.playingDays = cleanPlayingDays(body.playingDays);
+  if ('accommodationAvailable' in body) updateData.accommodationAvailable = body.accommodationAvailable ?? undefined;
+  if ('riderProvided' in body) updateData.riderFriendly = body.riderProvided ?? undefined;
+  if ('riderFriendly' in body) updateData.riderFriendly = body.riderFriendly ?? undefined;
+  if ('playingDays' in body) updateData.playingDays = cleanPlayingDays(body.playingDays) ?? undefined;
   if ('venueNotes' in body) updateData.generalNotes = cleanText(body.venueNotes);
   if ('productionNotes' in body) updateData.productionNotes = cleanText(body.productionNotes);
   if ('techSpecs' in body) updateData.techSpecs = cleanText(body.techSpecs);
@@ -610,9 +612,9 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     typicalSetTime: cleanText(typicalSetTime),
     venueStatus: cleanedVenueStatus,
     willPlayAgain: cleanedWillPlayAgain,
-    accommodationAvailable: accommodationAvailable ?? false,
-    riderFriendly: riderFriendly ?? riderProvided ?? false,
-    playingDays: cleanPlayingDays(playingDays),
+    accommodationAvailable: accommodationAvailable ?? undefined,
+    riderFriendly: riderFriendly ?? riderProvided ?? undefined,
+    playingDays: cleanPlayingDays(playingDays) ?? undefined,
     productionNotes: cleanText(productionNotes),
     techSpecs: cleanText(techSpecs),
     stagePlotNotes: cleanText(stagePlotNotes),
@@ -626,7 +628,7 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
 
 router.delete("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const id = parseInt(req.params.id);
+  const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid id" });
     return;
