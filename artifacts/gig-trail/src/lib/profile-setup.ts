@@ -1,7 +1,8 @@
 import type { Profile } from "@workspace/api-client-react";
 import { parseActiveMemberIds } from "@/lib/member-utils";
 
-export const ALPHA_MEMBER_LIMIT = 3;
+export const ALPHA_MEMBER_LIMIT = 5;
+export const BAND_MIN_MEMBER_COUNT = 3;
 export const PROFILE_CHECKOUT_RETURN_KEY = "gigtrail_post_checkout_return_to";
 
 export const FUEL_TYPES = ["petrol", "diesel", "lpg"] as const;
@@ -31,7 +32,7 @@ export function inferActTypeFromMemberCount(memberCount: number): SupportedActTy
   if (memberCount <= 0) return null;
   if (memberCount === 1) return "Solo";
   if (memberCount === 2) return "Duo";
-  if (memberCount === ALPHA_MEMBER_LIMIT) return "Band";
+  if (memberCount >= BAND_MIN_MEMBER_COUNT && memberCount <= ALPHA_MEMBER_LIMIT) return "Band";
   return null;
 }
 
@@ -60,11 +61,15 @@ export function getMemberSetupFeedback(
   }
 
   const actType = isSupportedActType(actTypeRaw) ? actTypeRaw : "Solo";
-  const requiredCount = getRequiredMemberCount(actType);
   const inferredActType = inferActTypeFromMemberCount(memberCount);
   const suggestedActType = inferredActType && inferredActType !== actType ? inferredActType : null;
 
-  if (memberCount === requiredCount) {
+  const isValid =
+    actType === "Solo" ? memberCount === 1
+    : actType === "Duo" ? memberCount === 2
+    : memberCount >= BAND_MIN_MEMBER_COUNT && memberCount <= ALPHA_MEMBER_LIMIT;
+
+  if (isValid) {
     return {
       isValid: true,
       message: null,
@@ -81,9 +86,9 @@ export function getMemberSetupFeedback(
       ? "Duo requires 2 members - add one more or switch to Solo"
       : "Duo requires 2 members - remove one or switch to Band";
   } else {
-    message = memberCount < ALPHA_MEMBER_LIMIT
-      ? "Band requires 3 members - add one more or switch to Duo"
-      : "Band is capped at 3 members for alpha - remove one or switch to Duo";
+    message = memberCount < BAND_MIN_MEMBER_COUNT
+      ? `Band requires ${BAND_MIN_MEMBER_COUNT}-${ALPHA_MEMBER_LIMIT} members - add one more or switch to Duo`
+      : `Band is capped at ${ALPHA_MEMBER_LIMIT} members for alpha - remove one`;
   }
 
   return {

@@ -706,6 +706,10 @@ components:
           type: number
         minTakeHomePerPerson:
           type: number
+        payoutMode:
+          type: string
+        minimumActTakeHome:
+          type: number
         accommodationRequired:
           type: boolean
         accommodationType:
@@ -737,6 +741,8 @@ components:
         - fuelConsumption
         - expectedGigFee
         - minTakeHomePerPerson
+        - payoutMode
+        - minimumActTakeHome
         - accommodationRequired
         - avgAccomPerNight
         - avgFoodPerDay
@@ -789,6 +795,10 @@ components:
           type: number
         minTakeHomePerPerson:
           type: number
+        payoutMode:
+          type: string
+        minimumActTakeHome:
+          type: number
         accommodationRequired:
           type: boolean
         accommodationType:
@@ -840,6 +850,10 @@ components:
         expectedGigFee:
           type: number
         minTakeHomePerPerson:
+          type: number
+        payoutMode:
+          type: string
+        minimumActTakeHome:
           type: number
         accommodationRequired:
           type: boolean

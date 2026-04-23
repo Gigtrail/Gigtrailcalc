@@ -29,6 +29,8 @@ export const profilesTable = pgTable("profiles", {
   doubleRoomsDefault: integer("double_rooms_default").notNull().default(0),
   avgFoodPerDay: numeric("avg_food_per_day", { precision: 10, scale: 2 }).notNull().default("0"),
   minTakeHomePerPerson: numeric("min_take_home_per_person", { precision: 10, scale: 2 }).notNull().default("0"),
+  payoutMode: text("payout_mode").notNull().default("fixed"),
+  minimumActTakeHome: numeric("minimum_act_take_home", { precision: 10, scale: 2 }).notNull().default("0"),
   maxDriveHoursPerDay: integer("max_drive_hours_per_day").default(8),
   notes: text("notes"),
   calculationsThisWeek: integer("calculations_this_week").notNull().default(0),

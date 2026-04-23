@@ -66,6 +66,8 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
     avgAccomPerNight: Number(p.avgAccomPerNight),
     avgFoodPerDay: Number(p.avgFoodPerDay),
     minTakeHomePerPerson: Number(p.minTakeHomePerPerson),
+    payoutMode: p.payoutMode ?? "fixed",
+    minimumActTakeHome: Number(p.minimumActTakeHome ?? 0),
     defaultFuelPrice: p.defaultFuelPrice != null ? Number(p.defaultFuelPrice) : null,
     defaultPetrolPrice: p.defaultPetrolPrice != null ? Number(p.defaultPetrolPrice) : null,
     defaultDieselPrice: p.defaultDieselPrice != null ? Number(p.defaultDieselPrice) : null,
@@ -107,6 +109,8 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     fuelConsumption: String(parsed.data.fuelConsumption ?? 10),
     expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
     minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
+    payoutMode: parsed.data.payoutMode ?? "fixed",
+    minimumActTakeHome: String(parsed.data.minimumActTakeHome ?? 0),
     homeBaseLat: parsed.data.homeBaseLat != null ? String(parsed.data.homeBaseLat) : null,
     homeBaseLng: parsed.data.homeBaseLng != null ? String(parsed.data.homeBaseLng) : null,
     defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
@@ -158,6 +162,8 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
   if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
   if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
+  if (parsed.data.payoutMode != null) updateData.payoutMode = parsed.data.payoutMode;
+  if (parsed.data.minimumActTakeHome != null) updateData.minimumActTakeHome = String(parsed.data.minimumActTakeHome);
   if (parsed.data.homeBaseLat != null) updateData.homeBaseLat = String(parsed.data.homeBaseLat);
   else if (parsed.data.homeBaseLat === null) updateData.homeBaseLat = null;
   if (parsed.data.homeBaseLng != null) updateData.homeBaseLng = String(parsed.data.homeBaseLng);

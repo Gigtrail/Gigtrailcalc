@@ -674,6 +674,18 @@ export interface SingleShowInput {
    * Defaults to 0 when omitted — older callers continue to work unchanged.
    */
   totalMemberFees?: number | null;
+  /**
+   * How band members are paid:
+   *   "fixed" — each member is paid their expected gig fee
+   *   "split" — remaining profit is split evenly between members
+   * Defaults to "fixed".
+   */
+  payoutMode?: "fixed" | "split" | string | null;
+  /**
+   * Floor the act keeps before any remaining profit is treated as surplus or
+   * pooled for splitting. Defaults to 0.
+   */
+  minimumActTakeHome?: number | null;
 }
 
 export interface SingleShowResult {
@@ -718,6 +730,23 @@ export interface SingleShowResult {
   fullBandBreakEvenImpossible: boolean;
   /** Echo of the input — handy for downstream consumers / snapshots. */
   expectedMemberFeesTotal: number;
+  // ── Payout-mode breakdown (alpha v1.3) ────────────────────────────────────
+  payoutMode: "fixed" | "split";
+  minimumActTakeHome: number;
+  /** Fixed mode: expenses + memberFees */
+  needCostsAndFees: number;
+  /** Fixed mode: expenses + memberFees + minimumActTakeHome */
+  needPlusMinTakeHome: number;
+  /** Fixed mode: totalIncome - needPlusMinTakeHome (can be negative) */
+  remainingSurplus: number;
+  /** Split mode: totalIncome - expenses - minimumActTakeHome (can be negative) */
+  splitPool: number;
+  /** Split mode: splitPool / peopleCount (can be negative) */
+  perMemberSplit: number;
+  /** True when fixed-mode show fails to cover costs+fees+minTakeHome */
+  fixedShortfall: boolean;
+  /** True when split-mode show fails to cover costs+minTakeHome */
+  splitShortfall: boolean;
   // ── Attendance scenario ladder (ticketed/hybrid only; empty otherwise) ───
   scenarios: SingleShowScenario[];
 }
@@ -832,6 +861,17 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     peopleCount: input.peopleCount,
   });
 
+  // Payout-mode breakdown (alpha v1.3)
+  const payoutMode: "fixed" | "split" = input.payoutMode === "split" ? "split" : "fixed";
+  const minimumActTakeHome = Math.max(0, n(input.minimumActTakeHome));
+  const needCostsAndFees = totalCost + expectedMemberFeesTotal;
+  const needPlusMinTakeHome = needCostsAndFees + minimumActTakeHome;
+  const remainingSurplus = totalIncome - needPlusMinTakeHome;
+  const splitPool = totalIncome - totalCost - minimumActTakeHome;
+  const perMemberSplit = peopleCount > 0 ? splitPool / peopleCount : splitPool;
+  const fixedShortfall = payoutMode === "fixed" && remainingSurplus < 0;
+  const splitShortfall = payoutMode === "split" && splitPool < 0;
+
   return {
     showIncome,
     expectedTicketsSold,
@@ -862,6 +902,15 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     fullBandBreakEvenCapacityPct: fullBand.breakEvenCapacityPct,
     fullBandBreakEvenImpossible: fullBand.impossible,
     expectedMemberFeesTotal,
+    payoutMode,
+    minimumActTakeHome,
+    needCostsAndFees,
+    needPlusMinTakeHome,
+    remainingSurplus,
+    splitPool,
+    perMemberSplit,
+    fixedShortfall,
+    splitShortfall,
     scenarios,
   };
 }

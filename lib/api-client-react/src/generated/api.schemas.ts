@@ -45,6 +45,8 @@ export interface Profile {
   expectedGigFee: number;
   /** @deprecated — no longer used in UI; kept for backward compat */
   minTakeHomePerPerson?: number;
+  payoutMode: string;
+  minimumActTakeHome: number;
   accommodationRequired: boolean;
   /** @nullable */
   accommodationType: string | null;
@@ -99,6 +101,8 @@ export interface CreateProfileBody {
   fuelConsumption?: number;
   expectedGigFee?: number;
   minTakeHomePerPerson?: number;
+  payoutMode?: string;
+  minimumActTakeHome?: number;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
@@ -142,6 +146,8 @@ export interface UpdateProfileBody {
   fuelConsumption?: number;
   expectedGigFee?: number;
   minTakeHomePerPerson?: number;
+  payoutMode?: string;
+  minimumActTakeHome?: number;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;

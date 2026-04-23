@@ -428,6 +428,21 @@ export default function RunResults() {
   const splitPerMember = activeMembers.length > 0 ? displayNetProfit / activeMembers.length : 0;
   const fullFeesCovered = profitAfterMemberFees >= 0;
 
+  // ── Payout-mode plain-English breakdown (alpha v1.3) ─────────────────────
+  // Falls back to fixed/0 when profile is unavailable (e.g. very old snapshot).
+  const profileForPayout = profiles?.find(p => p.id === formData.profileId);
+  const profilePayoutMode: "fixed" | "split" = profileForPayout?.payoutMode === "split" ? "split" : "fixed";
+  const profileMinimumActTakeHome = Math.max(0, Number(profileForPayout?.minimumActTakeHome ?? 0));
+  const memberCountForSplit = activeMembers.length > 0 ? activeMembers.length : profilePeopleCount;
+  const expensesOnly = displayTotalCost;
+  const needCostsAndFees = expensesOnly + totalMemberFees;
+  const needPlusMinTakeHome = needCostsAndFees + profileMinimumActTakeHome;
+  const remainingSurplus = totalIncome - needPlusMinTakeHome;
+  const splitPool = totalIncome - expensesOnly - profileMinimumActTakeHome;
+  const perMemberSplitPayout = memberCountForSplit > 0 ? splitPool / memberCountForSplit : splitPool;
+  const fixedShortfall = profilePayoutMode === "fixed" && remainingSurplus < 0;
+  const splitShortfall = profilePayoutMode === "split" && splitPool < 0;
+
   // ── Single-show ticketed/hybrid: scenarios + full-band break-even ──────────
   // Recompute on the fly from formData + current member fees so older snapshots
   // (saved before these fields existed) still render the new sections, and so
@@ -1182,8 +1197,61 @@ export default function RunResults() {
         </Section>
       )}
 
+      {/* ── PAYOUT BREAKDOWN (plain English, alpha v1.3) ────────────────── */}
+      <Section title={profilePayoutMode === "split" ? "Profit Split" : "What This Show Pays"} defaultOpen>
+        {profilePayoutMode === "fixed" ? (
+          <div className="space-y-2 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-muted-foreground">You need <span className="font-medium text-foreground">${fmt(needCostsAndFees)}</span> to cover expenses and band fees</span>
+            </div>
+            {profileMinimumActTakeHome > 0 && (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">You need <span className="font-medium text-foreground">${fmt(needPlusMinTakeHome)}</span> to also hit your minimum take-home</span>
+              </div>
+            )}
+            <div className="flex items-baseline justify-between gap-3 pt-1 border-t border-border/30">
+              <span className="text-muted-foreground">Surplus after target:</span>
+              <span className={cn("text-lg font-semibold", remainingSurplus >= 0 ? "text-green-700" : "text-red-700")}>
+                {remainingSurplus >= 0 ? "+" : "−"}${fmt(Math.abs(remainingSurplus))}
+              </span>
+            </div>
+            {fixedShortfall && (
+              <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                <p>This show does not cover your costs, fees, and minimum take-home.</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2 text-sm">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-muted-foreground">Minimum take-home target:</span>
+              <span className="font-medium text-foreground">${fmt(profileMinimumActTakeHome)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-muted-foreground">Split pool:</span>
+              <span className={cn("font-semibold", splitPool >= 0 ? "text-foreground" : "text-red-700")}>
+                {splitPool >= 0 ? "" : "−"}${fmt(Math.abs(splitPool))}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 pt-1 border-t border-border/30">
+              <span className="text-muted-foreground">Per member ({memberCountForSplit}):</span>
+              <span className={cn("text-lg font-semibold", perMemberSplitPayout >= 0 ? "text-green-700" : "text-red-700")}>
+                {perMemberSplitPayout >= 0 ? "+" : "−"}${fmt(Math.abs(perMemberSplitPayout))}
+              </span>
+            </div>
+            {splitShortfall && (
+              <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                <p>This show does not cover your costs and minimum take-home.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Section>
+
       {/* ── 6. MEMBER PAYOUTS ────────────────────────────────────────────── */}
-      {showPayoutSection && (
+      {showPayoutSection && profilePayoutMode === "fixed" && (
         <Section
           title="Member Payouts"
           badge={

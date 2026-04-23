@@ -1630,6 +1630,8 @@ export default function RunForm() {
       marketingCost: vals.marketingCost,
       extraCosts: vals.extraCosts,
       peopleCount,
+      payoutMode: profile?.payoutMode === "split" ? "split" : "fixed",
+      minimumActTakeHome: Number(profile?.minimumActTakeHome ?? 0),
     });
 
     // Map viability status to its icon (UI concern kept in the UI layer)

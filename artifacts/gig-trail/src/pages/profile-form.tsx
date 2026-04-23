@@ -145,6 +145,8 @@ const profileSchema = z.object({
   fuelType: z.enum(FUEL_TYPES),
   fuelPrice: z.coerce.number().min(0.01, "Fuel price is required"),
   expectedGigFee: z.coerce.number().min(0),
+  payoutMode: z.enum(["fixed", "split"]),
+  minimumActTakeHome: z.coerce.number().min(0),
   avgFoodPerDay: z.coerce.number().min(0),
   accommodationRequired: z.boolean(),
   singleRoomsDefault: z.coerce.number().min(0).int(),
@@ -175,6 +177,8 @@ const FORM_DEFAULTS: ProfileFormValues = {
   fuelType: "petrol",
   fuelPrice: 2,
   expectedGigFee: 0,
+  payoutMode: "fixed",
+  minimumActTakeHome: 0,
   avgFoodPerDay: 0,
   accommodationRequired: false,
   singleRoomsDefault: 0,
@@ -331,11 +335,13 @@ function MemberCard({
   member, index, totalActive,
   actType,
   showRole = true,
+  hideFee = false,
   onChangeName, onChangeRole, onChangeFee, onRemove,
 }: {
   member: Member; index: number; totalActive: number;
   actType?: string;
   showRole?: boolean;
+  hideFee?: boolean;
   onChangeName: (v: string) => void; onChangeRole: (v: string) => void;
   onChangeFee: (v: number) => void; onRemove: () => void;
 }) {
@@ -366,24 +372,26 @@ function MemberCard({
         </button>
       </div>
 
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_120px] gap-2">
+      <div className={`mt-2 grid gap-2 ${hideFee ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_120px]"}`}>
         <Input
           placeholder="Role (optional)"
           value={member.role ?? ""}
           onChange={(event) => onChangeRole(event.target.value)}
           className="h-9 text-sm"
         />
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-          <Input
-            type="number"
-            min="0"
-            placeholder="0"
-            value={member.expectedGigFee ?? ""}
-            onChange={(event) => onChangeFee(event.target.value === "" ? 0 : Number(event.target.value))}
-            className="h-9 pl-7 pr-3 text-right text-sm"
-          />
-        </div>
+        {!hideFee && (
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <Input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={member.expectedGigFee ?? ""}
+              onChange={(event) => onChangeFee(event.target.value === "" ? 0 : Number(event.target.value))}
+              className="h-9 pl-7 pr-3 text-right text-sm"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -613,6 +621,8 @@ export default function ProfileForm() {
         },
       ) ?? 2,
       expectedGigFee: profile.expectedGigFee ?? 0,
+      payoutMode: profile.payoutMode === "split" ? "split" : "fixed",
+      minimumActTakeHome: profile.minimumActTakeHome ?? 0,
       avgFoodPerDay: profile.avgFoodPerDay,
       accommodationRequired: profile.accommodationRequired ?? false,
       singleRoomsDefault: profile.singleRoomsDefault ?? 0,
@@ -641,6 +651,7 @@ export default function ProfileForm() {
     fuelType,
     fuelPrice,
     expectedGigFee, avgFoodPerDay,
+    payoutMode,
     defaultPetrolPrice, defaultDieselPrice, defaultLpgPrice,
     homeBase,
   } = watchedValues;
@@ -1056,6 +1067,7 @@ export default function ProfileForm() {
                         member={m}
                         index={idx}
                         totalActive={activeMembers.length}
+                        hideFee={payoutMode === "split"}
                         onChangeName={v => updateMemberField(m.id, "name", v)}
                         onChangeRole={v => updateMemberField(m.id, "role", v)}
                         onChangeFee={v => updateMemberField(m.id, "expectedGigFee", v)}
@@ -1063,6 +1075,12 @@ export default function ProfileForm() {
                       />
                     ))}
                   </div>
+
+                  {payoutMode === "split" && activeMembers.length > 0 && (
+                    <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+                      Remaining profit will be split evenly between {activeMembers.length} member{activeMembers.length === 1 ? "" : "s"}.
+                    </p>
+                  )}
 
                   {actType !== "Solo" && (
                     <div className="space-y-1.5 pt-0.5">
@@ -1077,7 +1095,7 @@ export default function ProfileForm() {
                       </button>
                       {activeMembers.length >= ALPHA_MEMBER_LIMIT && (
                         <p className="text-xs text-muted-foreground text-center">
-                          Band is capped at 3 members for alpha.
+                          Band is capped at {ALPHA_MEMBER_LIMIT} members for alpha.
                         </p>
                       )}
                     </div>
@@ -1085,6 +1103,63 @@ export default function ProfileForm() {
                 </div>
 
                 <div className="border-t border-border/30 pt-4 space-y-4">
+                  {/* Payout mode */}
+                  <FormField control={form.control} name="payoutMode" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>How are you paying the band?</FormLabel>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => field.onChange("fixed")}
+                          className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                            field.value === "fixed"
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border/50 text-muted-foreground hover:border-border"
+                          }`}
+                        >
+                          Fixed Pay
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange("split")}
+                          className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                            field.value === "split"
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border/50 text-muted-foreground hover:border-border"
+                          }`}
+                        >
+                          Profit Split
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {field.value === "split"
+                          ? "Remaining profit is split evenly between active members."
+                          : "Each member is paid their fixed gig fee."}
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  {/* Minimum act take-home */}
+                  <FormField control={form.control} name="minimumActTakeHome" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Minimum Act Take-Home ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          {...field}
+                          value={field.value ?? 0}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        The amount the act keeps before any remaining profit is considered surplus or split.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
                   {/* Food */}
                   <FormField control={form.control} name="avgFoodPerDay" render={({ field }) => (
                     <FormItem>
