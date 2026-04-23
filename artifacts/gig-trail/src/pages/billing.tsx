@@ -38,6 +38,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
 import { PROFILE_CHECKOUT_RETURN_KEY } from "@/lib/profile-setup";
+import { isEmbedded, openExternal } from "@/lib/external-redirect";
 
 type Period = "monthly" | "yearly";
 
@@ -613,6 +614,26 @@ export default function Billing() {
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
+  const embedded = isEmbedded();
+  const [pendingExternalUrl, setPendingExternalUrl] = useState<{ url: string; label: string } | null>(null);
+
+  const launchExternal = (url: string, label: string) => {
+    const result = openExternal(url);
+    if (result.mode === "blocked") {
+      setPendingExternalUrl({ url, label });
+      toast({
+        title: `${label} couldn't open automatically`,
+        description: "Your browser blocked the new tab. Use the button below to open it.",
+        variant: "destructive",
+      });
+    } else if (result.mode === "newtab") {
+      // Keep a persistent button around in case the user closed the tab by
+      // mistake — Stripe Checkout cannot run inside this preview iframe.
+      setPendingExternalUrl({ url, label });
+    } else {
+      setPendingExternalUrl(null);
+    }
+  };
   const updateRole = useUpdateUserRole();
   const syncPlan = useSyncPlan();
   const queryClient = useQueryClient();
@@ -694,7 +715,7 @@ export default function Billing() {
       sessionStorage.setItem("gt_pending_plan", staticPlan.stripePlanKey ?? staticPlan.name);
       trackEvent("upgrade_started", { plan_type: staticPlan.stripePlanKey ?? staticPlan.name, interval: period });
       const { url } = await createCheckout.mutateAsync(price.id);
-      window.location.href = url;
+      launchExternal(url, "Secure checkout");
     } catch (e: any) {
       toast({ title: "Checkout failed", description: e.message, variant: "destructive" });
     }
@@ -703,7 +724,7 @@ export default function Billing() {
   const handleManageBilling = async () => {
     try {
       const { url } = await customerPortal.mutateAsync();
-      window.location.href = url;
+      launchExternal(url, "Billing portal");
     } catch (e: any) {
       toast({ title: "Could not open billing portal", description: e.message, variant: "destructive" });
     }
@@ -728,6 +749,31 @@ export default function Billing() {
           <p className="text-muted-foreground text-sm">Manage your subscription and upgrade your plan</p>
         </div>
       </div>
+
+      {(embedded || pendingExternalUrl) && (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                {pendingExternalUrl
+                  ? `${pendingExternalUrl.label} opens in a new tab`
+                  : "Stripe Checkout opens in a new tab"}
+              </div>
+              <div className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                Stripe Checkout cannot run inside the preview pane. If your browser blocked the popup, use the button to open it manually.
+              </div>
+            </div>
+            {pendingExternalUrl && (
+              <Button
+                variant="default"
+                onClick={() => launchExternal(pendingExternalUrl.url, pendingExternalUrl.label)}
+              >
+                Open {pendingExternalUrl.label.toLowerCase()} in new tab
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Current plan */}
       <Card className="bg-card border-border/60 shadow-sm">
