@@ -132,7 +132,7 @@ const tourSchema = z.object({
   defaultFoodCost: z.coerce.number().optional().nullable(),
   daysOnTour: z.coerce.number().min(1).optional().nullable(),
   notes: z.string().optional().nullable(),
-  fuelType: z.string().optional().nullable(),
+  fuelType: z.string().optional(),
   fuelConsumption: z.coerce.number().optional().nullable(),
   fuelPrice: z.coerce.number().optional().nullable(),
   fuelPricePetrol: z.coerce.number().optional().nullable(),
@@ -710,7 +710,7 @@ export default function TourForm() {
 
   const singleFuelPrice = watchedValues.fuelPrice;
   const fuelPriceForType = Number(
-    singleFuelPrice != null && singleFuelPrice !== ""
+    singleFuelPrice != null
       ? singleFuelPrice
       : fuelType === "diesel" ? (fuelPriceDiesel ?? 1.95)
       : fuelType === "lpg" ? (fuelPriceLpg ?? 0.95)

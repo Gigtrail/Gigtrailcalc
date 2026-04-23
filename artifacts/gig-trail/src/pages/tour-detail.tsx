@@ -460,35 +460,8 @@ export default function TourDetail() {
   // that drive calc, so calc will not re-run after the write.
   const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    // Auto-save of computed totals is currently disabled.
     return;
-    if (!calc || !tour) return;
-    if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    const netProfit  = Math.round((calc.netProfit    ?? 0) * 100) / 100;
-    const grossIncome = Math.round((calc.grossIncome  ?? 0) * 100) / 100;
-    console.debug(
-      `[GigTrail] Tour ${tourId} calc → grossIncome=${grossIncome} netProfit=${netProfit}`,
-    );
-    calcSaveTimerRef.current = setTimeout(() => {
-      updateTour.mutate(
-        {
-          id: tourId,
-          data: {
-            name: tour.name,
-          },
-        },
-        {
-          onSuccess: () => {
-            console.debug(
-              `[GigTrail] Tour ${tourId} saved → totalProfit=${netProfit} totalIncome=${grossIncome}`,
-            );
-            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
-          },
-        }
-      );
-    }, 1500);
-    return () => {
-      if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calc]);
 

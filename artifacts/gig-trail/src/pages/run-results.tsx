@@ -513,11 +513,11 @@ export default function RunResults() {
               {runStatusMeta.label}
             </Badge>
           </div>
-          {(formData.origin || formData.destination) && (
+          {(formData.origin || formData.destination) ? (
             <p className="text-sm text-muted-foreground truncate">
               {formData.origin as string} → {formData.destination as string}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
 

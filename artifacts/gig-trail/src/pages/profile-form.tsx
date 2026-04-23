@@ -544,7 +544,7 @@ export default function ProfileForm() {
   const skipNextAutoSaveRef = useRef(false);
 
   const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickAddType, setQuickAddType] = useState(STANDARD_VEHICLES[2].key);
+  const [quickAddType, setQuickAddType] = useState<string>(STANDARD_VEHICLES[2].key);
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddConsumption, setQuickAddConsumption] = useState(STANDARD_VEHICLES[2].fuelConsumptionL100km);
   const [quickAddFuelType, setQuickAddFuelType] = useState("petrol");
@@ -1325,7 +1325,7 @@ export default function ProfileForm() {
           {saveStatus === "saving" && <span className="text-muted-foreground/70">Saving...</span>}
           {saveStatus === "saved" && <span className="text-secondary/80">Saved</span>}
           {saveStatus === "idle" && lastSavedAt && (
-            <span className="text-muted-foreground/60">{formatTimeAgo(lastSavedAt)}</span>
+            <span className="text-muted-foreground/60">{formatTimeAgo(lastSavedAt as string)}</span>
           )}
         </div>
       </div>
@@ -1334,7 +1334,7 @@ export default function ProfileForm() {
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200/70 bg-amber-50 px-3 py-2 text-xs">
           <CloudOff className="h-3.5 w-3.5 shrink-0 text-amber-600" />
           <span className="flex-1 text-amber-900">
-            Draft restored{lastSavedAt ? ` - ${formatTimeAgo(lastSavedAt)}` : ""}
+            Draft restored{lastSavedAt ? ` - ${formatTimeAgo(lastSavedAt as string)}` : ""}
           </span>
           <button
             type="button"
@@ -1563,7 +1563,7 @@ export default function ProfileForm() {
               step={4}
               title="What are fuel prices looking like?"
               subtitle="We will use this as the default for your first run."
-              chips={<SummaryChip label="Fuel type" value={fuelType?.toString().toUpperCase()} />}
+              chips={<SummaryChip label="Fuel type" value={fuelType?.toString().toUpperCase() ?? ""} />}
               onBack={() => goToStep(3)}
               onNext={() => {
                 form.trigger("fuelPrice").then((isValid) => {
@@ -1621,7 +1621,7 @@ export default function ProfileForm() {
               </div>
 
               {lastSavedAt && (
-                <p className="text-center text-xs text-muted-foreground/60">Draft saved {formatTimeAgo(lastSavedAt)}</p>
+                <p className="text-center text-xs text-muted-foreground/60">Draft saved {formatTimeAgo(lastSavedAt as string)}</p>
               )}
             </StepShell>
           )}
@@ -1655,7 +1655,7 @@ export default function ProfileForm() {
             </span>
           )}
           {saveStatus === "idle" && lastSavedAt && (
-            <span className="text-muted-foreground/60">{formatTimeAgo(lastSavedAt)}</span>
+            <span className="text-muted-foreground/60">{formatTimeAgo(lastSavedAt as string)}</span>
           )}
         </div>
       </div>
@@ -1665,7 +1665,7 @@ export default function ProfileForm() {
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200/60 rounded-lg px-3 py-2 mb-4 text-xs">
           <CloudOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
           <span className="text-amber-800 flex-1">
-            Draft restored{lastSavedAt && <span className="text-amber-600/80"> · {formatTimeAgo(lastSavedAt)}</span>}
+            Draft restored{lastSavedAt && <span className="text-amber-600/80"> · {formatTimeAgo(lastSavedAt as string)}</span>}
           </span>
           <button type="button" onClick={handleStartFresh} className="flex items-center gap-1 text-amber-700 hover:text-amber-900 font-medium">
             <RotateCcw className="w-3 h-3" />Start fresh
@@ -1685,7 +1685,7 @@ export default function ProfileForm() {
               title="Tell us about your act"
               subtitle="Give your act a name and tell us how you roll."
               onNext={() => form.trigger("name").then(ok => { if (ok) goToStep(2); })}
-              nextDisabled={!name || name.trim() === ""}
+              nextDisabled={!name || (name as string).trim() === ""}
             >
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
@@ -1872,7 +1872,7 @@ export default function ProfileForm() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {vehicles.map(v => {
+                      {(vehicles ?? []).map(v => {
                         const isSelected = defaultVehicleIdWatch === v.id;
                         return (
                           <button key={v.id} type="button" onClick={() => form.setValue("defaultVehicleId", isSelected ? null : v.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${isSelected ? "border-primary bg-primary/5" : "border-border/40 bg-card/50 hover:border-border"}`}>
@@ -2000,15 +2000,15 @@ export default function ProfileForm() {
             >
               <div className="space-y-1 text-sm">
                 <ReviewRow icon={<Music2 className="w-4 h-4 text-primary" />} label="Act" value={`${name || "—"} (${actType})`} />
-                {homeBase && <ReviewRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Home base" value={homeBase} />}
+                {homeBase && <ReviewRow icon={<MapPin className="w-4 h-4 text-muted-foreground" />} label="Home base" value={homeBase as string} />}
                 <ReviewRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="People on tour" value={`${derivedPeopleCount}`} />
                 {activeMembers.filter(m => m.name).length > 0 && (
                   <ReviewRow icon={<Users className="w-4 h-4 text-muted-foreground opacity-0" />} label="Members" value={activeMembers.filter(m => m.name).map(m => m.name).join(", ")} />
                 )}
                 {isPro && selectedVehicle
-                  ? <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle" value={`${selectedVehicle.name} (${selectedVehicle.fuelType})`} />
+                  ? <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle" value={`${selectedVehicle!.name} (${selectedVehicle!.fuelType})`} />
                   : !isPro && selectedStdVehicle
-                  ? <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle type" value={`${selectedStdVehicle.displayName} · ${selectedStdVehicle.fuelConsumptionL100km} L/100km`} />
+                  ? <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle type" value={`${selectedStdVehicle!.displayName} · ${selectedStdVehicle!.fuelConsumptionL100km} L/100km`} />
                   : null
                 }
                 <ReviewRow icon={<BedDouble className="w-4 h-4 text-muted-foreground" />} label="Accommodation" value={
@@ -2028,7 +2028,7 @@ export default function ProfileForm() {
               </div>
 
               {lastSavedAt && (
-                <p className="text-center text-xs text-muted-foreground/60">Draft saved {formatTimeAgo(lastSavedAt)}</p>
+                <p className="text-center text-xs text-muted-foreground/60">Draft saved {formatTimeAgo(lastSavedAt as string)}</p>
               )}
             </StepShell>
           )}

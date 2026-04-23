@@ -2870,7 +2870,7 @@ export default function RunForm() {
         dealLabel={dealLabel}
         distanceMode={distanceMode}
         form={form}
-        formValues={formValues}
+        formValues={formValues as Parameters<typeof CompactRunFormLayout>[0]["formValues"]}
         handleCalculate={() => {
           void handleCalculate();
         }}
@@ -3111,12 +3111,12 @@ export default function RunForm() {
                             </div>
                           );
                         }
-                        const actVehicles = (vehicles ?? []).filter(v => v.assignedActIds?.includes(selectedProfile.id));
+                        const actVehicles = (vehicles ?? []).filter(v => v.assignedActIds?.includes(selectedProfile!.id));
                         const activeVehicle = actVehicles.find(v => v.id === runVehicleId) ?? null;
-                        const profileVehicleLabel = selectedProfile.vehicleName
-                          ? `${selectedProfile.vehicleName} (${getStandardVehicle(selectedProfile.vehicleType).displayName})`
-                          : getStandardVehicle(selectedProfile.vehicleType).displayName;
-                        const profileFuelConsumption = selectedProfile.fuelConsumption;
+                        const profileVehicleLabel = selectedProfile!.vehicleName
+                          ? `${selectedProfile!.vehicleName} (${getStandardVehicle(selectedProfile!.vehicleType).displayName})`
+                          : getStandardVehicle(selectedProfile!.vehicleType).displayName;
+                        const profileFuelConsumption = selectedProfile!.fuelConsumption;
 
                         const handleVehicleSwitch = (vehicleId: string) => {
                           const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
@@ -3124,7 +3124,7 @@ export default function RunForm() {
                           if (vid !== null) {
                             const profileVehiclePatch: UpdateProfileMutationBody = { defaultVehicleId: vid };
                             updateProfile.mutate(
-                              { id: selectedProfile.id, data: profileVehiclePatch },
+                              { id: selectedProfile!.id, data: profileVehiclePatch },
                               {
                                 onSuccess: () => {
                                   queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
@@ -3183,7 +3183,7 @@ export default function RunForm() {
 
                             {activeVehicle && (
                               <p className="text-xs text-muted-foreground">
-                                {activeVehicle.fuelType} · {activeVehicle.avgConsumption} L/100km
+                                {activeVehicle!.fuelType} · {activeVehicle!.avgConsumption} L/100km
                               </p>
                             )}
                           </div>
@@ -3491,7 +3491,7 @@ export default function RunForm() {
                       )}
                       {calculationResult && (
                         <p className="text-xs text-muted-foreground">
-                          Last calc: {calculationResult.expectedTicketsSold} tickets / ${calculationResult.grossRevenue} gross
+                          Last calc: {calculationResult!.expectedTicketsSold} tickets / ${calculationResult!.grossRevenue} gross
                         </p>
                       )}
                     </div>
@@ -3903,9 +3903,9 @@ export default function RunForm() {
                         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Last result</div>
                         <div className={cn(
                           "text-sm font-semibold tabular-nums",
-                          lastResult.netProfit >= 0 ? "text-emerald-700" : "text-rose-700"
+                          lastResult!.netProfit >= 0 ? "text-emerald-700" : "text-rose-700"
                         )}>
-                          {lastResult.netProfit >= 0 ? "+" : "−"}${Math.abs(Math.round(lastResult.netProfit)).toLocaleString()}
+                          {lastResult!.netProfit >= 0 ? "+" : "−"}${Math.abs(Math.round(lastResult!.netProfit)).toLocaleString()}
                         </div>
                       </div>
                     )}

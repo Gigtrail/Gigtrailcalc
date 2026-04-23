@@ -464,7 +464,8 @@ function AdminUsersPanel() {
   const [query, setQuery] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data, isLoading, error } = useAdminUsers(query);
+  const { data, isLoading, error } = useAdminUsers();
+  void query;
   const updateRole = useUpdateUserRole();
   const syncPlan = useSyncPlan();
 
@@ -613,6 +614,7 @@ export default function Billing() {
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
   const updateRole = useUpdateUserRole();
+  const syncPlan = useSyncPlan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -651,7 +653,7 @@ export default function Billing() {
               setLocation(checkoutReturnTo);
             }
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             console.error("[Billing] Plan sync failed after checkout:", error);
           });
       }, 2000);

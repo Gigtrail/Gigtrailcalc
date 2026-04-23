@@ -12,6 +12,7 @@ function n(val: unknown): number {
 export interface TourStopInput {
   id: number;
   city: string;
+  venueName?: string | null;
   cityLat?: number | null;
   cityLng?: number | null;
   stopOrder: number;
