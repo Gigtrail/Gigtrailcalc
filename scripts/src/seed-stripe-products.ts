@@ -7,6 +7,56 @@
 
 import Stripe from "stripe";
 
+type StripeConfig = NonNullable<ConstructorParameters<typeof Stripe>[1]>;
+type StripeApiVersion = StripeConfig["apiVersion"];
+
+interface ReplitStripeConnectionResponse {
+  items?: ReplitStripeConnection[];
+}
+
+interface ReplitStripeConnection {
+  settings?: {
+    secret?: string;
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isReplitStripeConnectionResponse(value: unknown): value is ReplitStripeConnectionResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { items } = value;
+  if (items === undefined) {
+    return true;
+  }
+
+  if (!Array.isArray(items)) {
+    return false;
+  }
+
+  return items.every((item) => {
+    if (!isRecord(item)) {
+      return false;
+    }
+
+    const { settings } = item;
+    if (settings === undefined) {
+      return true;
+    }
+
+    if (!isRecord(settings)) {
+      return false;
+    }
+
+    const { secret } = settings;
+    return secret === undefined || typeof secret === "string";
+  });
+}
+
 async function getStripe(): Promise<Stripe> {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
@@ -27,13 +77,18 @@ async function getStripe(): Promise<Stripe> {
   const response = await fetch(url.toString(), {
     headers: { Accept: "application/json", "X-Replit-Token": xReplitToken },
   });
-  const data = await response.json();
+  const data: unknown = await response.json();
+  if (!isReplitStripeConnectionResponse(data)) {
+    throw new Error("Unexpected Replit connector response.");
+  }
+
   const settings = data.items?.[0];
   if (!settings?.settings?.secret) {
     throw new Error("Stripe development connection not found. Connect Stripe via Replit integrations.");
   }
 
-  return new Stripe(settings.settings.secret as string, { apiVersion: "2025-08-27.basil" as any });
+  const apiVersion = "2025-08-27.basil" as StripeApiVersion;
+  return new Stripe(settings.settings.secret, { apiVersion });
 }
 
 async function main() {
@@ -52,7 +107,7 @@ async function main() {
       const prices = await stripe.prices.list({ product: p.id, active: true });
       for (const pr of prices.data) {
         console.log(
-          `  ${p.name} [plan=${p.metadata?.plan}] — ${pr.id}: ${((pr.unit_amount ?? 0) / 100).toFixed(2)} ${pr.currency.toUpperCase()} / ${(pr.recurring as any)?.interval}`
+          `  ${p.name} [plan=${p.metadata?.plan}] — ${pr.id}: ${((pr.unit_amount ?? 0) / 100).toFixed(2)} ${pr.currency.toUpperCase()} / ${pr.recurring?.interval}`
         );
       }
     }
