@@ -1,0 +1,68 @@
+We are past typecheck. Build is now failing because the Vite configs are throwing at config-load time when PORT is missing, and they will likely do the same for BASE_PATH immediately after.
+
+Please fix the build configuration cleanly and then run the full build again to reveal the next real blocker.
+
+Current known failing files:
+- artifacts/gig-trail/vite.config.ts
+- artifacts/mockup-sandbox/vite.config.ts
+
+Problem:
+Both files currently do top-level throws for:
+- missing PORT
+- missing BASE_PATH
+
+That is fine for strict runtime/dev assumptions, but it breaks CI/build because vite build loads the config in an environment where those vars may not be set.
+
+What to do:
+
+1. Update BOTH Vite config files so they are build-safe.
+
+2. Remove top-level hard throws like:
+   - if (!rawPort) throw ...
+   - if (!basePath) throw ...
+
+3. Replace with safe defaults:
+   - const rawPort = process.env.PORT
+   - const port = rawPort ? Number(rawPort) : 4173
+   - if rawPort exists but is invalid, still throw for invalid numeric value
+   - const basePath = process.env.BASE_PATH ?? "/"
+
+4. Keep explicit env values working in Replit/dev.
+   Meaning:
+   - If PORT is provided and valid, use it
+   - If BASE_PATH is provided, use it
+   - If not provided during build/CI, fall back safely
+
+5. Make the server/preview config robust:
+   - server.port should use the computed port
+   - preview.port should use the computed port
+   - base should use computed basePath
+
+6. Do NOT weaken unrelated config.
+   Keep:
+   - host: "0.0.0.0"
+   - allowedHosts
+   - fs.strict / deny
+   - aliases
+   - plugins
+   intact unless needed
+
+7. After fixing those two files, run:
+   pnpm run build
+
+8. If build fails again, fix the NEXT real blocker too.
+   Do at least one more full pass after the Vite env fix so we know whether there are additional build issues hiding behind it.
+
+Rules:
+- No hacks
+- No removing features just to make build pass
+- Keep logic minimal and clean
+- Do not suppress errors silently
+- If using defaults, make them explicit and sensible
+
+Output back to me:
+1. Files changed
+2. Exact root cause
+3. Whether build passed
+4. If build still failed, the next exact blocker after PORT/BASE_PATH
+5. Any runtime risks still worth manually testing in Replit
