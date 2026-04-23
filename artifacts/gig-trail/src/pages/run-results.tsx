@@ -484,6 +484,22 @@ export default function RunResults() {
   const fullBandBreakEvenCapacityPct = fullBandBE.breakEvenCapacityPct ?? snapshotFullBandBreakEvenPct ?? null;
   const fullBandSameAsCost = fullBandBreakEvenTickets <= breakEvenTickets;
 
+  // Ticketed/hybrid hero: verdict line based on expected vs break-even thresholds.
+  const expectedTicketsForVerdict = expectedScenario?.tickets ?? 0;
+  const ticketedVerdict = (() => {
+    if (!isTicketed || !expectedScenario || breakEvenTickets <= 0) return null;
+    if (expectedTicketsForVerdict >= fullBandBreakEvenTickets) return "Safe show — your expected crowd covers everyone";
+    if (expectedTicketsForVerdict >= breakEvenTickets) return "Tight show — you're close, but need a solid crowd";
+    return "Risky show — your expected crowd is below full break-even";
+  })();
+  const ticketedVerdictTone = (() => {
+    if (!ticketedVerdict) return "";
+    if (expectedTicketsForVerdict >= fullBandBreakEvenTickets) return "text-green-700";
+    if (expectedTicketsForVerdict >= breakEvenTickets) return "text-amber-700";
+    return "text-red-700";
+  })();
+  const capacityNum = Number(formData.capacity) || 0;
+
   // Venue / page title
   const venueName = (formData.venueName as string | undefined)?.trim() || "";
   const pageTitle = venueName || "Gig Verdict";
@@ -523,11 +539,12 @@ export default function RunResults() {
   if (totalDriveHours > 8) allInsights.push({ icon: Lightbulb, text: "Long drive — consider arriving the day before.", color: "text-amber-600" });
   if (fuelCost > 0 && totalIncome > 0 && fuelCost / totalIncome > 0.35)
     allInsights.push({ icon: Fuel, text: `Fuel is ${((fuelCost / totalIncome) * 100).toFixed(0)}% of income — high road-cost show.`, color: "text-amber-600" });
-  if (showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
+  // Flat Fee–only insights (ticketed surfaces these via hero/expected/scenarios already).
+  if (!isTicketed && showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
     allInsights.push({ icon: TrendingUp, text: "All band fees covered.", color: "text-green-600" });
-  if (showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
+  if (!isTicketed && showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
     allInsights.push({ icon: AlertTriangle, text: `You're still $${fmt(Math.abs(profitAfterMemberFees))} short on full band fees.`, color: "text-amber-600" });
-  if (displayNetProfit < 0)
+  if (!isTicketed && displayNetProfit < 0)
     allInsights.push({ icon: XCircle, text: "Costs are above income — try a higher fee, cut costs, or pass.", color: "text-red-600" });
   const insights = allInsights.slice(0, 3);
 
@@ -645,106 +662,175 @@ export default function RunResults() {
         </div>
       ) : null}
 
-      <div className={`rounded-2xl border-2 overflow-hidden shadow-sm ${verdict.bg}`}>
-        <div className={`${verdict.headerBg} px-5 py-3.5 flex items-center gap-2.5`}>
-          <VerdictIcon className="w-5 h-5 text-white" />
-          <span className="text-base font-bold text-white tracking-tight uppercase">{status}</span>
-        </div>
-        <div className="px-5 py-6 space-y-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
-              {isTicketed && expectedScenario
-                ? `If you sell ${expectedScenario.tickets} tickets`
-                : "You walk away with"}
-            </p>
-            <p className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
-              {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
-            </p>
-            {isTicketed && expectedScenario && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Expected crowd · {expectedScenario.pct}% of {Number(formData.capacity) || 0} cap
+      {isTicketed ? (
+        /* ── TICKETED / HYBRID HERO ────────────────────────────────────── */
+        <div className={`rounded-2xl border-2 overflow-hidden shadow-sm ${verdict.bg}`}>
+          <div className={`${verdict.headerBg} px-5 py-3.5 flex items-center gap-2.5`}>
+            <VerdictIcon className="w-5 h-5 text-white" />
+            <span className="text-base font-bold text-white tracking-tight uppercase">{status}</span>
+          </div>
+          <div className="px-5 py-6 space-y-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
+                You need to sell
+              </p>
+              <p className="text-5xl md:text-6xl font-bold leading-none tabular-nums text-foreground">
+                {fullBandBreakEvenTickets}
+                <span className="text-2xl md:text-3xl font-semibold text-muted-foreground ml-2">tickets</span>
+              </p>
+              <p className="text-sm text-foreground/80 mt-1.5">to pay everyone</p>
+            </div>
+            {!fullBandSameAsCost && breakEvenTickets > 0 && (
+              <p className="text-sm text-foreground/70">
+                <span className="font-semibold text-foreground tabular-nums">{breakEvenTickets} tickets</span> to cover expenses only
+              </p>
+            )}
+            {capacityNum > 0 && fullBandBreakEvenTickets > 0 && (
+              fullBandBE.impossible ? (
+                <p className="text-xs font-medium text-red-700">
+                  Over capacity — won't fit in {capacityNum} seats
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {Math.round((fullBandBreakEvenTickets / capacityNum) * 100)}% of {capacityNum} cap
+                </p>
+              )
+            )}
+            {ticketedVerdict && (
+              <p className={cn("text-sm font-medium pt-1 border-t border-current/10", ticketedVerdictTone)}>
+                {ticketedVerdict}
               </p>
             )}
           </div>
-          {isTicketed ? (
-            <div className="flex flex-col gap-1.5 pt-1 border-t border-current/10">
-              <div className={cn(
-                "flex items-center gap-1.5 text-sm",
-                displayNetProfit >= 0 ? "text-green-700" : "text-amber-700",
-              )}>
-                {displayNetProfit >= 0
-                  ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers costs</span></>
-                  : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(displayNetProfit))} on costs</span></>}
-              </div>
-              {showPayoutSection && totalMemberFees > 0 && (
-                <div className={cn(
-                  "flex items-center gap-1.5 text-sm",
-                  fullFeesCovered ? "text-green-700" : "text-amber-700",
-                )}>
-                  {fullFeesCovered
-                    ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers full band fees</span></>
-                    : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Still short ${fmt(Math.abs(profitAfterMemberFees))} on full band fees</span></>}
-                </div>
-              )}
+        </div>
+      ) : (
+        /* ── FLAT FEE HERO (unchanged) ─────────────────────────────────── */
+        <div className={`rounded-2xl border-2 overflow-hidden shadow-sm ${verdict.bg}`}>
+          <div className={`${verdict.headerBg} px-5 py-3.5 flex items-center gap-2.5`}>
+            <VerdictIcon className="w-5 h-5 text-white" />
+            <span className="text-base font-bold text-white tracking-tight uppercase">{status}</span>
+          </div>
+          <div className="px-5 py-6 space-y-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                You walk away with
+              </p>
+              <p className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
+                {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
+              </p>
             </div>
-          ) : (
             <p className="text-sm text-foreground/80 leading-snug max-w-prose">
               {summarySentence}
             </p>
-          )}
-          {/* Quick at-a-glance metrics inside the hero */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-foreground/70 pt-1 border-t border-current/10">
-            {isTicketed && breakEvenTickets > 0 && (
-              <span className="flex items-center gap-1.5">
-                <Ticket className="w-3.5 h-3.5" />
-                Break-even at <span className="font-semibold text-foreground tabular-nums">{breakEvenTickets} tickets</span>
-              </span>
-            )}
-            {distanceKm > 0 && (
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5" />
-                <span className="font-semibold text-foreground tabular-nums">{Math.round(distanceKm)} km</span>
-                {totalDriveMinutes ? <> · <span className="font-semibold text-foreground tabular-nums">{formatDuration(totalDriveMinutes)}</span></> : null}
-              </span>
-            )}
-            {profilePeopleCount > 1 && (
-              <span className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5" />
-                <span className="font-semibold text-foreground tabular-nums">${fmt(Math.abs(displayTakeHome))}</span> per person
-              </span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-foreground/70 pt-1 border-t border-current/10">
+              {distanceKm > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span className="font-semibold text-foreground tabular-nums">{Math.round(distanceKm)} km</span>
+                  {totalDriveMinutes ? <> · <span className="font-semibold text-foreground tabular-nums">{formatDuration(totalDriveMinutes)}</span></> : null}
+                </span>
+              )}
+              {profilePeopleCount > 1 && (
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="font-semibold text-foreground tabular-nums">${fmt(Math.abs(displayTakeHome))}</span> per person
+                </span>
+              )}
+            </div>
+            {showPayoutSection && totalMemberFees > 0 && (
+              <div className={`flex items-center gap-1.5 text-sm ${fullFeesCovered ? "text-green-700" : "text-amber-700"}`}>
+                {fullFeesCovered
+                  ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>All member fees covered</span></>
+                  : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(profitAfterMemberFees))} to cover band fees</span></>
+                }
+              </div>
             )}
           </div>
-          {showPayoutSection && totalMemberFees > 0 && (
-            <div className={`flex items-center gap-1.5 text-sm ${fullFeesCovered ? "text-green-700" : "text-amber-700"}`}>
-              {fullFeesCovered
-                ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>All member fees covered</span></>
-                : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(profitAfterMemberFees))} to cover band fees</span></>
-              }
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* ── 1b. TICKET LADDER (ticketed/hybrid only) ───────────────────────── */}
+      {/* ── EXPECTED OUTCOME (ticketed/hybrid only) ─────────────────────── */}
+      {isTicketed && expectedScenario && (
+        <Card className="border-border/60">
+          <CardContent className="pt-4 pb-4 space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              If you sell {expectedScenario.tickets} tickets
+            </p>
+            <p className={cn(
+              "text-3xl md:text-4xl font-bold leading-none tabular-nums",
+              expectedScenario.netProfit >= 0 ? "text-green-700" : "text-red-700",
+            )}>
+              {expectedScenario.netProfit >= 0 ? "+" : "−"}${fmt(Math.abs(expectedScenario.netProfit))}
+            </p>
+            <div className="flex flex-col gap-1 pt-1.5">
+              <div className={cn(
+                "flex items-center gap-1.5 text-sm",
+                expectedScenario.coversCosts ? "text-green-700" : "text-red-700",
+              )}>
+                {expectedScenario.coversCosts
+                  ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers costs</span></>
+                  : <><XCircle className="w-3.5 h-3.5 shrink-0" /><span>Doesn't cover costs</span></>}
+              </div>
+              {totalMemberFees > 0 && (
+                <div className={cn(
+                  "flex items-center gap-1.5 text-sm",
+                  expectedScenario.coversFullBandFees ? "text-green-700" : "text-amber-700",
+                )}>
+                  {expectedScenario.coversFullBandFees
+                    ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers band fees</span></>
+                    : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short on band fees — ${fmt(Math.abs(expectedScenario.netAfterMemberFees))}</span></>}
+                </div>
+              )}
+            </div>
+            {breakEvenTickets > 0 && (() => {
+              const aboveExpense = expectedScenario.tickets - breakEvenTickets;
+              const shortFullBand = fullBandBreakEvenTickets - expectedScenario.tickets;
+              if (totalMemberFees > 0 && shortFullBand > 0) {
+                return (
+                  <p className="text-xs text-muted-foreground pt-0.5">
+                    You're <span className="font-semibold text-foreground tabular-nums">{shortFullBand}</span> tickets short of full band pay
+                  </p>
+                );
+              }
+              if (aboveExpense > 0) {
+                return (
+                  <p className="text-xs text-muted-foreground pt-0.5">
+                    You're <span className="font-semibold text-foreground tabular-nums">{aboveExpense}</span> tickets above expense break-even
+                  </p>
+                );
+              }
+              if (aboveExpense < 0) {
+                return (
+                  <p className="text-xs text-muted-foreground pt-0.5">
+                    You're <span className="font-semibold text-foreground tabular-nums">{Math.abs(aboveExpense)}</span> tickets short of expense break-even
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── SCENARIO LADDER (ticketed/hybrid only) ─────────────────────────── */}
       {isTicketed && scenarios.length > 0 && (
         <Card className="border-border/60">
-          <CardContent className="pt-4 pb-4 space-y-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold tracking-tight">What if ticket sales are…</h3>
-              <span className="text-[11px] text-muted-foreground">capacity {Number(formData.capacity) || 0}</span>
-            </div>
+          <CardContent className="pt-4 pb-4 space-y-2">
+            <h3 className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
+              If ticket sales land here
+            </h3>
             <div className="divide-y divide-border/40">
               {scenarios.map(s => {
                 const badgeText = !s.coversCosts
                   ? "Below costs"
-                  : (showPayoutSection && totalMemberFees > 0 && !s.coversFullBandFees)
+                  : (totalMemberFees > 0 && !s.coversFullBandFees)
                   ? "Covers costs"
-                  : (showPayoutSection && totalMemberFees > 0)
+                  : (totalMemberFees > 0)
                   ? "Covers band"
                   : "Covers costs";
                 const badgeClasses = !s.coversCosts
                   ? "bg-red-100 text-red-700"
-                  : (showPayoutSection && totalMemberFees > 0 && !s.coversFullBandFees)
+                  : (totalMemberFees > 0 && !s.coversFullBandFees)
                   ? "bg-amber-100 text-amber-800"
                   : "bg-green-100 text-green-700";
                 const netClass = s.netProfit >= 0 ? "text-green-700" : "text-red-700";
@@ -753,7 +839,7 @@ export default function RunResults() {
                     key={s.pct}
                     className={cn(
                       "grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2.5",
-                      s.isExpected && "bg-primary/5 -mx-3 px-3 rounded-md",
+                      s.isExpected && "bg-primary/5 -mx-3 px-3 rounded-md border-l-2 border-primary/60",
                     )}
                   >
                     <div className="min-w-[72px]">
@@ -772,79 +858,35 @@ export default function RunResults() {
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              Net = ticket income {totalMemberFees > 0 ? "− costs (member fees handled separately)" : "− all costs"}.
-            </p>
           </CardContent>
         </Card>
       )}
 
-      {/* ── 1c. TWO-NUMBER BREAK-EVEN (ticketed/hybrid only) ───────────────── */}
-      {isTicketed && breakEvenTickets > 0 && (
-        <Card className="border-border/60">
-          <CardContent className="pt-4 pb-4 space-y-3">
-            <h3 className="text-sm font-semibold tracking-tight">What you need to sell</h3>
-            <div className={cn("grid gap-3", fullBandSameAsCost ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
-              <div className="rounded-lg bg-muted/40 px-4 py-3">
-                <p className="text-xs text-muted-foreground mb-1">To cover costs</p>
-                <p className="text-2xl font-bold tabular-nums">{breakEvenTickets}<span className="text-sm font-normal ml-1">tickets</span></p>
-                {breakEvenCapacity > 0 && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{breakEvenCapacity.toFixed(0)}% of capacity</p>
-                )}
-              </div>
-              {!fullBandSameAsCost && (
-                <div className={cn(
-                  "rounded-lg px-4 py-3",
-                  fullBandBE.impossible
-                    ? "bg-red-50 border border-red-200"
-                    : "bg-amber-50 border border-amber-200",
-                )}>
-                  <p className="text-xs text-amber-800 mb-1">To cover full band fees</p>
-                  <p className={cn(
-                    "text-2xl font-bold tabular-nums",
-                    fullBandBE.impossible ? "text-red-700" : "text-amber-800",
-                  )}>
-                    {fullBandBreakEvenTickets}<span className="text-sm font-normal ml-1">tickets</span>
-                  </p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
-                    {fullBandBreakEvenCapacityPct != null && `${fullBandBreakEvenCapacityPct.toFixed(0)}% of capacity`}
-                    {fullBandBE.impossible && " · over capacity — won't fit"}
-                  </p>
-                </div>
-              )}
+      {/* ── SUMMARY PILLS (Flat Fee only — ticketed shows numbers in hero/expected/scenarios) ── */}
+      {!isTicketed && (
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: "Income", value: `$${fmt(totalIncome)}`, color: "text-green-700" },
+            { label: "Expenses", value: `$${fmt(displayTotalCost)}`, color: "text-red-600" },
+            {
+              label: "Profit",
+              value: `${displayNetProfit >= 0 ? "+" : "−"}$${fmt(Math.abs(displayNetProfit))}`,
+              color: displayNetProfit >= 0 ? "text-green-700" : "text-red-700",
+            },
+          ].map(pill => (
+            <div key={pill.label} className="rounded-xl border border-border/50 bg-card px-3 py-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">{pill.label}</p>
+              <p className={`text-base font-bold tabular-nums leading-tight ${pill.color}`}>{pill.value}</p>
             </div>
-            {fullBandSameAsCost && totalMemberFees === 0 && showPayoutSection && (
-              <p className="text-[11px] text-muted-foreground">
-                Set expected fees on members to see a separate full-band break-even.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
-
-      {/* ── 2. SUMMARY PILLS ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { label: "Income", value: `$${fmt(totalIncome)}`, color: "text-green-700" },
-          { label: "Expenses", value: `$${fmt(displayTotalCost)}`, color: "text-red-600" },
-          {
-            label: "Profit",
-            value: `${displayNetProfit >= 0 ? "+" : "−"}$${fmt(Math.abs(displayNetProfit))}`,
-            color: displayNetProfit >= 0 ? "text-green-700" : "text-red-700",
-          },
-        ].map(pill => (
-          <div key={pill.label} className="rounded-xl border border-border/50 bg-card px-3 py-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">{pill.label}</p>
-            <p className={`text-base font-bold tabular-nums leading-tight ${pill.color}`}>{pill.value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* ── 3. INCOME BREAKDOWN ──────────────────────────────────────────── */}
       <Section
         title="Income"
         badge={<span className="text-xs font-semibold text-green-700 bg-green-100 rounded-full px-2 py-0.5">${fmt(totalIncome)}</span>}
-        defaultOpen
+        defaultOpen={!isTicketed}
       >
         <div className="divide-y divide-border/30 mt-1">
           {/* Deal-type income breakdown */}
@@ -1062,7 +1104,7 @@ export default function RunResults() {
       <Section
         title="Expenses"
         badge={<span className="text-xs font-semibold text-red-600 bg-red-50 rounded-full px-2 py-0.5">${fmt(displayTotalCost)}</span>}
-        defaultOpen
+        defaultOpen={!isTicketed}
       >
         <div className="divide-y divide-border/30 mt-1">
           {/* Fuel */}
@@ -1198,7 +1240,10 @@ export default function RunResults() {
       )}
 
       {/* ── PAYOUT BREAKDOWN (plain English, alpha v1.3) ────────────────── */}
-      <Section title={profilePayoutMode === "split" ? "Profit Split" : "What This Show Pays"} defaultOpen>
+      <Section
+        title={profilePayoutMode === "split" ? "Profit Split" : "What This Show Pays"}
+        defaultOpen={!isTicketed || profilePayoutMode === "split"}
+      >
         {profilePayoutMode === "fixed" ? (
           <div className="space-y-2 text-sm">
             <div className="flex items-baseline justify-between gap-3">
@@ -1271,7 +1316,7 @@ export default function RunResults() {
               )}
             </div>
           }
-          defaultOpen
+          defaultOpen={!isTicketed}
         >
           {/* Toggle: Full Fees vs Split Evenly */}
           <div className="flex items-center gap-2 mt-2 mb-3">
@@ -1364,127 +1409,7 @@ export default function RunResults() {
         </Section>
       )}
 
-      {/* ── 7. TICKET BREAK-EVEN ─────────────────────────────────────────── */}
-      {isTicketed && breakEvenTickets > 0 && (
-        <Section title="Break-Even" defaultOpen>
-          <div className="space-y-4 mt-2">
-            {/* Show-cost recovery threshold (if there are show-specific costs) */}
-            {showCostBreakEvenTickets != null && showCostBreakEvenTickets > 0 && showCostBreakEvenTickets < breakEvenTickets && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-1">Show cost recovery</p>
-                <p className="text-2xl font-bold text-amber-700">{showCostBreakEvenTickets} <span className="text-sm font-normal">tickets</span></p>
-                <p className="text-xs text-amber-700 mt-0.5">to cover your show-night costs (marketing + support act)</p>
-              </div>
-            )}
-
-            {/* Full break-even (all costs including travel) */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-muted/40 px-4 py-3 text-center">
-                <p className="text-2xl font-bold text-foreground">{breakEvenTickets}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {showCostBreakEvenTickets != null && showCostBreakEvenTickets > 0 && showCostBreakEvenTickets < breakEvenTickets
-                    ? "tickets to cover all costs"
-                    : "tickets to break even"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-muted/40 px-4 py-3 text-center">
-                <p className="text-2xl font-bold text-foreground">{breakEvenCapacity.toFixed(0)}%</p>
-                <p className="text-xs text-muted-foreground mt-0.5">of capacity needed</p>
-              </div>
-            </div>
-
-            {/* Visual bar */}
-            {(formData.capacity as number) > 0 && (() => {
-              const cap = formData.capacity as number;
-              const expectedPct = formData.expectedAttendancePct as number;
-              const showCostPct = showCostBreakEvenTickets != null && cap > 0
-                ? (showCostBreakEvenTickets / cap) * 100
-                : null;
-              return (
-                <div className="space-y-2">
-                  <div className="relative h-5 rounded-full bg-muted/50 overflow-hidden">
-                    {/* Show-cost recovery zone (amber) */}
-                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
-                      <div
-                        className="absolute inset-y-0 left-0 bg-amber-200"
-                        style={{ width: `${Math.min(showCostPct, 100)}%` }}
-                      />
-                    )}
-                    {/* Break-even zone (red, starts after show-cost if applicable) */}
-                    <div
-                      className="absolute inset-y-0 bg-red-200"
-                      style={{
-                        left: showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity
-                          ? `${Math.min(showCostPct, 100)}%`
-                          : "0%",
-                        width: showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity
-                          ? `${Math.min(breakEvenCapacity - showCostPct, 100 - showCostPct)}%`
-                          : `${Math.min(breakEvenCapacity, 100)}%`,
-                      }}
-                    />
-                    {/* Profit zone (green, from break-even to expected) */}
-                    {expectedPct > 0 && (
-                      <div
-                        className="absolute inset-y-0 bg-green-200"
-                        style={{
-                          left: `${Math.min(breakEvenCapacity, 100)}%`,
-                          width: `${Math.max(0, Math.min(expectedPct - breakEvenCapacity, 100 - breakEvenCapacity))}%`,
-                        }}
-                      />
-                    )}
-                    {/* Show-cost marker (amber) */}
-                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
-                      <div
-                        className="absolute inset-y-0 w-0.5 bg-amber-500"
-                        style={{ left: `${Math.min(showCostPct, 100)}%` }}
-                      />
-                    )}
-                    {/* Break-even marker (red) */}
-                    <div
-                      className="absolute inset-y-0 w-0.5 bg-red-500"
-                      style={{ left: `${Math.min(breakEvenCapacity, 100)}%` }}
-                    />
-                    {/* Expected attendance marker (green) */}
-                    {expectedPct > 0 && (
-                      <div
-                        className="absolute inset-y-0 w-0.5 bg-green-600"
-                        style={{ left: `${Math.min(expectedPct, 100)}%` }}
-                      />
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    {showCostPct != null && showCostPct > 0 && showCostPct < breakEvenCapacity && (
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" />
-                        Show costs at {showCostPct.toFixed(0)}%
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-2 h-2 rounded-sm bg-red-400" />
-                      Full break-even at {breakEvenCapacity.toFixed(0)}%
-                    </span>
-                    {expectedPct > 0 && (
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2 h-2 rounded-sm bg-green-500" />
-                        Expected {expectedPct}%
-                      </span>
-                    )}
-                  </div>
-                  {breakEvenCapacity > (formData.expectedAttendancePct as number) ? (
-                    <p className="text-xs text-red-600">
-                      Break-even requires more than your expected attendance — you'll likely fall short on costs.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-green-700">
-                      Your expected attendance is above break-even — you should cover all costs.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </Section>
-      )}
+      {/* (Ticketed break-even moved into the hero; no separate break-even section.) */}
 
       {/* ── 8. INSIGHTS ──────────────────────────────────────────────────── */}
       {insights.length > 0 && (
