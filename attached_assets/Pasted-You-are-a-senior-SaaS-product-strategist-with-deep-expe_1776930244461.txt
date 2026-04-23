@@ -1,0 +1,74 @@
+You are a senior SaaS product strategist with deep experience in early-stage product validation and user behavior.
+
+I am building a touring calculator app for musicians called GigTrail.
+
+I want you to critically evaluate whether the following feature should be included in ALPHA — not beta, not later — alpha.
+
+FEATURE:
+A dashboard section called “After the Show” that prompts users to log post-show actuals for past gigs.
+
+The purpose is to:
+- capture real-world outcomes (attendance, income, expenses)
+- compare projected vs actual performance
+- build venue intelligence over time
+- improve future booking and pricing decisions
+
+IMPORTANT CONTEXT:
+- Users are working musicians (time-poor, tired, often on the road)
+- The core product is a pre-show calculator (this is the main value)
+- This feature is optional and should NOT interrupt the calculator flow
+- It appears only after a show date has passed
+- It lives on the dashboard as a lightweight memory prompt, not a task list
+- Users can skip via “no data”
+- The entire flow must take under 2 minutes on mobile
+- No notifications in alpha (dashboard only)
+
+V1 SCOPE:
+Dashboard:
+- Section: “After the Show”
+- Lists past shows missing actuals
+- Each item: venue name, date, “How’d it go?”
+- Actions: “Add actuals” or “No data”
+
+Form fields:
+- attendance
+- ticket income
+- other income
+- expenses
+- play again? (yes / no / maybe)
+- notes
+
+Auto-calculated:
+- actual net
+- variance vs projected
+
+Venue payoff:
+- after 2 entries, show:
+  - avg attendance
+  - avg net
+  - play again rate
+
+GOAL OF ALPHA:
+Validate BEHAVIOR, not polish.
+
+Specifically:
+- Do users actually log post-show data?
+- Does this feel helpful or like admin?
+- Does it increase perceived value of the app?
+
+YOUR JOB:
+Give me a brutally honest assessment.
+
+Answer these:
+
+1. Should this feature be included in alpha, or does it risk diluting focus?
+2. What is the biggest reason users will ignore or abandon this feature?
+3. What is the minimum version that still validates the idea?
+4. What is the ONE thing that would make this feel valuable immediately?
+5. What is the biggest UX mistake I could make here?
+6. What metric should I track to determine if this is working?
+7. If you had to simplify this even further, what would you cut?
+8. If this fails in alpha, what is the most likely reason?
+
+Be direct. Do not validate the idea unless it earns it.
+Focus on real-world behavior, not theory.
