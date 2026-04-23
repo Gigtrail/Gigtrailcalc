@@ -199,12 +199,21 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
   const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData, params.data.id);
-  const updateData = {
-    ...vehicleData,
-    isDefault: vehicleData.isDefault ?? undefined,
-  } as Partial<typeof vehiclesTable.$inferInsert>;
-  if (vehicleData.avgConsumption != null) updateData.avgConsumption = String(vehicleData.avgConsumption);
-  if (vehicleData.tankSizeLitres != null) updateData.tankSizeLitres = String(vehicleData.tankSizeLitres);
+  const updateData: Partial<typeof vehiclesTable.$inferInsert> = {};
+  if (vehicleData.name !== undefined) updateData.name = vehicleData.name;
+  if (vehicleData.vehicleType !== undefined) updateData.vehicleType = vehicleData.vehicleType;
+  if (vehicleData.fuelType !== undefined) updateData.fuelType = vehicleData.fuelType;
+  if (vehicleData.avgConsumption !== undefined) updateData.avgConsumption = String(vehicleData.avgConsumption);
+  if (vehicleData.tankSizeLitres !== undefined) {
+    updateData.tankSizeLitres =
+      vehicleData.tankSizeLitres === null ? null : String(vehicleData.tankSizeLitres);
+  }
+  if (vehicleData.maxPassengers !== undefined) updateData.maxPassengers = vehicleData.maxPassengers;
+  if (vehicleData.isDefault !== undefined && vehicleData.isDefault !== null) {
+    updateData.isDefault = vehicleData.isDefault;
+  }
+  if (vehicleData.assignedMemberIds !== undefined) updateData.assignedMemberIds = vehicleData.assignedMemberIds;
+  if (vehicleData.notes !== undefined) updateData.notes = vehicleData.notes;
   if (vehicleData.isDefault) {
     await db.update(vehiclesTable).set({ isDefault: false }).where(
       and(eq(vehiclesTable.userId, userId), ne(vehiclesTable.id, params.data.id))

@@ -42,11 +42,18 @@ function getWeeklyUsagePayload(
     return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
   }
 
-  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
-  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
-  const resetsIn = needsReset
-    ? 7
-    : Math.ceil(7 - daysDiff(profile.lastCalculationReset));
+  const lastCalculationReset = profile.lastCalculationReset;
+  if (!lastCalculationReset) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const daysSinceReset = daysDiff(lastCalculationReset);
+  if (daysSinceReset >= 7) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const used = profile.calculationsThisWeek ?? 0;
+  const resetsIn = Math.ceil(7 - daysSinceReset);
 
   return { used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false };
 }

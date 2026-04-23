@@ -20,6 +20,7 @@ interface ReplitStripeConnection {
 type StripeSyncInstance = {
   findOrCreateManagedWebhook(url: string): Promise<unknown>;
   syncBackfill(): Promise<unknown>;
+  processWebhook(payload: Buffer, signature: string): Promise<unknown>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
