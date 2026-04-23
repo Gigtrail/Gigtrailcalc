@@ -32,7 +32,15 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { usePlan } from "@/hooks/use-plan";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, CALC_ENGINE_VERSION, calculateShowViability } from "@/lib/calculations";
+import {
+  SINGLE_ROOM_RATE,
+  DOUBLE_ROOM_RATE,
+  CALC_ENGINE_VERSION,
+  calculateShowViability,
+  generateSingleShowAttendanceScenarios,
+  calculateFullBandBreakEven,
+  type SingleShowScenario,
+} from "@/lib/calculations";
 import { cn } from "@/lib/utils";
 import { migrateOldMembers, resolveActiveMembers } from "@/lib/member-utils";
 import type { SnapMember } from "@/lib/snapshot-types";
@@ -150,6 +158,16 @@ export interface GigTrailResultData {
   breakEvenCapacity: number;
   /** Tickets needed to cover show-specific costs only (marketing + support act) */
   showCostBreakEvenTickets?: number;
+  /** Tickets needed to cover all costs PLUS expected member fees (>= breakEvenTickets). */
+  fullBandBreakEvenTickets?: number;
+  /** Pct of capacity for the full-band break-even (null when capacity unknown). */
+  fullBandBreakEvenCapacityPct?: number | null;
+  /** True when full-band break-even cannot be reached even at sell-out. */
+  fullBandBreakEvenImpossible?: boolean;
+  /** Sum of expected member fees baked into fullBandBreakEvenTickets. */
+  expectedMemberFeesTotal?: number;
+  /** Attendance ladder rendered on the results page (ticketed/hybrid only). */
+  scenarios?: SingleShowScenario[];
   distanceKm: number;
   driveTimeMinutes: number | null;
   fuelUsedLitres: number;
@@ -343,6 +361,9 @@ export default function RunResults() {
     bookingFeeTotal, netTicketRevenue,
     accomSingleRooms, accomDoubleRooms,
     status, formData, profilePeopleCount,
+    scenarios: snapshotScenarios,
+    fullBandBreakEvenTickets: snapshotFullBandBreakEven,
+    fullBandBreakEvenCapacityPct: snapshotFullBandBreakEvenPct,
     vehicleType, vehicleName, fuelPriceSource, resolvedFuelPrice,
     runId, savedRunId, saveFailed,
     calcCount, calcLimit,
@@ -407,6 +428,47 @@ export default function RunResults() {
   const splitPerMember = activeMembers.length > 0 ? displayNetProfit / activeMembers.length : 0;
   const fullFeesCovered = profitAfterMemberFees >= 0;
 
+  // ── Single-show ticketed/hybrid: scenarios + full-band break-even ──────────
+  // Recompute on the fly from formData + current member fees so older snapshots
+  // (saved before these fields existed) still render the new sections, and so
+  // member changes after a save are reflected in the ladder.
+  const scenarios: SingleShowScenario[] = isTicketed
+    ? generateSingleShowAttendanceScenarios({
+        showType,
+        dealType: (formData.dealType as string | null) ?? "100% door",
+        capacity: Number(formData.capacity) || 0,
+        ticketPrice: Number(formData.ticketPrice) || 0,
+        splitPct: Number(formData.splitPct) || 0,
+        guarantee: Number(formData.guarantee) || 0,
+        bookingFeePerTicket: Number(formData.bookingFeePerTicket) || 0,
+        merchEstimate: Number(formData.merchEstimate) || 0,
+        expectedAttendancePct: Number(formData.expectedAttendancePct) || 0,
+        totalCost: displayTotalCost,
+        totalMemberFees,
+        peopleCount: profilePeopleCount,
+      })
+    : (snapshotScenarios ?? []);
+
+  const expectedScenario = scenarios.find(s => s.isExpected) ?? null;
+
+  const fullBandBE = isTicketed
+    ? calculateFullBandBreakEven({
+        showType,
+        dealType: (formData.dealType as string | null) ?? "100% door",
+        ticketPrice: Number(formData.ticketPrice) || 0,
+        splitPct: Number(formData.splitPct) || 0,
+        guarantee: Number(formData.guarantee) || 0,
+        capacity: Number(formData.capacity) || 0,
+        totalCost: displayTotalCost,
+        merchEstimate: Number(formData.merchEstimate) || 0,
+        bookingFeePerTicket: Number(formData.bookingFeePerTicket) || 0,
+        totalMemberFees,
+      })
+    : { breakEvenTickets: 0, breakEvenCapacityPct: null, impossible: false };
+  const fullBandBreakEvenTickets = fullBandBE.breakEvenTickets || (snapshotFullBandBreakEven ?? breakEvenTickets);
+  const fullBandBreakEvenCapacityPct = fullBandBE.breakEvenCapacityPct ?? snapshotFullBandBreakEvenPct ?? null;
+  const fullBandSameAsCost = fullBandBreakEvenTickets <= breakEvenTickets;
+
   // Venue / page title
   const venueName = (formData.venueName as string | undefined)?.trim() || "";
   const pageTitle = venueName || "Gig Verdict";
@@ -445,13 +507,13 @@ export default function RunResults() {
   const allInsights: { icon: typeof Lightbulb; text: string; color: string }[] = [];
   if (totalDriveHours > 8) allInsights.push({ icon: Lightbulb, text: "Long drive — consider arriving the day before.", color: "text-amber-600" });
   if (fuelCost > 0 && totalIncome > 0 && fuelCost / totalIncome > 0.35)
-    allInsights.push({ icon: Fuel, text: `Fuel is ${((fuelCost / totalIncome) * 100).toFixed(0)}% of your income — this run is heavily road-dependent.`, color: "text-amber-600" });
+    allInsights.push({ icon: Fuel, text: `Fuel is ${((fuelCost / totalIncome) * 100).toFixed(0)}% of income — high road-cost show.`, color: "text-amber-600" });
   if (showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
-    allInsights.push({ icon: TrendingUp, text: "All member fees covered.", color: "text-green-600" });
+    allInsights.push({ icon: TrendingUp, text: "All band fees covered.", color: "text-green-600" });
   if (showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
-    allInsights.push({ icon: AlertTriangle, text: `Short $${fmt(Math.abs(profitAfterMemberFees))} to cover all band fees.`, color: "text-amber-600" });
+    allInsights.push({ icon: AlertTriangle, text: `You're still $${fmt(Math.abs(profitAfterMemberFees))} short on full band fees.`, color: "text-amber-600" });
   if (displayNetProfit < 0)
-    allInsights.push({ icon: XCircle, text: "Costs exceed income. Consider negotiating a higher fee, reducing costs, or passing on this one.", color: "text-red-600" });
+    allInsights.push({ icon: XCircle, text: "Costs are above income — try a higher fee, cut costs, or pass.", color: "text-red-600" });
   const insights = allInsights.slice(0, 3);
 
   // Actions
@@ -575,14 +637,46 @@ export default function RunResults() {
         </div>
         <div className="px-5 py-6 space-y-3">
           <div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Likely net</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+              {isTicketed && expectedScenario
+                ? `If you sell ${expectedScenario.tickets} tickets`
+                : "You walk away with"}
+            </p>
             <p className={`text-5xl md:text-6xl font-bold leading-none tabular-nums ${displayNetProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
               {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
             </p>
+            {isTicketed && expectedScenario && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Expected crowd · {expectedScenario.pct}% of {Number(formData.capacity) || 0} cap
+              </p>
+            )}
           </div>
-          <p className="text-sm text-foreground/80 leading-snug max-w-prose">
-            {summarySentence}
-          </p>
+          {isTicketed ? (
+            <div className="flex flex-col gap-1.5 pt-1 border-t border-current/10">
+              <div className={cn(
+                "flex items-center gap-1.5 text-sm",
+                displayNetProfit >= 0 ? "text-green-700" : "text-amber-700",
+              )}>
+                {displayNetProfit >= 0
+                  ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers costs</span></>
+                  : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Short ${fmt(Math.abs(displayNetProfit))} on costs</span></>}
+              </div>
+              {showPayoutSection && totalMemberFees > 0 && (
+                <div className={cn(
+                  "flex items-center gap-1.5 text-sm",
+                  fullFeesCovered ? "text-green-700" : "text-amber-700",
+                )}>
+                  {fullFeesCovered
+                    ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Covers full band fees</span></>
+                    : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Still short ${fmt(Math.abs(profitAfterMemberFees))} on full band fees</span></>}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-foreground/80 leading-snug max-w-prose">
+              {summarySentence}
+            </p>
+          )}
           {/* Quick at-a-glance metrics inside the hero */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-foreground/70 pt-1 border-t border-current/10">
             {isTicketed && breakEvenTickets > 0 && (
@@ -615,6 +709,103 @@ export default function RunResults() {
           )}
         </div>
       </div>
+
+      {/* ── 1b. TICKET LADDER (ticketed/hybrid only) ───────────────────────── */}
+      {isTicketed && scenarios.length > 0 && (
+        <Card className="border-border/60">
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-sm font-semibold tracking-tight">What if ticket sales are…</h3>
+              <span className="text-[11px] text-muted-foreground">capacity {Number(formData.capacity) || 0}</span>
+            </div>
+            <div className="divide-y divide-border/40">
+              {scenarios.map(s => {
+                const badgeText = !s.coversCosts
+                  ? "Below costs"
+                  : (showPayoutSection && totalMemberFees > 0 && !s.coversFullBandFees)
+                  ? "Covers costs"
+                  : (showPayoutSection && totalMemberFees > 0)
+                  ? "Covers band"
+                  : "Covers costs";
+                const badgeClasses = !s.coversCosts
+                  ? "bg-red-100 text-red-700"
+                  : (showPayoutSection && totalMemberFees > 0 && !s.coversFullBandFees)
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-green-100 text-green-700";
+                const netClass = s.netProfit >= 0 ? "text-green-700" : "text-red-700";
+                return (
+                  <div
+                    key={s.pct}
+                    className={cn(
+                      "grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2.5",
+                      s.isExpected && "bg-primary/5 -mx-3 px-3 rounded-md",
+                    )}
+                  >
+                    <div className="min-w-[72px]">
+                      <p className={cn("text-sm font-semibold", s.isExpected && "text-primary")}>{s.label}</p>
+                      <p className="text-[11px] text-muted-foreground tabular-nums">{s.tickets} tickets</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={cn("text-sm font-semibold tabular-nums", netClass)}>
+                        {s.netProfit >= 0 ? "+" : "−"}${fmt(Math.abs(s.netProfit))}
+                      </p>
+                    </div>
+                    <span className={cn("text-[11px] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap", badgeClasses)}>
+                      {badgeText}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              Net = ticket income {totalMemberFees > 0 ? "− costs (member fees handled separately)" : "− all costs"}.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── 1c. TWO-NUMBER BREAK-EVEN (ticketed/hybrid only) ───────────────── */}
+      {isTicketed && breakEvenTickets > 0 && (
+        <Card className="border-border/60">
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <h3 className="text-sm font-semibold tracking-tight">What you need to sell</h3>
+            <div className={cn("grid gap-3", fullBandSameAsCost ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+              <div className="rounded-lg bg-muted/40 px-4 py-3">
+                <p className="text-xs text-muted-foreground mb-1">To cover costs</p>
+                <p className="text-2xl font-bold tabular-nums">{breakEvenTickets}<span className="text-sm font-normal ml-1">tickets</span></p>
+                {breakEvenCapacity > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{breakEvenCapacity.toFixed(0)}% of capacity</p>
+                )}
+              </div>
+              {!fullBandSameAsCost && (
+                <div className={cn(
+                  "rounded-lg px-4 py-3",
+                  fullBandBE.impossible
+                    ? "bg-red-50 border border-red-200"
+                    : "bg-amber-50 border border-amber-200",
+                )}>
+                  <p className="text-xs text-amber-800 mb-1">To cover full band fees</p>
+                  <p className={cn(
+                    "text-2xl font-bold tabular-nums",
+                    fullBandBE.impossible ? "text-red-700" : "text-amber-800",
+                  )}>
+                    {fullBandBreakEvenTickets}<span className="text-sm font-normal ml-1">tickets</span>
+                  </p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">
+                    {fullBandBreakEvenCapacityPct != null && `${fullBandBreakEvenCapacityPct.toFixed(0)}% of capacity`}
+                    {fullBandBE.impossible && " · over capacity — won't fit"}
+                  </p>
+                </div>
+              )}
+            </div>
+            {fullBandSameAsCost && totalMemberFees === 0 && showPayoutSection && (
+              <p className="text-[11px] text-muted-foreground">
+                Set expected fees on members to see a separate full-band break-even.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── 2. SUMMARY PILLS ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-2">
@@ -1020,12 +1211,13 @@ export default function RunResults() {
             <div className="flex items-center rounded-md border border-border/60 overflow-hidden text-xs">
               <button type="button" onClick={() => setPayoutMode("full")}
                 className={cn("px-2.5 py-1 transition-colors", payoutMode === "full" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50")}>
-                Expected Fees
+                Target Pay
               </button>
               <button type="button" onClick={() => setPayoutMode("split")}
                 className={cn("px-2.5 py-1 transition-colors", payoutMode === "split" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50")}>
                 Even Split
               </button>
+              {/* Even Split = realistic per-person payout when there isn't enough to cover full fees */}
             </div>
           </div>
 
@@ -1034,13 +1226,13 @@ export default function RunResults() {
             <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
               <div>
-                <p className="font-medium">Show doesn't cover full fees</p>
+                <p className="font-medium">Still short on full band fees</p>
                 <p className="text-xs text-amber-700 mt-0.5">
                   ${fmt(Math.abs(profitAfterMemberFees))} short.{" "}
                   <button onClick={() => setPayoutMode("split")} className="underline underline-offset-2 font-medium hover:text-amber-900">
                     Switch to Even Split
                   </button>{" "}
-                  to see realistic payouts.
+                  to see real per-person payouts.
                 </p>
               </div>
             </div>

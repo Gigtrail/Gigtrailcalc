@@ -29,7 +29,7 @@
  *   MINOR — new derived outputs added; existing outputs unchanged
  *   PATCH — bug fix that corrects previously wrong outputs
  */
-export const CALC_ENGINE_VERSION = "1.1.0";
+export const CALC_ENGINE_VERSION = "1.2.0";
 
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, SYSTEM_FALLBACK_FUEL_PRICE } from "./gig-constants";
 import { calculateMemberEarnings, type MemberEarningsSummary } from "./member-utils";
@@ -399,6 +399,239 @@ export function calculateMemberPayouts(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Per-ticket artist net + full-band break-even + scenario generator
+// (shared helpers used by single-show results UI)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Net dollars an artist receives per ticket sold for a given deal type, after
+ * booking fees and the artist's split. For Hybrid, the guarantee is treated as
+ * a fixed amount on top and is NOT included here — only the per-ticket portion.
+ */
+export function calculateArtistNetPerTicket(input: {
+  showType: string;
+  dealType?: string | null;
+  ticketPrice: number;
+  splitPct?: number | null;
+  bookingFeePerTicket?: number | null;
+}): number {
+  const { showType, dealType, ticketPrice, splitPct, bookingFeePerTicket } = input;
+  const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
+  if (!isTicketed) return 0;
+  const price = n(ticketPrice);
+  const feePerTicket = n(bookingFeePerTicket);
+  const netPricePerTicket = Math.max(0, price - feePerTicket);
+  if (showType === "Hybrid") {
+    const hybridSplit = (dealType === "percentage split" || dealType === "guarantee vs door")
+      ? n(splitPct)
+      : 100;
+    return netPricePerTicket * (hybridSplit / 100);
+  }
+  if (dealType === "100% door") return netPricePerTicket;
+  const split = n(splitPct);
+  const effectiveSplit = split > 0 ? split / 100 : 1.0;
+  return netPricePerTicket * effectiveSplit;
+}
+
+/**
+ * Tickets needed to cover ALL operating costs PLUS expected member fees.
+ * Identical algorithm to `calculateTicketBreakEven` but with member fees added
+ * to `totalCost`. When `totalMemberFees <= 0`, returns the same number as the
+ * regular `calculateTicketBreakEven` call.
+ */
+export function calculateFullBandBreakEven(
+  input: TicketBreakEvenInput & { totalMemberFees?: number | null },
+): TicketBreakEvenResult {
+  const memberFees = Math.max(0, n(input.totalMemberFees));
+  return calculateTicketBreakEven({
+    ...input,
+    totalCost: n(input.totalCost) + memberFees,
+  });
+}
+
+/**
+ * Compute show income for an exact ticket count under a given deal structure.
+ * Mirrors `calculateShowIncome` but takes raw tickets instead of attendance %.
+ */
+function calcShowIncomeForTickets(input: {
+  showType: string;
+  tickets: number;
+  ticketPrice: number;
+  feePerTicket: number;
+  dealType: string;
+  splitPct: number;
+  guarantee: number;
+}): { showIncome: number; doorIncome: number; grossRevenue: number; netTicketRevenue: number; guaranteeApplied: boolean } {
+  const { showType, tickets, ticketPrice, feePerTicket, dealType, splitPct, guarantee } = input;
+  const grossRevenue = tickets * ticketPrice;
+  const netTicketRevenue = Math.max(0, grossRevenue - tickets * feePerTicket);
+
+  let doorIncome = 0;
+  let guaranteeApplied = false;
+
+  if (showType === "Hybrid") {
+    // Hybrid: door portion is a pure split (or full door if no split spec'd);
+    // never apply a guarantee floor on the door portion (the base guarantee is
+    // added separately and would otherwise be double-counted).
+    const hybridSplit = (dealType === "percentage split" || dealType === "guarantee vs door")
+      ? splitPct
+      : 100;
+    doorIncome = netTicketRevenue * (hybridSplit / 100);
+  } else if (dealType === "100% door") {
+    doorIncome = netTicketRevenue;
+  } else if (dealType === "percentage split") {
+    doorIncome = netTicketRevenue * (splitPct / 100);
+  } else if (dealType === "guarantee vs door") {
+    const doorShare = netTicketRevenue * (splitPct / 100);
+    guaranteeApplied = guarantee > doorShare;
+    doorIncome = Math.max(guarantee, doorShare);
+  } else {
+    doorIncome = netTicketRevenue;
+  }
+
+  const showIncome = showType === "Hybrid" ? guarantee + doorIncome : doorIncome;
+  return { showIncome, doorIncome, grossRevenue, netTicketRevenue, guaranteeApplied };
+}
+
+export interface SingleShowScenarioInput {
+  showType: string;
+  dealType?: string | null;
+  capacity?: number | null;
+  ticketPrice?: number | null;
+  splitPct?: number | null;
+  guarantee?: number | null;
+  bookingFeePerTicket?: number | null;
+  merchEstimate?: number | null;
+  expectedAttendancePct?: number | null;
+  /** Total fixed costs (fuel + accom + food + marketing + extras + support) */
+  totalCost: number;
+  /** Sum of expected member gig fees for active band members. Defaults to 0. */
+  totalMemberFees?: number | null;
+  /** Used to compute per-person take-home; null if unknown. Defaults to 1. */
+  peopleCount?: number | null;
+}
+
+export interface SingleShowScenario {
+  /** Attendance % bucket (0–100). For "expected" the value matches the input. */
+  pct: number;
+  /** True when this row corresponds to the user's expected attendance %. */
+  isExpected: boolean;
+  /** Friendly label for UI ("20%", "Expected", "Sell out"). */
+  label: string;
+  tickets: number;
+  grossRevenue: number;
+  netTicketRevenue: number;
+  /** Door income (after booking fees + deal split). Excludes hybrid guarantee. */
+  doorIncome: number;
+  /** Show income = doorIncome (+ guarantee for Hybrid). */
+  showIncome: number;
+  /** Total income = showIncome + merch. */
+  totalIncome: number;
+  totalCost: number;
+  /** Net profit before subtracting member fees. */
+  netProfit: number;
+  /** Net profit after deducting expected member fees. */
+  netAfterMemberFees: number;
+  /** Net per person after member fees (null when peopleCount is unknown / 0). */
+  perPersonAfterFees: number | null;
+  coversCosts: boolean;
+  coversFullBandFees: boolean;
+  /** True when this scenario hit the guarantee floor (guarantee vs door deals). */
+  guaranteeApplied: boolean;
+}
+
+/**
+ * Generate the canonical 4-scenario ladder used on the single-show results page.
+ *   - 20% attendance
+ *   - 50% attendance
+ *   - expected attendance from the form (when set)
+ *   - 100% (sell out)
+ * Duplicates are merged — if expected matches one of the fixed pcts, that row
+ * is flagged `isExpected = true` instead of being repeated. Returns `[]` for
+ * non-ticketed shows or when capacity / ticket price are unknown.
+ */
+export function generateSingleShowAttendanceScenarios(
+  input: SingleShowScenarioInput,
+): SingleShowScenario[] {
+  const isTicketed = input.showType === "Ticketed Show" || input.showType === "Hybrid";
+  if (!isTicketed) return [];
+
+  const cap = n(input.capacity);
+  const price = n(input.ticketPrice);
+  if (cap <= 0 || price <= 0) return [];
+
+  const feePerTicket = n(input.bookingFeePerTicket);
+  const split = n(input.splitPct);
+  const guarantee = n(input.guarantee);
+  const merch = n(input.merchEstimate);
+  const dealType = input.dealType ?? "100% door";
+  const totalCost = n(input.totalCost);
+  const memberFees = Math.max(0, n(input.totalMemberFees));
+  const people = n(input.peopleCount) > 0 ? n(input.peopleCount) : null;
+
+  const expectedRaw = n(input.expectedAttendancePct);
+  const expectedPct = expectedRaw > 0 && expectedRaw <= 100 ? expectedRaw : 0;
+
+  const fixed = [20, 50, 100];
+  const seen = new Set<number>();
+  const allPcts: { pct: number; isExpected: boolean }[] = [];
+  const pushPct = (pct: number, isExpected: boolean) => {
+    if (pct <= 0 || pct > 100) return;
+    if (seen.has(pct)) {
+      if (isExpected) {
+        const idx = allPcts.findIndex(s => s.pct === pct);
+        if (idx >= 0) allPcts[idx].isExpected = true;
+      }
+      return;
+    }
+    seen.add(pct);
+    allPcts.push({ pct, isExpected });
+  };
+  for (const p of fixed) pushPct(p, p === expectedPct);
+  if (expectedPct > 0) pushPct(expectedPct, true);
+  allPcts.sort((a, b) => a.pct - b.pct);
+
+  return allPcts.map(({ pct, isExpected }) => {
+    const tickets = Math.floor((cap * pct) / 100);
+    const inc = calcShowIncomeForTickets({
+      showType: input.showType,
+      tickets,
+      ticketPrice: price,
+      feePerTicket,
+      dealType,
+      splitPct: split,
+      guarantee,
+    });
+    const totalIncome = inc.showIncome + merch;
+    const netProfit = totalIncome - totalCost;
+    const netAfterMemberFees = netProfit - memberFees;
+    const label = isExpected
+      ? "Expected"
+      : pct === 100
+      ? "Sell out"
+      : `${pct}%`;
+    return {
+      pct,
+      isExpected,
+      label,
+      tickets,
+      grossRevenue: inc.grossRevenue,
+      netTicketRevenue: inc.netTicketRevenue,
+      doorIncome: inc.doorIncome,
+      showIncome: inc.showIncome,
+      totalIncome,
+      totalCost,
+      netProfit,
+      netAfterMemberFees,
+      perPersonAfterFees: people ? netAfterMemberFees / people : null,
+      coversCosts: netProfit >= 0,
+      coversFullBandFees: netAfterMemberFees >= 0,
+      guaranteeApplied: inc.guaranteeApplied,
+    };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // calculateSingleShow  —  complete single-show result (replaces run-form inline calc)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -434,6 +667,13 @@ export interface SingleShowInput {
   supportActCost?: number | null;
   // People
   peopleCount?: number | null;
+  /**
+   * Sum of expected member gig fees for active band members.
+   * Used to compute the "full band" break-even (tickets needed to cover all
+   * operating costs PLUS member pay) and to flag scenarios that cover band fees.
+   * Defaults to 0 when omitted — older callers continue to work unchanged.
+   */
+  totalMemberFees?: number | null;
 }
 
 export interface SingleShowResult {
@@ -471,6 +711,15 @@ export interface SingleShowResult {
   breakEvenImpossible: boolean;
   /** Tickets to cover show-specific costs only (marketing + support act, not travel) */
   showCostBreakEvenTickets: number;
+  // ── Full-band break-even (ticketed/hybrid only) ─────────────────────────
+  /** Tickets to cover ALL costs PLUS expected member fees (== breakEvenTickets when no fees). */
+  fullBandBreakEvenTickets: number;
+  fullBandBreakEvenCapacityPct: number | null;
+  fullBandBreakEvenImpossible: boolean;
+  /** Echo of the input — handy for downstream consumers / snapshots. */
+  expectedMemberFeesTotal: number;
+  // ── Attendance scenario ladder (ticketed/hybrid only; empty otherwise) ───
+  scenarios: SingleShowScenario[];
 }
 
 /**
@@ -552,6 +801,37 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     showOnlyCosts,
   });
 
+  // Full-band break-even (all costs + member fees)
+  const expectedMemberFeesTotal = Math.max(0, n(input.totalMemberFees));
+  const fullBand = calculateFullBandBreakEven({
+    showType: input.showType,
+    dealType: input.dealType,
+    ticketPrice: n(input.ticketPrice),
+    splitPct: input.splitPct,
+    guarantee: input.guarantee,
+    capacity: n(input.capacity),
+    totalCost,
+    merchEstimate: input.merchEstimate,
+    bookingFeePerTicket: input.bookingFeePerTicket,
+    totalMemberFees: expectedMemberFeesTotal,
+  });
+
+  // Attendance scenario ladder for the results page
+  const scenarios = generateSingleShowAttendanceScenarios({
+    showType: input.showType,
+    dealType: input.dealType,
+    capacity: input.capacity,
+    ticketPrice: input.ticketPrice,
+    splitPct: input.splitPct,
+    guarantee: input.guarantee,
+    bookingFeePerTicket: input.bookingFeePerTicket,
+    merchEstimate: input.merchEstimate,
+    expectedAttendancePct: input.expectedAttendancePct,
+    totalCost,
+    totalMemberFees: expectedMemberFeesTotal,
+    peopleCount: input.peopleCount,
+  });
+
   return {
     showIncome,
     expectedTicketsSold,
@@ -578,6 +858,11 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     breakEvenCapacityPct: be.breakEvenCapacityPct,
     breakEvenImpossible: be.impossible,
     showCostBreakEvenTickets,
+    fullBandBreakEvenTickets: fullBand.breakEvenTickets,
+    fullBandBreakEvenCapacityPct: fullBand.breakEvenCapacityPct,
+    fullBandBreakEvenImpossible: fullBand.impossible,
+    expectedMemberFeesTotal,
+    scenarios,
   };
 }
 
