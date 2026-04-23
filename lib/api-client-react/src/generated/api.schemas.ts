@@ -13,6 +13,14 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface DuplicateProtection {
+  duplicateFound: boolean;
+  matchingRecordIds?: number[];
+  summaries?: unknown[];
+  matchingRecords?: unknown[];
+  rules?: string[];
+}
+
 export interface Profile {
   id: number;
   name: string;
@@ -173,6 +181,7 @@ export interface Vehicle {
   notes: string | null;
   createdAt: string;
   assignedActIds: number[];
+  duplicateProtection?: DuplicateProtection;
 }
 
 export interface CreateVehicleBody {
@@ -944,6 +953,7 @@ export interface Tour {
   otherCosts?: number | null;
   stopCount: number;
   createdAt: string;
+  duplicateProtection?: DuplicateProtection;
 }
 
 export interface CreateTourBody {
@@ -1168,6 +1178,7 @@ export interface TourWithStops {
   otherCosts?: number | null;
   createdAt: string;
   stops: TourStop[];
+  duplicateProtection?: DuplicateProtection;
 }
 
 export interface DashboardSummary {

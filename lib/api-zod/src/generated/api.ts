@@ -14,6 +14,14 @@ export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
 
+export const DuplicateProtection = zod.object({
+  duplicateFound: zod.boolean(),
+  matchingRecordIds: zod.array(zod.number()).optional(),
+  summaries: zod.array(zod.unknown()).optional(),
+  matchingRecords: zod.array(zod.unknown()).optional(),
+  rules: zod.array(zod.string()).optional(),
+});
+
 /**
  * @summary List all profiles
  */
@@ -228,6 +236,7 @@ export const GetVehiclesResponseItem = zod.object({
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   assignedActIds: zod.array(zod.number()),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
 
@@ -268,6 +277,7 @@ export const GetVehicleResponse = zod.object({
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   assignedActIds: zod.array(zod.number()),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 
 /**
@@ -304,6 +314,7 @@ export const UpdateVehicleResponse = zod.object({
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   assignedActIds: zod.array(zod.number()),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 
 /**
@@ -775,6 +786,7 @@ export const GetToursResponseItem = zod.object({
   totalProfit: zod.number().nullable(),
   stopCount: zod.number(),
   createdAt: zod.string(),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 export const GetToursResponse = zod.array(GetToursResponseItem);
 
@@ -882,6 +894,7 @@ export const GetTourResponse = zod.object({
       notes: zod.string().nullable(),
     }),
   ),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 
 /**
@@ -961,6 +974,7 @@ export const UpdateTourResponse = zod.object({
   gearHireCost: zod.number().nullish(),
   otherCosts: zod.number().nullish(),
   createdAt: zod.string(),
+  duplicateProtection: DuplicateProtection.optional(),
 });
 
 /**

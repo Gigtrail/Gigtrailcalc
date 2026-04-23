@@ -5,6 +5,7 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { DuplicateProtection } from "./duplicateProtection";
 
 export interface Tour {
   id: number;
@@ -35,4 +36,5 @@ export interface Tour {
   /** @nullable */
   totalProfit: number | null;
   createdAt: string;
+  duplicateProtection?: DuplicateProtection;
 }

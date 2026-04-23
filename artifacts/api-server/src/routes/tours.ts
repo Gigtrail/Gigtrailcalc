@@ -246,8 +246,8 @@ router.post("/tours", requireAuth, async (req, res): Promise<void> => {
   }
   const duplicateProtection = await checkTourDuplicateName(userId, parsed.data.name);
   const [tour] = await db.insert(toursTable).values({ ...toDbNumeric(parsed.data as Record<string, unknown>, TOUR_NUMERIC) as typeof toursTable.$inferInsert, userId }).returning();
-  const response = GetTourResponse.parse({ ...serializeTour(tour), stops: [] });
-  res.status(201).json({ ...response, duplicateProtection });
+  const response = GetTourResponse.parse({ ...serializeTour(tour), stops: [], duplicateProtection });
+  res.status(201).json(response);
 });
 
 router.get("/tours/:id", requireAuth, async (req, res): Promise<void> => {
@@ -302,8 +302,8 @@ router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { metricsByTourId } = await loadTourDerivations(userId, [tour]);
-  const response = UpdateTourResponse.parse(serializeTour(tour, metricsByTourId.get(tour.id)));
-  res.json({ ...response, duplicateProtection });
+  const response = UpdateTourResponse.parse({ ...serializeTour(tour, metricsByTourId.get(tour.id)), duplicateProtection });
+  res.json(response);
 });
 
 router.delete("/tours/:id", requireAuth, async (req, res): Promise<void> => {

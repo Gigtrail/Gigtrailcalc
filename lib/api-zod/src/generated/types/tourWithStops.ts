@@ -5,6 +5,7 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { DuplicateProtection } from "./duplicateProtection";
 import type { TourStop } from "./tourStop";
 
 export interface TourWithStops {
@@ -37,4 +38,5 @@ export interface TourWithStops {
   totalProfit: number | null;
   createdAt: string;
   stops: TourStop[];
+  duplicateProtection?: DuplicateProtection;
 }

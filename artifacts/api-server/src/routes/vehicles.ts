@@ -164,8 +164,8 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
   await setActAssignments(vehicle.id, userId, resolvedActIds, resolvedDefaultForActIds);
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  const response = GetVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds));
-  res.status(201).json({ ...response, duplicateProtection });
+  const response = GetVehicleResponse.parse({ ...serializeVehicle(vehicle, assignedActIds), duplicateProtection });
+  res.status(201).json(response);
 });
 
 router.get("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -217,8 +217,8 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  const response = UpdateVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds));
-  res.json({ ...response, duplicateProtection });
+  const response = UpdateVehicleResponse.parse({ ...serializeVehicle(vehicle, assignedActIds), duplicateProtection });
+  res.json(response);
 });
 
 router.put("/vehicles/:id/act-assignments", requireAuth, async (req, res): Promise<void> => {

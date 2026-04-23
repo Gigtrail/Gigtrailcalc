@@ -653,6 +653,28 @@ components:
       required:
         - error
 
+    DuplicateProtection:
+      type: object
+      properties:
+        duplicateFound:
+          type: boolean
+        matchingRecordIds:
+          type: array
+          items:
+            type: integer
+        summaries:
+          type: array
+          items: {}
+        matchingRecords:
+          type: array
+          items: {}
+        rules:
+          type: array
+          items:
+            type: string
+      required:
+        - duplicateFound
+
     Profile:
       type: object
       properties:
@@ -861,6 +883,8 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        duplicateProtection:
+          $ref: "#/components/schemas/DuplicateProtection"
       required:
         - id
         - name
@@ -1413,6 +1437,8 @@ components:
           type: ["number", "null"]
         createdAt:
           type: string
+        duplicateProtection:
+          $ref: "#/components/schemas/DuplicateProtection"
       required:
         - id
         - name
@@ -1655,6 +1681,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TourStop"
+        duplicateProtection:
+          $ref: "#/components/schemas/DuplicateProtection"
       required:
         - id
         - name

@@ -14,6 +14,7 @@ export * from "./createVehicleBody";
 export * from "./createVenueBody";
 export * from "./dashboardRecent";
 export * from "./dashboardSummary";
+export * from "./duplicateProtection";
 export * from "./errorResponse";
 export * from "./healthStatus";
 export * from "./profile";

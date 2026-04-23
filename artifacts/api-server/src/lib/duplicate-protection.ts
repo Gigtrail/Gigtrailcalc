@@ -39,7 +39,7 @@ export async function checkTourDuplicateName(
 ) {
   const normalized = normalizeDuplicateName(name);
   if (!normalized) {
-    return { duplicateFound: false, matchingRecordIds: [], matchingRecords: [] };
+    return { duplicateFound: false, matchingRecordIds: [], summaries: [], matchingRecords: [] };
   }
 
   const rows = await db
@@ -51,10 +51,12 @@ export async function checkTourDuplicateName(
         : eq(toursTable.userId, userId),
     );
   const matches = rows.filter((tour) => normalizeDuplicateName(tour.name) === normalized);
+  const summaries = matches.map(tourSummary);
   return {
     duplicateFound: matches.length > 0,
     matchingRecordIds: matches.map((tour) => tour.id),
-    matchingRecords: matches.map(tourSummary),
+    summaries,
+    matchingRecords: summaries,
     rules: ["trim whitespace", "collapse repeated spaces", "case-insensitive name compare", "same user only"],
   };
 }
@@ -71,7 +73,7 @@ export async function checkLikelyVehicleDuplicate(
 ) {
   const normalized = normalizeDuplicateName(candidate.name);
   if (!normalized) {
-    return { duplicateFound: false, matchingRecordIds: [], matchingRecords: [] };
+    return { duplicateFound: false, matchingRecordIds: [], summaries: [], matchingRecords: [] };
   }
 
   const rows = await db
@@ -114,10 +116,12 @@ export async function checkLikelyVehicleDuplicate(
     })
     .filter((match) => match.reasons.length > 0);
 
+  const summaries = matches.map((match) => vehicleSummary(match.vehicle, match.reasons));
   return {
     duplicateFound: matches.length > 0,
     matchingRecordIds: matches.map((match) => match.vehicle.id),
-    matchingRecords: matches.map((match) => vehicleSummary(match.vehicle, match.reasons)),
+    summaries,
+    matchingRecords: summaries,
     rules: [
       "trim whitespace",
       "collapse repeated spaces",
