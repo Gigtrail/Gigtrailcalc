@@ -1546,6 +1546,19 @@ export default function RunForm() {
     queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+    // Also invalidate every per-venue and per-run detail query so a freshly
+    // saved run shows up on the linked venue's profile (and any open run
+    // detail) without requiring a manual refresh. The orval-generated query
+    // keys for these are `["/api/venues/<id>"]` and `["/api/runs/<id>"]`.
+    queryClient.invalidateQueries({
+      predicate: (q) => {
+        const head = q.queryKey[0];
+        return (
+          typeof head === "string" &&
+          (head.startsWith("/api/venues/") || head.startsWith("/api/runs/"))
+        );
+      },
+    });
   }, [queryClient]);
 
   const trackCalculation = useTrackCalculation();

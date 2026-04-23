@@ -1,0 +1,86 @@
+We found the likely root cause of the venue show history bug.
+
+BUG:
+When a user does a calc and it auto-saves, the run is saved to history, but it is not being linked to the venue profile.
+Venue detail/history reads from runsTable where runsTable.venueId = venue.id.
+Right now the frontend creates/updates the venue, but does NOT reliably pass venueId into the saved run payload.
+
+Please fix this end-to-end.
+
+GOAL:
+Any calc saved from the single show calculator must appear in:
+1. Saved calculations / run history
+2. The linked venue profile show history
+
+ROOT CAUSE TO FIX:
+- Venue detail uses runsTable.venueId to load venue history
+- runs route simply saves what it is given
+- run-form currently calls createOrUpdateVenue, but does not use the returned venue.id in the final createRun/updateRun payload
+- VenueSearch already supports venueId for selected past venues
+- runSelectedVenueId exists in run-form state but is not being properly persisted into the run payload
+
+IMPLEMENT THESE CHANGES:
+
+1. FRONTEND: persist venueId in run-form
+- In artifacts/gig-trail/src/pages/run-form.tsx:
+  - When a venue is selected from VenueSearch, store the selected venueId in state
+  - If user selects an existing venue from the venue database, use that venueId directly
+  - If user types/manual-enters a venue and createOrUpdateVenue is called, capture the returned venue object and set venueId = returnedVenue.id
+  - When venue is cleared, clear runSelectedVenueId
+  - Include venueId in BOTH create and update run payloads
+  - Also include vehicleId if there is already a selected vehicle state available and it should persist
+
+2. FRONTEND: make venue selection robust
+- Ensure the VenueSearch onSelect handler in run-form preserves:
+  - venueName
+  - destination
+  - city/suburb/state/country
+  - lat/lng
+  - venueId
+- If a manual venue is entered and then saved via createOrUpdateVenue, make sure the resulting venueId replaces null before the run save happens
+
+3. BACKEND SAFETY NET
+- In artifacts/api-server/src/routes/runs.ts:
+  - Add a fallback so that if a run is being created/updated with venueName but no venueId, the API attempts to resolve venueId by matching the user’s venue record using normalized venue name
+  - Reuse the same normalization logic used in venues.ts if possible
+  - If a match is found, inject venueId before save
+  - This is a safety net only; frontend should still send venueId properly
+
+4. OPTIONAL BUT IMPORTANT BACKFILL
+- Add a one-off repair utility or admin-safe script that backfills existing runs with missing venueId by matching:
+  - same userId
+  - normalized venue name
+- Only set venueId when there is a single confident match
+- Do not overwrite existing venueId values
+- Put this in a clear script file or a small reusable function so we can run it once for existing bad data
+
+5. QUERY INVALIDATION / UI REFRESH
+- After save, invalidate/refetch all relevant queries so the UI updates immediately:
+  - runs history
+  - venues list
+  - venue detail
+  - dashboard views that depend on runs/venues
+- Ensure the newly saved calc appears on the linked venue page without a manual refresh
+
+6. EDIT FLOW
+- If editing an existing run and the venue changes:
+  - update venueId accordingly
+- If editing and venue is removed:
+  - set venueId to null
+- Make sure changing venue from one saved venue to another updates the relationship correctly
+
+7. TEST / VERIFY
+Please verify these cases:
+- Case A: select an existing venue from venue search, calculate, save => run has venueId and appears in venue profile history
+- Case B: type a new venue manually, calculate, save => venue record is created, run gets returned venue.id, appears in venue profile history
+- Case C: edit an existing saved run and switch venue => venue history moves correctly
+- Case D: clear venue and save => venueId becomes null and venue history no longer shows that run
+- Case E: existing historical runs with missing venueId can be repaired by the backfill
+
+OUTPUT REQUIRED:
+- List files changed
+- Exact root cause
+- What was changed in frontend
+- What was changed in backend
+- Whether a backfill script was added
+- Confirmation that saved run payloads now include venueId
