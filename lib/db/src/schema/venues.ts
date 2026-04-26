@@ -1,4 +1,5 @@
-import { pgTable, text, serial, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, serial, timestamp, integer, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -53,6 +54,11 @@ export const venuesTable = pgTable("venues", {
   cityIdx: index("venues_city_idx").on(table.city),
   stateIdx: index("venues_state_idx").on(table.state),
   normalizedVenueKeyIdx: index("venues_normalized_venue_key_idx").on(table.normalizedVenueKey),
+  // Enforces find-or-create dedupe per user. Partial because legacy rows may
+  // still have a null key; once backfilled they fall under the constraint.
+  userVenueKeyUnique: uniqueIndex("venues_user_id_normalized_key_unique")
+    .on(table.userId, table.normalizedVenueKey)
+    .where(sql`user_id IS NOT NULL AND normalized_venue_key IS NOT NULL`),
 }));
 
 export const insertVenueSchema = createInsertSchema(venuesTable).omit({ id: true, createdAt: true, updatedAt: true });

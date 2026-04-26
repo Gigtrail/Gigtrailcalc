@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable, runsTable, venuesTable } from "@workspace/db";
+import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable, runsTable } from "@workspace/db";
+import { findOrCreateUserVenue } from "../lib/venue-resolver";
 import { requireAuth, getPlanLimits, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateTourBody,
@@ -174,49 +175,25 @@ async function getOwnedTourStop(userId: string, tourId: number, stopId: number) 
   return row ?? null;
 }
 
-function normalizeVenueName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
-function normalizeVenueKey(name: string | null | undefined, city: string | null | undefined, country: string | null | undefined): string {
-  return [name, city, country].map((part) => (part ?? "").trim().toLowerCase()).join("|");
-}
-
 // Immediately find or create a venue for a stop and link it. Returns the venueId.
+// Uses the canonical (userId, name|city|country) key via the shared resolver
+// so manual run saves and tour-stop saves converge on the same venue rows.
 async function syncStopVenue(
   userId: string,
   stopId: number,
   venueName: string,
   city?: string | null,
+  country?: string | null,
 ): Promise<number | null> {
-  const normalized = normalizeVenueName(venueName);
-  if (!normalized) return null;
-
-  const [existing] = await db.select().from(venuesTable)
-    .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
-
-  let venueId: number;
-  if (existing) {
-    if (!existing.city && city) {
-      await db.update(venuesTable)
-        .set({ city, normalizedVenueKey: normalizeVenueKey(existing.name, city, existing.country) })
-        .where(eq(venuesTable.id, existing.id));
-    }
-    venueId = existing.id;
-  } else {
-    const [created] = await db.insert(venuesTable).values({
-      userId,
-      name: venueName.trim(),
-      normalizedVenueName: normalized,
-      normalizedVenueKey: normalizeVenueKey(venueName, city, null),
-      venueType: "personal",
-      city: city ?? null,
-    }).returning();
-    venueId = created.id;
-  }
-
-  await db.update(tourStopsTable).set({ venueId }).where(eq(tourStopsTable.id, stopId));
-  return venueId;
+  const result = await findOrCreateUserVenue({
+    userId,
+    venueName,
+    city: city ?? null,
+    country: country ?? null,
+  });
+  if (!result) return null;
+  await db.update(tourStopsTable).set({ venueId: result.venueId }).where(eq(tourStopsTable.id, stopId));
+  return result.venueId;
 }
 
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, runsTable, venuesTable } from "@workspace/db";
-import { normalizeVenueName } from "./venues";
+import { db, runsTable } from "@workspace/db";
+import { findOrCreateUserVenue } from "../lib/venue-resolver";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateRunBody,
@@ -178,18 +178,27 @@ function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferS
   );
 }
 
-async function findVenueIdByName(userId: string, venueName: unknown): Promise<number | null> {
-  if (typeof venueName !== "string" || !venueName.trim()) return null;
-  const normalized = normalizeVenueName(venueName);
-  if (!normalized) return null;
-
-  const [match] = await db
-    .select({ id: venuesTable.id })
-    .from(venuesTable)
-    .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)))
-    .limit(1);
-
-  return match?.id ?? null;
+async function resolveVenueIdForRun(
+  userId: string,
+  runData: Record<string, unknown>,
+): Promise<number | null> {
+  const venueName = typeof runData.venueName === "string" ? runData.venueName : null;
+  if (!venueName || !venueName.trim()) return null;
+  const result = await findOrCreateUserVenue({
+    userId,
+    venueName,
+    city: typeof runData.city === "string" ? runData.city : null,
+    state: typeof runData.state === "string" ? runData.state : null,
+    country: typeof runData.country === "string" ? runData.country : null,
+  });
+  if (!result) return null;
+  if (result.created) {
+    logger.info(
+      { userId, venueId: result.venueId, venueName },
+      "[Runs] Auto-created venue while saving run",
+    );
+  }
+  return result.venueId;
 }
 
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
@@ -222,14 +231,14 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
     status: derivedStatus,
   };
 
-  // Auto-link manual venue entries to an existing venue when the user typed
-  // a name that matches one of their saved venues. This makes the run show up
-  // on the venue detail page and feeds the venue's performance stats — without
-  // requiring the user to remember to click an autocomplete result.
-  if (!runData.venueId && typeof runData.venueName === "string" && runData.venueName.trim()) {
-    const fallbackVenueId = await findVenueIdByName(userId, runData.venueName);
-    if (fallbackVenueId != null) {
-      runData.venueId = fallbackVenueId;
+  // Every saved run must feed the venue system. Find the matching venue by
+  // (userId, name|city|country) and create a personal venue if none exists.
+  // Without this, the Saved Venues page would stay empty even after saving
+  // shows from the calculator.
+  if (!runData.venueId) {
+    const resolved = await resolveVenueIdForRun(userId, runData);
+    if (resolved != null) {
+      runData.venueId = resolved;
     }
   }
 
@@ -297,10 +306,36 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
       : existingRun.showDate;
 
   const runData: Record<string, unknown> = { ...parsed.data };
-  if (!runData.venueId && typeof runData.venueName === "string" && runData.venueName.trim()) {
-    const fallbackVenueId = await findVenueIdByName(userId, runData.venueName);
-    if (fallbackVenueId != null) {
-      runData.venueId = fallbackVenueId;
+  // Re-resolve venue when either:
+  //  • the run has no link (existing venueId null and client didn't supply one), OR
+  //  • the client is editing any venue identity field (name/city/state/country).
+  // We re-resolve even when the client also echoes back a venueId in the same
+  // payload — a fresh text edit is the more recent signal of intent, and form-
+  // controlled clients commonly send the whole payload back unchanged.
+  // The only way to keep an explicit venueId override is to send a non-null
+  // venueId WITHOUT touching any identity field.
+  // When resolution fails and the client tried to null out venueId, preserve
+  // the existing link rather than silently orphaning the run.
+  const venueIdSpecified = Object.prototype.hasOwnProperty.call(runData, "venueId");
+  const effectiveVenueId =
+    venueIdSpecified ? (runData.venueId as number | null | undefined) : existingRun.venueId;
+  const venueIdentityEdited =
+    Object.prototype.hasOwnProperty.call(runData, "venueName") ||
+    Object.prototype.hasOwnProperty.call(runData, "city") ||
+    Object.prototype.hasOwnProperty.call(runData, "state") ||
+    Object.prototype.hasOwnProperty.call(runData, "country");
+  if (effectiveVenueId == null || venueIdentityEdited) {
+    const merged: Record<string, unknown> = {
+      venueName: runData.venueName ?? existingRun.venueName,
+      city: runData.city ?? existingRun.city,
+      state: runData.state ?? existingRun.state,
+      country: runData.country ?? existingRun.country,
+    };
+    const resolved = await resolveVenueIdForRun(userId, merged);
+    if (resolved != null) {
+      runData.venueId = resolved;
+    } else if (venueIdSpecified && runData.venueId === null && existingRun.venueId != null) {
+      delete runData.venueId;
     }
   }
 
