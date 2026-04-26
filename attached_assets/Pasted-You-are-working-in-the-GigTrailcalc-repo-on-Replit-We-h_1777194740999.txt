@@ -1,0 +1,96 @@
+You are working in the GigTrailcalc repo on Replit.
+
+We have just completed a working implementation of venue/deal persistence:
+- saveDealAndUpsertVenue is the canonical pipeline
+- Calculate now creates a runs row (deal)
+- Tour past-show sync uses the same pipeline
+- All 7 integration scenarios pass
+
+However:
+The live database previously did NOT have the runs.deal_source column, and it was added manually via schema push.
+
+Goal:
+Ensure the database schema is fully reproducible, versioned, and safe for deployment.
+
+DO NOT add features.
+DO NOT refactor working logic.
+ONLY stabilise schema + deployment.
+
+---
+
+## STEP 1 — Verify schema definition
+
+Check:
+- runs schema file (Drizzle or equivalent)
+- Confirm `deal_source` exists and is typed correctly
+
+---
+
+## STEP 2 — Verify migration / schema sync
+
+Check:
+- Is there a migration file that adds `deal_source`?
+- Or is this relying on a manual `db push`?
+
+If missing:
+- Generate a proper migration OR
+- Ensure `drizzle push` (or equivalent) will always create the column on fresh DB
+
+---
+
+## STEP 3 — Test fresh DB scenario (CRITICAL)
+
+Simulate:
+- New environment
+- Empty database
+
+Run:
+- Schema sync
+- API start
+
+Confirm:
+- runs table includes `deal_source`
+- No runtime errors on startup
+
+---
+
+## STEP 4 — Validate full pipeline again
+
+Re-run:
+
+1. Calculate → creates run
+2. Venue created
+3. Venue history populated
+4. Repeat calc → no duplicate venue
+5. Tour stop → venue created
+6. Past show sync → run created
+7. Re-sync → no duplicate
+
+---
+
+## STEP 5 — Build + typecheck
+
+Run:
+pnpm run typecheck
+pnpm run build
+
+Fix any issues if present.
+
+---
+
+## STEP 6 — Output report
+
+Return:
+
+1. Schema status:
+   - Is `deal_source` properly versioned?
+   - Will it exist in a fresh deployment?
+
+2. Files changed (if any)
+
+3. Migration or schema sync method used
+
+4. Any remaining risks
+
+5. Final verdict:
+   Is venue/deal persistence alpha-safe? (Yes/No with reason)
