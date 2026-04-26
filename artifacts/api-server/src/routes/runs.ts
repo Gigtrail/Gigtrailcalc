@@ -1,7 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
 import { db, runsTable } from "@workspace/db";
-import { findOrCreateUserVenue } from "../lib/venue-resolver";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import {
   CreateRunBody,
@@ -20,6 +19,7 @@ import {
   isPastRun,
 } from "../lib/run-lifecycle";
 import { logger } from "../lib/logger";
+import { saveDealAndUpsertVenue } from "../lib/deal-persistence";
 
 const router: IRouter = Router();
 
@@ -86,73 +86,6 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
   };
 }
 
-function toDbRun(data: Record<string, unknown>) {
-  const normalizedData: Record<string, unknown> = { ...data };
-  // Map client-side aliases to their canonical DB columns. The aliases themselves
-  // are NOT real columns and must be removed before insert.
-  if (normalizedData.totalCost === undefined && normalizedData.totalExpenses !== undefined) {
-    normalizedData.totalCost = normalizedData.totalExpenses;
-  }
-  if (normalizedData.totalProfit === undefined && normalizedData.netProfit !== undefined) {
-    normalizedData.totalProfit = normalizedData.netProfit;
-  }
-  if (normalizedData.totalProfit === undefined && normalizedData.profit !== undefined) {
-    normalizedData.totalProfit = normalizedData.profit;
-  }
-  // Legacy → canonical column remaps. Both sides are real columns; we want to
-  // write to the canonical column only (and drop the legacy alias from the
-  // payload) so that reads are unambiguous.
-  if (normalizedData.attendance === undefined && normalizedData.actualAttendance !== undefined) {
-    normalizedData.attendance = normalizedData.actualAttendance;
-  }
-  if (normalizedData.actualIncome === undefined && normalizedData.actualTicketIncome !== undefined) {
-    normalizedData.actualIncome = normalizedData.actualTicketIncome;
-  }
-  if (normalizedData.merch === undefined && normalizedData.actualOtherIncome !== undefined) {
-    normalizedData.merch = normalizedData.actualOtherIncome;
-  }
-  if (normalizedData.showNotes === undefined && normalizedData.notes !== undefined) {
-    normalizedData.showNotes = normalizedData.notes;
-  }
-  // Strip ONLY the alias source fields. Everything else here is a real column
-  // (venueName, city, state, country, totalCost, totalIncome, totalProfit,
-  // actualProfit, calculationSnapshot, etc.) and must be allowed through so the
-  // calc save actually persists what the user entered/calculated.
-  for (const aliasOnly of [
-    "totalExpenses",
-    "netProfit",
-    "profit",
-    "actualAttendance",
-    "actualTicketIncome",
-    "actualOtherIncome",
-    "notes",
-  ]) {
-    delete normalizedData[aliasOnly];
-  }
-
-  const result: Record<string, unknown> = {};
-  const numericFields = new Set([
-    'originLat', 'originLng', 'destinationLat', 'destinationLng',
-    'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
-    'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'bookingFeePerTicket', 'supportActCost',
-    'accommodationNights', 'accommodationCost',
-    'foodCost', 'extraCosts',
-    'actualIncome', 'actualExpenses', 'merch',
-    'totalCost', 'totalIncome', 'totalProfit', 'actualProfit',
-  ]);
-  const dateFields = new Set(['showDate']);
-  for (const [k, v] of Object.entries(normalizedData)) {
-    if (typeof v === 'number' && numericFields.has(k)) {
-      result[k] = String(v);
-    } else if (dateFields.has(k)) {
-      result[k] = (v === "" || v == null) ? null : v;
-    } else {
-      result[k] = v;
-    }
-  }
-  return result;
-}
-
 function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferSelect) {
   const raw = run as typeof runsTable.$inferSelect & {
     actualIncome?: string | number | null;
@@ -176,30 +109,6 @@ function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferS
     },
     "[Runs] Saved run financial snapshot",
   );
-}
-
-async function resolveVenueIdForRun(
-  userId: string,
-  runData: Record<string, unknown>,
-): Promise<number | null> {
-  const venueName = typeof runData.venueName === "string" ? runData.venueName : null;
-  if (!venueName || !venueName.trim()) return null;
-  const result = await findOrCreateUserVenue({
-    userId,
-    venueName,
-    city: typeof runData.city === "string" ? runData.city : null,
-    state: typeof runData.state === "string" ? runData.state : null,
-    country: typeof runData.country === "string" ? runData.country : null,
-    profileId: typeof runData.profileId === "number" ? runData.profileId : null,
-  });
-  if (!result) return null;
-  if (result.created) {
-    logger.info(
-      { userId, venueId: result.venueId, venueName },
-      "[Runs] Auto-created venue while saving run",
-    );
-  }
-  return result.venueId;
 }
 
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
@@ -232,25 +141,21 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
     status: derivedStatus,
   };
 
-  // Every saved run must feed the venue system. Find the matching venue by
-  // (userId, name|city|country) and create a personal venue if none exists.
-  // Without this, the Saved Venues page would stay empty even after saving
-  // shows from the calculator.
-  if (!runData.venueId) {
-    const resolved = await resolveVenueIdForRun(userId, runData);
-    if (resolved != null) {
-      runData.venueId = resolved;
-    }
-  }
-
   // Multiple runs for the same venue/date are valid GigTrail scenarios.
   // Preserve them instead of auto-collapsing drafts.
-  const [run] = await db
-    .insert(runsTable)
-    .values({ ...toDbRun(runData as Record<string, unknown>) as typeof runsTable.$inferInsert, userId })
-    .returning();
+  const saved = await saveDealAndUpsertVenue({
+    userId,
+    runData,
+    dealSource: "single_show",
+  });
+  const { run } = saved;
   logSavedRun("created", run);
-  res.status(201).json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
+  res.status(201).json({
+    ...GetRunResponse.parse(serializeRun(run, todayIsoDate)),
+    dealId: saved.dealId,
+    runId: saved.runId,
+    createdVenue: saved.createdVenue,
+  });
 });
 
 router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
@@ -307,54 +212,23 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
       : existingRun.showDate;
 
   const runData: Record<string, unknown> = { ...parsed.data };
-  // Re-resolve venue when either:
-  //  • the run has no link (existing venueId null and client didn't supply one), OR
-  //  • the client is editing any venue identity field (name/city/state/country).
-  // We re-resolve even when the client also echoes back a venueId in the same
-  // payload — a fresh text edit is the more recent signal of intent, and form-
-  // controlled clients commonly send the whole payload back unchanged.
-  // The only way to keep an explicit venueId override is to send a non-null
-  // venueId WITHOUT touching any identity field.
-  // When resolution fails and the client tried to null out venueId, preserve
-  // the existing link rather than silently orphaning the run.
-  const venueIdSpecified = Object.prototype.hasOwnProperty.call(runData, "venueId");
-  const effectiveVenueId =
-    venueIdSpecified ? (runData.venueId as number | null | undefined) : existingRun.venueId;
-  const venueIdentityEdited =
-    Object.prototype.hasOwnProperty.call(runData, "venueName") ||
-    Object.prototype.hasOwnProperty.call(runData, "city") ||
-    Object.prototype.hasOwnProperty.call(runData, "state") ||
-    Object.prototype.hasOwnProperty.call(runData, "country");
-  if (effectiveVenueId == null || venueIdentityEdited) {
-    const merged: Record<string, unknown> = {
-      venueName: runData.venueName ?? existingRun.venueName,
-      city: runData.city ?? existingRun.city,
-      state: runData.state ?? existingRun.state,
-      country: runData.country ?? existingRun.country,
-    };
-    const resolved = await resolveVenueIdForRun(userId, merged);
-    if (resolved != null) {
-      runData.venueId = resolved;
-    } else if (venueIdSpecified && runData.venueId === null && existingRun.venueId != null) {
-      delete runData.venueId;
-    }
-  }
-
-  const [run] = await db.update(runsTable)
-    .set(
-      toDbRun({
-        ...runData,
-        status: getDefaultSavedCalculationStatus(effectiveShowDate, todayIsoDate),
-      } as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>,
-    )
-    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
-    .returning();
-  if (!run) {
-    res.status(404).json({ error: "Run not found" });
-    return;
-  }
-  logSavedRun("updated", run);
-  res.json(UpdateRunResponse.parse(serializeRun(run, todayIsoDate)));
+  const saved = await saveDealAndUpsertVenue({
+    userId,
+    runData: {
+      ...runData,
+      status: getDefaultSavedCalculationStatus(effectiveShowDate, todayIsoDate),
+    },
+    dealSource: existingRun.dealSource === "tour_show" ? "tour_show" : "single_show",
+    existingRun,
+  });
+  const savedRun = saved.run;
+  logSavedRun("updated", savedRun);
+  res.json({
+    ...UpdateRunResponse.parse(serializeRun(savedRun, todayIsoDate)),
+    dealId: saved.dealId,
+    runId: saved.runId,
+    createdVenue: saved.createdVenue,
+  });
 });
 
 router.delete("/runs/:id", requireAuth, async (req, res): Promise<void> => {

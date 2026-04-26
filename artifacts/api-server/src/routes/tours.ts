@@ -31,6 +31,7 @@ import { loadTourDerivations } from "../lib/tour-derivations";
 import { getDefaultSavedCalculationStatus, getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 import { checkTourDuplicateName } from "../lib/duplicate-protection";
 import { parseIntegerParam } from "../lib/request-params";
+import { saveDealAndUpsertVenue } from "../lib/deal-persistence";
 
 const router: IRouter = Router();
 
@@ -452,88 +453,91 @@ router.post("/tours/:tourId/stops/:stopId/past-show", requireAuth, async (req, r
 
   console.log("[Tours] Syncing stop to past show", { userId, tourId, stopId });
 
-  // Use existing venueId from stop (already synced on save), or find/create as fallback
-  let venueId: number | null = stop.venueId ?? null;
-  if (!venueId && stop.venueName?.trim()) {
-    venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
-  }
-
-  // 2. Check if a Past Show already exists for this stop
+  // 2. Check if a Past Show already exists for this stop so manually-entered
+  // actuals are preserved during repeat syncs. The shared deal helper also
+  // performs this lookup by sourceStopId before inserting, preventing duplicates.
   const [existingRun] = await db.select().from(runsTable)
     .where(and(eq(runsTable.userId, userId), eq(runsTable.sourceStopId, stopId)));
 
   const fee = stop.fee != null ? Number(stop.fee) : null;
   const guarantee = stop.guarantee != null ? Number(stop.guarantee) : null;
   const merch = stop.merchEstimate != null ? Number(stop.merchEstimate) : null;
+  const ticketPrice = stop.ticketPrice != null ? Number(stop.ticketPrice) : null;
+  const expectedAttendancePct = stop.expectedAttendancePct != null ? Number(stop.expectedAttendancePct) : null;
+  const splitPct = stop.splitPct != null ? Number(stop.splitPct) : null;
+  const marketingCost = stop.marketingCost != null ? Number(stop.marketingCost) : null;
+  const accommodationCost = stop.accommodationCost != null ? Number(stop.accommodationCost) : null;
+  const extraCosts = stop.extraCosts != null ? Number(stop.extraCosts) : null;
   const todayIsoDate = getTodayIsoDateFromRequest(req);
   const estimatedFinancials = estimatePastShowFinancialsFromStop(stop);
-
-  if (existingRun) {
-    // Update only planned fields; preserve any actual values already entered
-    const update: Partial<typeof runsTable.$inferInsert> = {
-      venueName: stop.venueName ?? existingRun.venueName,
-      city: stop.city ?? existingRun.city,
-      showDate: stop.date ?? existingRun.showDate,
-      status: getDefaultSavedCalculationStatus(stop.date ?? existingRun.showDate, todayIsoDate),
-      showType: stop.showType,
-      fee: fee != null ? String(fee) : existingRun.fee,
-      guarantee: guarantee != null ? String(guarantee) : existingRun.guarantee,
-      merchEstimate: merch != null ? String(merch) : existingRun.merchEstimate,
-      notes: existingRun.actualProfit != null ? existingRun.notes : (stop.notes ?? existingRun.notes),
-      venueId: venueId ?? existingRun.venueId,
-      tourName: tour.name,
-      totalIncome:
-        existingRun.totalIncome != null
-          ? existingRun.totalIncome
-          : estimatedFinancials
-            ? String(estimatedFinancials.totalIncome)
-            : existingRun.totalIncome,
-      totalCost:
-        existingRun.totalCost != null
-          ? existingRun.totalCost
-          : estimatedFinancials
-            ? String(estimatedFinancials.totalCost)
-            : existingRun.totalCost,
-      totalProfit:
-        existingRun.totalProfit != null
-          ? existingRun.totalProfit
-          : estimatedFinancials
-            ? String(estimatedFinancials.totalProfit)
-            : existingRun.totalProfit,
-    };
-    const [updated] = await db.update(runsTable).set(update).where(eq(runsTable.id, existingRun.id)).returning();
-    res.json({ ...updated, id: updated.id, createdPastShow: false });
-    return;
-  }
-
-  // 3. Create new synced show record
-  const [created] = await db.insert(runsTable).values({
-    userId,
-    venueId,
-    venueName: stop.venueName ?? null,
-    city: stop.city ?? null,
-    showDate: stop.date ?? null,
-    status: getDefaultSavedCalculationStatus(stop.date ?? null, todayIsoDate),
-    showType: stop.showType,
-    fee: fee != null ? String(fee) : null,
-    guarantee: guarantee != null ? String(guarantee) : null,
-    merchEstimate: merch != null ? String(merch) : null,
-    notes: stop.notes ?? null,
-    distanceKm: "0",
-    fuelPrice: "0",
-    totalIncome: estimatedFinancials ? String(estimatedFinancials.totalIncome) : null,
-    totalCost: estimatedFinancials ? String(estimatedFinancials.totalCost) : null,
-    totalProfit: estimatedFinancials ? String(estimatedFinancials.totalProfit) : null,
-    returnTrip: false,
+  const showDate = stop.date ?? existingRun?.showDate ?? null;
+  const runData: Record<string, unknown> = {
+    profileId: tour.profileId ?? existingRun?.profileId ?? null,
+    vehicleId: tour.vehicleId ?? existingRun?.vehicleId ?? null,
+    venueId: stop.venueId ?? existingRun?.venueId ?? null,
+    venueName: stop.venueName ?? existingRun?.venueName ?? null,
+    city: stop.city ?? existingRun?.city ?? null,
+    showDate,
+    status: getDefaultSavedCalculationStatus(showDate, todayIsoDate),
+    showType: stop.showType ?? existingRun?.showType ?? null,
+    fee: fee ?? existingRun?.fee ?? null,
+    capacity: stop.capacity ?? existingRun?.capacity ?? null,
+    ticketPrice: ticketPrice ?? existingRun?.ticketPrice ?? null,
+    expectedAttendancePct: expectedAttendancePct ?? existingRun?.expectedAttendancePct ?? null,
+    dealType: stop.dealType ?? existingRun?.dealType ?? null,
+    splitPct: splitPct ?? existingRun?.splitPct ?? null,
+    guarantee: guarantee ?? existingRun?.guarantee ?? null,
+    merchEstimate: merch ?? existingRun?.merchEstimate ?? null,
+    marketingCost: marketingCost ?? existingRun?.marketingCost ?? null,
+    accommodationCost: accommodationCost ?? existingRun?.accommodationCost ?? null,
+    extraCosts: extraCosts ?? existingRun?.extraCosts ?? null,
+    notes: existingRun?.actualProfit != null ? existingRun.notes : (stop.notes ?? existingRun?.notes ?? null),
+    distanceKm: existingRun?.distanceKm ?? 0,
+    fuelPrice: existingRun?.fuelPrice ?? 0,
+    totalIncome:
+      existingRun?.totalIncome != null
+        ? existingRun.totalIncome
+        : estimatedFinancials?.totalIncome ?? null,
+    totalCost:
+      existingRun?.totalCost != null
+        ? existingRun.totalCost
+        : estimatedFinancials?.totalCost ?? null,
+    totalProfit:
+      existingRun?.totalProfit != null
+        ? existingRun.totalProfit
+        : estimatedFinancials?.totalProfit ?? null,
+    returnTrip: existingRun?.returnTrip ?? false,
     sourceTourId: tourId,
     sourceStopId: stopId,
     importedFromTour: true,
-    importedAt: new Date(),
+    importedAt: existingRun?.importedAt ?? new Date(),
     tourName: tour.name,
-    accommodationRequired: false,
-  }).returning();
+    accommodationRequired: existingRun?.accommodationRequired ?? false,
+  };
 
-  res.status(201).json({ ...created, id: created.id, createdPastShow: true });
+  const saved = await saveDealAndUpsertVenue({
+    userId,
+    dealSource: "tour_show",
+    runData,
+    existingRun,
+  });
+
+  if (stop.venueId == null && saved.venueId != null) {
+    await db
+      .update(tourStopsTable)
+      .set({ venueId: saved.venueId })
+      .where(and(eq(tourStopsTable.id, stopId), eq(tourStopsTable.tourId, tourId)));
+  }
+
+  const statusCode = saved.createdDeal ? 201 : 200;
+  res.status(statusCode).json({
+    ...saved.run,
+    id: saved.run.id,
+    createdPastShow: saved.createdDeal,
+    venueId: saved.venueId,
+    dealId: saved.dealId,
+    createdVenue: saved.createdVenue,
+  });
 });
 
 // ─── Tour Vehicles ──────────────────────────────────────────────────────────

@@ -12,8 +12,12 @@ export function normalizeVenueName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeVenueKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function normalizeVenueKey(name: string | null | undefined, city: string | null | undefined, country: string | null | undefined): string {
-  return [name, city, country].map((part) => (part ?? "").trim().toLowerCase()).join("|");
+  return [normalizeVenueName(name ?? ""), normalizeVenueKeyPart(city), normalizeVenueKeyPart(country)].join("|");
 }
 
 function serializeVenue(v: typeof venuesTable.$inferSelect) {

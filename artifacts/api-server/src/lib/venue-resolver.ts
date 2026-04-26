@@ -5,12 +5,24 @@ export function normalizeVenueName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeVenueKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function normalizeVenueKey(
   name: string | null | undefined,
   city: string | null | undefined,
   country: string | null | undefined,
 ): string {
-  return [name, city, country].map((p) => (p ?? "").trim().toLowerCase()).join("|");
+  return [normalizeVenueName(name ?? ""), normalizeVenueKeyPart(city), normalizeVenueKeyPart(country)].join("|");
+}
+
+function normalizeLegacyVenueKey(
+  name: string | null | undefined,
+  city: string | null | undefined,
+  country: string | null | undefined,
+): string {
+  return [name, city, country].map(normalizeVenueKeyPart).join("|");
 }
 
 export interface VenueIdentity {
@@ -39,9 +51,10 @@ export interface VenueResolutionResult {
  *
  * Lookup strategy:
  *  1. Match by canonical (userId, normalizedVenueKey).
- *  2. Fall back to legacy (userId, normalizedVenueName) when the canonical
- *     key is empty — covers venues created before the key column existed
- *     and prevents accidental duplication.
+ *  2. Fall back to the old raw-name key format for rows saved before the
+ *     key normalization was tightened.
+ *  3. Fall back to legacy (userId, normalizedVenueName) when the canonical
+ *     key is null, covering venues created before the key column existed.
  *
  * When the legacy match is used, we opportunistically backfill the key,
  * city, state, and country on that row so subsequent lookups hit step 1.
@@ -58,6 +71,7 @@ export async function findOrCreateUserVenue(
   const state = identity.state?.trim() || null;
   const country = identity.country?.trim() || null;
   const key = normalizeVenueKey(name, city, country);
+  const legacyKey = normalizeLegacyVenueKey(name, city, country);
 
   const [byKey] = await db
     .select({
@@ -72,6 +86,18 @@ export async function findOrCreateUserVenue(
     .limit(1);
 
   if (byKey) return { venueId: byKey.id, created: false };
+
+  if (legacyKey !== key) {
+    const [byLegacyKey] = await db
+      .select({ id: venuesTable.id })
+      .from(venuesTable)
+      .where(and(eq(venuesTable.userId, identity.userId), eq(venuesTable.normalizedVenueKey, legacyKey)))
+      .limit(1);
+
+    if (byLegacyKey) {
+      return { venueId: byLegacyKey.id, created: false };
+    }
+  }
 
   // Legacy fallback: venues saved before the canonical key existed have a
   // null key. Match by (userId, normalizedVenueName) and prefer rows whose

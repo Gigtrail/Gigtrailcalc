@@ -66,6 +66,7 @@ export const runsTable = pgTable("runs", {
   actualOtherIncome: numeric("actual_other_income", { precision: 10, scale: 2 }),
   actualProfit: numeric("actual_profit", { precision: 10, scale: 2 }),
   calculationSnapshot: jsonb("calculation_snapshot").$type<Record<string, unknown>>(),
+  dealSource: text("deal_source", { enum: ["single_show", "tour_show", "manual", "import"] }),
   country: text("country"),
   venueName: text("venue_name"),
   city: text("city"),

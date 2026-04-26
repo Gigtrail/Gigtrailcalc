@@ -1668,6 +1668,7 @@ export default function RunForm() {
   const [lastCalcKey, setLastCalcKey] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState(false);
   const celebrateTimeoutRef = useRef<number | null>(null);
+  const calculateInFlightRef = useRef(false);
 
   // Build a stable signature of inputs that affect the calc result.
   // Used to detect when the displayed result is "stale" after edits.
@@ -1716,10 +1717,15 @@ export default function RunForm() {
   }, []);
 
   const handleCalculate = useCallback(async () => {
+    if (calculateInFlightRef.current) {
+      return;
+    }
+    calculateInFlightRef.current = true;
     // Validate the form before navigating to results so users can't reach the
     // results page with missing required inputs.
     const valid = await form.trigger();
     if (!valid) {
+      calculateInFlightRef.current = false;
       toast({
         title: "Check your inputs",
         description: "Some required fields are missing or invalid. Fix the highlighted fields and try again.",
@@ -1730,6 +1736,7 @@ export default function RunForm() {
     const vals = form.getValues();
     const profileId = vals.profileId;
     if (usageReached) {
+      calculateInFlightRef.current = false;
       setShowLimitModal(true);
       return;
     }
@@ -1832,7 +1839,8 @@ export default function RunForm() {
         const firstPart = dest?.split(",")[0]?.trim();
         return firstPart || null;
       })();
-      if (calcVenueName && calcCity && runSelectedVenueId == null) {
+      let resolvedVenueId = runSelectedVenueId;
+      if (calcVenueName && calcCity && resolvedVenueId == null) {
         try {
           const venue = await createOrUpdateVenue.mutateAsync({
             data: {
@@ -1843,6 +1851,7 @@ export default function RunForm() {
               country: vals.country || null,
             },
           });
+          resolvedVenueId = venue.id;
           setRunSelectedVenueId(venue.id);
           queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
         } catch (venueErr) {
@@ -1859,14 +1868,18 @@ export default function RunForm() {
       const vehicleOverrides = selectedVehicle
         ? { vehicleConsumption: selectedVehicle.avgConsumption, vehicleFuelType: selectedVehicle.fuelType }
         : {};
+      const valuesAtCalculation = {
+        ...form.getValues(),
+        distanceKm: routeOverride.distanceKm ?? form.getValues("distanceKm"),
+      };
 
       // Pass room overrides only — accommodationNights comes from the form value the user set
-      const computed = computeGigResults(vals, {
+      const computed = computeGigResults(valuesAtCalculation, {
         ...routeOverride,
         ...vehicleOverrides,
-        accommodationRequired: vals.accommodationRequired ?? false,
-        singleRooms: Number(vals.singleRooms) || 0,
-        doubleRooms: Number(vals.doubleRooms) || 0,
+        accommodationRequired: valuesAtCalculation.accommodationRequired ?? false,
+        singleRooms: Number(valuesAtCalculation.singleRooms) || 0,
+        doubleRooms: Number(valuesAtCalculation.doubleRooms) || 0,
       });
 
       // StatusIcon is a React component — not JSON-serializable; exclude it
@@ -1896,11 +1909,11 @@ export default function RunForm() {
       //     results page. This is the "payoff moment" — the form no longer
       //     shows results inline. The snapshot mirrors the saved-run snapshot
       //     so the results page can render with full context.
-      const profile = profiles?.find((p) => p.id === vals.profileId);
+      const profile = profiles?.find((p) => p.id === valuesAtCalculation.profileId);
       const peopleCount = profile?.peopleCount ?? 1;
       const expectedTicketsSold =
-        vals.capacity != null && vals.expectedAttendancePct != null
-          ? Math.round(Number(vals.capacity) * (Number(vals.expectedAttendancePct) / 100))
+        valuesAtCalculation.capacity != null && valuesAtCalculation.expectedAttendancePct != null
+          ? Math.round(Number(valuesAtCalculation.capacity) * (Number(valuesAtCalculation.expectedAttendancePct) / 100))
           : 0;
       const { library: snapMemberLib, activeMemberIds: snapActiveMemberIds } = profile
         ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
@@ -1932,13 +1945,13 @@ export default function RunForm() {
         distanceKm: computed.distanceKm,
         driveTimeMinutes: computed.driveTimeMinutes ?? null,
         fuelUsedLitres: computed.fuelUsedLitres,
-        recommendedNights: Math.max(0, (Number(vals.accommodationNights) || 0) - 1),
+        recommendedNights: Math.max(0, (Number(valuesAtCalculation.accommodationNights) || 0) - 1),
         maxDriveHoursPerDay: Number(profile?.maxDriveHoursPerDay) || DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
-        accomSingleRooms: Number(vals.singleRooms) || 0,
-        accomDoubleRooms: Number(vals.doubleRooms) || 0,
+        accomSingleRooms: Number(valuesAtCalculation.singleRooms) || 0,
+        accomDoubleRooms: Number(valuesAtCalculation.doubleRooms) || 0,
         estimatedAccomCostFromDrive: computed.accommodationCost ?? 0,
         formData: {
-          ...vals,
+          ...valuesAtCalculation,
           actType: profile?.actType ?? null,
           accommodationCost: computed.accommodationCost,
           totalCost: computed.totalCost,
@@ -1961,21 +1974,66 @@ export default function RunForm() {
         calculationVersion: CALC_ENGINE_VERSION,
         calculatedAt: new Date().toISOString(),
         snapshotMembers,
-        runLifecycleStatus: getSavedCalculationStatusForPersist(vals.showDate),
+        runLifecycleStatus: getSavedCalculationStatusForPersist(valuesAtCalculation.showDate),
       };
 
+      let resultPath = "/runs/results";
+      let resultForStorage: Record<string, unknown> = transientResult;
       try {
-        sessionStorage.setItem("gigtrail_result", JSON.stringify(transientResult));
+        const fallbackCity = (() => {
+          const city = valuesAtCalculation.city?.trim();
+          if (city) return city;
+          const destination = valuesAtCalculation.destination?.trim();
+          const firstPart = destination?.split(",")[0]?.trim();
+          return firstPart || null;
+        })();
+        const calculateSavePayload = {
+          ...valuesAtCalculation,
+          dealSource: "single_show" as const,
+          city: fallbackCity,
+          venueId: resolvedVenueId,
+          vehicleId: runVehicleId,
+          accommodationCost: computed.accommodationCost,
+          totalCost: computed.totalCost,
+          totalIncome: computed.totalIncome,
+          totalProfit: computed.netProfit,
+          calculationSnapshot: transientResult,
+        };
+        const savedRun = await createRun.mutateAsync({ data: calculateSavePayload });
+        resolvedVenueId = savedRun.venueId ?? resolvedVenueId;
+        if (resolvedVenueId != null) setRunSelectedVenueId(resolvedVenueId);
+        invalidateRunDashboardQueries();
+        resultPath = `/runs/results?runId=${savedRun.id}`;
+        resultForStorage = {
+          ...transientResult,
+          runId: savedRun.id,
+          savedRunId: savedRun.id,
+          saveFailed: false,
+          runLifecycleStatus: getRunLifecycleState(savedRun),
+        };
+      } catch (saveErr) {
+        console.error("[RunForm] Calculate save failed:", saveErr);
+        resultForStorage = { ...transientResult, saveFailed: true };
+        trackEvent("save_failed", { entity_type: "run", error_message: String(saveErr) });
+        toast({
+          title: "Result calculated, but not saved",
+          description: "Showing the result from this session. Try Save Show from the calculator if it does not appear in history.",
+          variant: "destructive",
+        });
+      }
+
+      try {
+        sessionStorage.setItem("gigtrail_result", JSON.stringify(resultForStorage));
         // Always persist the inputs as a draft. The results page uses this on
         // "Edit Inputs" to round-trip the user back to the form with the
         // EXACT values they just calculated with — including unsaved edits
         // when calculating from /runs/:id/edit (where reloading the run from
         // the DB would otherwise overwrite their changes).
-        sessionStorage.setItem("gigtrail_form_draft", JSON.stringify(vals));
+        sessionStorage.setItem("gigtrail_form_draft", JSON.stringify(valuesAtCalculation));
       } catch (storageErr) {
         console.warn("[RunForm] Could not persist result to sessionStorage", storageErr);
       }
-      setLocation("/runs/results");
+      setLocation(resultPath);
       return;
 
       /* Legacy save-and-redirect flow removed to keep calculation inline and repeatable.
@@ -2192,8 +2250,9 @@ export default function RunForm() {
       }
     } finally {
       setIsCalculating(false);
+      calculateInFlightRef.current = false;
     }
-  }, [buildCalcKey, calcUsage, computeGigResults, distanceMode, form, isEditing, isPro, profiles, queryClient, runId, runSelectedVenueId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
+  }, [buildCalcKey, calcUsage, computeGigResults, createRun, createOrUpdateVenue, distanceMode, form, invalidateRunDashboardQueries, isEditing, isPro, profiles, queryClient, runId, runSelectedVenueId, runVehicleId, setLocation, toast, trackCalculation, usageReached, vehicles]);
 
   // Restore form draft saved by the calculator when user clicks "Edit Inputs"
   // on the results page. For new runs (/runs/new) we apply on mount. For edits
