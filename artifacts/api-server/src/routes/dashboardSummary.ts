@@ -245,6 +245,11 @@ function isCompletedPastShowRun(run: RunRecord, todayIsoDate: string): boolean {
     return true;
   }
 
+  const showDate = getIsoDate(run.showDate);
+  if (!showDate || showDate >= todayIsoDate) {
+    return false;
+  }
+
   const status = String((run as unknown as JsonRecord).status ?? "")
     .trim()
     .toLowerCase();
