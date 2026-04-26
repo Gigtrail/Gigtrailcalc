@@ -12,6 +12,13 @@ import {
   useUpdateAdminFeedback,
   useDeleteAdminFeedback,
   useRestoreAdminFeedback,
+  usePreviewVenueImport,
+  useSaveVenueImport,
+  useAdminVenueImports,
+  useVenueImportRows,
+  useImportReadyVenueRows,
+  type VenueImportRow,
+  type VenueImportStatus,
   type AdminFeedbackPost,
   type AdminFeedbackCategory,
   type AdminFeedbackStatus,
@@ -60,6 +67,9 @@ import {
   ChevronUp,
   RotateCcw,
   Reply,
+  Upload,
+  Database,
+  FileText,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -322,6 +332,229 @@ function UsersSection() {
 }
 
 // ─── Promo Codes Section ──────────────────────────────────────────────────────
+
+const IMPORT_STATUS_LABELS: Record<VenueImportStatus, string> = {
+  unverified: "Unverified",
+  ready_to_import: "Ready",
+  needs_review: "Needs review",
+  duplicate: "Duplicate",
+  missing_required: "Missing required",
+  imported: "Imported",
+  skipped: "Skipped",
+};
+
+const IMPORT_STATUS_CLASSES: Record<VenueImportStatus, string> = {
+  unverified: "bg-slate-50 text-slate-700 border-slate-200",
+  ready_to_import: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  needs_review: "bg-amber-50 text-amber-800 border-amber-200",
+  duplicate: "bg-indigo-50 text-indigo-800 border-indigo-200",
+  missing_required: "bg-red-50 text-red-800 border-red-200",
+  imported: "bg-green-50 text-green-800 border-green-200",
+  skipped: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+function ImportStatusBadge({ status }: { status: VenueImportStatus }) {
+  return (
+    <Badge className={cn("text-[10px] px-2 py-0 border font-medium", IMPORT_STATUS_CLASSES[status])}>
+      {IMPORT_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+function VenueImportRowPreview({ row }: { row: VenueImportRow }) {
+  return (
+    <div className="grid grid-cols-[1fr_140px_110px_120px] gap-3 items-center border-b border-slate-100 py-2 text-xs last:border-0">
+      <div className="min-w-0">
+        <p className="font-semibold text-slate-900 truncate">{row.venueName ?? "(missing venue)"}</p>
+        <p className="text-slate-500 truncate">{[row.cityTown, row.country].filter(Boolean).join(", ") || "No location"}</p>
+      </div>
+      <p className="text-slate-500 truncate">{row.sourceSheet ?? "-"}</p>
+      <p className="text-slate-500">{row.sourceRowNumber ?? "-"}</p>
+      <div className="flex justify-end">
+        <ImportStatusBadge status={row.importStatus} />
+      </div>
+    </div>
+  );
+}
+
+function VenueImportSection() {
+  const [fileName, setFileName] = useState("");
+  const [csvText, setCsvText] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<VenueImportStatus | "">("");
+  const previewImport = usePreviewVenueImport();
+  const saveImport = useSaveVenueImport();
+  const batchesQuery = useAdminVenueImports();
+  const rowsQuery = useVenueImportRows(selectedBatchId, statusFilter);
+  const approveImport = useImportReadyVenueRows();
+  const { toast } = useToast();
+
+  const preview = previewImport.data;
+  const batches = batchesQuery.data?.batches ?? [];
+  const selectedBatch = rowsQuery.data?.batch ?? batches.find((batch) => batch.id === selectedBatchId) ?? null;
+  const displayedRows = rowsQuery.data?.rows ?? preview?.rows ?? [];
+  const summary = preview?.summary ?? selectedBatch;
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setFileName(file.name);
+    setCsvText(text);
+    setSelectedBatchId(null);
+    setStatusFilter("");
+    previewImport.reset();
+  }
+
+  async function handlePreview() {
+    try {
+      await previewImport.mutateAsync({ csvText });
+    } catch (e: unknown) {
+      toast({ title: "Preview failed", description: e instanceof Error ? e.message : "Could not parse CSV", variant: "destructive" });
+    }
+  }
+
+  async function handleSave() {
+    try {
+      const result = await saveImport.mutateAsync({ csvText, fileName: fileName || "venue-import.csv" });
+      setSelectedBatchId(result.batch.id);
+      toast({ title: "Import staged", description: `${result.summary.totalRows} rows saved for admin review.` });
+    } catch (e: unknown) {
+      toast({ title: "Save failed", description: e instanceof Error ? e.message : "Could not save import", variant: "destructive" });
+    }
+  }
+
+  async function handleApproveReady() {
+    if (!selectedBatchId) return;
+    try {
+      const result = await approveImport.mutateAsync(selectedBatchId);
+      toast({ title: "Ready rows imported", description: `${result.imported} imported, ${result.skipped} skipped.` });
+      rowsQuery.refetch();
+    } catch (e: unknown) {
+      toast({ title: "Import failed", description: e instanceof Error ? e.message : "Could not import ready rows", variant: "destructive" });
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <Database className="w-5 h-5 text-primary" />
+          Venue Import
+        </h3>
+        <Badge className="bg-slate-100 text-slate-700 border-none">Admin only</Badge>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="flex-1">
+            <label className="text-xs text-muted-foreground mb-1 block">Europe venue CSV</label>
+            <Input type="file" accept=".csv,text/csv" onChange={handleFileChange} className="bg-white" />
+          </div>
+          <Button onClick={handlePreview} disabled={!csvText || previewImport.isPending} variant="outline" className="gap-2">
+            <FileText className="w-4 h-4" />
+            {previewImport.isPending ? "Parsing..." : "Preview"}
+          </Button>
+          <Button onClick={handleSave} disabled={!preview || saveImport.isPending} className="gap-2">
+            <Upload className="w-4 h-4" />
+            {saveImport.isPending ? "Saving..." : "Save rows"}
+          </Button>
+        </div>
+
+        {summary && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {[
+              ["Total", summary.totalRows],
+              ["Ready", summary.readyRows],
+              ["Duplicates", summary.duplicateRows],
+              ["Needs review", summary.needsReviewRows],
+              ["Missing required", summary.missingRequiredRows],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] uppercase text-slate-500 font-semibold">{label}</p>
+                <p className="text-xl font-bold text-slate-900">{value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+          <p className="text-sm font-semibold text-slate-900 px-1">Staged batches</p>
+          {batchesQuery.isLoading ? (
+            <Skeleton className="h-20 rounded-lg" />
+          ) : batches.length === 0 ? (
+            <p className="text-xs text-slate-500 px-1 py-4">No venue imports staged yet.</p>
+          ) : (
+            batches.map((batch) => (
+              <button
+                key={batch.id}
+                onClick={() => { setSelectedBatchId(batch.id); setStatusFilter(""); }}
+                className={cn(
+                  "w-full text-left rounded-lg border px-3 py-2 transition-colors",
+                  selectedBatchId === batch.id ? "border-primary/50 bg-primary/5" : "border-slate-100 hover:border-slate-200"
+                )}
+              >
+                <p className="text-xs font-semibold text-slate-900 truncate">{batch.fileName}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{batch.totalRows} rows - {format(new Date(batch.createdAt), "MMM d, yyyy")}</p>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-w-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                {selectedBatch ? selectedBatch.fileName : preview ? "Preview rows" : "Rows"}
+              </p>
+              <p className="text-xs text-slate-500">Showing up to 200 staged rows, or the first 50 preview rows.</p>
+            </div>
+            <div className="flex gap-2">
+              {selectedBatchId && (
+                <select
+                  className="text-sm border border-slate-200 rounded-md px-3 py-2 bg-white focus:outline-none"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as VenueImportStatus | "")}
+                >
+                  <option value="">All statuses</option>
+                  {(Object.entries(IMPORT_STATUS_LABELS) as [VenueImportStatus, string][]).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              )}
+              <Button
+                onClick={handleApproveReady}
+                disabled={!selectedBatchId || !selectedBatch?.readyRows || approveImport.isPending}
+                className="gap-2"
+              >
+                <Check className="w-4 h-4" />
+                {approveImport.isPending ? "Importing..." : "Import ready"}
+              </Button>
+            </div>
+          </div>
+
+          {rowsQuery.isLoading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+            </div>
+          ) : displayedRows.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-10">Upload a CSV or select a staged batch.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="min-w-[620px]">
+                {displayedRows.map((row, index) => (
+                  <VenueImportRowPreview key={row.id ?? `${row.duplicateKey}-${index}`} row={row} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 const PROMO_ROLE_COLOR: Record<string, string> = {
   pro: "bg-amber-50 text-amber-800 border-amber-200",
@@ -1072,6 +1305,9 @@ export default function Admin() {
 
         {/* Users (metric cards + grid) */}
         <UsersSection />
+
+        {/* Venue Import */}
+        <VenueImportSection />
 
         {/* Promo Codes */}
         <PromoCodesSection />

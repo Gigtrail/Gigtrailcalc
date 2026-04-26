@@ -17,10 +17,25 @@ import {
 const FEEDBACK_CATEGORIES = new Set(["bug", "feature_request", "improvement", "ux_issue"]);
 const FEEDBACK_STATUSES = new Set(["planned", "in_progress", "released"]);
 const FEEDBACK_SORTS = new Set(["newest", "oldest", "top_voted"]);
+const IMPORT_STATUSES = [
+  "unverified",
+  "ready_to_import",
+  "needs_review",
+  "duplicate",
+  "missing_required",
+  "imported",
+  "skipped",
+] as const;
 const VENUE_IMPORT_PREVIEW_LIMIT = 50;
 const VENUE_IMPORT_INSERT_CHUNK_SIZE = 500;
 
 const router: IRouter = Router();
+
+type ImportStatus = (typeof IMPORT_STATUSES)[number];
+
+function isImportStatus(value: unknown): value is ImportStatus {
+  return typeof value === "string" && IMPORT_STATUSES.includes(value as ImportStatus);
+}
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
@@ -223,7 +238,6 @@ router.get("/admin/venue-imports/:id/rows", requireAuth, requireAdmin, async (re
     return;
   }
   const status = firstParam(req.query.status)?.trim();
-  const validStatuses = new Set(["ready_to_import", "duplicate", "needs_review", "missing_required", "imported", "skipped", "unverified"]);
 
   const [batch] = await db
     .select()
@@ -236,8 +250,8 @@ router.get("/admin/venue-imports/:id/rows", requireAuth, requireAdmin, async (re
     return;
   }
 
-  const conditions = [eq(venueImportRowsTable.importBatchId, id)];
-  if (status && validStatuses.has(status)) conditions.push(eq(venueImportRowsTable.importStatus, status));
+  const conditions: SQL[] = [eq(venueImportRowsTable.importBatchId, id)];
+  if (isImportStatus(status)) conditions.push(eq(venueImportRowsTable.importStatus, status));
 
   const rows = await db
     .select()
@@ -325,8 +339,12 @@ router.post("/admin/venue-imports/:id/import-ready", requireAuth, requireAdmin, 
         country: venuesTable.country,
       });
 
-    importedIds.push(row.id);
-    existingVenueMap.set(key, created);
+    if (created) {
+      importedIds.push(row.id);
+      existingVenueMap.set(key, created);
+    } else {
+      skippedIds.push(row.id);
+    }
   }
 
   if (importedIds.length > 0) {

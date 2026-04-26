@@ -348,6 +348,146 @@ export function usePromoCodeRedemptions(id: number | null) {
   });
 }
 
+export type VenueImportStatus =
+  | "unverified"
+  | "ready_to_import"
+  | "needs_review"
+  | "duplicate"
+  | "missing_required"
+  | "imported"
+  | "skipped";
+
+export interface VenueImportSummary {
+  totalRows: number;
+  readyRows: number;
+  duplicateRows: number;
+  needsReviewRows: number;
+  missingRequiredRows: number;
+}
+
+export interface VenueImportBatch {
+  id: number;
+  sourceDatabase: string;
+  fileName: string;
+  uploadedByUserId: string | null;
+  totalRows: number;
+  readyRows: number;
+  duplicateRows: number;
+  needsReviewRows: number;
+  missingRequiredRows: number;
+  createdAt: string;
+}
+
+export interface VenueImportRow {
+  id?: number;
+  importBatchId?: number;
+  sourceDatabase: string;
+  sourceSheet: string | null;
+  sourceRowNumber: number | null;
+  venueName: string | null;
+  cityTown: string | null;
+  country: string | null;
+  bookingEmail: string | null;
+  bookingContactName: string | null;
+  bookingPhone: string | null;
+  website: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  notes: string | null;
+  rawAction: string | null;
+  duplicateKey: string | null;
+  importStatus: VenueImportStatus;
+  duplicateStatus: string | null;
+  matchedVenueId: number | null;
+  createdAt?: string;
+}
+
+export function usePreviewVenueImport() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async ({ csvText }: { csvText: string }) => {
+      const res = await authedFetch("/api/admin/venue-imports/preview", () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to preview venue import");
+      return json as { summary: VenueImportSummary; rows: VenueImportRow[] };
+    },
+  });
+}
+
+export function useAdminVenueImports() {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  return useQuery<{ batches: VenueImportBatch[] }>({
+    queryKey: ["/api/admin/venue-imports"],
+    queryFn: async () => {
+      const res = await authedFetch("/api/admin/venue-imports", () => getToken());
+      if (!res.ok) throw new Error("Failed to fetch venue imports");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useSaveVenueImport() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ csvText, fileName }: { csvText: string; fileName: string }) => {
+      const res = await authedFetch("/api/admin/venue-imports", () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText, fileName }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to save venue import");
+      return json as { batch: VenueImportBatch; summary: VenueImportSummary; rows: VenueImportRow[] };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/admin/venue-imports"] });
+    },
+  });
+}
+
+export function useVenueImportRows(batchId: number | null, status?: VenueImportStatus | "") {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useQuery<{ batch: VenueImportBatch; rows: VenueImportRow[] }>({
+    queryKey: ["/api/admin/venue-imports", batchId, "rows", status ?? ""],
+    queryFn: async () => {
+      const res = await authedFetch(`/api/admin/venue-imports/${batchId}/rows${qs}`, () => getToken());
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch import rows");
+      return json as { batch: VenueImportBatch; rows: VenueImportRow[] };
+    },
+    enabled: !!isSignedIn && batchId !== null,
+    staleTime: 0,
+  });
+}
+
+export function useImportReadyVenueRows() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (batchId: number) => {
+      const res = await authedFetch(`/api/admin/venue-imports/${batchId}/import-ready`, () => getToken(), {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to import ready rows");
+      return json as { imported: number; skipped: number };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/admin/venue-imports"] });
+    },
+  });
+}
+
 export function useRedeemPromo() {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
