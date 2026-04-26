@@ -635,7 +635,7 @@ function CompactRunFormLayout({
 
                           <div className="text-xs text-muted-foreground">
                             {routeCalcFailed && distanceMode === "auto"
-                              ? "Route unavailable. Fuel cannot be calculated until the route works or you enter distance manually."
+                              ? "Route unavailable — enter distance manually or continue without travel cost."
                               : travelDistanceKm > 0
                                 ? `Total travel ${totalTravelDistanceKm.toFixed(0)} km${formValues.returnTrip ? " return" : ""}.`
                                 : distanceMode === "auto"
@@ -1745,6 +1745,18 @@ export default function RunForm() {
     trackEvent("show_calc_started", { deal_type: vals.dealType ?? "flat_fee" });
 
     let routeOverride: { distanceKm?: number; driveTimeMinutes?: number | null } = {};
+    let routeUnavailable = false;
+
+    const handleRouteUnavailable = () => {
+      routeUnavailable = true;
+      setRouteCalcFailed(true);
+      form.setValue("distanceKm", 0);
+      routeOverride = { distanceKm: 0, driveTimeMinutes: null };
+      toast({
+        title: "Route unavailable",
+        description: "Continuing with no travel cost. Switch to Manual to enter distance, or save as-is.",
+      });
+    };
 
     try {
       if (distanceMode === "auto") {
@@ -1769,32 +1781,14 @@ export default function RunForm() {
             form.setValue("distanceKm", route.distanceKm);
             routeOverride = { distanceKm: route.distanceKm, driveTimeMinutes: route.durationMinutes };
           } else {
-            setRouteCalcFailed(true);
-            form.setValue("distanceKm", 0);
-            setCalculationResult(null);
-            setLastCalcKey(null);
-            toast({
-              title: "Route unavailable",
-              description: "Fuel cannot be calculated until we can resolve the route or you enter distance manually.",
-              variant: "destructive",
-            });
-            return;
+            handleRouteUnavailable();
           }
         } else {
           console.warn("[RunForm] Could not resolve route endpoints during calculate", {
             origin: vals.origin,
             destination: vals.destination,
           });
-          setRouteCalcFailed(true);
-          form.setValue("distanceKm", 0);
-          setCalculationResult(null);
-          setLastCalcKey(null);
-          toast({
-            title: "Route unavailable",
-            description: "Fuel cannot be calculated until we can resolve the route or you enter distance manually.",
-            variant: "destructive",
-          });
-          return;
+          handleRouteUnavailable();
         }
       }
 
@@ -1943,6 +1937,11 @@ export default function RunForm() {
         breakEvenCapacity: computed.breakEvenCapacity,
         showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
         distanceKm: computed.distanceKm,
+        distanceSource: routeUnavailable
+          ? ("unavailable" as const)
+          : distanceMode === "manual"
+            ? ("manual" as const)
+            : ("google" as const),
         driveTimeMinutes: computed.driveTimeMinutes ?? null,
         fuelUsedLitres: computed.fuelUsedLitres,
         recommendedNights: Math.max(0, (Number(valuesAtCalculation.accommodationNights) || 0) - 1),
@@ -2679,59 +2678,81 @@ export default function RunForm() {
       const profile = profiles?.find((item) => item.id === data.profileId);
       const selectedVehicle = runVehicleId ? vehicles?.find((item) => item.id === runVehicleId) : null;
       let submissionData = data;
+      let submitRouteUnavailable = false;
+
+      const markRouteUnavailableForSubmit = () => {
+        submitRouteUnavailable = true;
+        setRouteCalcFailed(true);
+        form.setValue("distanceKm", 0);
+        toast({
+          title: "Route unavailable",
+          description: "Saving with no travel cost. Switch to Manual to enter distance.",
+        });
+      };
 
       if (distanceMode === "auto") {
         const resolvedOrigin = await resolveRouteLocation(data.origin, data.originLat, data.originLng);
         const resolvedDestination = await resolveRouteLocation(data.destination, data.destinationLat, data.destinationLng);
 
         if (!resolvedOrigin || !resolvedDestination) {
-          setRouteCalcFailed(true);
-          form.setValue("distanceKm", 0);
-          toast({
-            title: "Route unavailable",
-            description: "Fuel cannot be calculated until we can resolve the route or you enter distance manually.",
-            variant: "destructive",
-          });
-          return;
-        }
+          markRouteUnavailableForSubmit();
+          submissionData = { ...data, distanceKm: 0 };
+        } else {
+          const route = await calculateGoogleRoute(resolvedOrigin, resolvedDestination);
+          if (!route) {
+            markRouteUnavailableForSubmit();
+            // Still apply resolved coords so the venue location is captured.
+            form.setValue("originLat", resolvedOrigin.lat);
+            form.setValue("originLng", resolvedOrigin.lng);
+            form.setValue("destinationLat", resolvedDestination.lat);
+            form.setValue("destinationLng", resolvedDestination.lng);
+            if (looksLikeCoordinateLabel(data.origin)) {
+              form.setValue("origin", resolvedOrigin.label);
+            }
+            if (looksLikeCoordinateLabel(data.destination)) {
+              form.setValue("destination", resolvedDestination.label);
+            }
+            submissionData = {
+              ...data,
+              origin: looksLikeCoordinateLabel(data.origin) ? resolvedOrigin.label : data.origin,
+              originLat: resolvedOrigin.lat,
+              originLng: resolvedOrigin.lng,
+              destination: looksLikeCoordinateLabel(data.destination) ? resolvedDestination.label : data.destination,
+              destinationLat: resolvedDestination.lat,
+              destinationLng: resolvedDestination.lng,
+              distanceKm: 0,
+            };
+          } else {
+            setRouteCalcFailed(false);
+            form.setValue("originLat", resolvedOrigin.lat);
+            form.setValue("originLng", resolvedOrigin.lng);
+            form.setValue("destinationLat", resolvedDestination.lat);
+            form.setValue("destinationLng", resolvedDestination.lng);
+            form.setValue("distanceKm", route.distanceKm);
 
-        const route = await calculateGoogleRoute(resolvedOrigin, resolvedDestination);
-        if (!route) {
-          setRouteCalcFailed(true);
-          form.setValue("distanceKm", 0);
-          toast({
-            title: "Route unavailable",
-            description: "Fuel cannot be calculated until we can resolve the route or you enter distance manually.",
-            variant: "destructive",
-          });
-          return;
-        }
+            if (looksLikeCoordinateLabel(data.origin)) {
+              form.setValue("origin", resolvedOrigin.label);
+            }
+            if (looksLikeCoordinateLabel(data.destination)) {
+              form.setValue("destination", resolvedDestination.label);
+            }
 
-        setRouteCalcFailed(false);
-        form.setValue("originLat", resolvedOrigin.lat);
-        form.setValue("originLng", resolvedOrigin.lng);
-        form.setValue("destinationLat", resolvedDestination.lat);
-        form.setValue("destinationLng", resolvedDestination.lng);
-        form.setValue("distanceKm", route.distanceKm);
-
-        if (looksLikeCoordinateLabel(data.origin)) {
-          form.setValue("origin", resolvedOrigin.label);
+            submissionData = {
+              ...data,
+              origin: looksLikeCoordinateLabel(data.origin) ? resolvedOrigin.label : data.origin,
+              originLat: resolvedOrigin.lat,
+              originLng: resolvedOrigin.lng,
+              destination: looksLikeCoordinateLabel(data.destination) ? resolvedDestination.label : data.destination,
+              destinationLat: resolvedDestination.lat,
+              destinationLng: resolvedDestination.lng,
+              distanceKm: route.distanceKm,
+            };
+          }
         }
-        if (looksLikeCoordinateLabel(data.destination)) {
-          form.setValue("destination", resolvedDestination.label);
-        }
-
-        submissionData = {
-          ...data,
-          origin: looksLikeCoordinateLabel(data.origin) ? resolvedOrigin.label : data.origin,
-          originLat: resolvedOrigin.lat,
-          originLng: resolvedOrigin.lng,
-          destination: looksLikeCoordinateLabel(data.destination) ? resolvedDestination.label : data.destination,
-          destinationLat: resolvedDestination.lat,
-          destinationLng: resolvedDestination.lng,
-          distanceKm: route.distanceKm,
-        };
       }
+
+      const submitDistanceSource: "google" | "manual" | "unavailable" =
+        submitRouteUnavailable ? "unavailable" : (distanceMode === "manual" ? "manual" : "google");
 
       const computed = computeGigResults(
         submissionData,
@@ -2773,6 +2794,7 @@ export default function RunForm() {
         breakEvenCapacity: computed.breakEvenCapacity,
         showCostBreakEvenTickets: computed.showCostBreakEvenTickets,
         distanceKm: computed.distanceKm,
+        distanceSource: submitDistanceSource,
         driveTimeMinutes: computed.driveTimeMinutes ?? null,
         fuelUsedLitres: computed.fuelUsedLitres,
         recommendedNights: Math.max(0, (Number(submissionData.accommodationNights) || 0) - 1),
