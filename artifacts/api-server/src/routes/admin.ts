@@ -6,7 +6,6 @@ import { eq, ilike, desc, asc, sql, isNull, isNotNull, and, or, inArray } from "
 import type { SQL } from "drizzle-orm";
 import { firstParam, parseIntegerParam } from "../lib/request-params";
 import {
-  buildExistingVenueMap,
   parseVenueImportCsv,
   summarizeRows,
   toImportRowValues,
@@ -41,26 +40,55 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
-function normalizeVenueName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-}
-
 function cleanText(value: unknown): string | null {
   if (value == null) return null;
   const trimmed = String(value).trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-async function loadExistingVenueMap(): Promise<Map<string, ExistingVenueMatch>> {
-  const venues = await db
-    .select({
-      id: venuesTable.id,
-      name: venuesTable.name,
-      city: venuesTable.city,
-      country: venuesTable.country,
-    })
-    .from(venuesTable);
-  return buildExistingVenueMap(venues);
+async function loadExistingVenueMapForKeys(keys: string[]): Promise<Map<string, ExistingVenueMatch>> {
+  const map = new Map<string, ExistingVenueMatch>();
+  const uniqueKeys = Array.from(new Set(keys.filter((key) => key && key !== "||")));
+
+  for (let i = 0; i < uniqueKeys.length; i += VENUE_IMPORT_INSERT_CHUNK_SIZE) {
+    const chunk = uniqueKeys.slice(i, i + VENUE_IMPORT_INSERT_CHUNK_SIZE);
+    const venues = await db
+      .select({
+        id: venuesTable.id,
+        name: venuesTable.name,
+        city: venuesTable.city,
+        country: venuesTable.country,
+        normalizedVenueKey: venuesTable.normalizedVenueKey,
+      })
+      .from(venuesTable)
+      .where(inArray(venuesTable.normalizedVenueKey, chunk));
+
+    for (const venue of venues) {
+      const key = venue.normalizedVenueKey ?? venueDuplicateKey(venue.name, venue.city, venue.country);
+      if (key !== "||" && !map.has(key)) map.set(key, venue);
+    }
+  }
+
+  return map;
+}
+
+async function parseVenueImportCsvWithDbDuplicates(csvText: string) {
+  const rows = parseVenueImportCsv(csvText, new Map());
+  const keys = rows.map((row) => venueDuplicateKey(row.venueName, row.cityTown, row.country));
+  const existingVenueMap = await loadExistingVenueMapForKeys(keys);
+
+  return rows.map((row) => {
+    if (row.importStatus === "missing_required" || row.importStatus === "duplicate") return row;
+    const key = venueDuplicateKey(row.venueName, row.cityTown, row.country);
+    const matchedVenue = existingVenueMap.get(key);
+    if (!matchedVenue) return row;
+    return {
+      ...row,
+      importStatus: "duplicate" as ImportStatus,
+      duplicateStatus: "existing_venue",
+      matchedVenueId: matchedVenue.id,
+    };
+  });
 }
 
 function serializeImportBatch(batch: typeof venueImportBatchesTable.$inferSelect) {
@@ -170,8 +198,7 @@ router.post("/admin/venue-imports/preview", requireAuth, requireAdmin, async (re
     return;
   }
 
-  const existingVenueMap = await loadExistingVenueMap();
-  const rows = parseVenueImportCsv(csvText, existingVenueMap);
+  const rows = await parseVenueImportCsvWithDbDuplicates(csvText);
   const summary = summarizeRows(rows);
 
   res.json({
@@ -198,8 +225,7 @@ router.post("/admin/venue-imports", requireAuth, requireAdmin, async (req, res):
     return;
   }
 
-  const existingVenueMap = await loadExistingVenueMap();
-  const parsedRows = parseVenueImportCsv(csvText, existingVenueMap);
+  const parsedRows = await parseVenueImportCsvWithDbDuplicates(csvText);
   const summary = summarizeRows(parsedRows);
   const sourceDatabase = parsedRows.find((row) => row.sourceDatabase)?.sourceDatabase ?? "Europe Master Sheet";
 
@@ -267,7 +293,6 @@ router.get("/admin/venue-imports/:id/rows", requireAuth, requireAdmin, async (re
 });
 
 router.post("/admin/venue-imports/:id/import-ready", requireAuth, requireAdmin, async (req, res): Promise<void> => {
-  const { userId } = req as AuthenticatedRequest;
   const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid import batch id" });
@@ -285,91 +310,10 @@ router.post("/admin/venue-imports/:id/import-ready", requireAuth, requireAdmin, 
     return;
   }
 
-  const readyRows = await db
-    .select()
-    .from(venueImportRowsTable)
-    .where(and(
-      eq(venueImportRowsTable.importBatchId, id),
-      eq(venueImportRowsTable.importStatus, "ready_to_import"),
-    ))
-    .orderBy(asc(venueImportRowsTable.id));
-
-  if (readyRows.length === 0) {
-    res.json({ imported: 0, skipped: 0 });
-    return;
-  }
-
-  const existingVenueMap = await loadExistingVenueMap();
-  const importedIds: number[] = [];
-  const skippedIds: number[] = [];
-
-  for (const row of readyRows) {
-    const venueName = cleanText(row.venueName);
-    const cityTown = cleanText(row.cityTown);
-    const country = cleanText(row.country);
-    const key = venueDuplicateKey(venueName, cityTown, country);
-
-    if (!venueName || !cityTown || !country || existingVenueMap.has(key)) {
-      skippedIds.push(row.id);
-      continue;
-    }
-
-    const [created] = await db
-      .insert(venuesTable)
-      .values({
-        userId,
-        name: venueName,
-        normalizedVenueName: normalizeVenueName(venueName),
-        city: cityTown,
-        country,
-        website: cleanText(row.website),
-        contactName: cleanText(row.bookingContactName),
-        contactEmail: cleanText(row.bookingEmail),
-        contactPhone: cleanText(row.bookingPhone),
-        generalNotes: cleanText(row.notes),
-        venueStatus: "untested",
-        willPlayAgain: "unsure",
-        source: row.sourceDatabase || "Europe Master Sheet",
-        updatedAt: new Date(),
-      })
-      .returning({
-        id: venuesTable.id,
-        name: venuesTable.name,
-        city: venuesTable.city,
-        country: venuesTable.country,
-      });
-
-    if (created) {
-      importedIds.push(row.id);
-      existingVenueMap.set(key, created);
-    } else {
-      skippedIds.push(row.id);
-    }
-  }
-
-  if (importedIds.length > 0) {
-    await db
-      .update(venueImportRowsTable)
-      .set({ importStatus: "imported" })
-      .where(inArray(venueImportRowsTable.id, importedIds));
-  }
-
-  if (skippedIds.length > 0) {
-    await db
-      .update(venueImportRowsTable)
-      .set({ importStatus: "skipped", duplicateStatus: "duplicate_found_at_import_time" })
-      .where(inArray(venueImportRowsTable.id, skippedIds));
-  }
-
-  const remainingReady = Math.max(0, batch.readyRows - importedIds.length - skippedIds.length);
-  await db
-    .update(venueImportBatchesTable)
-    .set({ readyRows: remainingReady })
-    .where(eq(venueImportBatchesTable.id, id));
-
-  res.json({
-    imported: importedIds.length,
-    skipped: skippedIds.length,
+  res.status(409).json({
+    error: "Bulk venue import is disabled. Imported rows remain staged in venue_import_rows until an explicit per-row promotion workflow is implemented.",
+    imported: 0,
+    skipped: 0,
   });
 });
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable, venuesTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
@@ -16,6 +16,8 @@ import { loadTourDerivations } from "../lib/tour-derivations";
 import { getTodayIsoDateFromRequest, isCompletedRun } from "../lib/run-lifecycle";
 
 const router: IRouter = Router();
+const DASHBOARD_COLLECTION_LIMIT = 500;
+const DASHBOARD_MAP_VENUE_LIMIT = 500;
 
 function serializeRun(r: typeof runsTable.$inferSelect) {
   return {
@@ -58,10 +60,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [runs, tours, profiles, vehicles] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
-    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)),
-    db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
 
   const summary = buildDashboardSummary({
@@ -80,8 +82,8 @@ router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => 
   const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [runs, tours] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
 
   const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, tours);
@@ -163,8 +165,8 @@ router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void>
   const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [runs, tours] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
 
   const tourIds = tours.map(t => t.id);
@@ -255,14 +257,16 @@ router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => 
   const todayIsoDate = getTodayIsoDateFromRequest(req);
 
   const [venues, runs, userTours] = await Promise.all([
-    db.select().from(venuesTable).where(eq(venuesTable.userId, userId)),
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
+    db.select().from(venuesTable).where(eq(venuesTable.userId, userId)).orderBy(desc(venuesTable.updatedAt)).limit(DASHBOARD_MAP_VENUE_LIMIT),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
 
   const tourIds = userTours.map(t => t.id);
   const stops = tourIds.length > 0
     ? await db.select().from(tourStopsTable).where(inArray(tourStopsTable.tourId, tourIds))
+        .orderBy(sql`${tourStopsTable.date} asc nulls last`)
+        .limit(DASHBOARD_COLLECTION_LIMIT)
     : [];
 
   const runsByVenueId = new Map<number, typeof runsTable.$inferSelect[]>();

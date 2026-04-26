@@ -178,6 +178,10 @@ function normalizeVenueName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeVenueKey(name: string | null | undefined, city: string | null | undefined, country: string | null | undefined): string {
+  return [name, city, country].map((part) => (part ?? "").trim().toLowerCase()).join("|");
+}
+
 // Immediately find or create a venue for a stop and link it. Returns the venueId.
 async function syncStopVenue(
   userId: string,
@@ -194,7 +198,9 @@ async function syncStopVenue(
   let venueId: number;
   if (existing) {
     if (!existing.city && city) {
-      await db.update(venuesTable).set({ city }).where(eq(venuesTable.id, existing.id));
+      await db.update(venuesTable)
+        .set({ city, normalizedVenueKey: normalizeVenueKey(existing.name, city, existing.country) })
+        .where(eq(venuesTable.id, existing.id));
     }
     venueId = existing.id;
   } else {
@@ -202,6 +208,8 @@ async function syncStopVenue(
       userId,
       name: venueName.trim(),
       normalizedVenueName: normalized,
+      normalizedVenueKey: normalizeVenueKey(venueName, city, null),
+      venueType: "personal",
       city: city ?? null,
     }).returning();
     venueId = created.id;

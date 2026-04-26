@@ -187,7 +187,7 @@ export function parseVenueImportCsv(
       const computedKey = venueDuplicateKey(venueName, cityTown, country);
       const matchedVenue = existingVenueMap.get(computedKey) ?? null;
 
-      let importStatus: VenueImportStatus = "ready_to_import";
+      let importStatus: VenueImportStatus = "unverified";
       let duplicateStatus: string | null = null;
 
       if (!venueName || !cityTown || !country) {

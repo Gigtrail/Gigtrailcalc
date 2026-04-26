@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
-import { useGetVenues } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { Venue } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Bed, Building2, MapPin, Search, X, TrendingUp, Clock, Star, Lock, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,36 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+
+type VenuesPageResponse = {
+  items: Venue[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
+
+const VENUES_PAGE_SIZE = 25;
+
+async function fetchVenuesPage(page: number, search: string): Promise<VenuesPageResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(VENUES_PAGE_SIZE),
+    type: "all",
+  });
+  const q = search.trim();
+  if (q) params.set("q", q);
+
+  const response = await fetch(`/api/venues?${params.toString()}`, {
+    credentials: "include",
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`Failed to load venues (${response.status})`);
+  return response.json() as Promise<VenuesPageResponse>;
+}
 
 const fmt = (n: number | null | undefined) =>
   n == null ? "—" : `$${Math.round(Math.abs(n)).toLocaleString()}`;
@@ -78,23 +109,17 @@ function VenueStatusBadge({ status }: { status: VenueStatus }) {
 export default function Venues() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  const { data: venues, isLoading } = useGetVenues();
+  const { data, isLoading } = useQuery({
+    queryKey: ["venues", { page, search }],
+    queryFn: () => fetchVenuesPage(page, search),
+    placeholderData: (previousData) => previousData,
+  });
 
-  const filtered = useMemo(() => {
-    if (!venues) return [];
-    const q = search.trim().toLowerCase();
-    if (!q) return venues;
-    return venues.filter(v =>
-      v.venueName.toLowerCase().includes(q) ||
-      (v.city ?? "").toLowerCase().includes(q) ||
-      (v.state ?? "").toLowerCase().includes(q) ||
-      (v.suburb ?? "").toLowerCase().includes(q)
-    );
-  }, [venues, search]);
-
-  const totalVenues = venues?.length ?? 0;
-  const totalShows = venues?.reduce((acc, v) => acc + (v.showCount ?? 0), 0) ?? 0;
+  const venues = data?.items ?? [];
+  const totalVenues = data?.pagination.total ?? 0;
+  const totalShows = venues.reduce((acc, v) => acc + (v.showCount ?? 0), 0);
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
@@ -117,7 +142,7 @@ export default function Venues() {
         <div className="flex gap-4 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{totalVenues}</span> venue{totalVenues !== 1 ? "s" : ""}
           <span className="text-border">·</span>
-          <span className="font-medium text-foreground">{totalShows}</span> recorded show{totalShows !== 1 ? "s" : ""}
+          <span className="font-medium text-foreground">{totalShows}</span> recorded show{totalShows !== 1 ? "s" : ""} on this page
         </div>
       )}
 
@@ -126,13 +151,19 @@ export default function Venues() {
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         <Input
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           placeholder="Search venues or cities…"
           className="pl-8 pr-8 h-9 text-sm"
         />
         {search && (
           <button
-            onClick={() => setSearch("")}
+            onClick={() => {
+              setSearch("");
+              setPage(1);
+            }}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-3.5 h-3.5" />
@@ -150,7 +181,7 @@ export default function Venues() {
       )}
 
       {/* Empty state — no venues at all */}
-      {!isLoading && totalVenues === 0 && (
+      {!isLoading && totalVenues === 0 && !search.trim() && (
         <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <Building2 className="w-7 h-7 text-primary/60" />
@@ -169,16 +200,16 @@ export default function Venues() {
       )}
 
       {/* Empty state — no search results */}
-      {!isLoading && totalVenues > 0 && filtered.length === 0 && (
+      {!isLoading && search.trim() && totalVenues === 0 && (
         <div className="text-center py-10 text-sm text-muted-foreground">
           No venues match "<span className="font-medium text-foreground">{search}</span>"
         </div>
       )}
 
       {/* Venue list */}
-      {!isLoading && filtered.length > 0 && (
+      {!isLoading && venues.length > 0 && (
         <div className="space-y-2">
-          {filtered.map(venue => {
+          {venues.map(venue => {
             const status = deriveVenueStatus(venue);
             const location = [venue.suburb ?? venue.city, venue.state].filter(Boolean).join(", ") || venue.city || "—";
             return (
@@ -250,6 +281,32 @@ export default function Venues() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!isLoading && totalVenues > 0 && data?.pagination && (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-muted-foreground">
+            Page {data.pagination.page} of {Math.max(1, Math.ceil(data.pagination.total / data.pagination.limit))}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!data.pagination.hasPreviousPage}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!data.pagination.hasNextPage}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>

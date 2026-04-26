@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,6 +8,8 @@ export const venuesTable = pgTable("venues", {
   profileId: integer("profile_id"),
   name: text("venue_name").notNull(),
   normalizedVenueName: text("normalized_venue_name").notNull(),
+  normalizedVenueKey: text("normalized_venue_key"),
+  venueType: text("venue_type", { enum: ["personal", "imported"] }),
   city: text("city"),
   state: text("state"),
   country: text("country"),
@@ -43,7 +45,15 @@ export const venuesTable = pgTable("venues", {
   lastStatus: text("last_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("venues_user_id_idx").on(table.userId),
+  updatedAtIdx: index("venues_updated_at_idx").on(table.updatedAt),
+  countryIdx: index("venues_country_idx").on(table.country),
+  normalizedVenueNameIdx: index("venues_normalized_venue_name_idx").on(table.normalizedVenueName),
+  cityIdx: index("venues_city_idx").on(table.city),
+  stateIdx: index("venues_state_idx").on(table.state),
+  normalizedVenueKeyIdx: index("venues_normalized_venue_key_idx").on(table.normalizedVenueKey),
+}));
 
 export const insertVenueSchema = createInsertSchema(venuesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertVenue = z.infer<typeof insertVenueSchema>;

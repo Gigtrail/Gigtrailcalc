@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, or, ilike, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, desc, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
@@ -9,6 +9,10 @@ const router: IRouter = Router();
 
 export function normalizeVenueName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+export function normalizeVenueKey(name: string | null | undefined, city: string | null | undefined, country: string | null | undefined): string {
+  return [name, city, country].map((part) => (part ?? "").trim().toLowerCase()).join("|");
 }
 
 function serializeVenue(v: typeof venuesTable.$inferSelect) {
@@ -159,25 +163,6 @@ type VenuePerformanceSummary = {
   worstShowProfit: number | null;
 };
 
-function runProfit(run: typeof runsTable.$inferSelect): number | null {
-  const raw = run as typeof runsTable.$inferSelect & {
-    actualIncome?: string | number | null;
-    actualProfit?: string | number | null;
-    totalProfit?: string | number | null;
-  };
-
-  if (raw.actualIncome != null && run.actualExpenses != null) {
-    return Number(raw.actualIncome) - Number(run.actualExpenses);
-  }
-  if (raw.actualProfit != null) return Number(raw.actualProfit);
-  if (raw.totalProfit != null) return Number(raw.totalProfit);
-  return null;
-}
-
-function avg(values: number[]): number | null {
-  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-}
-
 export async function getVenuePerformance(
   venueId: number,
   userId?: string,
@@ -185,39 +170,88 @@ export async function getVenuePerformance(
 ): Promise<VenuePerformanceSummary> {
   const conditions = [eq(runsTable.venueId, venueId)];
   if (userId) conditions.push(eq(runsTable.userId, userId));
+  if (todayIsoDate) {
+    conditions.push(sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${todayIsoDate} or ${runsTable.status} = 'past')`);
+  }
 
-  const runs = await db
-    .select()
+  const [summary] = await db
+    .select({
+      totalShows: sql<number>`count(*)::int`,
+      avgTicketSales: sql<number | null>`avg(${runsTable.actualTicketSales})::float`,
+      avgProfit: sql<number | null>`avg(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
+      bestShowProfit: sql<number | null>`max(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
+      worstShowProfit: sql<number | null>`min(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
+    })
     .from(runsTable)
     .where(and(...conditions));
 
-  const playedRuns = runs.filter(run => (
-    run.status === "past" ||
-    !run.showDate ||
-    (todayIsoDate ? run.showDate < todayIsoDate : false)
-  ));
-  const ticketSales = playedRuns
-    .map(run => run.actualTicketSales)
-    .filter((value): value is number => value != null);
-  const profits = playedRuns
-    .map(runProfit)
-    .filter((value): value is number => value != null);
-
   return {
-    totalShows: playedRuns.length,
-    avgTicketSales: avg(ticketSales),
-    avgProfit: avg(profits),
-    bestShowProfit: profits.length > 0 ? Math.max(...profits) : null,
-    worstShowProfit: profits.length > 0 ? Math.min(...profits) : null,
+    totalShows: Number(summary?.totalShows ?? 0),
+    avgTicketSales: summary?.avgTicketSales != null ? Number(summary.avgTicketSales) : null,
+    avgProfit: summary?.avgProfit != null ? Number(summary.avgProfit) : null,
+    bestShowProfit: summary?.bestShowProfit != null ? Number(summary.bestShowProfit) : null,
+    worstShowProfit: summary?.worstShowProfit != null ? Number(summary.worstShowProfit) : null,
   };
 }
 
 router.get("/venues", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const today = getTodayIsoDateFromRequest(req);
+  const limitParam = parseIntegerParam(req.query.limit);
+  const pageParam = parseIntegerParam(req.query.page);
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 50) : 25;
+  const page = Number.isFinite(pageParam) ? Math.max(pageParam, 1) : 1;
+  const offset = (page - 1) * limit;
+  const type = firstParam(req.query.type) ?? "all";
+  const country = cleanText(firstParam(req.query.country));
+  const search = cleanText(firstParam(req.query.q) ?? firstParam(req.query.search));
+  const hasAnyRuns = sql`exists (
+    select 1 from ${runsTable}
+    where ${runsTable.venueId} = ${venuesTable.id}
+      and ${runsTable.userId} = ${userId}
+  )`;
+  const hasNoRuns = sql`not exists (
+    select 1 from ${runsTable}
+    where ${runsTable.venueId} = ${venuesTable.id}
+      and ${runsTable.userId} = ${userId}
+  )`;
+
+  const conditions: SQL[] = [eq(venuesTable.userId, userId)];
+  if (country) conditions.push(eq(venuesTable.country, country));
+  if (search) {
+    const like = `%${search}%`;
+    conditions.push(or(
+      ilike(venuesTable.name, like),
+      ilike(venuesTable.city, like),
+      ilike(venuesTable.state, like),
+    )!);
+  }
+  if (type === "played") {
+    conditions.push(and(
+      or(eq(venuesTable.venueType, "personal"), isNull(venuesTable.venueType))!,
+      hasAnyRuns,
+    )!);
+  } else if (type === "lead") {
+    conditions.push(or(
+      eq(venuesTable.venueType, "imported"),
+      and(or(eq(venuesTable.venueType, "personal"), isNull(venuesTable.venueType))!, hasNoRuns)!,
+    )!);
+  } else if (type !== "all") {
+    res.status(400).json({ error: "Invalid venue type" });
+    return;
+  }
+
+  const whereClause = and(...conditions);
   const venues = await db.select().from(venuesTable)
-    .where(eq(venuesTable.userId, userId))
-    .orderBy(desc(venuesTable.updatedAt));
+    .where(whereClause)
+    .orderBy(desc(venuesTable.updatedAt), desc(venuesTable.id))
+    .limit(limit)
+    .offset(offset);
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(venuesTable)
+    .where(whereClause);
 
   const venueIds = venues.map(v => v.id);
   let countMap: Record<number, number> = {};
@@ -248,12 +282,21 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  res.json(venues.map(v => ({
-    ...serializeVenue(v),
-    showCount: countMap[v.id] ?? 0,
-    lastPlayed: lastPlayedMap[v.id] ?? null,
-    avgProfit: avgProfitMap[v.id] ?? null,
-  })));
+  res.json({
+    items: venues.map(v => ({
+      ...serializeVenue(v),
+      showCount: countMap[v.id] ?? 0,
+      lastPlayed: lastPlayedMap[v.id] ?? null,
+      avgProfit: avgProfitMap[v.id] ?? null,
+    })),
+    pagination: {
+      page,
+      limit,
+      total: Number(total),
+      hasNextPage: offset + venues.length < Number(total),
+      hasPreviousPage: page > 1,
+    },
+  });
 });
 
 // ─── GET /venues/search ───────────────────────────────────────────────────────
@@ -297,35 +340,46 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
 
   const today = getTodayIsoDateFromRequest(req);
 
-  const linkedRuns = await db.select().from(runsTable)
-    .where(and(eq(runsTable.venueId, id), eq(runsTable.userId, userId)))
-    .orderBy(desc(runsTable.showDate));
+  const runLimitParam = parseIntegerParam(req.query.runsLimit);
+  const runLimit = Number.isFinite(runLimitParam) ? Math.min(Math.max(runLimitParam, 1), 100) : 50;
 
-  const historicalShows = linkedRuns.filter(s => !s.showDate || s.showDate < today || s.status === "past");
-  const upcomingRuns = linkedRuns.filter(s => s.showDate && s.showDate >= today && s.status !== "past");
+  const historicalShows = await db.select().from(runsTable)
+    .where(and(
+      eq(runsTable.venueId, id),
+      eq(runsTable.userId, userId),
+      sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${today} or ${runsTable.status} = 'past')`,
+    ))
+    .orderBy(desc(runsTable.showDate))
+    .limit(runLimit);
+
+  const upcomingRuns = await db.select().from(runsTable)
+    .where(and(
+      eq(runsTable.venueId, id),
+      eq(runsTable.userId, userId),
+      sql`${runsTable.showDate} >= ${today}`,
+      sql`${runsTable.status} <> 'past'`,
+    ))
+    .orderBy(desc(runsTable.showDate))
+    .limit(25);
 
   const timesPlayed = historicalShows.length;
-  const lastPlayed = historicalShows[0]?.showDate ?? null;
   const fees = historicalShows.map(s => s.fee != null ? Number(s.fee) : (s.guarantee != null ? Number(s.guarantee) : null)).filter((f): f is number => f != null);
-  const profits = historicalShows
-    .map(s => s.actualIncome != null && s.actualExpenses != null ? Number(s.actualIncome) - Number(s.actualExpenses) : null)
-    .filter((p): p is number => p != null);
   const merches = historicalShows.map(s => s.merch != null ? Number(s.merch) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
   const audiences = historicalShows.map(s => s.attendance).filter((a): a is number => a != null);
   const wouldPlayAgainCount = historicalShows.filter(s => s.wouldDoAgain === "yes").length;
 
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const performanceSummary = await getVenuePerformance(id, userId, today);
 
   const stats = {
-    timesPlayed,
-    lastPlayed,
+    timesPlayed: performanceSummary.totalShows,
+    lastPlayed: performanceSummary.totalShows > 0 ? (historicalShows[0]?.showDate ?? null) : null,
     avgFee: avg(fees),
-    avgProfit: avg(profits),
+    avgProfit: performanceSummary.avgProfit,
     avgMerch: avg(merches),
     avgAudience: avg(audiences),
-    wouldPlayAgainRatio: timesPlayed > 0 ? wouldPlayAgainCount / timesPlayed : null,
+    wouldPlayAgainRatio: performanceSummary.totalShows > 0 ? wouldPlayAgainCount / Math.min(timesPlayed, performanceSummary.totalShows) : null,
   };
-  const performanceSummary = await getVenuePerformance(id, userId, today);
 
   const tourStops = await db
     .select({
@@ -344,7 +398,9 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     })
     .from(tourStopsTable)
     .leftJoin(toursTable, eq(tourStopsTable.tourId, toursTable.id))
-    .where(and(eq(tourStopsTable.venueId, id), eq(toursTable.userId, userId)));
+    .where(and(eq(tourStopsTable.venueId, id), eq(toursTable.userId, userId)))
+    .orderBy(desc(tourStopsTable.date))
+    .limit(50);
 
   const serializeVenueStop = (s: typeof tourStops[0]) => ({
     ...s,
@@ -434,6 +490,7 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
 
   const nextName = body.venueName !== undefined ? cleanText(body.venueName) : existingVenue.name;
   const nextCity = 'city' in body ? cleanText(body.city) : existingVenue.city;
+  const nextCountry = 'country' in body ? cleanText(body.country) : existingVenue.country;
 
   if (!nextName) {
     res.status(400).json({ error: "venueName is required" });
@@ -478,6 +535,11 @@ router.patch("/venues/:id", requireAuth, async (req, res): Promise<void> => {
   if ('productionNotes' in body) updateData.productionNotes = cleanText(body.productionNotes);
   if ('techSpecs' in body) updateData.techSpecs = cleanText(body.techSpecs);
   if ('stagePlotNotes' in body) updateData.stagePlotNotes = cleanText(body.stagePlotNotes);
+  updateData.normalizedVenueKey = normalizeVenueKey(
+    updateData.name ?? existingVenue.name,
+    nextCity,
+    nextCountry,
+  );
 
   const [venue] = await db.update(venuesTable)
     .set(updateData)
@@ -563,6 +625,12 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
   if (existing) {
     const updateData: Partial<typeof venuesTable.$inferInsert> = {
       name: cleanedVenueName,
+      venueType: "personal",
+      normalizedVenueKey: normalizeVenueKey(
+        cleanedVenueName,
+        cleanedCity && cleanedCity !== "Unknown" ? cleanedCity : existing.city,
+        cleanText(country) ?? existing.country,
+      ),
       updatedAt: new Date(),
     };
     if (profileId !== undefined) updateData.profileId = profileId ?? existing.profileId;
@@ -592,6 +660,8 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     profileId: profileId ?? null,
     name: cleanedVenueName,
     normalizedVenueName: normalized,
+    normalizedVenueKey: normalizeVenueKey(cleanedVenueName, cleanedCity, cleanText(country)),
+    venueType: "personal",
     city: cleanedCity,
     state: cleanText(state),
     country: cleanText(country),
