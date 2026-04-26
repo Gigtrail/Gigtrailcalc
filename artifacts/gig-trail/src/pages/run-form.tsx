@@ -2831,6 +2831,45 @@ export default function RunForm() {
     })();
   };
 
+  const handleUseVenueDeal = useCallback((show: VenueShow) => {
+    if (show.showType) form.setValue("showType", show.showType);
+    if (show.fee != null) form.setValue("fee", show.fee);
+    if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
+    if (show.dealType) form.setValue("dealType", show.dealType);
+    if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
+    if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
+    if (show.capacity != null) form.setValue("capacity", show.capacity);
+    if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
+  }, [form]);
+  const handleRunVehicleChange = useCallback((vehicleId: string) => {
+    const profile = profiles?.find((p) => p.id === formValues.profileId);
+    if (!profile) return;
+    const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
+    setRunVehicleId(vid);
+    if (vid !== null) {
+      const profileVehiclePatch: UpdateProfileMutationBody = { defaultVehicleId: vid };
+      updateProfile.mutate(
+        { id: profile.id, data: profileVehiclePatch },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+          },
+        }
+      );
+    }
+  }, [queryClient, profiles, formValues.profileId, updateProfile]);
+  const openQuickAddModal = useCallback(() => {
+    setQuickAddName("");
+    setQuickAddType("van");
+    setQuickAddMakeDefault(true);
+    setShowQuickAdd(true);
+  }, []);
+  const resetCostsToProfile = useCallback(() => {
+    const profile = profiles?.find((item) => item.id === formValues.profileId);
+    if (profile) applyProfileValues(profile);
+    setOverridingCosts(false);
+  }, [applyProfileValues, formValues.profileId, profiles]);
+
   const isPending = createRun.isPending || updateRun.isPending;
   const isTicketed = formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid";
 
@@ -2905,43 +2944,6 @@ export default function RunForm() {
   const dealLabel = formValues.showType === "Ticketed Show"
     ? (formValues.dealType ?? "Ticketed")
     : (formValues.showType ?? "Flat Fee");
-  const handleUseVenueDeal = useCallback((show: VenueShow) => {
-    if (show.showType) form.setValue("showType", show.showType);
-    if (show.fee != null) form.setValue("fee", show.fee);
-    if (show.guarantee != null) form.setValue("guarantee", show.guarantee);
-    if (show.dealType) form.setValue("dealType", show.dealType);
-    if (show.splitPct != null) form.setValue("splitPct", show.splitPct);
-    if (show.ticketPrice != null) form.setValue("ticketPrice", show.ticketPrice);
-    if (show.capacity != null) form.setValue("capacity", show.capacity);
-    if (show.merchEstimate != null) form.setValue("merchEstimate", show.merchEstimate);
-  }, [form]);
-  const handleRunVehicleChange = useCallback((vehicleId: string) => {
-    if (!selectedProfile) return;
-    const vid = vehicleId === "profile" ? null : parseInt(vehicleId);
-    setRunVehicleId(vid);
-    if (vid !== null) {
-      const profileVehiclePatch: UpdateProfileMutationBody = { defaultVehicleId: vid };
-      updateProfile.mutate(
-        { id: selectedProfile.id, data: profileVehiclePatch },
-        {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
-          },
-        }
-      );
-    }
-  }, [queryClient, selectedProfile, updateProfile]);
-  const openQuickAddModal = useCallback(() => {
-    setQuickAddName("");
-    setQuickAddType("van");
-    setQuickAddMakeDefault(true);
-    setShowQuickAdd(true);
-  }, []);
-  const resetCostsToProfile = useCallback(() => {
-    const profile = profiles?.find((item) => item.id === formValues.profileId);
-    if (profile) applyProfileValues(profile);
-    setOverridingCosts(false);
-  }, [applyProfileValues, formValues.profileId, profiles]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 animate-in fade-in duration-500 pb-2">
