@@ -750,13 +750,16 @@ function CompactRunFormLayout({
                                   value={Number(field.value) || 0}
                                   onChange={(n) => field.onChange(n)}
                                   min={0}
-                                  max={2000}
+                                  max={300}
                                   step={10}
                                   ariaLabel="Venue capacity"
                                   className="gap-2"
                                   inputClassName="h-10"
                                 />
                               </FormControl>
+                              <p className="text-xs text-muted-foreground">
+                                Need more than 300? Enter a larger number manually.
+                              </p>
                               <FormMessage className="text-xs" />
                             </FormItem>
                           )}
@@ -790,7 +793,7 @@ function CompactRunFormLayout({
                       </div>
 
                       <div className={compactRowClass}>
-                        <div className={compactLabelClass}>Attendance</div>
+                        <div className={compactLabelClass}>Expected turnout</div>
                         <div className="space-y-1">
                           <SliderInput
                             value={attendanceCount || 0}
@@ -806,10 +809,13 @@ function CompactRunFormLayout({
                             min={0}
                             max={Math.max(Number(formValues.capacity) || 0, 100)}
                             step={1}
-                            ariaLabel="Expected attendance"
+                            ariaLabel="Expected turnout"
                             className="gap-2"
                             inputClassName="h-10"
                           />
+                          <p className="text-xs text-muted-foreground">
+                            How many people do you realistically think will come?
+                          </p>
                           <div className="text-xs text-muted-foreground">
                             {(formValues.capacity || 0) > 0
                               ? `${Math.min(100, Math.round((attendanceCount / (Number(formValues.capacity) || 1)) * 100))}% of capacity`

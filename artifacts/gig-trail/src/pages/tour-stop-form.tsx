@@ -518,10 +518,13 @@ export default function TourStopForm() {
                         name="expectedAttendancePct"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Expected Attendance (%)</FormLabel>
+                            <FormLabel>Expected turnout (%)</FormLabel>
                             <FormControl>
                               <Input type="number" min="0" max="100" {...field} value={field.value || 0} />
                             </FormControl>
+                            <p className="text-xs text-muted-foreground">
+                              What % of capacity do you realistically expect to attend?
+                            </p>
                             <p className="text-xs text-muted-foreground">Calculated: {calculatedValues.expectedTicketsSold} tickets / ${calculatedValues.grossRevenue} gross</p>
                             <FormMessage />
                           </FormItem>
