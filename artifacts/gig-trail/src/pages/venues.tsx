@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Venue } from "@workspace/api-client-react";
+import { getGetVenuesQueryKey, type Venue } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
+import { useAuth } from "@clerk/react";
+import { authedFetch } from "@/lib/authed-fetch";
 import {
   Bed,
   Building2,
@@ -48,6 +50,7 @@ async function fetchVenuesPage(
   page: number,
   search: string,
   filter: VenueFilter,
+  getToken: () => Promise<string | null>,
 ): Promise<VenuesPageResponse> {
   const params = new URLSearchParams({
     page: String(page),
@@ -57,8 +60,7 @@ async function fetchVenuesPage(
   const q = search.trim();
   if (q) params.set("q", q);
 
-  const response = await fetch(`/api/venues?${params.toString()}`, {
-    credentials: "include",
+  const response = await authedFetch(`/api/venues?${params.toString()}`, getToken, {
     headers: { accept: "application/json" },
   });
   if (!response.ok) throw new Error(`Failed to load venues (${response.status})`);
@@ -94,6 +96,7 @@ function VenueTypeBadge({ played }: { played: boolean }) {
 
 export default function Venues() {
   const [, navigate] = useLocation();
+  const { getToken } = useAuth();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<VenueFilter>("all");
@@ -109,8 +112,8 @@ export default function Venues() {
   }, [searchInput]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["venues", { page, search, filter }],
-    queryFn: () => fetchVenuesPage(page, search, filter),
+    queryKey: [...getGetVenuesQueryKey(), { page, search, filter }],
+    queryFn: () => fetchVenuesPage(page, search, filter, () => getToken()),
     placeholderData: (previousData) => previousData,
   });
 
