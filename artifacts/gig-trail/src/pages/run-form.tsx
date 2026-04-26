@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, useCreateOrUpdateVenue, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -1398,6 +1398,7 @@ export default function RunForm() {
   
   const createRun = useCreateRun();
   const updateRun = useUpdateRun();
+  const createOrUpdateVenue = useCreateOrUpdateVenue();
   
   const form = useForm<RunFormValues>({
     resolver: zodResolver(runSchema),
@@ -1807,6 +1808,46 @@ export default function RunForm() {
           isPro: previous?.isPro ?? isPro,
         }));
         queryClient.invalidateQueries({ queryKey: WEEKLY_USAGE_QUERY_KEY });
+      }
+
+      // Auto-save the venue as a lead so it appears on the Saved Venues
+      // page even when the user only Calculates (without committing the
+      // run via Save Show). The endpoint routes through the canonical
+      // venue resolver, so a later Save Show on the same name+city will
+      // dedupe to this same row instead of creating a duplicate.
+      //
+      // We only upsert when we have a real city — the canonical key
+      // includes (name|city|country), so an "Unknown" placeholder city
+      // would land on a different key from any later Save Show that
+      // resolved a real city, producing a duplicate lead. Skipping the
+      // upsert in that case is safer than creating a polluted lead.
+      //
+      // Best-effort: a venue upsert failure must not block the
+      // calculation result the user is here for.
+      const calcVenueName = vals.venueName?.trim();
+      const calcCity = (() => {
+        const c = vals.city?.trim();
+        if (c) return c;
+        const dest = vals.destination?.trim();
+        const firstPart = dest?.split(",")[0]?.trim();
+        return firstPart || null;
+      })();
+      if (calcVenueName && calcCity && runSelectedVenueId == null) {
+        try {
+          const venue = await createOrUpdateVenue.mutateAsync({
+            data: {
+              venueName: calcVenueName,
+              profileId: profileId ?? null,
+              city: calcCity,
+              state: vals.state || null,
+              country: vals.country || null,
+            },
+          });
+          setRunSelectedVenueId(venue.id);
+          queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
+        } catch (venueErr) {
+          console.warn("[RunForm] Lead venue upsert during Calculate failed", venueErr);
+        }
       }
 
 

@@ -205,13 +205,18 @@ export default function Venues() {
           <div>
             <p className="font-medium text-foreground">No venues saved yet</p>
             <p className="text-sm text-muted-foreground mt-1 max-w-xs">
-              Venues are created automatically when you save a tour stop to Past Shows.
-              Open a tour and hit "Save to Past Shows" on any stop.
+              Venues land here automatically when you calculate a show with a venue
+              name, save a show, or save a tour stop to Past Shows.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate("/tours")} className="mt-1">
-            Go to Tours
-          </Button>
+          <div className="flex items-center gap-2 mt-1">
+            <Button variant="default" size="sm" onClick={() => navigate("/runs/new")}>
+              Calculate a show
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/tours")}>
+              Go to Tours
+            </Button>
+          </div>
         </div>
       )}
 

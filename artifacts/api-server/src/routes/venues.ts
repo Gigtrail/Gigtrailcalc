@@ -4,6 +4,7 @@ import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspa
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 import { firstParam, parseIntegerParam } from "../lib/request-params";
+import { findOrCreateUserVenue } from "../lib/venue-resolver";
 
 const router: IRouter = Router();
 
@@ -617,81 +618,79 @@ router.post("/venues", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const normalized = normalizeVenueName(cleanedVenueName);
+  // Route through the canonical resolver so this endpoint dedupes the same
+  // way as run save and tour-stop save: by (userId, normalizedVenueKey)
+  // first, then by legacy (userId, normalizedVenueName) for older rows.
+  // Once we have a venueId, apply any additional editable fields the caller
+  // provided on top. This keeps the "save as new venue" UI flow and the
+  // calculator's lead-venue upsert pointing at the same canonical row.
+  const cleanedCountry = cleanText(country);
+  const resolved = await findOrCreateUserVenue({
+    userId,
+    venueName: cleanedVenueName,
+    city: cleanedCity && cleanedCity !== "Unknown" ? cleanedCity : null,
+    state: cleanText(state),
+    country: cleanedCountry,
+    profileId: profileId ?? null,
+  });
+  if (!resolved) {
+    res.status(400).json({ error: "venueName is required" });
+    return;
+  }
 
-  const [existing] = await db.select().from(venuesTable)
-    .where(and(eq(venuesTable.userId, userId), eq(venuesTable.normalizedVenueName, normalized)));
-
-  if (existing) {
-    const updateData: Partial<typeof venuesTable.$inferInsert> = {
-      name: cleanedVenueName,
-      venueType: "personal",
-      normalizedVenueKey: normalizeVenueKey(
-        cleanedVenueName,
-        cleanedCity && cleanedCity !== "Unknown" ? cleanedCity : existing.city,
-        cleanText(country) ?? existing.country,
-      ),
-      updatedAt: new Date(),
-    };
-    if (profileId !== undefined) updateData.profileId = profileId ?? existing.profileId;
+  // Apply optional/editable fields. Only write fields the caller explicitly
+  // supplied (non-null/non-empty after cleaning) so we don't clobber existing
+  // data with blanks. profileId is rebound only when the venue was just
+  // created — existing rows keep their original binding.
+  const updateData: Partial<typeof venuesTable.$inferInsert> = { updatedAt: new Date() };
+  if (resolved.created && profileId !== undefined) updateData.profileId = profileId ?? null;
+  // Always backfill city/state/country if caller provided them and the row
+  // is new — the resolver may have inserted with null when caller passed
+  // partial location info.
+  if (resolved.created) {
     if (cleanedCity && cleanedCity !== "Unknown") updateData.city = cleanedCity;
     if (cleanText(state)) updateData.state = cleanText(state);
-    if (cleanText(country)) updateData.country = cleanText(country);
-    if (cleanText(address)) updateData.address = cleanText(address);
-    if (cleanText(suburb)) updateData.suburb = cleanText(suburb);
-    if (cleanText(fullAddress)) updateData.fullAddress = cleanText(fullAddress);
-    if (cleanText(postcode)) updateData.postcode = cleanText(postcode);
-
-    const [venue] = await db.update(venuesTable)
-      .set(updateData)
-      .where(and(eq(venuesTable.id, existing.id), eq(venuesTable.userId, userId)))
-      .returning();
-    res.json(serializeVenue(venue));
-    return;
+    if (cleanedCountry) updateData.country = cleanedCountry;
   }
+  if (cleanText(address)) updateData.address = cleanText(address);
+  if (cleanText(suburb)) updateData.suburb = cleanText(suburb);
+  if (cleanText(fullAddress)) updateData.fullAddress = cleanText(fullAddress);
+  if (cleanText(postcode)) updateData.postcode = cleanText(postcode);
+  const cleanedCapacity = cleanNumber(capacity);
+  if (cleanedCapacity != null) updateData.capacity = cleanedCapacity;
+  if (cleanText(website)) updateData.website = cleanText(website);
+  if (cleanText(contactName)) updateData.contactName = cleanText(contactName);
+  if (cleanText(contactEmail)) updateData.contactEmail = cleanText(contactEmail);
+  if (cleanText(contactPhone)) updateData.contactPhone = cleanText(contactPhone);
+  if (cleanText(productionContactName)) updateData.productionContactName = cleanText(productionContactName);
+  if (cleanText(productionContactPhone)) updateData.productionContactPhone = cleanText(productionContactPhone);
+  if (cleanText(productionContactEmail)) updateData.productionContactEmail = cleanText(productionContactEmail);
+  const notes = cleanText(generalNotes) ?? cleanText(roomNotes) ?? cleanText(venueNotes);
+  if (notes) updateData.generalNotes = notes;
+  if (cleanText(typicalSoundcheckTime)) updateData.typicalSoundcheckTime = cleanText(typicalSoundcheckTime);
+  if (cleanText(typicalSetTime)) updateData.typicalSetTime = cleanText(typicalSetTime);
+  if (venueStatus !== undefined) updateData.venueStatus = cleanedVenueStatus;
+  if (willPlayAgain !== undefined) updateData.willPlayAgain = cleanedWillPlayAgain;
+  if (accommodationAvailable != null) updateData.accommodationAvailable = accommodationAvailable;
+  const riderValue = riderProvided ?? riderFriendly;
+  if (riderValue != null) updateData.riderFriendly = riderValue;
+  const cleanedDays = cleanPlayingDays(playingDays);
+  if (cleanedDays != null) updateData.playingDays = cleanedDays;
+  if (cleanText(productionNotes)) updateData.productionNotes = cleanText(productionNotes);
+  if (cleanText(techSpecs)) updateData.techSpecs = cleanText(techSpecs);
+  if (cleanText(stagePlotNotes)) updateData.stagePlotNotes = cleanText(stagePlotNotes);
+  // Status defaults for brand-new venues only — existing rows keep theirs.
+  if (resolved.created && updateData.venueStatus === undefined) updateData.venueStatus = "untested";
+  if (resolved.created && updateData.willPlayAgain === undefined) updateData.willPlayAgain = "unsure";
 
-  if (!cleanedCity) {
-    res.status(400).json({ error: "city is required" });
-    return;
-  }
+  await db.update(venuesTable)
+    .set(updateData)
+    .where(and(eq(venuesTable.id, resolved.venueId), eq(venuesTable.userId, userId)));
 
-  const [created] = await db.insert(venuesTable).values({
-    userId,
-    profileId: profileId ?? null,
-    name: cleanedVenueName,
-    normalizedVenueName: normalized,
-    normalizedVenueKey: normalizeVenueKey(cleanedVenueName, cleanedCity, cleanText(country)),
-    venueType: "personal",
-    city: cleanedCity,
-    state: cleanText(state),
-    country: cleanText(country),
-    address: cleanText(address),
-    suburb: cleanText(suburb),
-    fullAddress: cleanText(fullAddress),
-    postcode: cleanText(postcode),
-    capacity: cleanNumber(capacity),
-    website: cleanText(website),
-    contactName: cleanText(contactName),
-    contactEmail: cleanText(contactEmail),
-    contactPhone: cleanText(contactPhone),
-    productionContactName: cleanText(productionContactName),
-    productionContactPhone: cleanText(productionContactPhone),
-    productionContactEmail: cleanText(productionContactEmail),
-    generalNotes: cleanText(generalNotes) ?? cleanText(roomNotes) ?? cleanText(venueNotes),
-    typicalSoundcheckTime: cleanText(typicalSoundcheckTime),
-    typicalSetTime: cleanText(typicalSetTime),
-    venueStatus: cleanedVenueStatus,
-    willPlayAgain: cleanedWillPlayAgain,
-    accommodationAvailable: accommodationAvailable ?? undefined,
-    riderFriendly: riderFriendly ?? riderProvided ?? undefined,
-    playingDays: cleanPlayingDays(playingDays) ?? undefined,
-    productionNotes: cleanText(productionNotes),
-    techSpecs: cleanText(techSpecs),
-    stagePlotNotes: cleanText(stagePlotNotes),
-    updatedAt: new Date(),
-  }).returning();
+  const [venue] = await db.select().from(venuesTable)
+    .where(and(eq(venuesTable.id, resolved.venueId), eq(venuesTable.userId, userId)));
 
-  res.status(201).json(serializeVenue(created));
+  res.status(resolved.created ? 201 : 200).json(serializeVenue(venue));
 });
 
 // ─── DELETE /venues/:id ───────────────────────────────────────────────────────
