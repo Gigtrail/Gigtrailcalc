@@ -11,6 +11,7 @@ import {
   UpdateRunResponse,
   DeleteRunParams,
   GetRunsResponse,
+  CompleteRunBody,
 } from "@workspace/api-zod";
 import {
   getDefaultSavedCalculationStatus,
@@ -82,6 +83,15 @@ function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
     actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,
     actualProfit: derivedProfit,
     notes: raw.showNotes ?? raw.notes ?? null,
+    // Phase 3 — post-show completion + actuals (alpha-safe)
+    isCompleted: Boolean(r.isCompleted),
+    completionStatus: r.completionStatus ?? null,
+    accommodationProvided: r.accommodationProvided ?? null,
+    riderProvided: r.riderProvided ?? null,
+    completedAt:
+      r.completedAt instanceof Date
+        ? r.completedAt.toISOString()
+        : r.completedAt ?? null,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
@@ -229,6 +239,100 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     runId: saved.runId,
     createdVenue: saved.createdVenue,
   });
+});
+
+// POST /runs/:id/complete — Phase 3 post-show completion + actuals capture.
+// Bypasses the normal "past show is read-only" guard because the entire purpose
+// of this endpoint is to record what actually happened after the show date.
+// Existing projection fields are NEVER overwritten — only actuals + completion
+// flags are mutated.
+router.post("/runs/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+  const params = GetRunParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = CompleteRunBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  const body = parsed.data;
+  const cancelled = body.cancelled === true;
+
+  // Build a partial update with ONLY completion + actuals fields.
+  const update: Partial<typeof runsTable.$inferInsert> = {
+    isCompleted: true,
+    completionStatus: cancelled ? "cancelled" : "completed",
+    completedAt: new Date(),
+  };
+
+  if (!cancelled) {
+    if (body.actualAttendance !== undefined) {
+      update.attendance = body.actualAttendance ?? null;
+    }
+    if (body.actualTicketSales !== undefined) {
+      update.actualTicketSales = body.actualTicketSales ?? null;
+    }
+    if (body.actualMerch !== undefined) {
+      update.merch = body.actualMerch != null ? String(body.actualMerch) : null;
+    }
+    if (body.actualIncome !== undefined) {
+      update.actualIncome = body.actualIncome != null ? String(body.actualIncome) : null;
+    }
+    if (body.actualExpenses !== undefined) {
+      update.actualExpenses = body.actualExpenses != null ? String(body.actualExpenses) : null;
+    }
+    if (body.accommodationProvided !== undefined) {
+      update.accommodationProvided = body.accommodationProvided ?? null;
+    }
+    if (body.riderProvided !== undefined) {
+      update.riderProvided = body.riderProvided ?? null;
+    }
+    if (body.wouldDoAgain !== undefined) {
+      update.wouldDoAgain = body.wouldDoAgain ?? null;
+    }
+    if (body.notes !== undefined) {
+      update.showNotes = body.notes ?? null;
+    }
+  }
+
+  const [updated] = await db
+    .update(runsTable)
+    .set(update)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  logger.info(
+    {
+      stage: "completed",
+      id: updated.id,
+      cancelled,
+      isCompleted: updated.isCompleted,
+      completionStatus: updated.completionStatus,
+    },
+    "[Runs] Show completion recorded",
+  );
+
+  res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
 });
 
 router.delete("/runs/:id", requireAuth, async (req, res): Promise<void> => {

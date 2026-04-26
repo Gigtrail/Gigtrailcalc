@@ -4,6 +4,7 @@ import { useGetProfiles, useGetRun, type Run } from "@workspace/api-client-react
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ShowCompletionDialog } from "@/components/show-completion-dialog";
 import {
   ChevronLeft,
   ChevronDown,
@@ -307,6 +308,10 @@ export default function RunResults() {
   const [payoutMode, setPayoutMode] = useState<"full" | "split">("full");
   const [accomOn, setAccomOn] = useState(true);
   const [snapshotRunId, setSnapshotRunId] = useState<number | null>(null);
+  // Phase 3 — completion dialog state. Declared up-front so hook order is
+  // stable across the early returns below.
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionDialogMode, setCompletionDialogMode] = useState<"ask" | "edit">("ask");
   const { isPro } = usePlan();
   const { data: profiles } = useGetProfiles();
 
@@ -379,6 +384,24 @@ export default function RunResults() {
   const effectiveRunId = savedRunId ?? runId;
   const runStatusMeta = getRunStatusMeta(runLifecycleStatus);
   const canEditRun = runLifecycleStatus !== "past";
+
+  // ── Phase 3: post-show completion ─────────────────────────────────────────
+  const completionRunId = effectiveRunId ?? snapshotRunId ?? null;
+  const completionFlags = (snapshotRun ?? null) as
+    | (Run & {
+        isCompleted?: boolean | null;
+        completionStatus?: string | null;
+        completedAt?: string | null;
+      })
+    | null;
+  const isCompleted = !!completionFlags?.isCompleted;
+  const completionStatus = completionFlags?.completionStatus ?? null;
+  const showCompleteCta =
+    snapshotMode && runLifecycleStatus === "past" && !!completionRunId && !isCompleted;
+  const openCompletionDialog = (mode: "ask" | "edit") => {
+    setCompletionDialogMode(mode);
+    setCompletionDialogOpen(true);
+  };
   const showType = formData.showType as string;
   const isTicketed = showType === "Ticketed Show" || showType === "Hybrid";
 
@@ -674,7 +697,50 @@ export default function RunResults() {
           )}
           <span className="text-xs text-amber-700/60 ml-auto">Numbers reflect your settings at the time of calculation</span>
         </div>
-      ) : effectiveRunId ? (
+      ) : null}
+
+      {/* Phase 3: post-show completion banner */}
+      {snapshotMode && completionRunId && isCompleted ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+            <span className="font-medium">
+              {completionStatus === "cancelled" ? "Show cancelled" : "Show completed"}
+            </span>
+            {completionFlags?.completedAt ? (
+              <span className="text-emerald-700/70">
+                · {format(new Date(completionFlags.completedAt), "MMM d, yyyy")}
+              </span>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => openCompletionDialog("edit")}
+            data-testid="button-completed-edit"
+          >
+            Edit actuals
+          </Button>
+        </div>
+      ) : showCompleteCta ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600" />
+            <span>This show date has passed — record what really happened.</span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => openCompletionDialog("ask")}
+            data-testid="button-mark-complete"
+          >
+            Mark show as complete
+          </Button>
+        </div>
+      ) : null}
+
+      {!snapshotMode && effectiveRunId ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
           <div className="flex items-center gap-2">
             <Save className="w-4 h-4 shrink-0 text-green-600" />
@@ -1592,6 +1658,16 @@ export default function RunResults() {
           </Button>
         )}
       </div>
+
+      {completionRunId ? (
+        <ShowCompletionDialog
+          runId={completionRunId}
+          open={completionDialogOpen}
+          onOpenChange={setCompletionDialogOpen}
+          initialMode={completionDialogMode}
+          existingRun={completionFlags ?? null}
+        />
+      ) : null}
     </div>
   );
 }

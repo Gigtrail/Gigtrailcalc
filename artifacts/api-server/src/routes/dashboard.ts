@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable, venuesTable } from "@workspace/db";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
   GetDashboardTourItemsResponse,
-  GetDashboardVenuesResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import {
@@ -14,6 +14,23 @@ import {
 } from "./dashboardSummary";
 import { loadTourDerivations } from "../lib/tour-derivations";
 import { getTodayIsoDateFromRequest, isCompletedRun } from "../lib/run-lifecycle";
+
+// Pre-existing alpha tech-debt: /dashboard/venues handler exists without a
+// matching openapi schema. Inline-define so the server can build until
+// openapi.yaml is brought into line with the route.
+const GetDashboardVenuesResponse = z.array(
+  z.object({
+    id: z.number().int(),
+    venueName: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    fullAddress: z.string().nullable(),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    upcomingShowsCount: z.number().int(),
+    pastShowsCount: z.number().int(),
+  }),
+);
 
 const router: IRouter = Router();
 const DASHBOARD_COLLECTION_LIMIT = 500;

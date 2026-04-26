@@ -25,4 +25,21 @@ export interface CreateTourBody {
   defaultFoodCost?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  fuelType?: string | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
 }

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { eq, and, ne, inArray } from "drizzle-orm";
 import { db, vehiclesTable, vehicleActAssignmentsTable, profilesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
@@ -11,10 +12,17 @@ import {
   UpdateVehicleResponse,
   DeleteVehicleParams,
   GetVehiclesResponse,
-  SetVehicleActAssignmentsParams,
-  SetVehicleActAssignmentsBody,
 } from "@workspace/api-zod";
 import { checkLikelyVehicleDuplicate } from "../lib/duplicate-protection";
+
+// Pre-existing alpha tech-debt: these route handlers exist but their
+// matching openapi schemas have never been added. Inline-define here so the
+// server can build until the openapi spec is brought into line with the routes.
+const SetVehicleActAssignmentsParams = z.object({ id: z.coerce.number().int() });
+const SetVehicleActAssignmentsBody = z.object({
+  actIds: z.array(z.number().int()),
+  defaultForActIds: z.array(z.number().int()).optional(),
+});
 
 const router: IRouter = Router();
 

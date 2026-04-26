@@ -18,36 +18,26 @@ export interface Profile {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
-  bandMembers: string | null;
-  /** @nullable */
-  activeMemberIds?: string | null;
+  bandMembers?: string | null;
   /** @nullable */
   defaultVehicleId: number | null;
   vehicleType: string;
   /** @nullable */
-  vehicleName: string | null;
+  vehicleName?: string | null;
   fuelConsumption: number;
   expectedGigFee: number;
-  minTakeHomePerPerson?: number;
+  minTakeHomePerPerson: number;
   payoutMode: string;
   minimumActTakeHome: number;
   accommodationRequired: boolean;
   /** @nullable */
-  accommodationType: string | null;
+  accommodationType?: string | null;
   avgAccomPerNight: number;
-  singleRoomsDefault: number;
-  doubleRoomsDefault: number;
   avgFoodPerDay: number;
   /** @nullable */
-  maxDriveHoursPerDay: number | null;
+  maxDriveHoursPerDay?: number | null;
   /** @nullable */
   defaultFuelPrice: number | null;
-  /** @nullable */
-  defaultPetrolPrice: number | null;
-  /** @nullable */
-  defaultDieselPrice: number | null;
-  /** @nullable */
-  defaultLpgPrice: number | null;
   /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;

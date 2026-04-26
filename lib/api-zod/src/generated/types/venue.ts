@@ -5,6 +5,9 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { VenueVenueStatus } from "./venueVenueStatus";
+import type { VenueVenueType } from "./venueVenueType";
+import type { VenueWillPlayAgain } from "./venueWillPlayAgain";
 
 export interface Venue {
   id: number;
@@ -14,6 +17,8 @@ export interface Venue {
   profileId?: number | null;
   venueName: string;
   normalizedVenueName: string;
+  /** @nullable */
+  venueType?: VenueVenueType;
   /** @nullable */
   city?: string | null;
   /** @nullable */
@@ -30,6 +35,8 @@ export interface Venue {
   suburb?: string | null;
   /** @nullable */
   fullAddress?: string | null;
+  /** @nullable */
+  postcode?: string | null;
   /** @nullable */
   capacity?: number | null;
   /** @nullable */
@@ -49,9 +56,9 @@ export interface Venue {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
-  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  venueStatus?: VenueVenueStatus;
   /** @nullable */
-  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  willPlayAgain?: VenueWillPlayAgain;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */
@@ -60,8 +67,6 @@ export interface Venue {
   playingDays?: string[] | null;
   /** @nullable */
   venueNotes?: string | null;
-  /** @nullable */
-  postcode?: string | null;
   createdAt: string;
   updatedAt: string;
 }

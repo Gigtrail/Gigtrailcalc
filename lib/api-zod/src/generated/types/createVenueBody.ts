@@ -5,6 +5,8 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateVenueBodyVenueStatus } from "./createVenueBodyVenueStatus";
+import type { CreateVenueBodyWillPlayAgain } from "./createVenueBodyWillPlayAgain";
 
 export interface CreateVenueBody {
   venueName: string;
@@ -47,9 +49,9 @@ export interface CreateVenueBody {
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
-  venueStatus?: "great" | "risky" | "avoid" | "untested" | null;
+  venueStatus?: CreateVenueBodyVenueStatus;
   /** @nullable */
-  willPlayAgain?: "yes" | "no" | "unsure" | null;
+  willPlayAgain?: CreateVenueBodyWillPlayAgain;
   /** @nullable */
   accommodationAvailable?: boolean | null;
   /** @nullable */

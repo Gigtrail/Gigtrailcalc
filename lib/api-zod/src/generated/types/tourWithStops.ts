@@ -36,6 +36,21 @@ export interface TourWithStops {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   createdAt: string;
   stops: TourStop[];
   duplicateProtection?: DuplicateProtection;

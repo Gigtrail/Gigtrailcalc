@@ -6,50 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface DashboardActualPerformance {
-  label: "Past Show Snapshot";
-  helperText: string;
-  totalsBasis: "past_shows";
-  totalsRule: "Past Shows only";
-  totalShows: number;
-  showsUsedInTotals: number;
-  incompleteDataCount: number;
-  missingFinancialDataMessage: string | null;
+export interface DashboardSummary {
+  totalRuns: number;
+  totalTours: number;
+  totalProfiles: number;
+  totalVehicles: number;
+  totalKmDriven: number;
   totalIncome: number;
   totalProfit: number;
-  totalExpenses: number;
-  totalKmDriven: number;
-  avgShowProfit: number;
-  bestShowProfit: number;
-  worstShowProfit: number;
-  profitableShowCount: number;
-  totalAccommodationCost: number;
-  totalFoodCost: number;
-  totalMarketingCost: number;
   worthTheDrive: number;
   tightMargins: number;
   notWorthIt: number;
-}
-
-export interface DashboardFuturePotential {
-  label: "Future Potential";
-  helperText: string;
-  totalsBasis: "upcoming_tours";
-  totalsRule: "Projected from upcoming tours only";
-  projectedTours: number;
-  projectedShows: number;
-  projectedIncome: number;
-  projectedProfit: number;
-  projectedExpenses: number;
-  projectedKm: number;
-  avgProjectedTourProfit: number;
-  bestProjectedTourProfit: number;
-  worstProjectedTourProfit: number;
-}
-
-export interface DashboardSummary {
-  totalProfiles: number;
-  totalVehicles: number;
-  actualPerformance: DashboardActualPerformance;
-  futurePotential: DashboardFuturePotential;
 }

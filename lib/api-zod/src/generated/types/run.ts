@@ -5,6 +5,8 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { RunCompletionStatus } from "./runCompletionStatus";
+import type { RunStatus } from "./runStatus";
 
 export interface Run {
   id: number;
@@ -24,7 +26,7 @@ export interface Run {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  status: string;
+  status: RunStatus;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -96,5 +98,14 @@ export interface Run {
   wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
+  isCompleted?: boolean;
+  /** @nullable */
+  completionStatus?: RunCompletionStatus;
+  /** @nullable */
+  accommodationProvided?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  completedAt?: string | null;
   createdAt: string;
 }

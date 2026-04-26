@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { db, toursTable, tourStopsTable, tourVehiclesTable, vehiclesTable, runsTable } from "@workspace/db";
 import { findOrCreateUserVenue } from "../lib/venue-resolver";
@@ -20,18 +21,37 @@ import {
   UpdateTourStopBody,
   UpdateTourStopResponse,
   DeleteTourStopParams,
-  GetTourVehiclesParams,
-  GetTourVehiclesResponse,
-  AddTourVehicleParams,
-  AddTourVehicleBody,
-  AddTourVehicleResponse,
-  DeleteTourVehicleParams,
 } from "@workspace/api-zod";
 import { loadTourDerivations } from "../lib/tour-derivations";
 import { getDefaultSavedCalculationStatus, getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 import { checkTourDuplicateName } from "../lib/duplicate-protection";
 import { parseIntegerParam } from "../lib/request-params";
 import { saveDealAndUpsertVenue } from "../lib/deal-persistence";
+
+// Pre-existing alpha tech-debt: tour-vehicles route handlers exist but their
+// matching openapi schemas have never been added. Inline-define so the server
+// can build until openapi.yaml is brought into line with the routes.
+const TourVehicleItem = z.object({
+  id: z.number().int(),
+  tourId: z.number().int(),
+  vehicleId: z.number().int(),
+  vehicle: z.object({
+    id: z.number().int(),
+    name: z.string(),
+    fuelType: z.string(),
+    avgConsumption: z.number(),
+    vehicleType: z.string().nullable(),
+  }),
+});
+const GetTourVehiclesParams = z.object({ tourId: z.coerce.number().int() });
+const GetTourVehiclesResponse = z.array(TourVehicleItem);
+const AddTourVehicleParams = z.object({ tourId: z.coerce.number().int() });
+const AddTourVehicleBody = z.object({ vehicleId: z.number().int() });
+const AddTourVehicleResponse = TourVehicleItem;
+const DeleteTourVehicleParams = z.object({
+  tourId: z.coerce.number().int(),
+  vehicleId: z.coerce.number().int(),
+});
 
 const router: IRouter = Router();
 

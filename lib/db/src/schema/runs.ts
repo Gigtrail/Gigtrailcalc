@@ -49,6 +49,13 @@ export const runsTable = pgTable("runs", {
   merch: numeric("merch", { precision: 10, scale: 2 }),
   wouldDoAgain: text("would_do_again"),
   showNotes: text("show_notes"),
+  // Phase 3 — post-show completion + actuals capture (alpha-safe)
+  // All fields are optional / defaulted so existing rows stay valid without a migration.
+  isCompleted: boolean("is_completed").notNull().default(false),
+  completionStatus: text("completion_status"), // "completed" | "cancelled" | null
+  accommodationProvided: boolean("accommodation_provided"),
+  riderProvided: boolean("rider_provided"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   // Tour linkage
   sourceTourId: integer("source_tour_id"),
   sourceStopId: integer("source_stop_id"),

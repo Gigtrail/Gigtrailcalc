@@ -341,6 +341,40 @@ paths:
         "204":
           description: Deleted
 
+  /runs/{id}/complete:
+    post:
+      operationId: completeRun
+      tags: [runs]
+      summary: Mark a saved show as completed (or cancelled) and capture post-show actuals.
+      description: |
+        Bypasses the normal "past show is read-only" rule because the whole purpose of this
+        endpoint is to record what actually happened after the show date.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteRunBody"
+      responses:
+        "200":
+          description: Updated run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /venues:
     get:
       operationId: getVenues
@@ -1227,6 +1261,19 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        # Phase 3 — post-show completion
+        isCompleted:
+          type: boolean
+          default: false
+        completionStatus:
+          type: ["string", "null"]
+          enum: [completed, cancelled, null]
+        accommodationProvided:
+          type: ["boolean", "null"]
+        riderProvided:
+          type: ["boolean", "null"]
+        completedAt:
+          type: ["string", "null"]
         createdAt:
           type: string
       required:
@@ -1455,6 +1502,36 @@ components:
         calculationSnapshot:
           type: ["object", "null"]
           additionalProperties: true
+
+    CompleteRunBody:
+      type: object
+      description: |
+        Body for `POST /runs/{id}/complete`. When `cancelled` is true the show is marked
+        as cancelled (no actuals required). Otherwise actuals fields are persisted as
+        provided; nothing else on the run is overwritten.
+      properties:
+        cancelled:
+          type: boolean
+          default: false
+        actualAttendance:
+          type: ["integer", "null"]
+        actualTicketSales:
+          type: ["integer", "null"]
+        actualMerch:
+          type: ["number", "null"]
+        actualIncome:
+          type: ["number", "null"]
+        actualExpenses:
+          type: ["number", "null"]
+        accommodationProvided:
+          type: ["boolean", "null"]
+        riderProvided:
+          type: ["boolean", "null"]
+        wouldDoAgain:
+          type: ["string", "null"]
+          enum: [yes, no, unsure, null]
+        notes:
+          type: ["string", "null"]
 
     RunStatus:
       type: string

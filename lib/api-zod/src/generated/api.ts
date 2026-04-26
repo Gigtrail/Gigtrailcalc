@@ -14,14 +14,6 @@ export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
 
-export const DuplicateProtection = zod.object({
-  duplicateFound: zod.boolean(),
-  matchingRecordIds: zod.array(zod.number()).optional(),
-  summaries: zod.array(zod.unknown()).optional(),
-  matchingRecords: zod.array(zod.unknown()).optional(),
-  rules: zod.array(zod.string()).optional(),
-});
-
 /**
  * @summary List all profiles
  */
@@ -33,27 +25,21 @@ export const GetProfilesResponseItem = zod.object({
   homeBaseLat: zod.number().nullish(),
   homeBaseLng: zod.number().nullish(),
   peopleCount: zod.number(),
-  bandMembers: zod.string().nullable(),
-  activeMemberIds: zod.string().nullable(),
+  bandMembers: zod.string().nullish(),
   defaultVehicleId: zod.number().nullable(),
   vehicleType: zod.string(),
-  vehicleName: zod.string().nullable(),
+  vehicleName: zod.string().nullish(),
   fuelConsumption: zod.number(),
   expectedGigFee: zod.number(),
-  minTakeHomePerPerson: zod.number().optional().default(0),
-  payoutMode: zod.string().optional().default("fixed"),
-  minimumActTakeHome: zod.number().optional().default(0),
+  minTakeHomePerPerson: zod.number(),
+  payoutMode: zod.string(),
+  minimumActTakeHome: zod.number(),
   accommodationRequired: zod.boolean(),
-  accommodationType: zod.string().nullable(),
+  accommodationType: zod.string().nullish(),
   avgAccomPerNight: zod.number(),
-  singleRoomsDefault: zod.number(),
-  doubleRoomsDefault: zod.number(),
   avgFoodPerDay: zod.number(),
-  maxDriveHoursPerDay: zod.number().nullable(),
+  maxDriveHoursPerDay: zod.number().nullish(),
   defaultFuelPrice: zod.number().nullable(),
-  defaultPetrolPrice: zod.number().nullable(),
-  defaultDieselPrice: zod.number().nullable(),
-  defaultLpgPrice: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -65,86 +51,6 @@ export const GetProfilesResponse = zod.array(GetProfilesResponseItem);
  * @summary Create a profile
  */
 export const CreateProfileBody = zod.object({
-  name: zod.string(),
-  actType: zod.string(),
-  homeBase: zod.string().nullish(),
-  homeBaseLat: zod.number().nullish(),
-  homeBaseLng: zod.number().nullish(),
-  peopleCount: zod.number(),
-  bandMembers: zod.string().nullish(),
-  activeMemberIds: zod.string().nullish(),
-  defaultVehicleId: zod.number().nullish(),
-  vehicleType: zod.string().optional(),
-  vehicleName: zod.string().nullish(),
-  fuelConsumption: zod.number().optional(),
-  expectedGigFee: zod.number().optional(),
-  minTakeHomePerPerson: zod.number().optional(),
-  payoutMode: zod.string().optional(),
-  minimumActTakeHome: zod.number().optional(),
-  accommodationRequired: zod.boolean().optional(),
-  accommodationType: zod.string().nullish(),
-  avgAccomPerNight: zod.number().optional(),
-  singleRoomsDefault: zod.number().optional(),
-  doubleRoomsDefault: zod.number().optional(),
-  avgFoodPerDay: zod.number(),
-  maxDriveHoursPerDay: zod.number().nullish(),
-  defaultFuelPrice: zod.number().nullish(),
-  defaultPetrolPrice: zod.number().nullish(),
-  defaultDieselPrice: zod.number().nullish(),
-  defaultLpgPrice: zod.number().nullish(),
-  notes: zod.string().nullish(),
-});
-
-/**
- * @summary Get a profile by ID
- */
-export const GetProfileParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const GetProfileResponse = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  actType: zod.string(),
-  homeBase: zod.string().nullable(),
-  homeBaseLat: zod.number().nullish(),
-  homeBaseLng: zod.number().nullish(),
-  peopleCount: zod.number(),
-  bandMembers: zod.string().nullable(),
-  activeMemberIds: zod.string().nullable(),
-  defaultVehicleId: zod.number().nullable(),
-  vehicleType: zod.string(),
-  vehicleName: zod.string().nullable(),
-  fuelConsumption: zod.number(),
-  expectedGigFee: zod.number(),
-  minTakeHomePerPerson: zod.number().optional().default(0),
-  payoutMode: zod.string().optional().default("fixed"),
-  minimumActTakeHome: zod.number().optional().default(0),
-  accommodationRequired: zod.boolean(),
-  accommodationType: zod.string().nullable(),
-  avgAccomPerNight: zod.number(),
-  singleRoomsDefault: zod.number(),
-  doubleRoomsDefault: zod.number(),
-  avgFoodPerDay: zod.number(),
-  maxDriveHoursPerDay: zod.number().nullable(),
-  defaultFuelPrice: zod.number().nullable(),
-  defaultPetrolPrice: zod.number().nullable(),
-  defaultDieselPrice: zod.number().nullable(),
-  defaultLpgPrice: zod.number().nullable(),
-  notes: zod.string().nullable(),
-  calculationsThisWeek: zod.number(),
-  lastCalculationReset: zod.string().nullable(),
-  createdAt: zod.string(),
-});
-
-/**
- * @summary Update a profile
- */
-export const UpdateProfileParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const UpdateProfileBody = zod.object({
   name: zod.string().optional(),
   actType: zod.string().optional(),
   homeBase: zod.string().nullish(),
@@ -175,6 +81,74 @@ export const UpdateProfileBody = zod.object({
   notes: zod.string().nullish(),
 });
 
+/**
+ * @summary Get a profile by ID
+ */
+export const GetProfileParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProfileResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  actType: zod.string(),
+  homeBase: zod.string().nullable(),
+  homeBaseLat: zod.number().nullish(),
+  homeBaseLng: zod.number().nullish(),
+  peopleCount: zod.number(),
+  bandMembers: zod.string().nullish(),
+  defaultVehicleId: zod.number().nullable(),
+  vehicleType: zod.string(),
+  vehicleName: zod.string().nullish(),
+  fuelConsumption: zod.number(),
+  expectedGigFee: zod.number(),
+  minTakeHomePerPerson: zod.number(),
+  payoutMode: zod.string(),
+  minimumActTakeHome: zod.number(),
+  accommodationRequired: zod.boolean(),
+  accommodationType: zod.string().nullish(),
+  avgAccomPerNight: zod.number(),
+  avgFoodPerDay: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullish(),
+  defaultFuelPrice: zod.number().nullable(),
+  notes: zod.string().nullable(),
+  calculationsThisWeek: zod.number(),
+  lastCalculationReset: zod.string().nullable(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Update a profile
+ */
+export const UpdateProfileParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateProfileBody = zod.object({
+  name: zod.string(),
+  actType: zod.string(),
+  homeBase: zod.string().nullish(),
+  homeBaseLat: zod.number().nullish(),
+  homeBaseLng: zod.number().nullish(),
+  peopleCount: zod.number(),
+  bandMembers: zod.string().nullish(),
+  defaultVehicleId: zod.number().nullish(),
+  vehicleType: zod.string().optional(),
+  vehicleName: zod.string().nullish(),
+  fuelConsumption: zod.number().optional(),
+  expectedGigFee: zod.number().optional(),
+  minTakeHomePerPerson: zod.number().optional(),
+  payoutMode: zod.string().optional(),
+  minimumActTakeHome: zod.number().optional(),
+  accommodationRequired: zod.boolean().optional(),
+  accommodationType: zod.string().nullish(),
+  avgAccomPerNight: zod.number(),
+  avgFoodPerDay: zod.number(),
+  maxDriveHoursPerDay: zod.number().nullish(),
+  defaultFuelPrice: zod.number().nullish(),
+  notes: zod.string().nullish(),
+});
+
 export const UpdateProfileResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
@@ -183,27 +157,21 @@ export const UpdateProfileResponse = zod.object({
   homeBaseLat: zod.number().nullish(),
   homeBaseLng: zod.number().nullish(),
   peopleCount: zod.number(),
-  bandMembers: zod.string().nullable(),
-  activeMemberIds: zod.string().nullable(),
+  bandMembers: zod.string().nullish(),
   defaultVehicleId: zod.number().nullable(),
   vehicleType: zod.string(),
-  vehicleName: zod.string().nullable(),
+  vehicleName: zod.string().nullish(),
   fuelConsumption: zod.number(),
   expectedGigFee: zod.number(),
-  minTakeHomePerPerson: zod.number().optional().default(0),
-  payoutMode: zod.string().optional().default("fixed"),
-  minimumActTakeHome: zod.number().optional().default(0),
+  minTakeHomePerPerson: zod.number(),
+  payoutMode: zod.string(),
+  minimumActTakeHome: zod.number(),
   accommodationRequired: zod.boolean(),
-  accommodationType: zod.string().nullable(),
+  accommodationType: zod.string().nullish(),
   avgAccomPerNight: zod.number(),
-  singleRoomsDefault: zod.number(),
-  doubleRoomsDefault: zod.number(),
   avgFoodPerDay: zod.number(),
-  maxDriveHoursPerDay: zod.number().nullable(),
+  maxDriveHoursPerDay: zod.number().nullish(),
   defaultFuelPrice: zod.number().nullable(),
-  defaultPetrolPrice: zod.number().nullable(),
-  defaultDieselPrice: zod.number().nullable(),
-  defaultLpgPrice: zod.number().nullable(),
   notes: zod.string().nullable(),
   calculationsThisWeek: zod.number(),
   lastCalculationReset: zod.string().nullable(),
@@ -236,17 +204,20 @@ export const TrackCalculationResponse = zod.object({
 export const GetVehiclesResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
-  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
-  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
-  isDefault: zod.boolean(),
-  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
-  assignedActIds: zod.array(zod.number()),
-  duplicateProtection: DuplicateProtection.optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
 
@@ -255,16 +226,10 @@ export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
  */
 export const CreateVehicleBody = zod.object({
   name: zod.string(),
-  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
-  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
-  isDefault: zod.boolean().nullish(),
-  assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
-  actIds: zod.array(zod.number()).nullish(),
-  defaultForActIds: zod.array(zod.number()).nullish(),
 });
 
 /**
@@ -277,17 +242,20 @@ export const GetVehicleParams = zod.object({
 export const GetVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
-  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
-  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
-  isDefault: zod.boolean(),
-  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
-  assignedActIds: zod.array(zod.number()),
-  duplicateProtection: DuplicateProtection.optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -299,44 +267,29 @@ export const UpdateVehicleParams = zod.object({
 
 export const UpdateVehicleBody = zod.object({
   name: zod.string(),
-  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
-  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
-  isDefault: zod.boolean().nullish(),
-  assignedMemberIds: zod.string().nullish(),
   notes: zod.string().nullish(),
-  actIds: zod.array(zod.number()).nullish(),
-  defaultForActIds: zod.array(zod.number()).nullish(),
 });
 
 export const UpdateVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
-  vehicleType: zod.string().nullable(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
-  tankSizeLitres: zod.number().nullable(),
   maxPassengers: zod.number().nullable(),
-  isDefault: zod.boolean(),
-  assignedMemberIds: zod.string().nullable(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
-  assignedActIds: zod.array(zod.number()),
-  duplicateProtection: DuplicateProtection.optional(),
-});
-
-/**
- * @summary Set act assignments for a vehicle
- */
-export const SetVehicleActAssignmentsParams = zod.object({
-  id: zod.coerce.number(),
-});
-
-export const SetVehicleActAssignmentsBody = zod.object({
-  actIds: zod.array(zod.number()),
-  defaultForActIds: zod.array(zod.number()).optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -349,7 +302,7 @@ export const DeleteVehicleParams = zod.object({
 /**
  * @summary List all single show calculations
  */
-export const RunStatus = zod.enum(["draft", "planned", "past"]);
+export const getRunsResponseIsCompletedDefault = false;
 
 export const GetRunsResponseItem = zod.object({
   id: zod.number(),
@@ -361,8 +314,7 @@ export const GetRunsResponseItem = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: RunStatus,
-  actType: zod.string().nullish(),
+  status: zod.enum(["draft", "planned", "past"]),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
   originLng: zod.number().nullish(),
@@ -382,12 +334,8 @@ export const GetRunsResponseItem = zod.object({
   guarantee: zod.number().nullish(),
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
-  bookingFeePerTicket: zod.number().nullish(),
-  supportActCost: zod.number().nullish(),
   accommodationRequired: zod.boolean().optional(),
   accommodationType: zod.string().nullish(),
-  singleRooms: zod.number().nullish(),
-  doubleRooms: zod.number().nullish(),
   accommodationNights: zod.number().nullish(),
   accommodationCost: zod.number().nullish(),
   foodCost: zod.number().nullish(),
@@ -405,6 +353,17 @@ export const GetRunsResponseItem = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
+  isCompleted: zod.boolean().default(getRunsResponseIsCompletedDefault),
+  completionStatus: zod
+    .union([
+      zod.literal("completed"),
+      zod.literal("cancelled"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  accommodationProvided: zod.boolean().nullish(),
+  riderProvided: zod.boolean().nullish(),
+  completedAt: zod.string().nullish(),
   createdAt: zod.string(),
 });
 export const GetRunsResponse = zod.array(GetRunsResponseItem);
@@ -421,8 +380,9 @@ export const CreateRunBody = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: RunStatus.nullish(),
-  actType: zod.string().nullish(),
+  status: zod
+    .union([zod.enum(["draft", "planned", "past"]), zod.null()])
+    .optional(),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
   originLng: zod.number().nullish(),
@@ -442,12 +402,8 @@ export const CreateRunBody = zod.object({
   guarantee: zod.number().nullish(),
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
-  bookingFeePerTicket: zod.number().nullish(),
-  supportActCost: zod.number().nullish(),
   accommodationRequired: zod.boolean().optional(),
   accommodationType: zod.string().nullish(),
-  singleRooms: zod.number().nullish(),
-  doubleRooms: zod.number().nullish(),
   accommodationNights: zod.number().nullish(),
   accommodationCost: zod.number().nullish(),
   foodCost: zod.number().nullish(),
@@ -465,7 +421,6 @@ export const CreateRunBody = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
-  calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 /**
@@ -474,6 +429,8 @@ export const CreateRunBody = zod.object({
 export const GetRunParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const getRunResponseIsCompletedDefault = false;
 
 export const GetRunResponse = zod.object({
   id: zod.number(),
@@ -485,8 +442,7 @@ export const GetRunResponse = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: zod.string(),
-  actType: zod.string().nullish(),
+  status: zod.enum(["draft", "planned", "past"]),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
   originLng: zod.number().nullish(),
@@ -506,8 +462,6 @@ export const GetRunResponse = zod.object({
   guarantee: zod.number().nullish(),
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
-  bookingFeePerTicket: zod.number().nullish(),
-  supportActCost: zod.number().nullish(),
   accommodationRequired: zod.boolean().optional(),
   accommodationType: zod.string().nullish(),
   accommodationNights: zod.number().nullish(),
@@ -527,7 +481,17 @@ export const GetRunResponse = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
-  calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
+  isCompleted: zod.boolean().default(getRunResponseIsCompletedDefault),
+  completionStatus: zod
+    .union([
+      zod.literal("completed"),
+      zod.literal("cancelled"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  accommodationProvided: zod.boolean().nullish(),
+  riderProvided: zod.boolean().nullish(),
+  completedAt: zod.string().nullish(),
   createdAt: zod.string(),
 });
 
@@ -547,7 +511,9 @@ export const UpdateRunBody = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: RunStatus.nullish(),
+  status: zod
+    .union([zod.enum(["draft", "planned", "past"]), zod.null()])
+    .optional(),
   actType: zod.string().nullish(),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
@@ -594,6 +560,8 @@ export const UpdateRunBody = zod.object({
   calculationSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
+export const updateRunResponseIsCompletedDefault = false;
+
 export const UpdateRunResponse = zod.object({
   id: zod.number(),
   profileId: zod.number().nullish(),
@@ -604,7 +572,7 @@ export const UpdateRunResponse = zod.object({
   state: zod.string().nullish(),
   country: zod.string().nullish(),
   showDate: zod.string().nullish(),
-  status: RunStatus,
+  status: zod.enum(["draft", "planned", "past"]),
   origin: zod.string().nullish(),
   originLat: zod.number().nullish(),
   originLng: zod.number().nullish(),
@@ -624,8 +592,6 @@ export const UpdateRunResponse = zod.object({
   guarantee: zod.number().nullish(),
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
-  bookingFeePerTicket: zod.number().nullish(),
-  supportActCost: zod.number().nullish(),
   accommodationRequired: zod.boolean().optional(),
   accommodationType: zod.string().nullish(),
   accommodationNights: zod.number().nullish(),
@@ -645,6 +611,17 @@ export const UpdateRunResponse = zod.object({
   actualProfit: zod.number().nullish(),
   wouldDoAgain: zod.string().nullish(),
   notes: zod.string().nullish(),
+  isCompleted: zod.boolean().default(updateRunResponseIsCompletedDefault),
+  completionStatus: zod
+    .union([
+      zod.literal("completed"),
+      zod.literal("cancelled"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  accommodationProvided: zod.boolean().nullish(),
+  riderProvided: zod.boolean().nullish(),
+  completedAt: zod.string().nullish(),
   createdAt: zod.string(),
 });
 
@@ -656,42 +633,194 @@ export const DeleteRunParams = zod.object({
 });
 
 /**
- * @summary List all venues for user
+ * Bypasses the normal "past show is read-only" rule because the whole purpose of this
+endpoint is to record what actually happened after the show date.
+
+ * @summary Mark a saved show as completed (or cancelled) and capture post-show actuals.
  */
-export const GetVenuesResponseItem = zod.object({
+export const CompleteRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const completeRunBodyCancelledDefault = false;
+
+export const CompleteRunBody = zod
+  .object({
+    cancelled: zod.boolean().default(completeRunBodyCancelledDefault),
+    actualAttendance: zod.number().nullish(),
+    actualTicketSales: zod.number().nullish(),
+    actualMerch: zod.number().nullish(),
+    actualIncome: zod.number().nullish(),
+    actualExpenses: zod.number().nullish(),
+    accommodationProvided: zod.boolean().nullish(),
+    riderProvided: zod.boolean().nullish(),
+    wouldDoAgain: zod
+      .union([
+        zod.literal("yes"),
+        zod.literal("no"),
+        zod.literal("unsure"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    notes: zod.string().nullish(),
+  })
+  .describe(
+    "Body for `POST \/runs\/{id}\/complete`. When `cancelled` is true the show is marked\nas cancelled (no actuals required). Otherwise actuals fields are persisted as\nprovided; nothing else on the run is overwritten.\n",
+  );
+
+export const completeRunResponseIsCompletedDefault = false;
+
+export const CompleteRunResponse = zod.object({
   id: zod.number(),
-  userId: zod.string().nullish(),
   profileId: zod.number().nullish(),
-  venueName: zod.string(),
-  normalizedVenueName: zod.string(),
+  vehicleId: zod.number().nullish(),
+  venueId: zod.number().nullish(),
+  venueName: zod.string().nullish(),
   city: zod.string().nullish(),
   state: zod.string().nullish(),
   country: zod.string().nullish(),
-  lastTotalProfit: zod.number().nullish(),
-  lastStatus: zod.string().nullish(),
-  address: zod.string().nullish(),
-  suburb: zod.string().nullish(),
-  fullAddress: zod.string().nullish(),
+  showDate: zod.string().nullish(),
+  status: zod.enum(["draft", "planned", "past"]),
+  origin: zod.string().nullish(),
+  originLat: zod.number().nullish(),
+  originLng: zod.number().nullish(),
+  destination: zod.string().nullish(),
+  destinationLat: zod.number().nullish(),
+  destinationLng: zod.number().nullish(),
+  distanceKm: zod.number(),
+  returnTrip: zod.boolean(),
+  fuelPrice: zod.number(),
+  showType: zod.string(),
+  fee: zod.number().nullish(),
   capacity: zod.number().nullish(),
-  website: zod.string().nullish(),
-  contactName: zod.string().nullish(),
-  contactEmail: zod.string().nullish(),
-  contactPhone: zod.string().nullish(),
-  productionContactName: zod.string().nullish(),
-  productionContactPhone: zod.string().nullish(),
-  productionContactEmail: zod.string().nullish(),
-  roomNotes: zod.string().nullish(),
-  venueStatus: zod.enum(["great", "risky", "avoid", "untested"]).nullish(),
-  willPlayAgain: zod.enum(["yes", "no", "unsure"]).nullish(),
-  accommodationAvailable: zod.boolean().nullish(),
+  ticketPrice: zod.number().nullish(),
+  expectedAttendancePct: zod.number().nullish(),
+  dealType: zod.string().nullish(),
+  splitPct: zod.number().nullish(),
+  guarantee: zod.number().nullish(),
+  merchEstimate: zod.number().nullish(),
+  marketingCost: zod.number().nullish(),
+  accommodationRequired: zod.boolean().optional(),
+  accommodationType: zod.string().nullish(),
+  accommodationNights: zod.number().nullish(),
+  accommodationCost: zod.number().nullish(),
+  foodCost: zod.number().nullish(),
+  extraCosts: zod.number().nullish(),
+  totalCost: zod.number().nullish(),
+  totalIncome: zod.number().nullish(),
+  totalProfit: zod.number().nullish(),
+  soundcheckTime: zod.string().nullish(),
+  playingTime: zod.string().nullish(),
+  actualAttendance: zod.number().nullish(),
+  actualTicketSales: zod.number().nullish(),
+  actualTicketIncome: zod.number().nullish(),
+  actualOtherIncome: zod.number().nullish(),
+  actualExpenses: zod.number().nullish(),
+  actualProfit: zod.number().nullish(),
+  wouldDoAgain: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  isCompleted: zod.boolean().default(completeRunResponseIsCompletedDefault),
+  completionStatus: zod
+    .union([
+      zod.literal("completed"),
+      zod.literal("cancelled"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  accommodationProvided: zod.boolean().nullish(),
   riderProvided: zod.boolean().nullish(),
-  playingDays: zod.array(zod.string()).nullish(),
-  venueNotes: zod.string().nullish(),
-  postcode: zod.string().nullish(),
+  completedAt: zod.string().nullish(),
   createdAt: zod.string(),
-  updatedAt: zod.string(),
 });
-export const GetVenuesResponse = zod.array(GetVenuesResponseItem);
+
+/**
+ * @summary List paginated venues for user
+ */
+export const getVenuesQueryPageDefault = 1;
+
+export const getVenuesQueryLimitDefault = 25;
+export const getVenuesQueryLimitMax = 50;
+
+export const getVenuesQueryTypeDefault = `all`;
+
+export const GetVenuesQueryParams = zod.object({
+  page: zod.coerce.number().min(1).default(getVenuesQueryPageDefault),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getVenuesQueryLimitMax)
+    .default(getVenuesQueryLimitDefault),
+  type: zod.enum(["played", "lead", "all"]).default(getVenuesQueryTypeDefault),
+  country: zod.coerce.string().optional(),
+  q: zod.coerce.string().optional(),
+});
+
+export const GetVenuesResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.number(),
+      userId: zod.string().nullish(),
+      profileId: zod.number().nullish(),
+      venueName: zod.string(),
+      normalizedVenueName: zod.string(),
+      venueType: zod
+        .union([
+          zod.literal("personal"),
+          zod.literal("imported"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      city: zod.string().nullish(),
+      state: zod.string().nullish(),
+      country: zod.string().nullish(),
+      lastTotalProfit: zod.number().nullish(),
+      lastStatus: zod.string().nullish(),
+      address: zod.string().nullish(),
+      suburb: zod.string().nullish(),
+      fullAddress: zod.string().nullish(),
+      postcode: zod.string().nullish(),
+      capacity: zod.number().nullish(),
+      website: zod.string().nullish(),
+      contactName: zod.string().nullish(),
+      contactEmail: zod.string().nullish(),
+      contactPhone: zod.string().nullish(),
+      productionContactName: zod.string().nullish(),
+      productionContactPhone: zod.string().nullish(),
+      productionContactEmail: zod.string().nullish(),
+      roomNotes: zod.string().nullish(),
+      venueStatus: zod
+        .union([
+          zod.literal("great"),
+          zod.literal("risky"),
+          zod.literal("avoid"),
+          zod.literal("untested"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      willPlayAgain: zod
+        .union([
+          zod.literal("yes"),
+          zod.literal("no"),
+          zod.literal("unsure"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      accommodationAvailable: zod.boolean().nullish(),
+      riderProvided: zod.boolean().nullish(),
+      playingDays: zod.array(zod.string()).nullish(),
+      venueNotes: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  pagination: zod.object({
+    page: zod.number(),
+    limit: zod.number(),
+    total: zod.number(),
+    hasNextPage: zod.boolean(),
+    hasPreviousPage: zod.boolean(),
+  }),
+});
 
 /**
  * @summary Create or update a venue (upserts by normalised name)
@@ -717,8 +846,23 @@ export const CreateOrUpdateVenueBody = zod.object({
   productionContactPhone: zod.string().nullish(),
   productionContactEmail: zod.string().nullish(),
   roomNotes: zod.string().nullish(),
-  venueStatus: zod.enum(["great", "risky", "avoid", "untested"]).nullish(),
-  willPlayAgain: zod.enum(["yes", "no", "unsure"]).nullish(),
+  venueStatus: zod
+    .union([
+      zod.literal("great"),
+      zod.literal("risky"),
+      zod.literal("avoid"),
+      zod.literal("untested"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  willPlayAgain: zod
+    .union([
+      zod.literal("yes"),
+      zod.literal("no"),
+      zod.literal("unsure"),
+      zod.literal(null),
+    ])
+    .nullish(),
   accommodationAvailable: zod.boolean().nullish(),
   riderProvided: zod.boolean().nullish(),
   playingDays: zod.array(zod.string()).nullish(),
@@ -738,6 +882,13 @@ export const SearchVenuesResponseItem = zod.object({
   profileId: zod.number().nullish(),
   venueName: zod.string(),
   normalizedVenueName: zod.string(),
+  venueType: zod
+    .union([
+      zod.literal("personal"),
+      zod.literal("imported"),
+      zod.literal(null),
+    ])
+    .nullish(),
   city: zod.string().nullish(),
   state: zod.string().nullish(),
   country: zod.string().nullish(),
@@ -746,6 +897,7 @@ export const SearchVenuesResponseItem = zod.object({
   address: zod.string().nullish(),
   suburb: zod.string().nullish(),
   fullAddress: zod.string().nullish(),
+  postcode: zod.string().nullish(),
   capacity: zod.number().nullish(),
   website: zod.string().nullish(),
   contactName: zod.string().nullish(),
@@ -755,13 +907,27 @@ export const SearchVenuesResponseItem = zod.object({
   productionContactPhone: zod.string().nullish(),
   productionContactEmail: zod.string().nullish(),
   roomNotes: zod.string().nullish(),
-  venueStatus: zod.enum(["great", "risky", "avoid", "untested"]).nullish(),
-  willPlayAgain: zod.enum(["yes", "no", "unsure"]).nullish(),
+  venueStatus: zod
+    .union([
+      zod.literal("great"),
+      zod.literal("risky"),
+      zod.literal("avoid"),
+      zod.literal("untested"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  willPlayAgain: zod
+    .union([
+      zod.literal("yes"),
+      zod.literal("no"),
+      zod.literal("unsure"),
+      zod.literal(null),
+    ])
+    .nullish(),
   accommodationAvailable: zod.boolean().nullish(),
   riderProvided: zod.boolean().nullish(),
   playingDays: zod.array(zod.string()).nullish(),
   venueNotes: zod.string().nullish(),
-  postcode: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -788,15 +954,31 @@ export const GetToursResponseItem = zod.object({
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
-  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
+  fuelType: zod.string().nullish(),
+  fuelConsumption: zod.number().nullish(),
+  fuelPrice: zod.number().nullish(),
+  travelingWithPa: zod.boolean().optional(),
+  extraCrew: zod.boolean().optional(),
+  towingTrailer: zod.boolean().optional(),
+  flightsCost: zod.number().nullish(),
+  ferriesTollsCost: zod.number().nullish(),
+  gearHireCost: zod.number().nullish(),
+  otherCosts: zod.number().nullish(),
   totalDistance: zod.number().nullable(),
   totalCost: zod.number().nullable(),
   totalIncome: zod.number().nullable(),
   totalProfit: zod.number().nullable(),
-  stopCount: zod.number(),
   createdAt: zod.string(),
-  duplicateProtection: DuplicateProtection.optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 export const GetToursResponse = zod.array(GetToursResponseItem);
 
@@ -808,21 +990,13 @@ export const CreateTourBody = zod.object({
   profileId: zod.number().nullish(),
   vehicleId: zod.number().nullish(),
   startLocation: zod.string().nullish(),
-  startLocationLat: zod.number().nullish(),
-  startLocationLng: zod.number().nullish(),
   endLocation: zod.string().nullish(),
-  endLocationLat: zod.number().nullish(),
-  endLocationLng: zod.number().nullish(),
   returnHome: zod.boolean().optional(),
   startDate: zod.string().nullish(),
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
-  daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
-  fuelType: zod.string().optional(),
-  fuelPricePetrol: zod.number().nullish(),
-  fuelPriceDiesel: zod.number().nullish(),
-  fuelPriceLpg: zod.number().nullish(),
+  fuelType: zod.string().nullish(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),
   travelingWithPa: zod.boolean().optional(),
@@ -847,25 +1021,16 @@ export const GetTourResponse = zod.object({
   profileId: zod.number().nullable(),
   vehicleId: zod.number().nullable(),
   startLocation: zod.string().nullable(),
-  startLocationLat: zod.number().nullish(),
-  startLocationLng: zod.number().nullish(),
   endLocation: zod.string().nullable(),
-  endLocationLat: zod.number().nullish(),
-  endLocationLng: zod.number().nullish(),
   returnHome: zod.boolean(),
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
-  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
   totalDistance: zod.number().nullable(),
   totalCost: zod.number().nullable(),
   totalIncome: zod.number().nullable(),
   totalProfit: zod.number().nullable(),
-  fuelType: zod.string().nullable(),
-  fuelPricePetrol: zod.number().nullable(),
-  fuelPriceDiesel: zod.number().nullable(),
-  fuelPriceLpg: zod.number().nullable(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),
   travelingWithPa: zod.boolean().optional(),
@@ -897,14 +1062,21 @@ export const GetTourResponse = zod.object({
       merchEstimate: zod.number().nullable(),
       marketingCost: zod.number().nullable(),
       accommodationCost: zod.number().nullable(),
-      accommodationMode: zod.string().nullable(),
       extraCosts: zod.number().nullable(),
       distanceOverride: zod.number().nullable(),
       fuelPriceOverride: zod.number().nullable(),
       notes: zod.string().nullable(),
     }),
   ),
-  duplicateProtection: DuplicateProtection.optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -919,21 +1091,13 @@ export const UpdateTourBody = zod.object({
   profileId: zod.number().nullish(),
   vehicleId: zod.number().nullish(),
   startLocation: zod.string().nullish(),
-  startLocationLat: zod.number().nullish(),
-  startLocationLng: zod.number().nullish(),
   endLocation: zod.string().nullish(),
-  endLocationLat: zod.number().nullish(),
-  endLocationLng: zod.number().nullish(),
   returnHome: zod.boolean().optional(),
   startDate: zod.string().nullish(),
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
-  daysOnTour: zod.number().nullish(),
   notes: zod.string().nullish(),
-  fuelType: zod.string().optional(),
-  fuelPricePetrol: zod.number().nullish(),
-  fuelPriceDiesel: zod.number().nullish(),
-  fuelPriceLpg: zod.number().nullish(),
+  fuelType: zod.string().nullish(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),
   travelingWithPa: zod.boolean().optional(),
@@ -943,10 +1107,6 @@ export const UpdateTourBody = zod.object({
   ferriesTollsCost: zod.number().nullish(),
   gearHireCost: zod.number().nullish(),
   otherCosts: zod.number().nullish(),
-  totalDistance: zod.number().nullish(),
-  totalCost: zod.number().nullish(),
-  totalIncome: zod.number().nullish(),
-  totalProfit: zod.number().nullish(),
 });
 
 export const UpdateTourResponse = zod.object({
@@ -955,25 +1115,13 @@ export const UpdateTourResponse = zod.object({
   profileId: zod.number().nullable(),
   vehicleId: zod.number().nullable(),
   startLocation: zod.string().nullable(),
-  startLocationLat: zod.number().nullish(),
-  startLocationLng: zod.number().nullish(),
   endLocation: zod.string().nullable(),
-  endLocationLat: zod.number().nullish(),
-  endLocationLng: zod.number().nullish(),
   returnHome: zod.boolean(),
   startDate: zod.string().nullable(),
   endDate: zod.string().nullable(),
   defaultFoodCost: zod.number().nullable(),
-  daysOnTour: zod.number().nullable(),
   notes: zod.string().nullable(),
-  totalDistance: zod.number().nullable(),
-  totalCost: zod.number().nullable(),
-  totalIncome: zod.number().nullable(),
-  totalProfit: zod.number().nullable(),
-  fuelType: zod.string().nullable(),
-  fuelPricePetrol: zod.number().nullable(),
-  fuelPriceDiesel: zod.number().nullable(),
-  fuelPriceLpg: zod.number().nullable(),
+  fuelType: zod.string().nullish(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),
   travelingWithPa: zod.boolean().optional(),
@@ -983,8 +1131,20 @@ export const UpdateTourResponse = zod.object({
   ferriesTollsCost: zod.number().nullish(),
   gearHireCost: zod.number().nullish(),
   otherCosts: zod.number().nullish(),
+  totalDistance: zod.number().nullable(),
+  totalCost: zod.number().nullable(),
+  totalIncome: zod.number().nullable(),
+  totalProfit: zod.number().nullable(),
   createdAt: zod.string(),
-  duplicateProtection: DuplicateProtection.optional(),
+  duplicateProtection: zod
+    .object({
+      duplicateFound: zod.boolean(),
+      matchingRecordIds: zod.array(zod.number()).optional(),
+      summaries: zod.array(zod.unknown()).optional(),
+      matchingRecords: zod.array(zod.unknown()).optional(),
+      rules: zod.array(zod.string()).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -1004,8 +1164,6 @@ export const GetTourStopsParams = zod.object({
 export const GetTourStopsResponseItem = zod.object({
   id: zod.number(),
   tourId: zod.number(),
-  venueId: zod.number().nullable(),
-  bookingStatus: zod.string().nullable(),
   stopOrder: zod.number(),
   date: zod.string().nullable(),
   city: zod.string(),
@@ -1023,7 +1181,6 @@ export const GetTourStopsResponseItem = zod.object({
   merchEstimate: zod.number().nullable(),
   marketingCost: zod.number().nullable(),
   accommodationCost: zod.number().nullable(),
-  accommodationMode: zod.string().nullable(),
   extraCosts: zod.number().nullable(),
   distanceOverride: zod.number().nullable(),
   fuelPriceOverride: zod.number().nullable(),
@@ -1039,8 +1196,6 @@ export const CreateTourStopParams = zod.object({
 });
 
 export const CreateTourStopBody = zod.object({
-  venueId: zod.number().nullish(),
-  bookingStatus: zod.string().nullish(),
   stopOrder: zod.number().optional(),
   date: zod.string().nullish(),
   city: zod.string(),
@@ -1058,7 +1213,6 @@ export const CreateTourStopBody = zod.object({
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
   accommodationCost: zod.number().nullish(),
-  accommodationMode: zod.string().nullish(),
   extraCosts: zod.number().nullish(),
   distanceOverride: zod.number().nullish(),
   fuelPriceOverride: zod.number().nullish(),
@@ -1074,8 +1228,6 @@ export const UpdateTourStopParams = zod.object({
 });
 
 export const UpdateTourStopBody = zod.object({
-  venueId: zod.number().nullish(),
-  bookingStatus: zod.string().nullish(),
   stopOrder: zod.number().optional(),
   date: zod.string().nullish(),
   city: zod.string(),
@@ -1093,7 +1245,6 @@ export const UpdateTourStopBody = zod.object({
   merchEstimate: zod.number().nullish(),
   marketingCost: zod.number().nullish(),
   accommodationCost: zod.number().nullish(),
-  accommodationMode: zod.string().nullish(),
   extraCosts: zod.number().nullish(),
   distanceOverride: zod.number().nullish(),
   fuelPriceOverride: zod.number().nullish(),
@@ -1103,8 +1254,6 @@ export const UpdateTourStopBody = zod.object({
 export const UpdateTourStopResponse = zod.object({
   id: zod.number(),
   tourId: zod.number(),
-  venueId: zod.number().nullable(),
-  bookingStatus: zod.string().nullable(),
   stopOrder: zod.number(),
   date: zod.string().nullable(),
   city: zod.string(),
@@ -1122,7 +1271,6 @@ export const UpdateTourStopResponse = zod.object({
   merchEstimate: zod.number().nullable(),
   marketingCost: zod.number().nullable(),
   accommodationCost: zod.number().nullable(),
-  accommodationMode: zod.string().nullable(),
   extraCosts: zod.number().nullable(),
   distanceOverride: zod.number().nullable(),
   fuelPriceOverride: zod.number().nullable(),
@@ -1141,92 +1289,23 @@ export const DeleteTourStopParams = zod.object({
  * @summary Get dashboard summary stats
  */
 export const GetDashboardSummaryResponse = zod.object({
+  totalRuns: zod.number(),
+  totalTours: zod.number(),
   totalProfiles: zod.number(),
   totalVehicles: zod.number(),
-  actualPerformance: zod.object({
-    label: zod.literal("Past Show Snapshot"),
-    helperText: zod.string(),
-    totalsBasis: zod.literal("past_shows"),
-    totalsRule: zod.literal("Past Shows only"),
-    totalShows: zod.number(),
-    showsUsedInTotals: zod.number(),
-    incompleteDataCount: zod.number(),
-    missingFinancialDataMessage: zod.string().nullable(),
-    totalIncome: zod.number(),
-    totalProfit: zod.number(),
-    totalExpenses: zod.number(),
-    totalKmDriven: zod.number(),
-    avgShowProfit: zod.number(),
-    bestShowProfit: zod.number(),
-    worstShowProfit: zod.number(),
-    profitableShowCount: zod.number(),
-    totalAccommodationCost: zod.number(),
-    totalFoodCost: zod.number(),
-    totalMarketingCost: zod.number(),
-    worthTheDrive: zod.number(),
-    tightMargins: zod.number(),
-    notWorthIt: zod.number(),
-  }),
-  futurePotential: zod.object({
-    label: zod.literal("Future Potential"),
-    helperText: zod.string(),
-    totalsBasis: zod.literal("upcoming_tours"),
-    totalsRule: zod.literal("Projected from upcoming tours only"),
-    projectedTours: zod.number(),
-    projectedShows: zod.number(),
-    projectedIncome: zod.number(),
-    projectedProfit: zod.number(),
-    projectedExpenses: zod.number(),
-    projectedKm: zod.number(),
-    avgProjectedTourProfit: zod.number(),
-    bestProjectedTourProfit: zod.number(),
-    worstProjectedTourProfit: zod.number(),
-  }),
+  totalKmDriven: zod.number(),
+  totalIncome: zod.number(),
+  totalProfit: zod.number(),
+  worthTheDrive: zod.number(),
+  tightMargins: zod.number(),
+  notWorthIt: zod.number(),
 });
-
-/**
- * @summary Unified upcoming tour items (runs + tour stops) for Tour View
- */
-export const GetDashboardTourItemsResponse = zod.array(
-  zod.object({
-    id: zod.string(),
-    sourceId: zod.number(),
-    type: zod.enum(["run", "tour_stop"]),
-    showDate: zod.string(),
-    venueName: zod.string().nullable(),
-    location: zod.string().nullable(),
-    latitude: zod.number().nullable(),
-    longitude: zod.number().nullable(),
-    status: zod.enum(["draft", "pitched", "confirmed", "cancelled"]),
-    tourId: zod.number().nullable(),
-    tourName: zod.string().nullable(),
-    tourStartDate: zod.string().nullable(),
-    tourEndDate: zod.string().nullable(),
-    tourOrderIndex: zod.number().nullable(),
-    linkPath: zod.string(),
-  }),
-);
-
-/**
- * @summary Venues with upcoming/past metadata for the Tour View map
- */
-export const GetDashboardVenuesResponse = zod.array(
-  zod.object({
-    id: zod.number(),
-    venueName: zod.string(),
-    city: zod.string().nullable(),
-    state: zod.string().nullable(),
-    fullAddress: zod.string().nullable(),
-    latitude: zod.number().nullable(),
-    longitude: zod.number().nullable(),
-    upcomingShowsCount: zod.number(),
-    pastShowsCount: zod.number(),
-  }),
-);
 
 /**
  * @summary Get recent runs and tours for dashboard
  */
+export const getDashboardRecentResponseRecentRunsItemIsCompletedDefault = false;
+
 export const GetDashboardRecentResponse = zod.object({
   recentRuns: zod.array(
     zod.object({
@@ -1239,7 +1318,7 @@ export const GetDashboardRecentResponse = zod.object({
       state: zod.string().nullish(),
       country: zod.string().nullish(),
       showDate: zod.string().nullish(),
-      status: zod.string(),
+      status: zod.enum(["draft", "planned", "past"]),
       origin: zod.string().nullish(),
       originLat: zod.number().nullish(),
       originLng: zod.number().nullish(),
@@ -1268,69 +1347,93 @@ export const GetDashboardRecentResponse = zod.object({
       totalCost: zod.number().nullish(),
       totalIncome: zod.number().nullish(),
       totalProfit: zod.number().nullish(),
+      soundcheckTime: zod.string().nullish(),
+      playingTime: zod.string().nullish(),
       actualAttendance: zod.number().nullish(),
+      actualTicketSales: zod.number().nullish(),
       actualTicketIncome: zod.number().nullish(),
       actualOtherIncome: zod.number().nullish(),
       actualExpenses: zod.number().nullish(),
       actualProfit: zod.number().nullish(),
       wouldDoAgain: zod.string().nullish(),
       notes: zod.string().nullish(),
+      isCompleted: zod
+        .boolean()
+        .default(getDashboardRecentResponseRecentRunsItemIsCompletedDefault),
+      completionStatus: zod
+        .union([
+          zod.literal("completed"),
+          zod.literal("cancelled"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      accommodationProvided: zod.boolean().nullish(),
+      riderProvided: zod.boolean().nullish(),
+      completedAt: zod.string().nullish(),
       createdAt: zod.string(),
     }),
   ),
-  upcomingTours: zod.array(
+  recentTours: zod.array(
     zod.object({
       id: zod.number(),
       name: zod.string(),
-      nextStopDate: zod.string(),
+      profileId: zod.number().nullable(),
+      vehicleId: zod.number().nullable(),
+      startLocation: zod.string().nullable(),
+      endLocation: zod.string().nullable(),
+      returnHome: zod.boolean(),
+      startDate: zod.string().nullable(),
       endDate: zod.string().nullable(),
-      projectedShows: zod.number(),
-      projectedIncome: zod.number(),
-      projectedProfit: zod.number(),
-      projectedExpenses: zod.number(),
-      projectedKm: zod.number(),
+      defaultFoodCost: zod.number().nullable(),
+      notes: zod.string().nullable(),
+      fuelType: zod.string().nullish(),
+      fuelConsumption: zod.number().nullish(),
+      fuelPrice: zod.number().nullish(),
+      travelingWithPa: zod.boolean().optional(),
+      extraCrew: zod.boolean().optional(),
+      towingTrailer: zod.boolean().optional(),
+      flightsCost: zod.number().nullish(),
+      ferriesTollsCost: zod.number().nullish(),
+      gearHireCost: zod.number().nullish(),
+      otherCosts: zod.number().nullish(),
+      totalDistance: zod.number().nullable(),
+      totalCost: zod.number().nullable(),
+      totalIncome: zod.number().nullable(),
+      totalProfit: zod.number().nullable(),
+      createdAt: zod.string(),
+      duplicateProtection: zod
+        .object({
+          duplicateFound: zod.boolean(),
+          matchingRecordIds: zod.array(zod.number()).optional(),
+          summaries: zod.array(zod.unknown()).optional(),
+          matchingRecords: zod.array(zod.unknown()).optional(),
+          rules: zod.array(zod.string()).optional(),
+        })
+        .optional(),
     }),
   ),
 });
 
 /**
- * @summary Get vehicles assigned to a tour
+ * @summary Unified upcoming tour items (runs + tour stops) for Tour View
  */
-export const GetTourVehiclesParams = zod.object({
-  tourId: zod.coerce.number(),
+export const GetDashboardTourItemsResponseItem = zod.object({
+  id: zod.string(),
+  sourceId: zod.number(),
+  type: zod.enum(["run", "tour_stop"]),
+  showDate: zod.string(),
+  venueName: zod.string().nullable(),
+  location: zod.string().nullable(),
+  latitude: zod.number().nullable(),
+  longitude: zod.number().nullable(),
+  status: zod.enum(["draft", "pitched", "confirmed", "cancelled"]),
+  tourId: zod.number().nullable(),
+  tourName: zod.string().nullable(),
+  tourStartDate: zod.string().nullable(),
+  tourEndDate: zod.string().nullable(),
+  tourOrderIndex: zod.number().nullable(),
+  linkPath: zod.string(),
 });
-
-export const TourVehicleItem = zod.object({
-  id: zod.number(),
-  tourId: zod.number(),
-  vehicleId: zod.number(),
-  vehicle: zod.object({
-    id: zod.number(),
-    name: zod.string(),
-    fuelType: zod.string(),
-    avgConsumption: zod.number(),
-    vehicleType: zod.string().nullable(),
-  }),
-});
-export const GetTourVehiclesResponse = zod.array(TourVehicleItem);
-
-/**
- * @summary Add a vehicle to a tour
- */
-export const AddTourVehicleParams = zod.object({
-  tourId: zod.coerce.number(),
-});
-
-export const AddTourVehicleBody = zod.object({
-  vehicleId: zod.number(),
-});
-
-export const AddTourVehicleResponse = TourVehicleItem;
-
-/**
- * @summary Remove a vehicle from a tour
- */
-export const DeleteTourVehicleParams = zod.object({
-  tourId: zod.coerce.number(),
-  vehicleId: zod.coerce.number(),
-});
+export const GetDashboardTourItemsResponse = zod.array(
+  GetDashboardTourItemsResponseItem,
+);
