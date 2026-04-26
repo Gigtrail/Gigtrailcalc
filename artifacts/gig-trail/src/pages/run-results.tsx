@@ -39,6 +39,7 @@ import {
   calculateShowViability,
   generateSingleShowAttendanceScenarios,
   calculateFullBandBreakEven,
+  calculateTicketBreakEven,
   type SingleShowScenario,
 } from "@/lib/calculations";
 import { cn } from "@/lib/utils";
@@ -370,6 +371,10 @@ export default function RunResults() {
     snapshotMode, snapshotDate,
     calculationVersion, calculatedAt, snapshotMembers,
   } = result;
+  // v2.0.0+ snapshots store baseExpenses/bandMemberFees explicitly. Older
+  // snapshots only have totalCost (which was operating-only at the time of save).
+  const snapshotBaseExpenses = (result as { baseExpenses?: number }).baseExpenses;
+  const snapshotBandMemberFees = (result as { bandMemberFees?: number }).bandMemberFees;
 
   const effectiveRunId = savedRunId ?? runId;
   const runStatusMeta = getRunStatusMeta(runLifecycleStatus);
@@ -397,11 +402,14 @@ export default function RunResults() {
   })();
   const hasAccom = !!(formData.accommodationRequired && accomCostFromForm > 0);
 
-  // Accommodation-toggle-adjusted display values
+  // ── Display-time cost decomposition (v2.0.0) ─────────────────────────────
+  // Snapshots saved with engine ≥ 2.0.0 expose baseExpenses + bandMemberFees
+  // explicitly. Older snapshots' totalCost was operating-only, so use it as
+  // baseExpenses and re-fold member fees from the (live) profile.
+  const accomToggleAdjust = hasAccom && !accomOn ? accomCostFromForm : 0;
   const displayAccomCost = accomOn ? accomCostFromForm : 0;
-  const displayTotalCost = totalCost - (hasAccom && !accomOn ? accomCostFromForm : 0);
-  const displayNetProfit = netProfit + (hasAccom && !accomOn ? accomCostFromForm : 0);
-  const displayTakeHome = profilePeopleCount > 0 ? displayNetProfit / profilePeopleCount : displayNetProfit;
+  const baseExpensesRaw = snapshotBaseExpenses ?? totalCost;
+  const displayBaseExpenses = baseExpensesRaw - accomToggleAdjust;
 
   // Route
   const totalDriveMinutes = driveTimeMinutes !== null
@@ -423,22 +431,33 @@ export default function RunResults() {
     : liveMembersList;
   const membersWithFees = activeMembers.filter(m => (m.expectedGigFee ?? 0) > 0);
   const showPayoutSection = activeMembers.length > 1;
-  const totalMemberFees = activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0);
-  const profitAfterMemberFees = displayNetProfit - totalMemberFees;
+  // Prefer the snapshot's frozen member-fee total when available so old
+  // displays don't drift if the profile changes; otherwise sum live fees.
+  const liveTotalMemberFees = activeMembers.reduce((sum, m) => sum + (m.expectedGigFee ?? 0), 0);
+  const totalMemberFees = snapshotBandMemberFees ?? liveTotalMemberFees;
+  // ── Display totals (v2.0.0) ──────────────────────────────────────────────
+  // totalCost (and therefore netProfit) now ALWAYS includes member fees.
+  const displayTotalCost = displayBaseExpenses + totalMemberFees;
+  const displayNetProfit = totalIncome - displayTotalCost;
+  const displayTakeHome = profilePeopleCount > 0 ? displayNetProfit / profilePeopleCount : displayNetProfit;
+  // "Covers band fees" badge gating uses revenue ≥ totalCost (incl. fees).
+  const fullFeesCovered = totalIncome >= displayTotalCost;
+  const profitAfterMemberFees = displayNetProfit;
   const splitPerMember = activeMembers.length > 0 ? displayNetProfit / activeMembers.length : 0;
-  const fullFeesCovered = profitAfterMemberFees >= 0;
 
-  // ── Payout-mode plain-English breakdown (alpha v1.3) ─────────────────────
+  // ── Payout-mode plain-English breakdown (alpha v1.3 → v2.0.0) ─────────────
   // Falls back to fixed/0 when profile is unavailable (e.g. very old snapshot).
+  // v2.0.0: needCostsAndFees == displayTotalCost (already includes member fees).
+  // splitPool is computed against BASE expenses so members are paid from
+  // (revenue − operating costs − minimum act take-home), matching the engine.
   const profileForPayout = profiles?.find(p => p.id === formData.profileId);
   const profilePayoutMode: "fixed" | "split" = profileForPayout?.payoutMode === "split" ? "split" : "fixed";
   const profileMinimumActTakeHome = Math.max(0, Number(profileForPayout?.minimumActTakeHome ?? 0));
   const memberCountForSplit = activeMembers.length > 0 ? activeMembers.length : profilePeopleCount;
-  const expensesOnly = displayTotalCost;
-  const needCostsAndFees = expensesOnly + totalMemberFees;
+  const needCostsAndFees = displayTotalCost;
   const needPlusMinTakeHome = needCostsAndFees + profileMinimumActTakeHome;
   const remainingSurplus = totalIncome - needPlusMinTakeHome;
-  const splitPool = totalIncome - expensesOnly - profileMinimumActTakeHome;
+  const splitPool = totalIncome - displayBaseExpenses - profileMinimumActTakeHome;
   const perMemberSplitPayout = memberCountForSplit > 0 ? splitPool / memberCountForSplit : splitPool;
   const fixedShortfall = profilePayoutMode === "fixed" && remainingSurplus < 0;
   const splitShortfall = profilePayoutMode === "split" && splitPool < 0;
@@ -458,7 +477,9 @@ export default function RunResults() {
         bookingFeePerTicket: Number(formData.bookingFeePerTicket) || 0,
         merchEstimate: Number(formData.merchEstimate) || 0,
         expectedAttendancePct: Number(formData.expectedAttendancePct) || 0,
+        // v2.0.0: totalCost INCLUDES member fees so scenario nets subtract them.
         totalCost: displayTotalCost,
+        baseExpenses: displayBaseExpenses,
         totalMemberFees,
         peopleCount: profilePeopleCount,
       })
@@ -466,6 +487,9 @@ export default function RunResults() {
 
   const expectedScenario = scenarios.find(s => s.isExpected) ?? null;
 
+  // Full break-even covers EVERYTHING (operating + member fees). Pass the
+  // legacy `calculateFullBandBreakEven` operating-only totalCost; it adds
+  // member fees internally — which preserves identical output.
   const fullBandBE = isTicketed
     ? calculateFullBandBreakEven({
         showType,
@@ -474,7 +498,7 @@ export default function RunResults() {
         splitPct: Number(formData.splitPct) || 0,
         guarantee: Number(formData.guarantee) || 0,
         capacity: Number(formData.capacity) || 0,
-        totalCost: displayTotalCost,
+        totalCost: displayBaseExpenses,
         merchEstimate: Number(formData.merchEstimate) || 0,
         bookingFeePerTicket: Number(formData.bookingFeePerTicket) || 0,
         totalMemberFees,
@@ -482,6 +506,24 @@ export default function RunResults() {
     : { breakEvenTickets: 0, breakEvenCapacityPct: null, impossible: false };
   const fullBandBreakEvenTickets = fullBandBE.breakEvenTickets || (snapshotFullBandBreakEven ?? breakEvenTickets);
   const fullBandBreakEvenCapacityPct = fullBandBE.breakEvenCapacityPct ?? snapshotFullBandBreakEvenPct ?? null;
+
+  // Base-expenses-only break-even (operating costs, no member fees).
+  const baseExpensesBE = isTicketed
+    ? calculateTicketBreakEven({
+        showType,
+        dealType: (formData.dealType as string | null) ?? "100% door",
+        ticketPrice: Number(formData.ticketPrice) || 0,
+        splitPct: Number(formData.splitPct) || 0,
+        guarantee: Number(formData.guarantee) || 0,
+        capacity: Number(formData.capacity) || 0,
+        totalCost: displayBaseExpenses,
+        merchEstimate: Number(formData.merchEstimate) || 0,
+        bookingFeePerTicket: Number(formData.bookingFeePerTicket) || 0,
+      })
+    : { breakEvenTickets: 0, breakEvenCapacityPct: null, impossible: false };
+  const baseExpensesBreakEvenTickets = baseExpensesBE.breakEvenTickets;
+  const baseExpensesBreakEvenCapacityPct = baseExpensesBE.breakEvenCapacityPct;
+  const baseExpensesBreakEvenImpossible = baseExpensesBE.impossible;
   const fullBandSameAsCost = fullBandBreakEvenTickets <= breakEvenTickets;
 
   // Ticketed/hybrid hero: verdict line based on expected vs break-even thresholds.
@@ -680,9 +722,10 @@ export default function RunResults() {
               </p>
               <p className="text-sm text-foreground/80 mt-1.5">to pay everyone</p>
             </div>
-            {!fullBandSameAsCost && breakEvenTickets > 0 && (
+            {/* Base-expenses break-even (operating costs, no member fees). */}
+            {baseExpensesBreakEvenTickets > 0 && baseExpensesBreakEvenTickets < fullBandBreakEvenTickets && !baseExpensesBreakEvenImpossible && (
               <p className="text-sm text-foreground/70">
-                <span className="font-semibold text-foreground tabular-nums">{breakEvenTickets} tickets</span> to cover expenses only
+                <span className="font-semibold text-foreground tabular-nums">{baseExpensesBreakEvenTickets} tickets</span> to cover expenses only
               </p>
             )}
             {capacityNum > 0 && fullBandBreakEvenTickets > 0 && (
@@ -881,6 +924,54 @@ export default function RunResults() {
           ))}
         </div>
       )}
+
+      {/* ── SHOW THE MATH (collapsible quick reconciliation) ─────────────── */}
+      <Section
+        title="Show the math"
+        defaultOpen={false}
+        badge={
+          <span className={cn(
+            "text-xs font-semibold rounded-full px-2 py-0.5 tabular-nums",
+            displayNetProfit >= 0 ? "text-green-700 bg-green-100" : "text-red-700 bg-red-100",
+          )}>
+            {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
+          </span>
+        }
+      >
+        <div className="text-sm divide-y divide-border/30 mt-1" data-testid="section-show-the-math">
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">Total income</span>
+            <span className="font-semibold text-foreground tabular-nums">${fmt(totalIncome)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">Base expenses</span>
+            <span className="font-semibold text-foreground tabular-nums">−${fmt(displayBaseExpenses)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">
+              Band/member fees
+              {totalMemberFees === 0 && <span className="ml-1 text-xs">(none)</span>}
+            </span>
+            <span className="font-semibold text-foreground tabular-nums">−${fmt(totalMemberFees)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">Total cost</span>
+            <span className="font-semibold text-foreground tabular-nums">${fmt(displayTotalCost)}</span>
+          </div>
+          <div className="flex items-center justify-between py-2.5">
+            <span className="font-semibold">Net profit</span>
+            <span className={cn(
+              "font-bold tabular-nums",
+              displayNetProfit >= 0 ? "text-green-700" : "text-red-700",
+            )}>
+              {displayNetProfit >= 0 ? "+" : "−"}${fmt(Math.abs(displayNetProfit))}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground pt-2 leading-relaxed">
+            Net profit = Total income − (Base expenses + Band/member fees).
+          </p>
+        </div>
+      </Section>
 
       {/* ── 3. INCOME BREAKDOWN ──────────────────────────────────────────── */}
       <Section

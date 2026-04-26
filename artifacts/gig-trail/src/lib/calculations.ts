@@ -29,7 +29,7 @@
  *   MINOR — new derived outputs added; existing outputs unchanged
  *   PATCH — bug fix that corrects previously wrong outputs
  */
-export const CALC_ENGINE_VERSION = "1.2.0";
+export const CALC_ENGINE_VERSION = "2.0.0";
 
 import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, SYSTEM_FALLBACK_FUEL_PRICE } from "./gig-constants";
 import { calculateMemberEarnings, type MemberEarningsSummary } from "./member-utils";
@@ -503,8 +503,18 @@ export interface SingleShowScenarioInput {
   bookingFeePerTicket?: number | null;
   merchEstimate?: number | null;
   expectedAttendancePct?: number | null;
-  /** Total fixed costs (fuel + accom + food + marketing + extras + support) */
+  /**
+   * Total cost = baseExpenses + bandMemberFees.
+   * (As of v2.0.0 totalCost MUST include member fees so netProfit subtracts
+   *  them naturally per the ticketed-show profit spec.)
+   */
   totalCost: number;
+  /**
+   * Operating expenses only (fuel + accom + food + marketing + extras + support),
+   * EXCLUDING band/member fees. Used to compute "covers costs" (base only).
+   * Defaults to `totalCost - totalMemberFees` for back-compat.
+   */
+  baseExpenses?: number | null;
   /** Sum of expected member gig fees for active band members. Defaults to 0. */
   totalMemberFees?: number | null;
   /** Used to compute per-person take-home; null if unknown. Defaults to 1. */
@@ -528,13 +538,18 @@ export interface SingleShowScenario {
   /** Total income = showIncome + merch. */
   totalIncome: number;
   totalCost: number;
-  /** Net profit before subtracting member fees. */
+  /**
+   * Net profit = totalIncome − totalCost (where totalCost includes member fees).
+   * As of v2.0.0 this matches `netAfterMemberFees` — they are kept as aliases.
+   */
   netProfit: number;
-  /** Net profit after deducting expected member fees. */
+  /** Alias for `netProfit`; kept for back-compat. */
   netAfterMemberFees: number;
   /** Net per person after member fees (null when peopleCount is unknown / 0). */
   perPersonAfterFees: number | null;
+  /** True when scenarioRevenue covers BASE expenses (operating costs, no fees). */
   coversCosts: boolean;
+  /** True when scenarioRevenue covers BASE expenses + band/member fees. */
   coversFullBandFees: boolean;
   /** True when this scenario hit the guarantee floor (guarantee vs door deals). */
   guaranteeApplied: boolean;
@@ -567,6 +582,11 @@ export function generateSingleShowAttendanceScenarios(
   const dealType = input.dealType ?? "100% door";
   const totalCost = n(input.totalCost);
   const memberFees = Math.max(0, n(input.totalMemberFees));
+  // baseExpenses defaults to (totalCost - memberFees) for back-compat with
+  // callers that haven't been updated to pass it explicitly.
+  const baseExpenses = input.baseExpenses != null
+    ? Math.max(0, n(input.baseExpenses))
+    : Math.max(0, totalCost - memberFees);
   const people = n(input.peopleCount) > 0 ? n(input.peopleCount) : null;
 
   const expectedRaw = n(input.expectedAttendancePct);
@@ -603,8 +623,11 @@ export function generateSingleShowAttendanceScenarios(
       guarantee,
     });
     const totalIncome = inc.showIncome + merch;
+    // Per spec section 4: scenarioNet = scenarioRevenue − totalCosts (no
+    // hidden additions). totalCost already includes member fees so netProfit
+    // naturally subtracts them.
     const netProfit = totalIncome - totalCost;
-    const netAfterMemberFees = netProfit - memberFees;
+    const netAfterMemberFees = netProfit; // alias kept for back-compat
     const label = isExpected
       ? "Expected"
       : pct === 100
@@ -624,8 +647,9 @@ export function generateSingleShowAttendanceScenarios(
       netProfit,
       netAfterMemberFees,
       perPersonAfterFees: people ? netAfterMemberFees / people : null,
-      coversCosts: netProfit >= 0,
-      coversFullBandFees: netAfterMemberFees >= 0,
+      // Per spec section 9: badges are gated on revenue thresholds, not net.
+      coversCosts: totalIncome >= baseExpenses,
+      coversFullBandFees: totalIncome >= totalCost,
       guaranteeApplied: inc.guaranteeApplied,
     };
   });
@@ -709,22 +733,42 @@ export interface SingleShowResult {
   marketingCost: number;
   extraCosts: number;
   supportActCost: number;
+  /**
+   * Operating expenses only (fuel + accom + food + marketing + extras + support).
+   * EXCLUDES band/member fees. Added in v2.0.0.
+   */
+  baseExpenses: number;
+  /** Sum of member gig fees folded into totalCost. Alias of expectedMemberFeesTotal. */
+  bandMemberFees: number;
+  /**
+   * Total cost = baseExpenses + bandMemberFees.
+   * As of v2.0.0 this includes member fees so netProfit naturally subtracts them.
+   */
   totalCost: number;
   // Profit
+  /** Net profit = totalIncome − totalCost (i.e. AFTER member fees). */
   netProfit: number;
   takeHomePerPerson: number;
   profitPerMember: number;
   // Viability
   status: ViabilityStatus;
   statusColor: string;
-  // Break-even (full — all costs)
+  // Break-even — ticketed/hybrid only
+  /**
+   * Tickets to cover ALL costs (operating expenses + band/member fees).
+   * As of v2.0.0 equal to fullBandBreakEvenTickets.
+   */
   breakEvenTickets: number;
   breakEvenCapacityPct: number | null;
   breakEvenImpossible: boolean;
+  /** Tickets to cover BASE expenses only (fees excluded). */
+  baseExpensesBreakEvenTickets: number;
+  baseExpensesBreakEvenCapacityPct: number | null;
+  baseExpensesBreakEvenImpossible: boolean;
   /** Tickets to cover show-specific costs only (marketing + support act, not travel) */
   showCostBreakEvenTickets: number;
   // ── Full-band break-even (ticketed/hybrid only) ─────────────────────────
-  /** Tickets to cover ALL costs PLUS expected member fees (== breakEvenTickets when no fees). */
+  /** Tickets to cover ALL costs PLUS expected member fees (== breakEvenTickets in v2.0.0+). */
   fullBandBreakEvenTickets: number;
   fullBandBreakEvenCapacityPct: number | null;
   fullBandBreakEvenImpossible: boolean;
@@ -794,8 +838,16 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
   const extraCosts = n(input.extraCosts);
   const supportActCost = n(input.supportActCost);
 
-  const totalCost =
+  // ── Cost decomposition (v2.0.0) ────────────────────────────────────────
+  // baseExpenses  = operating costs only (no member fees)
+  // bandMemberFees = sum of expected per-show member fees
+  // totalCost     = baseExpenses + bandMemberFees  ← INCLUDES fees
+  // netProfit     = totalIncome − totalCost  ← naturally subtracts fees
+  const baseExpenses =
     fuel.fuelCost + accom.accommodationCost + foodCost + marketingCost + extraCosts + supportActCost;
+  const expectedMemberFeesTotal = Math.max(0, n(input.totalMemberFees));
+  const bandMemberFees = expectedMemberFeesTotal;
+  const totalCost = baseExpenses + bandMemberFees;
   const netProfit = totalIncome - totalCost;
 
   // Per-person
@@ -805,7 +857,7 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
   // Viability
   const { status, statusColor } = calculateShowViability({ netProfit, totalIncome });
 
-  // Full break-even (all costs)
+  // Full break-even — covers EVERYTHING (operating costs + band/member fees).
   const be = calculateTicketBreakEven({
     showType: input.showType,
     dealType: input.dealType,
@@ -814,6 +866,19 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     guarantee: input.guarantee,
     capacity: n(input.capacity),
     totalCost,
+    merchEstimate: input.merchEstimate,
+    bookingFeePerTicket: input.bookingFeePerTicket,
+  });
+
+  // Base-expenses break-even — covers operating costs only (no fees).
+  const beBase = calculateTicketBreakEven({
+    showType: input.showType,
+    dealType: input.dealType,
+    ticketPrice: n(input.ticketPrice),
+    splitPct: input.splitPct,
+    guarantee: input.guarantee,
+    capacity: n(input.capacity),
+    totalCost: baseExpenses,
     merchEstimate: input.merchEstimate,
     bookingFeePerTicket: input.bookingFeePerTicket,
   });
@@ -830,20 +895,8 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     showOnlyCosts,
   });
 
-  // Full-band break-even (all costs + member fees)
-  const expectedMemberFeesTotal = Math.max(0, n(input.totalMemberFees));
-  const fullBand = calculateFullBandBreakEven({
-    showType: input.showType,
-    dealType: input.dealType,
-    ticketPrice: n(input.ticketPrice),
-    splitPct: input.splitPct,
-    guarantee: input.guarantee,
-    capacity: n(input.capacity),
-    totalCost,
-    merchEstimate: input.merchEstimate,
-    bookingFeePerTicket: input.bookingFeePerTicket,
-    totalMemberFees: expectedMemberFeesTotal,
-  });
+  // Full-band break-even == full break-even (since totalCost includes fees).
+  const fullBand = be;
 
   // Attendance scenario ladder for the results page
   const scenarios = generateSingleShowAttendanceScenarios({
@@ -857,17 +910,19 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     merchEstimate: input.merchEstimate,
     expectedAttendancePct: input.expectedAttendancePct,
     totalCost,
+    baseExpenses,
     totalMemberFees: expectedMemberFeesTotal,
     peopleCount: input.peopleCount,
   });
 
   // Payout-mode breakdown (alpha v1.3)
+  // Note: needCostsAndFees == totalCost in v2.0.0+ (baseExpenses+memberFees).
   const payoutMode: "fixed" | "split" = input.payoutMode === "split" ? "split" : "fixed";
   const minimumActTakeHome = Math.max(0, n(input.minimumActTakeHome));
-  const needCostsAndFees = totalCost + expectedMemberFeesTotal;
+  const needCostsAndFees = totalCost;
   const needPlusMinTakeHome = needCostsAndFees + minimumActTakeHome;
   const remainingSurplus = totalIncome - needPlusMinTakeHome;
-  const splitPool = totalIncome - totalCost - minimumActTakeHome;
+  const splitPool = totalIncome - baseExpenses - minimumActTakeHome;
   const perMemberSplit = peopleCount > 0 ? splitPool / peopleCount : splitPool;
   const fixedShortfall = payoutMode === "fixed" && remainingSurplus < 0;
   const splitShortfall = payoutMode === "split" && splitPool < 0;
@@ -888,6 +943,8 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     marketingCost,
     extraCosts,
     supportActCost,
+    baseExpenses,
+    bandMemberFees,
     totalCost,
     netProfit,
     takeHomePerPerson,
@@ -897,6 +954,9 @@ export function calculateSingleShow(input: SingleShowInput): SingleShowResult {
     breakEvenTickets: be.breakEvenTickets,
     breakEvenCapacityPct: be.breakEvenCapacityPct,
     breakEvenImpossible: be.impossible,
+    baseExpensesBreakEvenTickets: beBase.breakEvenTickets,
+    baseExpensesBreakEvenCapacityPct: beBase.breakEvenCapacityPct,
+    baseExpensesBreakEvenImpossible: beBase.impossible,
     showCostBreakEvenTickets,
     fullBandBreakEvenTickets: fullBand.breakEvenTickets,
     fullBandBreakEvenCapacityPct: fullBand.breakEvenCapacityPct,
@@ -934,6 +994,11 @@ export interface StopPreviewInput {
   marketingCost?: number | null;
   extraCosts?: number | null;
   supportActCost?: number | null;
+  /**
+   * Sum of expected member gig fees for active band members. Defaults to 0.
+   * Folded into totalCost so netProfit / scenario nets naturally subtract them.
+   */
+  totalMemberFees?: number | null;
 }
 
 export interface AttendanceScenario {
@@ -958,7 +1023,16 @@ export interface StopPreviewResult {
   netTicketRevenue: number;
   merch: number;
   totalIncome: number;
+  /**
+   * Operating expenses only (accom + marketing + extras + support).
+   * EXCLUDES band/member fees. Added in v2.0.0.
+   */
+  baseExpenses: number;
+  /** Sum of member gig fees folded into totalCost. */
+  bandMemberFees: number;
+  /** Total cost = baseExpenses + bandMemberFees. */
   totalCost: number;
+  /** Net profit = totalIncome − totalCost (i.e. AFTER member fees). */
   netProfit: number;
   /** Attendance scenarios for 25 / 50 / 75 / 100 % (only populated for ticketed shows) */
   attendanceScenarios: AttendanceScenario[];
@@ -1029,7 +1103,13 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
   const marketingCost = n(input.marketingCost);
   const extraCosts = n(input.extraCosts);
   const supportActCost = n(input.supportActCost);
-  const totalCost = accommodationCost + marketingCost + extraCosts + supportActCost;
+  // ── Cost decomposition (v2.0.0) ────────────────────────────────────────
+  // baseExpenses = operating costs only (no member fees)
+  // bandMemberFees = sum of expected per-show member fees (defaults 0)
+  // totalCost = baseExpenses + bandMemberFees ← INCLUDES fees
+  const baseExpenses = accommodationCost + marketingCost + extraCosts + supportActCost;
+  const bandMemberFees = Math.max(0, n(input.totalMemberFees));
+  const totalCost = baseExpenses + bandMemberFees;
 
   const isTicketed = input.showType === "Ticketed Show" || input.showType === "Hybrid";
   const cap = n(input.capacity);
@@ -1084,6 +1164,8 @@ export function calculateStopPreview(input: StopPreviewInput): StopPreviewResult
     netTicketRevenue,
     merch,
     totalIncome,
+    baseExpenses,
+    bandMemberFees,
     totalCost,
     netProfit: totalIncome - totalCost,
     attendanceScenarios: scenarios,

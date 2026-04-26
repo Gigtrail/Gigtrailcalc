@@ -1556,6 +1556,24 @@ export default function RunForm() {
     const accommodationNights = overrides?.accommodationNights ?? Number(vals.accommodationNights) ?? 0;
     const peopleCount = profile && profile.peopleCount > 0 ? profile.peopleCount : 1;
 
+    // Sum of expected per-show member fees for active band members. Used so
+    // the engine folds member pay into totalCost (and therefore netProfit).
+    const totalMemberFees = profile
+      ? (() => {
+          const { library, activeMemberIds } = migrateOldMembers(
+            profile.bandMembers,
+            profile.activeMemberIds ?? null,
+          );
+          const active = resolveActiveMembers(library, activeMemberIds);
+          return active.reduce((sum, m) => {
+            const feeType = resolveFeeType(m);
+            // Only per-show fees count toward a single show's totalCost.
+            if (feeType !== "per_show") return sum;
+            return sum + (m.expectedGigFee ?? 0);
+          }, 0);
+        })()
+      : 0;
+
     // ── All financial math delegated to the shared calculation engine ──
     const result = calculateSingleShow({
       showType: vals.showType ?? "Flat Fee",
@@ -1581,6 +1599,8 @@ export default function RunForm() {
       marketingCost: vals.marketingCost,
       extraCosts: vals.extraCosts,
       peopleCount,
+      // v2.0.0: per-show member fees fold into totalCost so netProfit subtracts them.
+      totalMemberFees,
       payoutMode: profile?.payoutMode === "split" ? "split" : "fixed",
       minimumActTakeHome: Number(profile?.minimumActTakeHome ?? 0),
     });
@@ -1593,6 +1613,9 @@ export default function RunForm() {
     return {
       fuelCost: result.fuelCost,
       totalCost: result.totalCost,
+      // v2.0.0 cost decomposition — surfaced so snapshots can persist them.
+      baseExpenses: result.baseExpenses,
+      bandMemberFees: result.bandMemberFees,
       totalIncome: result.totalIncome,
       netProfit: result.netProfit,
       status: result.status,
@@ -1875,6 +1898,10 @@ export default function RunForm() {
       const transientResult = {
         fuelCost: computed.fuelCost,
         totalCost: computed.totalCost,
+        // v2.0.0: persist explicit cost decomposition so the results page can
+        // distinguish legacy snapshots (no baseExpenses) from new ones.
+        baseExpenses: computed.baseExpenses,
+        bandMemberFees: computed.bandMemberFees,
         totalIncome: computed.totalIncome,
         netProfit: computed.netProfit,
         status: computed.status,
@@ -2732,6 +2759,10 @@ export default function RunForm() {
       const calculationSnapshot = {
         fuelCost: computed.fuelCost,
         totalCost: computed.totalCost,
+        // v2.0.0: persist explicit cost decomposition so the results page can
+        // distinguish legacy snapshots (no baseExpenses) from new ones.
+        baseExpenses: computed.baseExpenses,
+        bandMemberFees: computed.bandMemberFees,
         totalIncome: computed.totalIncome,
         netProfit: computed.netProfit,
         status: computed.status,
