@@ -1133,7 +1133,7 @@ function CompactRunFormLayout({
                 <details className="group rounded-xl border border-border/40 bg-muted/10">
                   <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
                     <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-                    <span className="font-medium">Post-show actuals</span>
+                    <span className="font-medium">Show schedule</span>
                   </summary>
                   <div className="space-y-3 px-3 pb-3">
                     <div className="grid grid-cols-2 gap-3">
@@ -1164,61 +1164,6 @@ function CompactRunFormLayout({
                         )}
                       />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      {([
-                        ["actualAttendance", "Audience", "0"],
-                        ["actualTicketSales", "Ticket sales", "0"],
-                        ["actualTicketIncome", "Ticket income", "$0"],
-                        ["actualOtherIncome", "Other income", "$0"],
-                        ["actualExpenses", "Expenses", "$0"],
-                        ["actualProfit", "Profit", "$0"],
-                      ] as const).map(([name, label, placeholder]) => (
-                        <FormField
-                          key={name}
-                          control={form.control}
-                          name={name}
-                          render={({ field }) => (
-                            <FormItem className="space-y-1">
-                              <FormLabel className="text-xs text-muted-foreground">{label}</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="number"
-                                  className={compactFieldClass}
-                                  placeholder={placeholder}
-                                  value={field.value ?? ""}
-                                  onChange={(event) => field.onChange(event.target.value === "" ? null : Number(event.target.value))}
-                                />
-                              </FormControl>
-                              <FormMessage className="text-xs" />
-                            </FormItem>
-                          )}
-                        />
-                      ))}
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="wouldDoAgain"
-                      render={({ field }) => (
-                        <FormItem className="space-y-1">
-                          <FormLabel className="text-xs text-muted-foreground">Would do again</FormLabel>
-                          <Select value={field.value || "unsure"} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className={compactFieldClass}>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="yes">Yes</SelectItem>
-                              <SelectItem value="unsure">Unsure</SelectItem>
-                              <SelectItem value="no">No</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage className="text-xs" />
-                        </FormItem>
-                      )}
-                    />
                   </div>
                 </details>
 
