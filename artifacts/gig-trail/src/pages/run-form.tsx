@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, useCreateOrUpdateVenue, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -1398,7 +1398,6 @@ export default function RunForm() {
   
   const createRun = useCreateRun();
   const updateRun = useUpdateRun();
-  const createOrUpdateVenue = useCreateOrUpdateVenue();
   
   const form = useForm<RunFormValues>({
     resolver: zodResolver(runSchema),
@@ -2703,31 +2702,25 @@ export default function RunForm() {
       };
 
       try {
-        let venueId = runSelectedVenueId;
-        const venueName = submissionData.venueName?.trim();
-        if (venueName) {
-          const fallbackCity = (() => {
-            const city = submissionData.city?.trim();
-            if (city) return city;
-            const destination = submissionData.destination?.trim();
-            const firstPart = destination?.split(",")[0]?.trim();
-            return firstPart || "Unknown";
-          })();
-          const venue = await createOrUpdateVenue.mutateAsync({
-            data: {
-              venueName,
-              profileId: submissionData.profileId ?? null,
-              city: fallbackCity,
-              state: submissionData.state || null,
-              country: submissionData.country || null,
-            },
-          });
-          venueId = venue.id;
-          setRunSelectedVenueId(venue.id);
-        }
+        // Send the run with venue identity fields (venueName/city/state/
+        // country) and let the server-side resolver in POST/PATCH /runs
+        // find-or-create the personal venue using the canonical
+        // (name|city|country) key. We pass venueId only when the user
+        // explicitly picked an existing venue from autocomplete; otherwise
+        // we leave it null so the resolver does its job. This keeps the
+        // calculator save path consistent with the tour-stop and manual
+        // run paths — every saved run flows through the resolver.
+        const fallbackCity = (() => {
+          const city = submissionData.city?.trim();
+          if (city) return city;
+          const destination = submissionData.destination?.trim();
+          const firstPart = destination?.split(",")[0]?.trim();
+          return firstPart || null;
+        })();
         const payload = {
           ...submissionData,
-          venueId,
+          city: fallbackCity,
+          venueId: runSelectedVenueId,
           vehicleId: runVehicleId,
           accommodationCost: computed.accommodationCost,
           totalCost: computed.totalCost,
@@ -2737,7 +2730,8 @@ export default function RunForm() {
         };
 
         if (isEditing) {
-          await updateRun.mutateAsync({ id: runId, data: payload });
+          const updated = await updateRun.mutateAsync({ id: runId, data: payload });
+          if (updated.venueId != null) setRunSelectedVenueId(updated.venueId);
           invalidateRunDashboardQueries();
           toast({ title: "Show updated" });
           setLocation(`/runs/${runId}`);
@@ -2745,6 +2739,7 @@ export default function RunForm() {
         }
 
         const newRun = await createRun.mutateAsync({ data: payload });
+        if (newRun.venueId != null) setRunSelectedVenueId(newRun.venueId);
         invalidateRunDashboardQueries();
         toast({ title: "Show saved" });
         setLocation(`/runs/${newRun.id}`);
@@ -2763,7 +2758,7 @@ export default function RunForm() {
     })();
   };
 
-  const isPending = createRun.isPending || updateRun.isPending || createOrUpdateVenue.isPending;
+  const isPending = createRun.isPending || updateRun.isPending;
   const isTicketed = formValues.showType === "Ticketed Show" || formValues.showType === "Hybrid";
 
   if (isEditing && isLoadingRun) {

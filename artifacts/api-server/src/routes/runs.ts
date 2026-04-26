@@ -190,6 +190,7 @@ async function resolveVenueIdForRun(
     city: typeof runData.city === "string" ? runData.city : null,
     state: typeof runData.state === "string" ? runData.state : null,
     country: typeof runData.country === "string" ? runData.country : null,
+    profileId: typeof runData.profileId === "number" ? runData.profileId : null,
   });
   if (!result) return null;
   if (result.created) {

@@ -1,4 +1,4 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db, venuesTable } from "@workspace/db";
 
 export function normalizeVenueName(name: string): string {
@@ -19,6 +19,12 @@ export interface VenueIdentity {
   city?: string | null;
   state?: string | null;
   country?: string | null;
+  /**
+   * Optional band-profile binding. Stored on insert so the venue stays
+   * associated with the profile that first saved it. Existing venues are not
+   * re-bound when this field is supplied — see legacy fallback below.
+   */
+  profileId?: number | null;
 }
 
 export interface VenueResolutionResult {
@@ -109,9 +115,12 @@ export async function findOrCreateUserVenue(
     return { venueId: byName.id, created: false };
   }
 
-  // Conflict-safe insert: relies on the partial unique index
-  // venues_user_id_normalized_key_unique on (user_id, normalized_venue_key).
-  // If a concurrent request just inserted the same key we re-select instead
+  // Conflict-safe insert. The DB has a PARTIAL unique index
+  // venues_user_id_normalized_key_unique on (user_id, normalized_venue_key)
+  // WHERE user_id IS NOT NULL AND normalized_venue_key IS NOT NULL.
+  // Postgres requires the ON CONFLICT predicate to match the partial-index
+  // predicate exactly, so we pass the WHERE clause via raw sql. If a
+  // concurrent request just inserted the same key we re-select instead
   // of erroring out.
   const inserted = await db
     .insert(venuesTable)
@@ -124,9 +133,11 @@ export async function findOrCreateUserVenue(
       city,
       state,
       country,
+      profileId: identity.profileId ?? null,
     })
     .onConflictDoNothing({
       target: [venuesTable.userId, venuesTable.normalizedVenueKey],
+      where: sql`user_id IS NOT NULL AND normalized_venue_key IS NOT NULL`,
     })
     .returning({ id: venuesTable.id });
 
