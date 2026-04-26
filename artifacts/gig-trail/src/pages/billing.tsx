@@ -50,6 +50,9 @@ interface StaticPlan {
   badge?: string;
   monthlyPrice: string;
   yearlyPrice: string;
+  monthlyAnchor?: string;
+  yearlyAnchor?: string;
+  earlyAccess?: boolean;
   monthlyPeriod: string;
   yearlyPeriod: string;
   yearlyNote?: string;
@@ -80,11 +83,14 @@ const STATIC_PLANS: StaticPlan[] = [
     name: "Pro",
     tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
-    monthlyPrice: "AU$12",
-    yearlyPrice: "AU$79",
+    monthlyPrice: "AU$14",
+    yearlyPrice: "AU$88",
+    monthlyAnchor: "AU$19",
+    yearlyAnchor: "AU$120",
+    earlyAccess: true,
     monthlyPeriod: "per month",
     yearlyPeriod: "per year",
-    yearlyNote: "Less than AU$7/month · Save 45%",
+    yearlyNote: "Less than AU$8/month · Save AU$32/yr vs standard",
     features: [
       "Unlimited calculations",
       "Tour Builder",
@@ -934,7 +940,7 @@ export default function Billing() {
                 "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full",
                 period === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
               )}>
-                Save 45%
+                Save 48%
               </span>
             </button>
           </div>
@@ -948,7 +954,9 @@ export default function Billing() {
           const isUpgrade = staticPlan.key === "pro" && !isPro;
           const isProCard = staticPlan.key !== "free";
           const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
+          const displayAnchor = period === "yearly" ? staticPlan.yearlyAnchor : staticPlan.monthlyAnchor;
           const displayPeriodLabel = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
+          const standardPeriodShort = period === "yearly" ? "/yr" : "/mo";
           const showBestValue = period === "yearly" && isProCard;
 
           return (
@@ -981,15 +989,28 @@ export default function Billing() {
                 <div>
                   <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
                     {staticPlan.name}
+                    {staticPlan.earlyAccess && (
+                      <Badge className="bg-amber-100 text-amber-800 text-xs border border-amber-300">Early Access</Badge>
+                    )}
                     {isCurrentPlan && (
                       <Badge className="bg-primary/10 text-primary text-xs border border-primary/30">Current</Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{staticPlan.tagline}</div>
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                    {displayAnchor && (
+                      <span className="text-base text-muted-foreground line-through" aria-label={`Standard price ${displayAnchor} ${displayPeriodLabel}`}>
+                        {displayAnchor}
+                      </span>
+                    )}
                     <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
-                    <span className="text-xs text-muted-foreground ml-1">{displayPeriodLabel}</span>
+                    <span className="text-xs text-muted-foreground">{displayPeriodLabel}</span>
                   </div>
+                  {staticPlan.earlyAccess && displayAnchor && (
+                    <div className="text-xs text-amber-700 font-medium mt-1">
+                      Early Access pricing — standard price {displayAnchor}{standardPeriodShort}, early access {displayPrice}{standardPeriodShort}
+                    </div>
+                  )}
                   {period === "yearly" && staticPlan.yearlyNote && (
                     <div className="text-xs text-green-600 font-medium mt-0.5">{staticPlan.yearlyNote}</div>
                   )}
