@@ -3,6 +3,8 @@ export * from "./vehicles";
 export * from "./vehicleActAssignments";
 export * from "./runs";
 export * from "./venues";
+export * from "./venueImportBatches";
+export * from "./venueImportRows";
 export * from "./tours";
 export * from "./tourStops";
 export * from "./tourVehicles";

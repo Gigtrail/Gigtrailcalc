@@ -131,6 +131,7 @@ const memberWithIdSchema = z.object({
   name: z.string(),
   role: z.string().optional(),
   expectedGigFee: z.coerce.number().min(0).optional(),
+  email: z.string().email().optional().or(z.literal("")),
 });
 
 const profileSchema = z.object({

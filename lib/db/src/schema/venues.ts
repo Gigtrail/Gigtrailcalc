@@ -34,6 +34,7 @@ export const venuesTable = pgTable("venues", {
   productionNotes: text("production_notes"),
   techSpecs: text("tech_specs"),
   stagePlotNotes: text("stage_plot_notes"),
+  source: text("source"),
   // Legacy columns retained so historical data isn't dropped on db push.
   // `roomNotes` predates `generalNotes`; routes mirror writes to both.
   // `lastTotalProfit`/`lastStatus` cache the most recent calc result.

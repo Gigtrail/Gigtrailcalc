@@ -4,11 +4,23 @@ export function generateMemberId(): string {
   return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 }
 
+function withOptionalEmail<T>(member: T): T {
+  if (member == null || typeof member !== "object") return member;
+
+  const record = member as Record<string, unknown>;
+  if (record.email == null || typeof record.email === "string") {
+    return member;
+  }
+
+  const { email: _ignoredEmail, ...rest } = record;
+  return rest as T;
+}
+
 export function parseMemberLibrary(raw: string | null | undefined): Member[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map(withOptionalEmail) as Member[] : [];
   } catch {
     return [];
   }
@@ -65,6 +77,7 @@ export function migrateOldMembers(
       name: String(entry.name ?? ""),
       role: entry.role ? String(entry.role) : undefined,
       expectedGigFee: entry.expectedGigFee != null ? Number(entry.expectedGigFee) : 0,
+      email: typeof entry.email === "string" ? entry.email : undefined,
     };
   });
 
