@@ -158,14 +158,81 @@ function serializeShow(r: typeof runsTable.$inferSelect, venue?: typeof venuesTa
   };
 }
 
-// ─── GET /venues ──────────────────────────────────────────────────────────────
+// ─── Venue Deal History helpers ───────────────────────────────────────────────
+//
+// The Venue Detail page renders both a "Performance Summary" (totalShows, avg
+// profit, etc) and a "Deal History" table. Both must agree on the count and
+// underlying rows. To guarantee that, both are derived from a single helper
+// (`loadVenueDealHistory`) that returns the row set first, then the summary is
+// computed by counting/aggregating the same rows.
+//
+// Source-of-truth rules (alpha):
+//   1. If `venue_deals` has rows for this venue+user, render from venue_deals.
+//   2. Otherwise, fall back to the venue's historical `runs` rows (past or
+//      undated). This preserves history for runs created before the deal
+//      snapshot system existed and for any venues whose deals weren't synced.
+// We never mix the two sources for one venue — that would let an older run
+// "double-count" alongside a newer deal snapshot.
+
+type VenuePerformanceSummary = {
+  totalShows: number;
+  avgTicketSales: number | null;
+  avgProfit: number | null;
+  bestShowProfit: number | null;
+  worstShowProfit: number | null;
+};
+
+type VenueDealHistoryRow = {
+  id: number;
+  venueId: number | null;
+  profileId: number | null;
+  profileName: string | null;
+  profileArchived: boolean;
+  runId: number | null;
+  tourId: number | null;
+  sourceStopId: number | null;
+  date: string | null;
+  dealType: "ticketed" | "guarantee";
+  ticketPrice: number | null;
+  ticketsSoldEstimate: number | null;
+  ticketsSoldActual: number | null;
+  guaranteeAmount: number | null;
+  grossRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  calculationAvailable: boolean;
+  unavailableReason: string | null;
+  targetPath: string | null;
+  createdAt: string;
+};
+
+function isHistoricalRunSql(today: string): SQL {
+  return sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${today} or ${runsTable.status} = 'past')`;
+}
+
+function inferDealTypeFromRun(run: typeof runsTable.$inferSelect): "ticketed" | "guarantee" {
+  const showType = (run.showType ?? "").toLowerCase();
+  const dealTypeRaw = (run.dealType ?? "").toLowerCase();
+  if (showType.includes("ticket") || showType.includes("hybrid") || dealTypeRaw.includes("door") || dealTypeRaw.includes("split")) {
+    return "ticketed";
+  }
+  return "guarantee";
+}
+
+function estimateTicketsFromRun(run: typeof runsTable.$inferSelect): number | null {
+  if (run.capacity == null || run.expectedAttendancePct == null) return null;
+  const cap = Number(run.capacity);
+  const pct = Number(run.expectedAttendancePct);
+  if (!Number.isFinite(cap) || !Number.isFinite(pct)) return null;
+  return Math.floor((cap * pct) / 100);
+}
 
 function serializeDealHistoryRow(row: {
   deal: typeof venueDealsTable.$inferSelect;
   runId: number | null;
   profileName: string | null;
   profileArchivedAt: Date | string | null;
-}) {
+}): VenueDealHistoryRow {
   const deal = row.deal;
   const runAvailable = row.runId != null;
   const profileArchived = row.profileArchivedAt != null;
@@ -195,40 +262,177 @@ function serializeDealHistoryRow(row: {
   };
 }
 
-type VenuePerformanceSummary = {
-  totalShows: number;
-  avgTicketSales: number | null;
-  avgProfit: number | null;
-  bestShowProfit: number | null;
-  worstShowProfit: number | null;
-};
+function serializeDealHistoryRowFromRun(row: {
+  run: typeof runsTable.$inferSelect;
+  profileName: string | null;
+  profileArchivedAt: Date | string | null;
+}): VenueDealHistoryRow {
+  const run = row.run;
+  const dealType = inferDealTypeFromRun(run);
+  const ticketEstimate = dealType === "ticketed" ? estimateTicketsFromRun(run) : null;
 
-export async function getVenuePerformance(
-  venueId: number,
-  userId?: string,
-  todayIsoDate?: string,
-): Promise<VenuePerformanceSummary> {
-  void todayIsoDate;
-  const conditions = [eq(venueDealsTable.venueId, venueId)];
-  if (userId) conditions.push(eq(venueDealsTable.userId, userId));
+  const actualIncome = run.actualIncome != null ? Number(run.actualIncome) : null;
+  const actualExpenses = run.actualExpenses != null ? Number(run.actualExpenses) : null;
+  const actualProfit = run.actualProfit != null ? Number(run.actualProfit) : null;
+  const totalIncome = run.totalIncome != null ? Number(run.totalIncome) : null;
+  const totalCost = run.totalCost != null ? Number(run.totalCost) : null;
+  const totalProfit = run.totalProfit != null ? Number(run.totalProfit) : null;
+  const derivedNetProfit =
+    actualIncome != null && actualExpenses != null
+      ? actualIncome - actualExpenses
+      : actualProfit ?? totalProfit ?? 0;
 
-  const [summary] = await db
-    .select({
-      totalShows: sql<number>`count(*)::int`,
-      avgTicketSales: sql<number | null>`avg(${venueDealsTable.ticketsSoldActual})::float`,
-      avgProfit: sql<number | null>`avg(${venueDealsTable.netProfit})::float`,
-      bestShowProfit: sql<number | null>`max(${venueDealsTable.netProfit})::float`,
-      worstShowProfit: sql<number | null>`min(${venueDealsTable.netProfit})::float`,
-    })
-    .from(venueDealsTable)
-    .where(and(...conditions));
+  const guaranteeAmount = dealType === "guarantee"
+    ? (run.guarantee != null ? Number(run.guarantee) : run.fee != null ? Number(run.fee) : null)
+    : null;
+  const profileArchived = row.profileArchivedAt != null;
 
   return {
-    totalShows: Number(summary?.totalShows ?? 0),
-    avgTicketSales: summary?.avgTicketSales != null ? Number(summary.avgTicketSales) : null,
-    avgProfit: summary?.avgProfit != null ? Number(summary.avgProfit) : null,
-    bestShowProfit: summary?.bestShowProfit != null ? Number(summary.bestShowProfit) : null,
-    worstShowProfit: summary?.worstShowProfit != null ? Number(summary.worstShowProfit) : null,
+    // Negate to avoid colliding with venue_deals.id when tables both contribute
+    // somewhere in the future. Frontend uses `runId` for navigation, not `id`.
+    id: -run.id,
+    venueId: run.venueId ?? null,
+    profileId: run.profileId ?? null,
+    profileName: row.profileName ?? (profileArchived ? "Archived profile" : null),
+    profileArchived,
+    runId: run.id,
+    tourId: run.sourceTourId ?? null,
+    sourceStopId: run.sourceStopId ?? null,
+    date: run.showDate ?? null,
+    dealType,
+    ticketPrice: run.ticketPrice != null ? Number(run.ticketPrice) : null,
+    ticketsSoldEstimate: ticketEstimate,
+    // NEVER substitute predicted attendance for actual ticket sales.
+    ticketsSoldActual: run.actualTicketSales ?? null,
+    guaranteeAmount,
+    grossRevenue: actualIncome ?? totalIncome ?? 0,
+    totalExpenses: actualExpenses ?? totalCost ?? 0,
+    netProfit: derivedNetProfit,
+    calculationAvailable: true,
+    unavailableReason: null,
+    targetPath: `/runs/results?runId=${run.id}`,
+    createdAt: run.createdAt instanceof Date ? run.createdAt.toISOString() : String(run.createdAt),
+  };
+}
+
+// SQL expression for a run's net profit, mirrored across the detail and list
+// endpoints so avgProfit cannot diverge between them. Order of preference
+// matches `serializeDealHistoryRowFromRun`: actualIncome-actualExpenses ➜
+// actualProfit ➜ totalProfit ➜ 0.
+function runNetProfitSql(): SQL<number> {
+  return sql<number>`coalesce(
+    ${runsTable.actualIncome} - ${runsTable.actualExpenses},
+    ${runsTable.actualProfit},
+    ${runsTable.totalProfit},
+    0
+  )`;
+}
+
+async function loadVenueDealHistory(
+  venueId: number,
+  userId: string,
+  today: string,
+  limit: number,
+): Promise<{
+  rows: VenueDealHistoryRow[];
+  summary: VenuePerformanceSummary;
+  source: "venueDeals" | "runs";
+  lastPlayed: string | null;
+}> {
+  // Decide source from the FULL set (no row limit), so a paginated table can't
+  // shrink totalShows. Both the table rows and the summary are then derived
+  // from the same source.
+  const [dealCountRow] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(venueDealsTable)
+    .where(and(eq(venueDealsTable.venueId, venueId), eq(venueDealsTable.userId, userId)));
+  const dealCount = Number(dealCountRow?.n ?? 0);
+
+  if (dealCount > 0) {
+    const [agg] = await db
+      .select({
+        totalShows: sql<number>`count(*)::int`,
+        avgTicketSales: sql<number | null>`avg(${venueDealsTable.ticketsSoldActual})::float`,
+        avgProfit: sql<number | null>`avg(${venueDealsTable.netProfit})::float`,
+        bestShowProfit: sql<number | null>`max(${venueDealsTable.netProfit})::float`,
+        worstShowProfit: sql<number | null>`min(${venueDealsTable.netProfit})::float`,
+        lastPlayed: sql<string | null>`max(${venueDealsTable.date})`,
+      })
+      .from(venueDealsTable)
+      .where(and(eq(venueDealsTable.venueId, venueId), eq(venueDealsTable.userId, userId)));
+
+    const dealRows = await db
+      .select({
+        deal: venueDealsTable,
+        runId: runsTable.id,
+        profileName: profilesTable.name,
+        profileArchivedAt: profilesTable.archivedAt,
+      })
+      .from(venueDealsTable)
+      .leftJoin(runsTable, and(eq(venueDealsTable.runId, runsTable.id), eq(runsTable.userId, userId)))
+      .leftJoin(profilesTable, and(eq(venueDealsTable.profileId, profilesTable.id), eq(profilesTable.userId, userId)))
+      .where(and(eq(venueDealsTable.venueId, venueId), eq(venueDealsTable.userId, userId)))
+      .orderBy(desc(venueDealsTable.date), desc(venueDealsTable.createdAt))
+      .limit(limit);
+
+    return {
+      rows: dealRows.map(serializeDealHistoryRow),
+      summary: {
+        totalShows: Number(agg?.totalShows ?? 0),
+        avgTicketSales: agg?.avgTicketSales != null ? Number(agg.avgTicketSales) : null,
+        avgProfit: agg?.avgProfit != null ? Number(agg.avgProfit) : null,
+        bestShowProfit: agg?.bestShowProfit != null ? Number(agg.bestShowProfit) : null,
+        worstShowProfit: agg?.worstShowProfit != null ? Number(agg.worstShowProfit) : null,
+      },
+      source: "venueDeals",
+      // Strict source policy: when source is venue_deals, lastPlayed must come
+      // from venue_deals only. Never leak in run dates.
+      lastPlayed: agg?.lastPlayed ?? null,
+    };
+  }
+
+  // Fall back to historical runs as the alpha source-of-truth.
+  const histPredicate = and(
+    eq(runsTable.venueId, venueId),
+    eq(runsTable.userId, userId),
+    isHistoricalRunSql(today),
+  );
+
+  const [agg] = await db
+    .select({
+      totalShows: sql<number>`count(*)::int`,
+      avgTicketSales: sql<number | null>`avg(${runsTable.actualTicketSales})::float`,
+      avgProfit: sql<number | null>`avg(${runNetProfitSql()})::float`,
+      bestShowProfit: sql<number | null>`max(${runNetProfitSql()})::float`,
+      worstShowProfit: sql<number | null>`min(${runNetProfitSql()})::float`,
+      lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
+    })
+    .from(runsTable)
+    .where(histPredicate);
+
+  const runRows = await db
+    .select({
+      run: runsTable,
+      profileName: profilesTable.name,
+      profileArchivedAt: profilesTable.archivedAt,
+    })
+    .from(runsTable)
+    .leftJoin(profilesTable, and(eq(runsTable.profileId, profilesTable.id), eq(profilesTable.userId, userId)))
+    .where(histPredicate)
+    .orderBy(desc(runsTable.showDate), desc(runsTable.createdAt))
+    .limit(limit);
+
+  return {
+    rows: runRows.map(serializeDealHistoryRowFromRun),
+    summary: {
+      totalShows: Number(agg?.totalShows ?? 0),
+      avgTicketSales: agg?.avgTicketSales != null ? Number(agg.avgTicketSales) : null,
+      avgProfit: agg?.avgProfit != null ? Number(agg.avgProfit) : null,
+      bestShowProfit: agg?.bestShowProfit != null ? Number(agg.bestShowProfit) : null,
+      worstShowProfit: agg?.worstShowProfit != null ? Number(agg.worstShowProfit) : null,
+    },
+    source: "runs",
+    lastPlayed: agg?.lastPlayed ?? null,
   };
 }
 
@@ -292,12 +496,12 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
     .where(whereClause);
 
   const venueIds = venues.map(v => v.id);
-  let countMap: Record<number, number> = {};
-  let lastPlayedMap: Record<number, string | null> = {};
-  let avgProfitMap: Record<number, number | null> = {};
+  const countMap: Record<number, number> = {};
+  const lastPlayedMap: Record<number, string | null> = {};
+  const avgProfitMap: Record<number, number | null> = {};
 
   if (venueIds.length > 0) {
-    const stats = await db
+    const dealStats = await db
       .select({
         venueId: venueDealsTable.venueId,
         count: sql<number>`count(*)::int`,
@@ -310,11 +514,38 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
         inArray(venueDealsTable.venueId, venueIds),
       ))
       .groupBy(venueDealsTable.venueId);
-    for (const s of stats) {
+    for (const s of dealStats) {
       if (s.venueId != null) {
         countMap[s.venueId] = s.count;
         lastPlayedMap[s.venueId] = s.lastPlayed;
         avgProfitMap[s.venueId] = s.avgProfit != null ? Number(s.avgProfit) : null;
+      }
+    }
+
+    // Fallback to historical runs for venues without any deal snapshots so the
+    // list count never disagrees with the venue-detail count.
+    const venuesNeedingFallback = venueIds.filter(vid => !(vid in countMap));
+    if (venuesNeedingFallback.length > 0) {
+      const runStats = await db
+        .select({
+          venueId: runsTable.venueId,
+          count: sql<number>`count(*)::int`,
+          lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
+          avgProfit: sql<number | null>`avg(${runNetProfitSql()})::float`,
+        })
+        .from(runsTable)
+        .where(and(
+          eq(runsTable.userId, userId),
+          inArray(runsTable.venueId, venuesNeedingFallback),
+          isHistoricalRunSql(today),
+        ))
+        .groupBy(runsTable.venueId);
+      for (const s of runStats) {
+        if (s.venueId != null) {
+          countMap[s.venueId] = s.count;
+          lastPlayedMap[s.venueId] = s.lastPlayed;
+          avgProfitMap[s.venueId] = s.avgProfit != null ? Number(s.avgProfit) : null;
+        }
       }
     }
   }
@@ -399,36 +630,31 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     .orderBy(desc(runsTable.showDate))
     .limit(25);
 
-  const timesPlayed = historicalShows.length;
   const fees = historicalShows.map(s => s.fee != null ? Number(s.fee) : (s.guarantee != null ? Number(s.guarantee) : null)).filter((f): f is number => f != null);
   const merches = historicalShows.map(s => s.merch != null ? Number(s.merch) : (s.merchEstimate != null ? Number(s.merchEstimate) : null)).filter((m): m is number => m != null);
   const audiences = historicalShows.map(s => s.attendance).filter((a): a is number => a != null);
   const wouldPlayAgainCount = historicalShows.filter(s => s.wouldDoAgain === "yes").length;
 
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
-  const performanceSummary = await getVenuePerformance(id, userId, today);
-  const dealRows = await db
-    .select({
-      deal: venueDealsTable,
-      runId: runsTable.id,
-      profileName: profilesTable.name,
-      profileArchivedAt: profilesTable.archivedAt,
-    })
-    .from(venueDealsTable)
-    .leftJoin(runsTable, and(eq(venueDealsTable.runId, runsTable.id), eq(runsTable.userId, userId)))
-    .leftJoin(profilesTable, and(eq(venueDealsTable.profileId, profilesTable.id), eq(profilesTable.userId, userId)))
-    .where(and(eq(venueDealsTable.venueId, id), eq(venueDealsTable.userId, userId)))
-    .orderBy(desc(venueDealsTable.date), desc(venueDealsTable.createdAt))
-    .limit(runLimit);
+
+  // Performance Summary and Deal History MUST come from the same source so
+  // counts can never disagree. `loadVenueDealHistory` picks venue_deals when
+  // present and falls back to historical runs otherwise. Summary aggregates
+  // are computed over the FULL set so pagination of the table can't shrink
+  // the displayed totalShows.
+  const { rows: dealHistory, summary: performanceSummary, lastPlayed: dealsLastPlayed } =
+    await loadVenueDealHistory(id, userId, today, runLimit);
 
   const stats = {
     timesPlayed: performanceSummary.totalShows,
-    lastPlayed: performanceSummary.totalShows > 0 ? (dealRows[0]?.deal.date ?? historicalShows[0]?.showDate ?? null) : null,
+    lastPlayed: performanceSummary.totalShows > 0 ? dealsLastPlayed : null,
     avgFee: avg(fees),
     avgProfit: performanceSummary.avgProfit,
     avgMerch: avg(merches),
     avgAudience: avg(audiences),
-    wouldPlayAgainRatio: performanceSummary.totalShows > 0 ? wouldPlayAgainCount / Math.min(timesPlayed, performanceSummary.totalShows) : null,
+    wouldPlayAgainRatio: performanceSummary.totalShows > 0
+      ? wouldPlayAgainCount / Math.max(historicalShows.length, performanceSummary.totalShows)
+      : null,
   };
 
   const tourStops = await db
@@ -470,7 +696,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     ...serializeVenue(venue),
     stats,
     performanceSummary,
-    dealHistory: dealRows.map(serializeDealHistoryRow),
+    dealHistory,
     shows: historicalShows.map(show => serializeShow(show, venue)),
     upcomingRuns: upcomingRuns.map(show => serializeShow(show, venue)),
     upcomingStops,
