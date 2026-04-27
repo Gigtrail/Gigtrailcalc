@@ -468,22 +468,14 @@ export default function RunResults() {
   const profitAfterMemberFees = displayNetProfit;
   const splitPerMember = activeMembers.length > 0 ? displayNetProfit / activeMembers.length : 0;
 
-  // ── Payout-mode plain-English breakdown (alpha v1.3 → v2.0.0) ─────────────
-  // Falls back to fixed/0 when profile is unavailable (e.g. very old snapshot).
-  // v2.0.0: needCostsAndFees == displayTotalCost (already includes member fees).
-  // splitPool is computed against BASE expenses so members are paid from
-  // (revenue − operating costs − minimum act take-home), matching the engine.
+  // ── Payout mode (still drives Member Payouts gating) ──────────────────────
+  // The "What This Show Pays" / "Profit Split" plain-English breakdown was
+  // removed in alpha simplification — its derived values (needCostsAndFees,
+  // remainingSurplus, splitPool, perMemberSplitPayout, etc.) are now also
+  // gone since "Show the math" + "Member Payouts" cover the same ground
+  // without duplicating financial totals.
   const profileForPayout = profiles?.find(p => p.id === formData.profileId);
   const profilePayoutMode: "fixed" | "split" = profileForPayout?.payoutMode === "split" ? "split" : "fixed";
-  const profileMinimumActTakeHome = Math.max(0, Number(profileForPayout?.minimumActTakeHome ?? 0));
-  const memberCountForSplit = activeMembers.length > 0 ? activeMembers.length : profilePeopleCount;
-  const needCostsAndFees = displayTotalCost;
-  const needPlusMinTakeHome = needCostsAndFees + profileMinimumActTakeHome;
-  const remainingSurplus = totalIncome - needPlusMinTakeHome;
-  const splitPool = totalIncome - displayBaseExpenses - profileMinimumActTakeHome;
-  const perMemberSplitPayout = memberCountForSplit > 0 ? splitPool / memberCountForSplit : splitPool;
-  const fixedShortfall = profilePayoutMode === "fixed" && remainingSurplus < 0;
-  const splitShortfall = profilePayoutMode === "split" && splitPool < 0;
 
   // ── Single-show ticketed/hybrid: scenarios + full-band break-even ──────────
   // Recompute on the fly from formData + current member fees so older snapshots
@@ -598,20 +590,26 @@ export default function RunResults() {
     return "Show income";
   })();
 
-  // Insights
+  // Insights — capped at 2, ordered by impact (highest-impact first).
+  // Alpha simplification: the result screen is a decision tool, not a report.
   const totalDriveHours = totalDriveMinutes ? totalDriveMinutes / 60 : 0;
+  const fuelPctOfIncome = totalIncome > 0 ? fuelCost / totalIncome : 0;
   const allInsights: { icon: typeof Lightbulb; text: string; color: string }[] = [];
-  if (totalDriveHours > 8) allInsights.push({ icon: Lightbulb, text: "Long drive — consider arriving the day before.", color: "text-amber-600" });
-  if (fuelCost > 0 && totalIncome > 0 && fuelCost / totalIncome > 0.35)
-    allInsights.push({ icon: Fuel, text: `Fuel is ${((fuelCost / totalIncome) * 100).toFixed(0)}% of income — high road-cost show.`, color: "text-amber-600" });
-  // Flat Fee–only insights (ticketed surfaces these via hero/expected/scenarios already).
-  if (!isTicketed && showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
-    allInsights.push({ icon: TrendingUp, text: "All band fees covered.", color: "text-green-600" });
-  if (!isTicketed && showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
-    allInsights.push({ icon: AlertTriangle, text: `You're still $${fmt(Math.abs(profitAfterMemberFees))} short on full band fees.`, color: "text-amber-600" });
+  // 1. Net loss — biggest red flag.
   if (!isTicketed && displayNetProfit < 0)
     allInsights.push({ icon: XCircle, text: "Costs are above income — try a higher fee, cut costs, or pass.", color: "text-red-600" });
-  const insights = allInsights.slice(0, 3);
+  // 2. Fuel as % of income — most actionable single metric for road-heavy shows.
+  if (fuelCost > 0 && fuelPctOfIncome > 0.35)
+    allInsights.push({ icon: Fuel, text: `Fuel is ${(fuelPctOfIncome * 100).toFixed(0)}% of income — high road-cost show.`, color: "text-amber-600" });
+  // 3. Band-fee shortfall — only one fee insight (covered OR short, not both).
+  if (!isTicketed && showPayoutSection && totalMemberFees > 0 && !fullFeesCovered && displayNetProfit > 0)
+    allInsights.push({ icon: AlertTriangle, text: `You're still $${fmt(Math.abs(profitAfterMemberFees))} short on full band fees.`, color: "text-amber-600" });
+  else if (!isTicketed && showPayoutSection && totalMemberFees > 0 && fullFeesCovered)
+    allInsights.push({ icon: TrendingUp, text: "All band fees covered.", color: "text-green-600" });
+  // 4. Long drive — operational hint.
+  if (totalDriveHours > 8)
+    allInsights.push({ icon: Lightbulb, text: "Long drive — consider arriving the day before.", color: "text-amber-600" });
+  const insights = allInsights.slice(0, 2);
 
   // Actions
   const handleEdit = () => {
@@ -921,12 +919,12 @@ export default function RunResults() {
         </Card>
       )}
 
-      {/* ── SCENARIO LADDER (ticketed/hybrid only) ─────────────────────────── */}
+      {/* ── SCENARIO LADDER (ticketed only) ─────────────────────────── */}
       {isTicketed && scenarios.length > 0 && (
         <Card className="border-border/60">
           <CardContent className="pt-4 pb-4 space-y-2">
             <h3 className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
-              If ticket sales land here
+              If this is your crowd
             </h3>
             <div className="divide-y divide-border/40">
               {scenarios.map(s => {
@@ -971,27 +969,9 @@ export default function RunResults() {
         </Card>
       )}
 
-      {/* ── SUMMARY PILLS (Flat Fee only — ticketed shows numbers in hero/expected/scenarios) ── */}
-      {!isTicketed && (
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: "Income", value: `$${fmt(totalIncome)}`, color: "text-green-700" },
-            { label: "Expenses", value: `$${fmt(displayTotalCost)}`, color: "text-red-600" },
-            {
-              label: "Profit",
-              value: `${displayNetProfit >= 0 ? "+" : "−"}$${fmt(Math.abs(displayNetProfit))}`,
-              color: displayNetProfit >= 0 ? "text-green-700" : "text-red-700",
-            },
-          ].map(pill => (
-            <div key={pill.label} className="rounded-xl border border-border/50 bg-card px-3 py-3 text-center">
-              <p className="text-xs text-muted-foreground mb-1">{pill.label}</p>
-              <p className={`text-base font-bold tabular-nums leading-tight ${pill.color}`}>{pill.value}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* ── SHOW THE MATH (collapsible quick reconciliation) ─────────────── */}
+      {/* Alpha simplification: Income/Expenses/Profit pills removed — "Show the math"
+          is the single source of truth for all financial totals. */}
       <Section
         title="Show the math"
         defaultOpen={false}
@@ -1396,61 +1376,9 @@ export default function RunResults() {
         </Section>
       )}
 
-      {/* ── PAYOUT BREAKDOWN (plain English, alpha v1.3) ────────────────── */}
-      <Section
-        title={profilePayoutMode === "split" ? "Profit Split" : "What This Show Pays"}
-        defaultOpen={!isTicketed || profilePayoutMode === "split"}
-      >
-        {profilePayoutMode === "fixed" ? (
-          <div className="space-y-2 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-muted-foreground">You need <span className="font-medium text-foreground">${fmt(needCostsAndFees)}</span> to cover expenses and band fees</span>
-            </div>
-            {profileMinimumActTakeHome > 0 && (
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-muted-foreground">You need <span className="font-medium text-foreground">${fmt(needPlusMinTakeHome)}</span> to also hit your minimum take-home</span>
-              </div>
-            )}
-            <div className="flex items-baseline justify-between gap-3 pt-1 border-t border-border/30">
-              <span className="text-muted-foreground">Surplus after target:</span>
-              <span className={cn("text-lg font-semibold", remainingSurplus >= 0 ? "text-green-700" : "text-red-700")}>
-                {remainingSurplus >= 0 ? "+" : "−"}${fmt(Math.abs(remainingSurplus))}
-              </span>
-            </div>
-            {fixedShortfall && (
-              <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-                <p>This show does not cover your costs, fees, and minimum take-home.</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-muted-foreground">Minimum take-home target:</span>
-              <span className="font-medium text-foreground">${fmt(profileMinimumActTakeHome)}</span>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-muted-foreground">Split pool:</span>
-              <span className={cn("font-semibold", splitPool >= 0 ? "text-foreground" : "text-red-700")}>
-                {splitPool >= 0 ? "" : "−"}${fmt(Math.abs(splitPool))}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between gap-3 pt-1 border-t border-border/30">
-              <span className="text-muted-foreground">Per member ({memberCountForSplit}):</span>
-              <span className={cn("text-lg font-semibold", perMemberSplitPayout >= 0 ? "text-green-700" : "text-red-700")}>
-                {perMemberSplitPayout >= 0 ? "+" : "−"}${fmt(Math.abs(perMemberSplitPayout))}
-              </span>
-            </div>
-            {splitShortfall && (
-              <div className="mt-2 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-                <p>This show does not cover your costs and minimum take-home.</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Section>
+      {/* "What This Show Pays" / "Profit Split" section removed in alpha simplification —
+          income, expenses, profit, and per-member split are already shown in
+          "Show the math" + "Member Payouts" without duplication. */}
 
       {/* ── 6. MEMBER PAYOUTS ────────────────────────────────────────────── */}
       {showPayoutSection && profilePayoutMode === "fixed" && (
@@ -1491,20 +1419,15 @@ export default function RunResults() {
             </div>
           </div>
 
-          {/* Shortfall warning */}
+          {/* Shortfall warning — single source of truth for "fees not covered".
+              The Even Split toggle is right above; no inline link needed. */}
           {payoutMode === "full" && !fullFeesCovered && membersWithFees.length > 0 && (
             <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-800">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-              <div>
-                <p className="font-medium">Still short on full band fees</p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  ${fmt(Math.abs(profitAfterMemberFees))} short.{" "}
-                  <button onClick={() => setPayoutMode("split")} className="underline underline-offset-2 font-medium hover:text-amber-900">
-                    Switch to Even Split
-                  </button>{" "}
-                  to see real per-person payouts.
-                </p>
-              </div>
+              <p>
+                <span className="font-medium">${fmt(Math.abs(profitAfterMemberFees))} short on full band fees.</span>{" "}
+                <span className="text-amber-700">Try Even Split for realistic per-person payouts.</span>
+              </p>
             </div>
           )}
 
@@ -1512,7 +1435,8 @@ export default function RunResults() {
             <p className="text-xs text-muted-foreground mb-2">Profit split equally across {activeMembers.length} people</p>
           )}
 
-          {/* Member rows */}
+          {/* Member rows — per-row warning icons removed; the section-level
+              warning above already conveys the shortfall once. */}
           <div className="divide-y divide-border/30">
             {activeMembers.map(member => {
               const expectedFee = member.expectedGigFee ?? 0;
@@ -1523,11 +1447,6 @@ export default function RunResults() {
               return (
                 <div key={member.id} className="flex items-center justify-between py-2.5 gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    {payoutMode === "full" && membersWithFees.length > 0 && (
-                      isCovered
-                        ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                        : <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                    )}
                     <span className="text-sm font-medium text-foreground truncate">{member.name}</span>
                     {member.role && <span className="text-xs text-muted-foreground shrink-0">{member.role}</span>}
                   </div>

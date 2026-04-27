@@ -699,7 +699,6 @@ function CompactRunFormLayout({
                               <SelectContent>
                                 <SelectItem value="Flat Fee">Flat Fee</SelectItem>
                                 <SelectItem value="Ticketed Show">Ticketed Show</SelectItem>
-                                <SelectItem value="Hybrid">Hybrid</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage className="text-xs" />
@@ -707,10 +706,10 @@ function CompactRunFormLayout({
                         )}
                       />
 
-                      {(formValues.showType === "Flat Fee" || formValues.showType === "Hybrid") ? (
+                      {formValues.showType === "Flat Fee" ? (
                         <FormField
                           control={form.control}
-                          name={formValues.showType === "Hybrid" ? "guarantee" : "fee"}
+                          name="fee"
                           render={({ field }) => (
                             <FormItem className="space-y-1">
                               <FormControl>
@@ -721,7 +720,7 @@ function CompactRunFormLayout({
                                   max={5000}
                                   step={50}
                                   prefix="$"
-                                  ariaLabel={formValues.showType === "Hybrid" ? "Guarantee" : "Flat fee"}
+                                  ariaLabel="Flat fee"
                                   className="gap-2"
                                   inputClassName="h-10"
                                 />
@@ -873,7 +872,7 @@ function CompactRunFormLayout({
                                       render={({ field }) => (
                                         <FormItem className="space-y-1">
                                           <FormControl>
-                                            <Input type="number" min="0" max="100" {...field} value={field.value || 0} className={compactFieldClass} />
+                                            <Input type="number" min="0" max="100" {...field} value={field.value || 0} className={compactFieldClass} placeholder="Split %" />
                                           </FormControl>
                                         </FormItem>
                                       )}
@@ -881,6 +880,36 @@ function CompactRunFormLayout({
                                   )}
                                 </div>
                               </div>
+
+                              {/* Optional Guarantee field for Ticketed shows.
+                                  total_income = max(ticket_revenue, guarantee). */}
+                              {formValues.dealType === "guarantee vs door" && (
+                                <div className={compactRowClass}>
+                                  <div className={compactLabelClass}>Guarantee</div>
+                                  <FormField
+                                    control={form.control}
+                                    name="guarantee"
+                                    render={({ field }) => (
+                                      <FormItem className="space-y-1">
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            min="0"
+                                            step="50"
+                                            {...field}
+                                            value={field.value || 0}
+                                            className={compactFieldClass}
+                                            placeholder="$ optional floor"
+                                          />
+                                        </FormControl>
+                                        <p className="text-[11px] text-muted-foreground">
+                                          You'll earn whichever is higher: ticket revenue or this guarantee.
+                                        </p>
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
+                              )}
 
                               <div className={compactRowClass}>
                                 <div className={compactLabelClass}>Fees</div>
