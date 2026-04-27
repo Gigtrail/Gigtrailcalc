@@ -17,7 +17,15 @@ export interface Tour {
   /** @nullable */
   startLocation: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome: boolean;
   /** @nullable */
   startDate: string | null;
@@ -28,7 +36,24 @@ export interface Tour {
   /** @nullable */
   notes: string | null;
   /** @nullable */
+  daysOnTour?: number | null;
+  /** @nullable */
+  totalDistance: number | null;
+  /** @nullable */
+  totalCost: number | null;
+  /** @nullable */
+  totalIncome: number | null;
+  /** @nullable */
+  totalProfit: number | null;
+  stopCount: number;
+  /** @nullable */
   fuelType?: string | null;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
   /** @nullable */
   fuelConsumption?: number | null;
   /** @nullable */
@@ -44,14 +69,6 @@ export interface Tour {
   gearHireCost?: number | null;
   /** @nullable */
   otherCosts?: number | null;
-  /** @nullable */
-  totalDistance: number | null;
-  /** @nullable */
-  totalCost: number | null;
-  /** @nullable */
-  totalIncome: number | null;
-  /** @nullable */
-  totalProfit: number | null;
   createdAt: string;
   duplicateProtection?: DuplicateProtection;
 }

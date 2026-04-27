@@ -181,8 +181,8 @@ export interface GigTrailResultData {
   formData: Record<string, unknown>;
   profileName: string | null;
   profilePeopleCount: number;
-  vehicleType: string | null;
-  vehicleName: string | null;
+  vehicleType?: string | null;
+  vehicleName?: string | null;
   fuelPriceSource?: "manual" | "profile" | "system_fallback" | "profile_assumption" | "system_default";
   resolvedFuelPrice?: number;
   isEditing: boolean;
@@ -208,9 +208,9 @@ type FallbackProfile = {
   name: string;
   peopleCount: number;
   fuelConsumption: number;
-  maxDriveHoursPerDay: number | null;
-  vehicleType: string | null;
-  vehicleName: string | null;
+  maxDriveHoursPerDay?: number | null;
+  vehicleType?: string | null;
+  vehicleName?: string | null;
 };
 
 function buildFallbackResultFromRun(run: Run, profile?: FallbackProfile): GigTrailResultData {

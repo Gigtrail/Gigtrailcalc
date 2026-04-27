@@ -28,6 +28,12 @@ export interface Venue {
   /** @nullable */
   lastTotalProfit?: number | null;
   /** @nullable */
+  showCount?: number | null;
+  /** @nullable */
+  lastPlayed?: string | null;
+  /** @nullable */
+  avgProfit?: number | null;
+  /** @nullable */
   lastStatus?: string | null;
   /** @nullable */
   address?: string | null;
@@ -53,6 +59,12 @@ export interface Venue {
   productionContactPhone?: string | null;
   /** @nullable */
   productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */

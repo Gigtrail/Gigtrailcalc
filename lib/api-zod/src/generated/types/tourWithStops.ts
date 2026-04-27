@@ -18,7 +18,15 @@ export interface TourWithStops {
   /** @nullable */
   startLocation: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome: boolean;
   /** @nullable */
   startDate: string | null;
@@ -29,6 +37,8 @@ export interface TourWithStops {
   /** @nullable */
   notes: string | null;
   /** @nullable */
+  daysOnTour?: number | null;
+  /** @nullable */
   totalDistance: number | null;
   /** @nullable */
   totalCost: number | null;
@@ -36,6 +46,14 @@ export interface TourWithStops {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  /** @nullable */
+  fuelType?: string | null;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
   /** @nullable */
   fuelConsumption?: number | null;
   /** @nullable */

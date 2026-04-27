@@ -1043,7 +1043,7 @@ export default function VenueDetail() {
   const { toast } = useToast();
 
   const { data: venue, isLoading } = useGetVenue(venueId, {
-    query: { enabled: !Number.isNaN(venueId) },
+    query: { enabled: !Number.isNaN(venueId), queryKey: getGetVenueQueryKey(venueId) },
   });
 
   const [nameEditing, setNameEditing] = useState(false);

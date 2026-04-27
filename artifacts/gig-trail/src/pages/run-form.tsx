@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, useCreateOrUpdateVenue, type UpdateProfileMutationBody, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
+import { useCreateRun, useUpdateRun, useGetRun, useGetProfiles, useTrackCalculation, useGetVehicles, useGetVenue, useUpdateProfile, useCreateVehicle, useCreateOrUpdateVenue, type UpdateProfileMutationBody, getGetVenueQueryKey, getGetVehiclesQueryKey, getGetProfilesQueryKey, getGetRunsQueryKey, getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey, getGetVenuesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -1436,7 +1436,7 @@ export default function RunForm() {
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [isEditing]);
   const venuePrefillQuery = useGetVenue(venuePrefillId ?? 0, {
-    query: { enabled: venuePrefillId != null },
+    query: { enabled: venuePrefillId != null, queryKey: getGetVenueQueryKey(venuePrefillId ?? 0) },
   });
   const venuePrefillAppliedRef = useRef<number | null>(null);
   useEffect(() => {
@@ -1462,7 +1462,7 @@ export default function RunForm() {
   }, [venuePrefillId, venuePrefillQuery.data, isEditing, form]);
 
   const selectedVenueDetailQuery = useGetVenue(runSelectedVenueId ?? 0, {
-    query: { enabled: !isEditing && runSelectedVenueId != null && runSelectedVenueId > 0 },
+    query: { enabled: !isEditing && runSelectedVenueId != null && runSelectedVenueId > 0, queryKey: getGetVenueQueryKey(runSelectedVenueId ?? 0) },
   });
 
   useEffect(() => {

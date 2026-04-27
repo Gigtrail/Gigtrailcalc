@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./addTourVehicleBody";
 export * from "./completeRunBody";
 export * from "./completeRunBodyWouldDoAgain";
 export * from "./createProfileBody";
@@ -25,14 +26,19 @@ export * from "./getVenuesType";
 export * from "./healthStatus";
 export * from "./profile";
 export * from "./run";
+export * from "./runCalculationSnapshot";
 export * from "./runCompletionStatus";
 export * from "./runStatus";
 export * from "./searchVenuesParams";
+export * from "./setVehicleActAssignmentsBody";
+export * from "./syncStopToPastShow200";
+export * from "./syncStopToPastShow201";
 export * from "./tour";
 export * from "./tourItem";
 export * from "./tourItemStatus";
 export * from "./tourItemType";
 export * from "./tourStop";
+export * from "./tourVehicleItem";
 export * from "./tourWithStops";
 export * from "./trackCalculationResponse";
 export * from "./updateProfileBody";
@@ -40,8 +46,12 @@ export * from "./updateRunBody";
 export * from "./updateRunBodyCalculationSnapshot";
 export * from "./vehicle";
 export * from "./venue";
+export * from "./venueDetail";
 export * from "./venueListResponse";
 export * from "./venueListResponsePagination";
+export * from "./venueMapItem";
+export * from "./venueShow";
+export * from "./venueStats";
 export * from "./venueVenueStatus";
 export * from "./venueVenueType";
 export * from "./venueWillPlayAgain";

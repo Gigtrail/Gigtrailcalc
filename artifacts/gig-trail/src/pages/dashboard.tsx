@@ -5,6 +5,7 @@ import { CalendarDays, MapPin, Plus, Pencil, Calculator, Star, X } from "lucide-
 import {
   useGetDashboardTourItems,
   useGetDashboardVenues,
+  getGetDashboardVenuesQueryKey,
   type TourItem,
   type VenueMapItem,
 } from "@workspace/api-client-react";
@@ -1083,7 +1084,7 @@ function MapView({ upcoming }: { upcoming: ItemWithDate[] }) {
   const [mode, setMode] = useState<MapMode>("tour");
 
   const venuesQuery = useGetDashboardVenues({
-    query: { enabled: mode === "venues" },
+    query: { enabled: mode === "venues", queryKey: getGetDashboardVenuesQueryKey() },
   });
   const venues = venuesQuery.data ?? [];
 

@@ -108,6 +108,9 @@ function createProfileInsertData(
     homeBaseLat: nullableDecimalString(data.homeBaseLat) ?? null,
     homeBaseLng: nullableDecimalString(data.homeBaseLng) ?? null,
     defaultFuelPrice: nullableDecimalString(data.defaultFuelPrice) ?? null,
+    defaultPetrolPrice: nullableDecimalString(data.defaultPetrolPrice) ?? null,
+    defaultDieselPrice: nullableDecimalString(data.defaultDieselPrice) ?? null,
+    defaultLpgPrice: nullableDecimalString(data.defaultLpgPrice) ?? null,
   };
 }
 
@@ -122,6 +125,9 @@ function createProfileUpdateData(data: UpdateProfilePayload): Partial<typeof pro
     homeBaseLat,
     homeBaseLng,
     defaultFuelPrice,
+    defaultPetrolPrice,
+    defaultDieselPrice,
+    defaultLpgPrice,
     ...nonDecimalFields
   } = data;
   const updateData: Partial<typeof profilesTable.$inferInsert> = { ...nonDecimalFields };
@@ -134,6 +140,9 @@ function createProfileUpdateData(data: UpdateProfilePayload): Partial<typeof pro
   if (homeBaseLat !== undefined) updateData.homeBaseLat = nullableDecimalString(homeBaseLat);
   if (homeBaseLng !== undefined) updateData.homeBaseLng = nullableDecimalString(homeBaseLng);
   if (defaultFuelPrice !== undefined) updateData.defaultFuelPrice = nullableDecimalString(defaultFuelPrice);
+  if (defaultPetrolPrice !== undefined) updateData.defaultPetrolPrice = nullableDecimalString(defaultPetrolPrice);
+  if (defaultDieselPrice !== undefined) updateData.defaultDieselPrice = nullableDecimalString(defaultDieselPrice);
+  if (defaultLpgPrice !== undefined) updateData.defaultLpgPrice = nullableDecimalString(defaultLpgPrice);
   return updateData;
 }
 

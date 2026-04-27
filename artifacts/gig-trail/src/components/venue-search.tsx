@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { MapPin, Search, X, Building2, PenLine, Clock, ChevronRight, BookmarkPlus, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
-import { useSearchVenues, useCreateOrUpdateVenue } from "@workspace/api-client-react";
+import { getSearchVenuesQueryKey, useSearchVenues, useCreateOrUpdateVenue } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGoogleMapsApiKey, getGoogleMapsLoadError, loadGoogleMaps, parseAddressComponents } from "@/lib/google-maps";
 import { buildAppLocation, type AppLocation } from "@/lib/location";
@@ -94,7 +94,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   const debouncedQuery = useDebounce(query, 280);
   const { data: pastVenues } = useSearchVenues(
     { q: debouncedQuery },
-    { query: { enabled: debouncedQuery.length >= 2 } }
+    { query: { enabled: debouncedQuery.length >= 2, queryKey: getSearchVenuesQueryKey({ q: debouncedQuery }) } }
   );
 
   const selectedVenueName = venueName || "";

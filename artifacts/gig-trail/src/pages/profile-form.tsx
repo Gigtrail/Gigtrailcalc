@@ -875,6 +875,7 @@ export default function ProfileForm() {
       bandMembers: memberLibrary && memberLibrary.length > 0 ? JSON.stringify(memberLibrary) : null,
       activeMemberIds: activeIds.length > 0 ? JSON.stringify(activeIds) : null,
       peopleCount,
+      avgFoodPerDay: rest.avgFoodPerDay ?? 0,
     };
 
     if (isEditing) {

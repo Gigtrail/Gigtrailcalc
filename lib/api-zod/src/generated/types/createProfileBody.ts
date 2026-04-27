@@ -19,6 +19,8 @@ export interface CreateProfileBody {
   /** @nullable */
   bandMembers?: string | null;
   /** @nullable */
+  activeMemberIds?: string | null;
+  /** @nullable */
   defaultVehicleId?: number | null;
   vehicleType?: string;
   /** @nullable */
@@ -31,12 +33,20 @@ export interface CreateProfileBody {
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
-  avgAccomPerNight: number;
+  avgAccomPerNight?: number;
+  singleRoomsDefault?: number;
+  doubleRoomsDefault?: number;
   avgFoodPerDay: number;
   /** @nullable */
   maxDriveHoursPerDay?: number | null;
   /** @nullable */
   defaultFuelPrice?: number | null;
+  /** @nullable */
+  defaultPetrolPrice?: number | null;
+  /** @nullable */
+  defaultDieselPrice?: number | null;
+  /** @nullable */
+  defaultLpgPrice?: number | null;
   /** @nullable */
   notes?: string | null;
 }

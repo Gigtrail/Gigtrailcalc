@@ -3,7 +3,7 @@ import {
   useGetTour, useGetTourStops, useGetProfile,
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
   useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
-  getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey,
+  getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey, getGetRunsQueryKey,
   getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey,
   syncStopToPastShow as syncStopRaw,
 } from "@workspace/api-client-react";
@@ -121,9 +121,9 @@ export default function TourDetail() {
   });
   const { data: allVehicles } = useGetVehicles();
   const { data: tourVehicles, isLoading: isLoadingTourVehicles } = useGetTourVehicles(tourId, {
-    query: { enabled: !!tourId },
+    query: { enabled: !!tourId, queryKey: getGetTourVehiclesQueryKey(tourId) },
   });
-  const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal } });
+  const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal, queryKey: getGetRunsQueryKey() } });
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
 

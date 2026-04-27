@@ -291,13 +291,7 @@ router.patch("/tours/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const {
-    totalDistance: _ignoredTotalDistance,
-    totalCost: _ignoredTotalCost,
-    totalIncome: _ignoredTotalIncome,
-    totalProfit: _ignoredTotalProfit,
-    ...mutableTourFields
-  } = parsed.data;
+  const mutableTourFields = parsed.data;
   const duplicateProtection = await checkTourDuplicateName(userId, parsed.data.name, params.data.id);
   const [tour] = await db
     .update(toursTable)

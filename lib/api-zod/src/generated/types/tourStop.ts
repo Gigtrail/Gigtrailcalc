@@ -9,6 +9,10 @@
 export interface TourStop {
   id: number;
   tourId: number;
+  /** @nullable */
+  venueId: number | null;
+  /** @nullable */
+  bookingStatus?: string | null;
   stopOrder: number;
   /** @nullable */
   date: string | null;
@@ -46,6 +50,8 @@ export interface TourStop {
   distanceOverride: number | null;
   /** @nullable */
   fuelPriceOverride: number | null;
+  /** @nullable */
+  accommodationMode: string | null;
   /** @nullable */
   notes: string | null;
 }

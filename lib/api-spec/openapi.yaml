@@ -60,7 +60,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateProfileBody"
+              $ref: "#/components/schemas/CreateProfileBody"
       responses:
         "201":
           description: Created profile
@@ -108,7 +108,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateProfileBody"
+              $ref: "#/components/schemas/UpdateProfileBody"
       responses:
         "200":
           description: Updated profile
@@ -247,6 +247,31 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /vehicles/{id}/act-assignments:
+    put:
+      operationId: setVehicleActAssignments
+      tags: [vehicles]
+      summary: Replace vehicle act assignments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetVehicleActAssignmentsBody"
+      responses:
+        "200":
+          description: Updated vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
 
   /runs:
     get:
@@ -460,6 +485,52 @@ paths:
                   $ref: "#/components/schemas/Venue"
 
   /venues/{id}:
+    get:
+      operationId: getVenue
+      tags: [venues]
+      summary: Get a venue by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Venue detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenueDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: patchVenue
+      tags: [venues]
+      summary: Update a venue
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVenueBody"
+      responses:
+        "200":
+          description: Updated venue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VenueDetail"
     delete:
       operationId: deleteVenue
       tags: [venues]
@@ -659,6 +730,102 @@ paths:
         "204":
           description: Deleted
 
+  /tours/{tourId}/stops/{stopId}/past-show:
+    post:
+      operationId: syncStopToPastShow
+      tags: [tours]
+      summary: Sync a tour stop to a past show
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Synced past show
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "201":
+          description: Created past show
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /tours/{tourId}/vehicles:
+    get:
+      operationId: getTourVehicles
+      tags: [tours]
+      summary: List vehicles assigned to a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tour vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourVehicleItem"
+    post:
+      operationId: addTourVehicle
+      tags: [tours]
+      summary: Add a vehicle to a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTourVehicleBody"
+      responses:
+        "201":
+          description: Added tour vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourVehicleItem"
+
+  /tours/{tourId}/vehicles/{vehicleId}:
+    delete:
+      operationId: deleteTourVehicle
+      tags: [tours]
+      summary: Remove a vehicle from a tour
+      parameters:
+        - name: tourId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: vehicleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -684,6 +851,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardRecent"
+
+  /dashboard/venues:
+    get:
+      operationId: getDashboardVenues
+      tags: [dashboard]
+      summary: Get venue map items for dashboard
+      responses:
+        "200":
+          description: Venue map items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VenueMapItem"
 
   /dashboard/tour-items:
     get:
@@ -759,6 +941,8 @@ components:
           type: integer
         bandMembers:
           type: ["string", "null"]
+        activeMemberIds:
+          type: ["string", "null"]
         defaultVehicleId:
           type: ["integer", "null"]
         vehicleType:
@@ -781,11 +965,21 @@ components:
           type: ["string", "null"]
         avgAccomPerNight:
           type: number
+        singleRoomsDefault:
+          type: integer
+        doubleRoomsDefault:
+          type: integer
         avgFoodPerDay:
           type: number
         maxDriveHoursPerDay:
           type: ["integer", "null"]
         defaultFuelPrice:
+          type: ["number", "null"]
+        defaultPetrolPrice:
+          type: ["number", "null"]
+        defaultDieselPrice:
+          type: ["number", "null"]
+        defaultLpgPrice:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
@@ -848,6 +1042,8 @@ components:
           type: integer
         bandMembers:
           type: ["string", "null"]
+        activeMemberIds:
+          type: ["string", "null"]
         defaultVehicleId:
           type: ["integer", "null"]
         vehicleType:
@@ -870,11 +1066,21 @@ components:
           type: ["string", "null"]
         avgAccomPerNight:
           type: number
+        singleRoomsDefault:
+          type: integer
+        doubleRoomsDefault:
+          type: integer
         avgFoodPerDay:
           type: number
         maxDriveHoursPerDay:
           type: ["integer", "null"]
         defaultFuelPrice:
+          type: ["number", "null"]
+        defaultPetrolPrice:
+          type: ["number", "null"]
+        defaultDieselPrice:
+          type: ["number", "null"]
+        defaultLpgPrice:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
@@ -882,7 +1088,6 @@ components:
         - name
         - actType
         - peopleCount
-        - avgAccomPerNight
         - avgFoodPerDay
 
     UpdateProfileBody:
@@ -1043,6 +1248,12 @@ components:
           type: ["string", "null"]
         lastTotalProfit:
           type: ["number", "null"]
+        showCount:
+          type: ["integer", "null"]
+        lastPlayed:
+          type: ["string", "null"]
+        avgProfit:
+          type: ["number", "null"]
         lastStatus:
           type: ["string", "null"]
         address:
@@ -1068,6 +1279,12 @@ components:
         productionContactPhone:
           type: ["string", "null"]
         productionContactEmail:
+          type: ["string", "null"]
+        productionNotes:
+          type: ["string", "null"]
+        techSpecs:
+          type: ["string", "null"]
+        stagePlotNotes:
           type: ["string", "null"]
         roomNotes:
           type: ["string", "null"]
@@ -1097,6 +1314,63 @@ components:
         - normalizedVenueName
         - createdAt
         - updatedAt
+
+    VenueStats:
+      type: object
+      properties:
+        timesPlayed:
+          type: integer
+        avgProfit:
+          type: ["number", "null"]
+        lastPlayed:
+          type: ["string", "null"]
+      required:
+        - timesPlayed
+
+    VenueShow:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: integer
+        showDate:
+          type: ["string", "null"]
+        showType:
+          type: ["string", "null"]
+        fee:
+          type: ["number", "null"]
+        capacity:
+          type: ["integer", "null"]
+        ticketPrice:
+          type: ["number", "null"]
+        dealType:
+          type: ["string", "null"]
+        splitPct:
+          type: ["number", "null"]
+        guarantee:
+          type: ["number", "null"]
+        merchEstimate:
+          type: ["number", "null"]
+        actualAttendance:
+          type: ["integer", "null"]
+        totalProfit:
+          type: ["number", "null"]
+        actualProfit:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+
+    VenueDetail:
+      allOf:
+        - $ref: "#/components/schemas/Venue"
+        - type: object
+          properties:
+            stats:
+              $ref: "#/components/schemas/VenueStats"
+            shows:
+              type: array
+              items:
+                $ref: "#/components/schemas/VenueShow"
 
     VenueListResponse:
       type: object
@@ -1169,6 +1443,12 @@ components:
           type: ["string", "null"]
         productionContactEmail:
           type: ["string", "null"]
+        productionNotes:
+          type: ["string", "null"]
+        techSpecs:
+          type: ["string", "null"]
+        stagePlotNotes:
+          type: ["string", "null"]
         roomNotes:
           type: ["string", "null"]
         venueStatus:
@@ -1187,9 +1467,6 @@ components:
             type: string
         venueNotes:
           type: ["string", "null"]
-      required:
-        - venueName
-
     Run:
       type: object
       properties:
@@ -1251,10 +1528,18 @@ components:
           type: ["number", "null"]
         marketingCost:
           type: ["number", "null"]
+        bookingFeePerTicket:
+          type: ["number", "null"]
+        supportActCost:
+          type: ["number", "null"]
         accommodationRequired:
           type: boolean
         accommodationType:
           type: ["string", "null"]
+        singleRooms:
+          type: ["integer", "null"]
+        doubleRooms:
+          type: ["integer", "null"]
         accommodationNights:
           type: ["number", "null"]
         accommodationCost:
@@ -1302,6 +1587,13 @@ components:
           type: ["boolean", "null"]
         completedAt:
           type: ["string", "null"]
+        importedFromTour:
+          type: boolean
+        tourName:
+          type: ["string", "null"]
+        calculationSnapshot:
+          type: ["object", "null"]
+          additionalProperties: true
         createdAt:
           type: string
       required:
@@ -1578,8 +1870,16 @@ components:
           type: ["integer", "null"]
         startLocation:
           type: ["string", "null"]
+        startLocationLat:
+          type: ["number", "null"]
+        startLocationLng:
+          type: ["number", "null"]
         endLocation:
           type: ["string", "null"]
+        endLocationLat:
+          type: ["number", "null"]
+        endLocationLng:
+          type: ["number", "null"]
         returnHome:
           type: boolean
         startDate:
@@ -1590,6 +1890,8 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        daysOnTour:
+          type: ["integer", "null"]
         totalDistance:
           type: ["number", "null"]
         totalCost:
@@ -1598,8 +1900,16 @@ components:
           type: ["number", "null"]
         totalProfit:
           type: ["number", "null"]
+        stopCount:
+          type: integer
         fuelType:
           type: ["string", "null"]
+        fuelPricePetrol:
+          type: ["number", "null"]
+        fuelPriceDiesel:
+          type: ["number", "null"]
+        fuelPriceLpg:
+          type: ["number", "null"]
         fuelConsumption:
           type: ["number", "null"]
         fuelPrice:
@@ -1617,14 +1927,6 @@ components:
         gearHireCost:
           type: ["number", "null"]
         otherCosts:
-          type: ["number", "null"]
-        totalDistance:
-          type: ["number", "null"]
-        totalCost:
-          type: ["number", "null"]
-        totalIncome:
-          type: ["number", "null"]
-        totalProfit:
           type: ["number", "null"]
         createdAt:
           type: string
@@ -1646,6 +1948,7 @@ components:
         - totalCost
         - totalIncome
         - totalProfit
+        - stopCount
         - createdAt
 
     CreateTourBody:
@@ -1659,8 +1962,16 @@ components:
           type: ["integer", "null"]
         startLocation:
           type: ["string", "null"]
+        startLocationLat:
+          type: ["number", "null"]
+        startLocationLng:
+          type: ["number", "null"]
         endLocation:
           type: ["string", "null"]
+        endLocationLat:
+          type: ["number", "null"]
+        endLocationLng:
+          type: ["number", "null"]
         returnHome:
           type: boolean
         startDate:
@@ -1671,8 +1982,16 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        daysOnTour:
+          type: ["integer", "null"]
         fuelType:
           type: ["string", "null"]
+        fuelPricePetrol:
+          type: ["number", "null"]
+        fuelPriceDiesel:
+          type: ["number", "null"]
+        fuelPriceLpg:
+          type: ["number", "null"]
         fuelConsumption:
           type: ["number", "null"]
         fuelPrice:
@@ -1701,6 +2020,10 @@ components:
           type: integer
         tourId:
           type: integer
+        venueId:
+          type: ["integer", "null"]
+        bookingStatus:
+          type: ["string", "null"]
         stopOrder:
           type: integer
         date:
@@ -1741,11 +2064,14 @@ components:
           type: ["number", "null"]
         fuelPriceOverride:
           type: ["number", "null"]
+        accommodationMode:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
       required:
         - id
         - tourId
+        - venueId
         - stopOrder
         - date
         - city
@@ -1764,11 +2090,16 @@ components:
         - extraCosts
         - distanceOverride
         - fuelPriceOverride
+        - accommodationMode
         - notes
 
     CreateTourStopBody:
       type: object
       properties:
+        venueId:
+          type: ["integer", "null"]
+        bookingStatus:
+          type: ["string", "null"]
         stopOrder:
           type: integer
         date:
@@ -1809,6 +2140,8 @@ components:
           type: ["number", "null"]
         fuelPriceOverride:
           type: ["number", "null"]
+        accommodationMode:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
       required:
@@ -1828,8 +2161,16 @@ components:
           type: ["integer", "null"]
         startLocation:
           type: ["string", "null"]
+        startLocationLat:
+          type: ["number", "null"]
+        startLocationLng:
+          type: ["number", "null"]
         endLocation:
           type: ["string", "null"]
+        endLocationLat:
+          type: ["number", "null"]
+        endLocationLng:
+          type: ["number", "null"]
         returnHome:
           type: boolean
         startDate:
@@ -1840,6 +2181,8 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        daysOnTour:
+          type: ["integer", "null"]
         totalDistance:
           type: ["number", "null"]
         totalCost:
@@ -1847,6 +2190,14 @@ components:
         totalIncome:
           type: ["number", "null"]
         totalProfit:
+          type: ["number", "null"]
+        fuelType:
+          type: ["string", "null"]
+        fuelPricePetrol:
+          type: ["number", "null"]
+        fuelPriceDiesel:
+          type: ["number", "null"]
+        fuelPriceLpg:
           type: ["number", "null"]
         fuelConsumption:
           type: ["number", "null"]
@@ -1892,6 +2243,85 @@ components:
         - totalProfit
         - createdAt
         - stops
+
+    SetVehicleActAssignmentsBody:
+      type: object
+      properties:
+        actIds:
+          type: array
+          items:
+            type: integer
+        defaultForActIds:
+          type: array
+          items:
+            type: integer
+      required:
+        - actIds
+
+    TourVehicleItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        tourId:
+          type: integer
+        vehicleId:
+          type: integer
+        vehicle:
+          $ref: "#/components/schemas/Vehicle"
+      required:
+        - id
+        - tourId
+        - vehicleId
+        - vehicle
+
+    AddTourVehicleBody:
+      type: object
+      properties:
+        vehicleId:
+          type: integer
+      required:
+        - vehicleId
+
+    VenueMapItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        venueName:
+          type: string
+        city:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        fullAddress:
+          type: ["string", "null"]
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        upcomingShowsCount:
+          type: integer
+        pastShowsCount:
+          type: integer
+        nextShowDate:
+          type: ["string", "null"]
+        lastShowDate:
+          type: ["string", "null"]
+        totalProfit:
+          type: ["number", "null"]
+      required:
+        - id
+        - venueName
+        - city
+        - state
+        - fullAddress
+        - latitude
+        - longitude
+        - upcomingShowsCount
+        - pastShowsCount
+        - nextShowDate
+        - lastShowDate
 
     DashboardSummary:
       type: object

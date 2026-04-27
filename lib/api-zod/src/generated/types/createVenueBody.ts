@@ -9,7 +9,7 @@ import type { CreateVenueBodyVenueStatus } from "./createVenueBodyVenueStatus";
 import type { CreateVenueBodyWillPlayAgain } from "./createVenueBodyWillPlayAgain";
 
 export interface CreateVenueBody {
-  venueName: string;
+  venueName?: string;
   /** @nullable */
   profileId?: number | null;
   /** @nullable */
@@ -46,6 +46,12 @@ export interface CreateVenueBody {
   productionContactPhone?: string | null;
   /** @nullable */
   productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
   /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
