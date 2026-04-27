@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, or, ilike, desc, sql, inArray, isNull, type SQL } from "drizzle-orm";
-import { db, venuesTable, runsTable, tourStopsTable, toursTable } from "@workspace/db";
+import { db, venuesTable, runsTable, tourStopsTable, toursTable, venueDealsTable, profilesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 import { getTodayIsoDateFromRequest } from "../lib/run-lifecycle";
 import { firstParam, parseIntegerParam } from "../lib/request-params";
@@ -160,6 +160,41 @@ function serializeShow(r: typeof runsTable.$inferSelect, venue?: typeof venuesTa
 
 // ─── GET /venues ──────────────────────────────────────────────────────────────
 
+function serializeDealHistoryRow(row: {
+  deal: typeof venueDealsTable.$inferSelect;
+  runId: number | null;
+  profileName: string | null;
+  profileArchivedAt: Date | string | null;
+}) {
+  const deal = row.deal;
+  const runAvailable = row.runId != null;
+  const profileArchived = row.profileArchivedAt != null;
+
+  return {
+    id: deal.id,
+    venueId: deal.venueId,
+    profileId: deal.profileId ?? null,
+    profileName: row.profileName ?? (profileArchived ? "Archived profile" : null),
+    profileArchived,
+    runId: row.runId,
+    tourId: deal.tourId ?? null,
+    sourceStopId: deal.sourceStopId ?? null,
+    date: deal.date ?? null,
+    dealType: deal.dealType,
+    ticketPrice: deal.ticketPrice != null ? Number(deal.ticketPrice) : null,
+    ticketsSoldEstimate: deal.ticketsSoldEstimate ?? null,
+    ticketsSoldActual: deal.ticketsSoldActual ?? null,
+    guaranteeAmount: deal.guaranteeAmount != null ? Number(deal.guaranteeAmount) : null,
+    grossRevenue: Number(deal.grossRevenue),
+    totalExpenses: Number(deal.totalExpenses),
+    netProfit: Number(deal.netProfit),
+    calculationAvailable: runAvailable,
+    unavailableReason: runAvailable ? null : "Historical calculation unavailable",
+    targetPath: runAvailable ? `/runs/results?runId=${row.runId}` : null,
+    createdAt: deal.createdAt instanceof Date ? deal.createdAt.toISOString() : String(deal.createdAt),
+  };
+}
+
 type VenuePerformanceSummary = {
   totalShows: number;
   avgTicketSales: number | null;
@@ -173,21 +208,19 @@ export async function getVenuePerformance(
   userId?: string,
   todayIsoDate?: string,
 ): Promise<VenuePerformanceSummary> {
-  const conditions = [eq(runsTable.venueId, venueId)];
-  if (userId) conditions.push(eq(runsTable.userId, userId));
-  if (todayIsoDate) {
-    conditions.push(sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${todayIsoDate} or ${runsTable.status} = 'past')`);
-  }
+  void todayIsoDate;
+  const conditions = [eq(venueDealsTable.venueId, venueId)];
+  if (userId) conditions.push(eq(venueDealsTable.userId, userId));
 
   const [summary] = await db
     .select({
       totalShows: sql<number>`count(*)::int`,
-      avgTicketSales: sql<number | null>`avg(${runsTable.actualTicketSales})::float`,
-      avgProfit: sql<number | null>`avg(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
-      bestShowProfit: sql<number | null>`max(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
-      worstShowProfit: sql<number | null>`min(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
+      avgTicketSales: sql<number | null>`avg(${venueDealsTable.ticketsSoldActual})::float`,
+      avgProfit: sql<number | null>`avg(${venueDealsTable.netProfit})::float`,
+      bestShowProfit: sql<number | null>`max(${venueDealsTable.netProfit})::float`,
+      worstShowProfit: sql<number | null>`min(${venueDealsTable.netProfit})::float`,
     })
-    .from(runsTable)
+    .from(venueDealsTable)
     .where(and(...conditions));
 
   return {
@@ -266,18 +299,17 @@ router.get("/venues", requireAuth, async (req, res): Promise<void> => {
   if (venueIds.length > 0) {
     const stats = await db
       .select({
-        venueId: runsTable.venueId,
+        venueId: venueDealsTable.venueId,
         count: sql<number>`count(*)::int`,
-        lastPlayed: sql<string | null>`max(${runsTable.showDate})`,
-        avgProfit: sql<number | null>`avg(${runsTable.actualIncome} - ${runsTable.actualExpenses})::float`,
+        lastPlayed: sql<string | null>`max(${venueDealsTable.date})`,
+        avgProfit: sql<number | null>`avg(${venueDealsTable.netProfit})::float`,
       })
-      .from(runsTable)
+      .from(venueDealsTable)
       .where(and(
-        eq(runsTable.userId, userId),
-        inArray(runsTable.venueId, venueIds),
-        sql`(${runsTable.showDate} is null or ${runsTable.showDate} < ${today} or ${runsTable.status} = 'past')`,
+        eq(venueDealsTable.userId, userId),
+        inArray(venueDealsTable.venueId, venueIds),
       ))
-      .groupBy(runsTable.venueId);
+      .groupBy(venueDealsTable.venueId);
     for (const s of stats) {
       if (s.venueId != null) {
         countMap[s.venueId] = s.count;
@@ -375,10 +407,23 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
 
   const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
   const performanceSummary = await getVenuePerformance(id, userId, today);
+  const dealRows = await db
+    .select({
+      deal: venueDealsTable,
+      runId: runsTable.id,
+      profileName: profilesTable.name,
+      profileArchivedAt: profilesTable.archivedAt,
+    })
+    .from(venueDealsTable)
+    .leftJoin(runsTable, and(eq(venueDealsTable.runId, runsTable.id), eq(runsTable.userId, userId)))
+    .leftJoin(profilesTable, and(eq(venueDealsTable.profileId, profilesTable.id), eq(profilesTable.userId, userId)))
+    .where(and(eq(venueDealsTable.venueId, id), eq(venueDealsTable.userId, userId)))
+    .orderBy(desc(venueDealsTable.date), desc(venueDealsTable.createdAt))
+    .limit(runLimit);
 
   const stats = {
     timesPlayed: performanceSummary.totalShows,
-    lastPlayed: performanceSummary.totalShows > 0 ? (historicalShows[0]?.showDate ?? null) : null,
+    lastPlayed: performanceSummary.totalShows > 0 ? (dealRows[0]?.deal.date ?? historicalShows[0]?.showDate ?? null) : null,
     avgFee: avg(fees),
     avgProfit: performanceSummary.avgProfit,
     avgMerch: avg(merches),
@@ -425,6 +470,7 @@ router.get("/venues/:id", requireAuth, async (req, res): Promise<void> => {
     ...serializeVenue(venue),
     stats,
     performanceSummary,
+    dealHistory: dealRows.map(serializeDealHistoryRow),
     shows: historicalShows.map(show => serializeShow(show, venue)),
     upcomingRuns: upcomingRuns.map(show => serializeShow(show, venue)),
     upcomingStops,

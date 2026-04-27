@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db, runsTable, venuesTable } from "@workspace/db";
+import { db, runsTable, venuesTable, venueDealsTable } from "@workspace/db";
 import { findOrCreateUserVenue } from "./venue-resolver";
 import { logger } from "./logger";
 
@@ -23,6 +23,82 @@ export interface SaveDealAndUpsertVenueResult {
 
 function cleanString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function n(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function money(value: unknown): string {
+  return String(Math.round((n(value) ?? 0) * 100) / 100);
+}
+
+function inferVenueDealType(run: typeof runsTable.$inferSelect): "ticketed" | "guarantee" {
+  const showType = (run.showType ?? "").toLowerCase();
+  const dealType = (run.dealType ?? "").toLowerCase();
+  if (showType.includes("ticket") || showType.includes("hybrid") || dealType.includes("door") || dealType.includes("split")) {
+    return "ticketed";
+  }
+  return "guarantee";
+}
+
+function estimateTicketsSold(run: typeof runsTable.$inferSelect): number | null {
+  if (run.capacity == null || run.expectedAttendancePct == null) return null;
+  const capacity = n(run.capacity);
+  const expectedAttendancePct = n(run.expectedAttendancePct);
+  if (capacity == null || expectedAttendancePct == null) return null;
+  return Math.floor((capacity * expectedAttendancePct) / 100);
+}
+
+export async function syncVenueDealSnapshotFromRun(run: typeof runsTable.$inferSelect): Promise<void> {
+  if (run.venueId == null) return;
+
+  const dealType = inferVenueDealType(run);
+  const actualTicketSales = run.actualTicketSales ?? null;
+  const ticketEstimate = dealType === "ticketed" ? estimateTicketsSold(run) : null;
+  const actualIncome = n(run.actualIncome);
+  const actualExpenses = n(run.actualExpenses);
+  const actualNetProfit = actualIncome != null && actualExpenses != null ? actualIncome - actualExpenses : run.actualProfit;
+  const snapshot: typeof venueDealsTable.$inferInsert = {
+    venueId: run.venueId,
+    profileId: run.profileId ?? null,
+    userId: run.userId ?? null,
+    runId: run.id,
+    tourId: run.sourceTourId ?? null,
+    sourceStopId: run.sourceStopId ?? null,
+    date: run.showDate ?? null,
+    dealType,
+    ticketPrice: dealType === "ticketed" && run.ticketPrice != null ? String(run.ticketPrice) : null,
+    ticketsSoldEstimate: ticketEstimate,
+    ticketsSoldActual: actualTicketSales,
+    guaranteeAmount: dealType === "guarantee" && run.guarantee != null
+      ? String(run.guarantee)
+      : dealType === "guarantee" && run.fee != null
+        ? String(run.fee)
+        : null,
+    grossRevenue: money(run.actualIncome ?? run.totalIncome),
+    totalExpenses: money(run.actualExpenses ?? run.totalCost),
+    netProfit: money(actualNetProfit ?? run.totalProfit),
+    updatedAt: new Date(),
+  };
+
+  const [existing] = await db
+    .select({ id: venueDealsTable.id })
+    .from(venueDealsTable)
+    .where(eq(venueDealsTable.runId, run.id))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(venueDealsTable)
+      .set(snapshot)
+      .where(eq(venueDealsTable.id, existing.id));
+    return;
+  }
+
+  await db.insert(venueDealsTable).values(snapshot);
 }
 
 /**
@@ -176,6 +252,7 @@ export async function saveDealAndUpsertVenue(
     if (!run) {
       throw new Error(`Deal run ${existingRun.id} was not found during update`);
     }
+    await syncVenueDealSnapshotFromRun(run);
     return {
       run,
       venueId: run.venueId ?? null,
@@ -196,6 +273,7 @@ export async function saveDealAndUpsertVenue(
   if (!run) {
     throw new Error("Deal run insert did not return a row");
   }
+  await syncVenueDealSnapshotFromRun(run);
   if (createdVenue) {
     logger.info(
       { userId: input.userId, venueId: run.venueId, dealId: run.id, dealSource: input.dealSource },

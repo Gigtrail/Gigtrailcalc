@@ -217,6 +217,54 @@ async function syncStopVenue(
   return result.venueId;
 }
 
+async function saveTourStopDealSnapshot(
+  userId: string,
+  tour: typeof toursTable.$inferSelect,
+  stop: typeof tourStopsTable.$inferSelect,
+  todayIsoDate: string,
+) {
+  const estimatedFinancials = estimatePastShowFinancialsFromStop(stop);
+  const showDate = stop.date ?? null;
+  await saveDealAndUpsertVenue({
+    userId,
+    dealSource: "tour_show",
+    runData: {
+      profileId: tour.profileId ?? null,
+      vehicleId: tour.vehicleId ?? null,
+      venueId: stop.venueId ?? null,
+      venueName: stop.venueName ?? null,
+      city: stop.city ?? null,
+      showDate,
+      status: getDefaultSavedCalculationStatus(showDate, todayIsoDate),
+      showType: stop.showType,
+      fee: stop.fee != null ? Number(stop.fee) : null,
+      capacity: stop.capacity ?? null,
+      ticketPrice: stop.ticketPrice != null ? Number(stop.ticketPrice) : null,
+      expectedAttendancePct: stop.expectedAttendancePct != null ? Number(stop.expectedAttendancePct) : null,
+      dealType: stop.dealType ?? null,
+      splitPct: stop.splitPct != null ? Number(stop.splitPct) : null,
+      guarantee: stop.guarantee != null ? Number(stop.guarantee) : null,
+      merchEstimate: stop.merchEstimate != null ? Number(stop.merchEstimate) : null,
+      marketingCost: stop.marketingCost != null ? Number(stop.marketingCost) : null,
+      accommodationCost: stop.accommodationCost != null ? Number(stop.accommodationCost) : null,
+      extraCosts: stop.extraCosts != null ? Number(stop.extraCosts) : null,
+      notes: stop.notes ?? null,
+      distanceKm: 0,
+      fuelPrice: 0,
+      totalIncome: estimatedFinancials?.totalIncome ?? null,
+      totalCost: estimatedFinancials?.totalCost ?? null,
+      totalProfit: estimatedFinancials?.totalProfit ?? null,
+      returnTrip: false,
+      sourceTourId: tour.id,
+      sourceStopId: stop.id,
+      importedFromTour: true,
+      importedAt: new Date(),
+      tourName: tour.name,
+      accommodationRequired: false,
+    },
+  });
+}
+
 router.get("/tours", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userRole);
@@ -369,14 +417,15 @@ router.post("/tours/:tourId/stops", requireAuth, async (req, res): Promise<void>
   const [stop] = await db.insert(tourStopsTable).values(stopData).returning();
 
   // Immediately find/create venue if venueName is set
+  let responseStop = stop;
   if (stop.venueName?.trim()) {
     const venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
     if (venueId) {
-      res.status(201).json(serializeStop({ ...stop, venueId }));
-      return;
+      responseStop = { ...stop, venueId };
     }
   }
-  res.status(201).json(serializeStop(stop));
+  await saveTourStopDealSnapshot(userId, tour, responseStop, getTodayIsoDateFromRequest(req));
+  res.status(201).json(serializeStop(responseStop));
 });
 
 router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {
@@ -409,14 +458,15 @@ router.patch("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Prom
   }
 
   // Re-sync venue when venueName is present (handles renames + new venues)
+  let responseStop = stop;
   if (stop.venueName?.trim()) {
     const venueId = await syncStopVenue(userId, stop.id, stop.venueName, stop.city);
     if (venueId) {
-      res.json(UpdateTourStopResponse.parse(serializeStop({ ...stop, venueId })));
-      return;
+      responseStop = { ...stop, venueId };
     }
   }
-  res.json(UpdateTourStopResponse.parse(serializeStop(stop)));
+  await saveTourStopDealSnapshot(userId, ownedStop.tour, responseStop, getTodayIsoDateFromRequest(req));
+  res.json(UpdateTourStopResponse.parse(serializeStop(responseStop)));
 });
 
 router.delete("/tours/:tourId/stops/:stopId", requireAuth, async (req, res): Promise<void> => {

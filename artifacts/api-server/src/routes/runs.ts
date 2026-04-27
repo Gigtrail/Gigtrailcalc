@@ -20,7 +20,7 @@ import {
   isPastRun,
 } from "../lib/run-lifecycle";
 import { logger } from "../lib/logger";
-import { saveDealAndUpsertVenue } from "../lib/deal-persistence";
+import { saveDealAndUpsertVenue, syncVenueDealSnapshotFromRun } from "../lib/deal-persistence";
 
 const router: IRouter = Router();
 
@@ -331,6 +331,8 @@ router.post("/runs/:id/complete", requireAuth, async (req, res): Promise<void> =
     },
     "[Runs] Show completion recorded",
   );
+
+  await syncVenueDealSnapshotFromRun(updated);
 
   res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
 });
