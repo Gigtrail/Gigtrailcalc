@@ -249,6 +249,11 @@
     border-left: 3px solid rgb(224 122 31 / 0.35);
     color: #8A8176;
   }
+  .trail-leg-warning-extreme {
+    background-color: rgb(194 90 0 / 0.14);
+    border-left: 4px solid rgb(194 90 0 / 0.75);
+    color: #5A3000;
+  }
 
   /* Subtle paper texture overlay */
   .paper-texture {

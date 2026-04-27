@@ -56,7 +56,14 @@ import { generateTourICS, downloadICS, type ICSOptions, type ICSStop, type ICSLe
 import { getTodayIsoDate } from "@/lib/run-lifecycle";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import {
+  SINGLE_ROOM_RATE,
+  DOUBLE_ROOM_RATE,
+  DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
+  EXTREME_DRIVE_HOURS_THRESHOLD,
+  getDriveSeverity,
+  type DriveSeverity,
+} from "@/lib/gig-constants";
 import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
 } from "@/lib/member-utils";
@@ -748,21 +755,42 @@ export default function TourDetail() {
     });
   })();
 
-  const renderLegRow = (leg: TourLeg, driveWarning: boolean, legKey: string) => {
+  const renderLegRow = (leg: TourLeg, severity: DriveSeverity, legKey: string) => {
     const legOpen = expandedLegs.has(legKey);
     const hasVehicleBreakdown =
       (calc?.vehicleFuelBreakdown?.length ?? 0) > 1 &&
       (calc?.totalDistance ?? 0) > 0 &&
       leg.distanceKm > 0;
+    const rowClass =
+      severity === "extreme" ? "trail-leg-warning-extreme"
+      : severity === "long" ? "trail-leg-warning"
+      : "trail-leg-row";
+    const iconClass =
+      severity === "extreme" ? "w-3.5 h-3.5 shrink-0 text-[#A03A00]"
+      : severity === "long" ? "w-3 h-3 shrink-0 text-[#C25A00]"
+      : "w-3 h-3 shrink-0 opacity-50";
+    const labelText =
+      severity === "extreme" ? `Over ${EXTREME_DRIVE_HOURS_THRESHOLD} hrs — add a travel day`
+      : severity === "long" ? "Long drive"
+      : null;
+    const labelClass =
+      severity === "extreme" ? "text-[#A03A00] font-bold"
+      : "text-[#C25A00] font-semibold";
+    const detailNote =
+      severity === "extreme"
+        ? `Over ${EXTREME_DRIVE_HOURS_THRESHOLD} hours — practically unachievable in a single day. Add a travel day.`
+        : "Long drive — may exceed comfortable daily limit";
     return (
       <>
         <div
-          className={`px-4 py-2 flex items-center gap-2.5 text-xs cursor-pointer transition-colors border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}
+          data-testid={`leg-row-${legKey}`}
+          data-drive-severity={severity}
+          className={`px-4 py-2 flex items-center gap-2.5 text-xs cursor-pointer transition-colors border-b border-border/20 ${rowClass}`}
           onClick={e => { e.stopPropagation(); toggleLeg(legKey); }}
         >
-          {driveWarning
-            ? <AlertTriangle className="w-3 h-3 shrink-0 text-[#C25A00]" />
-            : <Fuel className="w-3 h-3 shrink-0 opacity-50" />
+          {severity !== "none"
+            ? <AlertTriangle className={iconClass} />
+            : <Fuel className={iconClass} />
           }
           <span className="flex-1 min-w-0">
             {leg.driveTimeMinutes > 0
@@ -772,14 +800,14 @@ export default function TourDetail() {
             {leg.fuelCost > 0 && (
               <span className="text-muted-foreground"> · Fuel {fmt(leg.fuelCost)}</span>
             )}
-            {driveWarning && (
-              <span className="text-[#C25A00] font-semibold"> · Long drive</span>
+            {labelText && (
+              <span className={labelClass}> · {labelText}</span>
             )}
           </span>
           <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground/50 transition-transform ${legOpen ? "rotate-180" : ""}`} />
         </div>
         {legOpen && (
-          <div className={`px-4 pb-3 pt-2 text-xs border-b border-border/20 space-y-2 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
+          <div className={`px-4 pb-3 pt-2 text-xs border-b border-border/20 space-y-2 ${rowClass}`}>
             <div>
               <span className="font-semibold text-foreground">{leg.from}</span>
               <span className="text-muted-foreground"> → </span>
@@ -817,10 +845,10 @@ export default function TourDetail() {
                 ))}
               </div>
             )}
-            {driveWarning && (
-              <div className="flex items-center gap-1 text-[#C25A00] font-medium pt-0.5">
+            {severity !== "none" && (
+              <div className={`flex items-center gap-1 ${severity === "extreme" ? "text-[#A03A00] font-bold" : "text-[#C25A00] font-medium"} pt-0.5`}>
                 <AlertTriangle className="w-3 h-3 shrink-0" />
-                Long drive — may exceed comfortable daily limit
+                {detailNote}
               </div>
             )}
           </div>
@@ -1229,7 +1257,7 @@ export default function TourDetail() {
                     const stop = day.stop;
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const leg = day.incomingLeg;
-                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+                    const legSeverity: DriveSeverity = leg ? getDriveSeverity(leg.driveTimeMinutes) : "none";
 
                     const isTicketed = stop.showType === "Ticketed Show" || stop.showType === "Hybrid";
                     const rowClass = isTicketed ? "trail-row-ticketed" : "trail-row-flat";
@@ -1237,7 +1265,7 @@ export default function TourDetail() {
 
                     return (
                       <div key={day.date}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, day.date)}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, legSeverity, day.date)}
 
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${rowClass}`}
@@ -1365,10 +1393,10 @@ export default function TourDetail() {
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const legIndex = tour.startLocation ? i : i - 1;
                     const leg = legIndex >= 0 ? calc?.legs[legIndex] : undefined;
-                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+                    const legSeverity: DriveSeverity = leg ? getDriveSeverity(leg.driveTimeMinutes) : "none";
                     return (
                       <div key={stop.id}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, `stop-${stop.id}`)}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, legSeverity, `stop-${stop.id}`)}
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${stop.showType === "Ticketed Show" || stop.showType === "Hybrid" ? "trail-row-ticketed" : "trail-row-flat"}`}
                           onClick={() => toggleStop(stop.id)}
@@ -1489,8 +1517,9 @@ export default function TourDetail() {
                     const returnLeg = calc?.legs[calc.legs.length - 1];
                     const isReturnLeg = tour.returnHome && returnLeg && sortedStops.length > 0 &&
                       returnLeg.to !== sortedStops[sortedStops.length - 1]?.city;
-                    const returnDriveWarn = isReturnLeg && returnLeg && returnLeg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
-                    return isReturnLeg ? renderLegRow(returnLeg!, !!returnDriveWarn, "return-leg") : null;
+                    const returnSeverity: DriveSeverity =
+                      isReturnLeg && returnLeg ? getDriveSeverity(returnLeg.driveTimeMinutes) : "none";
+                    return isReturnLeg ? renderLegRow(returnLeg!, returnSeverity, "return-leg") : null;
                   })()}
 
                   {tour.returnHome && (tour.endLocation || tour.startLocation) && (
@@ -1531,6 +1560,17 @@ export default function TourDetail() {
                           </div>
                         )}
                       </div>
+                      {calc.legs.some(l => getDriveSeverity(l.driveTimeMinutes) === "extreme") && (
+                        <div
+                          className="px-4 py-2 text-[11px] text-muted-foreground italic border-b border-border/30 flex items-start gap-1.5"
+                          data-testid="text-extreme-drive-helper"
+                        >
+                          <AlertTriangle className="w-3 h-3 shrink-0 text-[#A03A00] mt-0.5" />
+                          <span>
+                            Drives over {EXTREME_DRIVE_HOURS_THRESHOLD} hours between gigs are flagged because they are rarely achievable without a travel day.
+                          </span>
+                        </div>
+                      )}
 
                       {/* Fuel Settings — always visible, single price keyed off vehicle */}
                       {(() => {
