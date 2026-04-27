@@ -1,13 +1,35 @@
 import { Router, type IRouter } from "express";
-import { requireAuth, derivePlanFromRole, isPermanentAdminEmail, type AuthenticatedRequest, type UserRole } from "../middlewares/auth";
+import {
+  requireAuth,
+  derivePlanFromRole,
+  getEntitlements,
+  getPlanLimits,
+  isPermanentAdminEmail,
+  normalizeRole,
+  type AuthenticatedRequest,
+  type UserRole,
+} from "../middlewares/auth";
 import { db, promoCodesTable, promoCodeRedemptionsTable, usersTable } from "@workspace/db";
-import { eq, and, ilike } from "drizzle-orm";
+import { serializeEntitlements } from "@workspace/entitlements";
+import { eq } from "drizzle-orm";
+import { firstParam } from "../lib/request-params";
 
 const router: IRouter = Router();
 
+function promoAccessResponse(role: UserRole, accessSource: "default" | "stripe" | "promo" | "admin", message?: string) {
+  return {
+    role,
+    plan: derivePlanFromRole(role),
+    accessSource,
+    limits: getPlanLimits(role),
+    entitlements: serializeEntitlements(getEntitlements(role)),
+    ...(message ? { message } : {}),
+  };
+}
+
 /** Validate a promo code without redeeming it (public — no auth required). */
 router.get("/promo-codes/validate", async (req, res): Promise<void> => {
-  const rawCode = (req.query.code as string | undefined)?.trim().toUpperCase();
+  const rawCode = firstParam(req.query.code)?.trim().toUpperCase();
   if (!rawCode) {
     res.status(400).json({ valid: false, error: "Code is required" });
     return;
@@ -71,7 +93,12 @@ router.post("/me/redeem-promo", requireAuth, async (req, res): Promise<void> => 
   }
 
   // Promo codes cannot grant admin role via public signup
-  const grantsRole = code.grantsRole as UserRole;
+  const grantsRole = normalizeRole(code.grantsRole);
+  if (code.grantsRole !== grantsRole || grantsRole === "free") {
+    console.warn(`[promo] Refusing invalid promo role code=${rawCode} grantsRole=${code.grantsRole}`);
+    res.status(400).json({ error: "This promo code is misconfigured" });
+    return;
+  }
   if (grantsRole === "admin") {
     res.status(403).json({ error: "This promo code cannot be redeemed here" });
     return;
@@ -86,13 +113,35 @@ router.post("/me/redeem-promo", requireAuth, async (req, res): Promise<void> => 
 
   // Hard stop: permanent admin is never modified by promo codes
   if (isPermanentAdminEmail(user.email)) {
-    res.json({ role: "admin", plan: derivePlanFromRole("admin"), message: "Your current role already includes full access" });
+    res.json(promoAccessResponse("admin", "admin", "Your current role already includes full access"));
     return;
   }
 
   // Don't downgrade — if user is already admin or tester, don't override
-  if (user.role === "admin" || user.role === "tester") {
-    res.json({ role: user.role, plan: derivePlanFromRole(user.role), message: "Your current role already includes full access" });
+  // Admins keep their stronger access untouched.
+  if (user.role === "admin") {
+    const role = normalizeRole(user.role);
+    res.json(
+      promoAccessResponse(
+        role,
+        (user.accessSource as "default" | "stripe" | "promo" | "admin") ?? "admin",
+        "Your current role already includes full access",
+      ),
+    );
+    return;
+  }
+
+  if (user.role === "tester" && grantsRole === "tester") {
+    const plan = derivePlanFromRole("tester");
+    const needsRepair = user.plan !== plan || user.accessSource !== "promo";
+    if (needsRepair) {
+      await db
+        .update(usersTable)
+        .set({ role: "tester", plan, accessSource: "promo" })
+        .where(eq(usersTable.id, userId));
+      console.log(`[promo] Repaired tester access userId=${userId} code=${rawCode} role=tester plan=${plan} accessSource=promo`);
+    }
+    res.json(promoAccessResponse("tester", "promo", "Your current role already includes full access"));
     return;
   }
 
@@ -118,7 +167,9 @@ router.post("/me/redeem-promo", requireAuth, async (req, res): Promise<void> => 
     signupEmail: user2?.email ?? null,
   });
 
-  res.json({ role: grantsRole, plan: newPlan });
+  console.log(`[promo] Redeemed code=${rawCode} userId=${userId} role=${grantsRole} plan=${newPlan} accessSource=promo`);
+
+  res.json(promoAccessResponse(grantsRole, "promo"));
 });
 
 export default router;

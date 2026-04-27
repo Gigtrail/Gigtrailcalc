@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import {
   CreditCard, Zap, CheckCircle2, XCircle, Loader2, Star, ShieldCheck,
   Search, Plus, Pencil, Trash2, ToggleLeft, ToggleRight, Eye, Tag,
@@ -29,12 +30,15 @@ import {
   useUpdatePromoCode,
   useDeletePromoCode,
   usePromoCodeRedemptions,
+  useSyncPlan,
   type AdminUser,
   type PromoCode,
 } from "@/hooks/use-plan";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
+import { PROFILE_CHECKOUT_RETURN_KEY } from "@/lib/profile-setup";
+import { isEmbedded, openExternal } from "@/lib/external-redirect";
 
 type Period = "monthly" | "yearly";
 
@@ -46,6 +50,9 @@ interface StaticPlan {
   badge?: string;
   monthlyPrice: string;
   yearlyPrice: string;
+  monthlyAnchor?: string;
+  yearlyAnchor?: string;
+  earlyAccess?: boolean;
   monthlyPeriod: string;
   yearlyPeriod: string;
   yearlyNote?: string;
@@ -76,11 +83,14 @@ const STATIC_PLANS: StaticPlan[] = [
     name: "Pro",
     tagline: "Plan smarter tours. See your real profit.",
     badge: "Most popular",
-    monthlyPrice: "AU$12",
-    yearlyPrice: "AU$79",
+    monthlyPrice: "AU$14",
+    yearlyPrice: "AU$88",
+    monthlyAnchor: "AU$19",
+    yearlyAnchor: "AU$120",
+    earlyAccess: true,
     monthlyPeriod: "per month",
     yearlyPeriod: "per year",
-    yearlyNote: "Less than AU$7/month · Save 45%",
+    yearlyNote: "Less than AU$8/month · Save AU$32/yr vs standard",
     features: [
       "Unlimited calculations",
       "Tour Builder",
@@ -461,8 +471,10 @@ function AdminUsersPanel() {
   const [query, setQuery] = useState("");
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data, isLoading, error } = useAdminUsers(query);
+  const { data, isLoading, error } = useAdminUsers();
+  void query;
   const updateRole = useUpdateUserRole();
+  const syncPlan = useSyncPlan();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -601,13 +613,35 @@ function AdminPanel() {
 // ─── Main Billing Page ───────────────────────────────────────────────────────
 
 export default function Billing() {
+  const [, setLocation] = useLocation();
   const [period, setPeriod] = useState<Period>("yearly");
   const { plan, role, accessSource, isPro, me, isLoading, refetch } = usePlan();
   const { data: weeklyUsage } = useWeeklyUsage();
   const { data: plansData } = useStripePlans();
   const createCheckout = useCreateCheckout();
   const customerPortal = useCustomerPortal();
+  const embedded = isEmbedded();
+  const [pendingExternalUrl, setPendingExternalUrl] = useState<{ url: string; label: string } | null>(null);
+
+  const launchExternal = (url: string, label: string) => {
+    const result = openExternal(url);
+    if (result.mode === "blocked") {
+      setPendingExternalUrl({ url, label });
+      toast({
+        title: `${label} couldn't open automatically`,
+        description: "Your browser blocked the new tab. Use the button below to open it.",
+        variant: "destructive",
+      });
+    } else if (result.mode === "newtab") {
+      // Keep a persistent button around in case the user closed the tab by
+      // mistake — Stripe Checkout cannot run inside this preview iframe.
+      setPendingExternalUrl({ url, label });
+    } else {
+      setPendingExternalUrl(null);
+    }
+  };
   const updateRole = useUpdateUserRole();
+  const syncPlan = useSyncPlan();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -626,19 +660,28 @@ export default function Billing() {
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const isSuccess = searchParams.get("success") === "1";
   const isCanceled = searchParams.get("canceled") === "1";
+  const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
     trackEvent("pricing_viewed", { source: isSuccess ? "post_checkout" : isCanceled ? "post_cancel" : "direct" });
     if (isSuccess) {
       const pendingPlan = sessionStorage.getItem("gt_pending_plan") ?? "unknown";
+      const checkoutReturnTo = sessionStorage.getItem(PROFILE_CHECKOUT_RETURN_KEY);
       sessionStorage.removeItem("gt_pending_plan");
       trackEvent("upgrade_completed", { plan_type: pendingPlan });
       toast({ title: "Subscription activated!", description: "Your plan has been upgraded. It may take a moment to reflect." });
       setTimeout(() => {
-        fetch("/api/me/sync-plan", { method: "POST", credentials: "include" })
+        void syncPlan.mutateAsync()
           .then(() => {
             queryClient.invalidateQueries({ queryKey: ["/api/me"] });
             refetch();
+            if (checkoutReturnTo) {
+              sessionStorage.removeItem(PROFILE_CHECKOUT_RETURN_KEY);
+              setLocation(checkoutReturnTo);
+            }
+          })
+          .catch((error: unknown) => {
+            console.error("[Billing] Plan sync failed after checkout:", error);
           });
       }, 2000);
     } else if (isCanceled) {
@@ -670,10 +713,15 @@ export default function Billing() {
       return;
     }
     try {
+      if (returnTo) {
+        sessionStorage.setItem(PROFILE_CHECKOUT_RETURN_KEY, returnTo);
+      } else {
+        sessionStorage.removeItem(PROFILE_CHECKOUT_RETURN_KEY);
+      }
       sessionStorage.setItem("gt_pending_plan", staticPlan.stripePlanKey ?? staticPlan.name);
       trackEvent("upgrade_started", { plan_type: staticPlan.stripePlanKey ?? staticPlan.name, interval: period });
       const { url } = await createCheckout.mutateAsync(price.id);
-      window.location.href = url;
+      launchExternal(url, "Secure checkout");
     } catch (e: any) {
       toast({ title: "Checkout failed", description: e.message, variant: "destructive" });
     }
@@ -682,7 +730,7 @@ export default function Billing() {
   const handleManageBilling = async () => {
     try {
       const { url } = await customerPortal.mutateAsync();
-      window.location.href = url;
+      launchExternal(url, "Billing portal");
     } catch (e: any) {
       toast({ title: "Could not open billing portal", description: e.message, variant: "destructive" });
     }
@@ -707,6 +755,31 @@ export default function Billing() {
           <p className="text-muted-foreground text-sm">Manage your subscription and upgrade your plan</p>
         </div>
       </div>
+
+      {(embedded || pendingExternalUrl) && (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                {pendingExternalUrl
+                  ? `${pendingExternalUrl.label} opens in a new tab`
+                  : "Stripe Checkout opens in a new tab"}
+              </div>
+              <div className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                Stripe Checkout cannot run inside the preview pane. If your browser blocked the popup, use the button to open it manually.
+              </div>
+            </div>
+            {pendingExternalUrl && (
+              <Button
+                variant="default"
+                onClick={() => launchExternal(pendingExternalUrl.url, pendingExternalUrl.label)}
+              >
+                Open {pendingExternalUrl.label.toLowerCase()} in new tab
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Current plan */}
       <Card className="bg-card border-border/60 shadow-sm">
@@ -867,7 +940,7 @@ export default function Billing() {
                 "text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full",
                 period === "yearly" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
               )}>
-                Save 45%
+                Save 48%
               </span>
             </button>
           </div>
@@ -881,7 +954,9 @@ export default function Billing() {
           const isUpgrade = staticPlan.key === "pro" && !isPro;
           const isProCard = staticPlan.key !== "free";
           const displayPrice = period === "yearly" ? staticPlan.yearlyPrice : staticPlan.monthlyPrice;
+          const displayAnchor = period === "yearly" ? staticPlan.yearlyAnchor : staticPlan.monthlyAnchor;
           const displayPeriodLabel = period === "yearly" ? staticPlan.yearlyPeriod : staticPlan.monthlyPeriod;
+          const standardPeriodShort = period === "yearly" ? "/yr" : "/mo";
           const showBestValue = period === "yearly" && isProCard;
 
           return (
@@ -914,15 +989,28 @@ export default function Billing() {
                 <div>
                   <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
                     {staticPlan.name}
+                    {staticPlan.earlyAccess && (
+                      <Badge className="bg-amber-100 text-amber-800 text-xs border border-amber-300">Early Access</Badge>
+                    )}
                     {isCurrentPlan && (
                       <Badge className="bg-primary/10 text-primary text-xs border border-primary/30">Current</Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{staticPlan.tagline}</div>
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                    {displayAnchor && (
+                      <span className="text-base text-muted-foreground line-through" aria-label={`Standard price ${displayAnchor} ${displayPeriodLabel}`}>
+                        {displayAnchor}
+                      </span>
+                    )}
                     <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
-                    <span className="text-xs text-muted-foreground ml-1">{displayPeriodLabel}</span>
+                    <span className="text-xs text-muted-foreground">{displayPeriodLabel}</span>
                   </div>
+                  {staticPlan.earlyAccess && displayAnchor && (
+                    <div className="text-xs text-amber-700 font-medium mt-1">
+                      Early Access pricing — standard price {displayAnchor}{standardPeriodShort}, early access {displayPrice}{standardPeriodShort}
+                    </div>
+                  )}
                   {period === "yearly" && staticPlan.yearlyNote && (
                     <div className="text-xs text-green-600 font-medium mt-0.5">{staticPlan.yearlyNote}</div>
                   )}

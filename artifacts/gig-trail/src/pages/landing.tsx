@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Check, Fuel, BedDouble, DollarSign, TrendingUp, Map, Calendar, Users, Zap, ArrowRight, Music2, Menu, X, Star, ChevronDown, MapPin } from "lucide-react";
+import { Check, Fuel, BedDouble, DollarSign, TrendingUp, ArrowRight, Music2, Menu, X, ChevronDown, MapPin } from "lucide-react";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const PAYHIP_URL = "https://thegigtrail.com/b/Upr79";
@@ -128,18 +128,6 @@ function ProblemCard({ icon: Icon, text }: { icon: React.ElementType; text: stri
         <Icon size={18} color={C.accent} />
       </div>
       <p style={{ color: C.body, lineHeight: 1.6, margin: 0 }}>{text}</p>
-    </div>
-  );
-}
-
-function FeatureCard({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) {
-  return (
-    <div style={{ ...S.card, padding: "24px 20px" }}>
-      <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: C.accent + "15", border: `1px solid ${C.accent}25`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-        <Icon size={16} color={C.accent} />
-      </div>
-      <p style={{ color: C.heading, fontWeight: 600, marginBottom: 6, margin: "0 0 6px" }}>{title}</p>
-      <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.6, margin: 0 }}>{text}</p>
     </div>
   );
 }
@@ -402,25 +390,25 @@ export default function Landing() {
 
           {/* Headline */}
           <h1 style={{ ...S.h1, fontSize: "clamp(28px, 4.5vw, 48px)", marginBottom: 18 }}>
-            Know if your gigs are worth it<br />
-            <span style={{ color: C.accent }}>before you lock them in</span>
+            Know if the gig pays<br />
+            <span style={{ color: C.accent }}>before you say yes.</span>
           </h1>
 
           {/* Subtext */}
-          <p style={{ color: C.body, fontSize: 18, lineHeight: 1.65, marginBottom: 36, maxWidth: 520, margin: "0 auto 36px" }}>
-            Fuel, fees, accommodation… it adds up fast.
+          <p style={{ color: C.body, fontSize: 18, lineHeight: 1.65, marginBottom: 36, maxWidth: 560, margin: "0 auto 36px" }}>
+            GigTrail Calc helps independent musicians price shows, plan tours, and see the real costs — fuel, accommodation, band fees, food, travel, and break-even tickets — before they lock it in.
           </p>
 
           {/* CTA buttons */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", marginBottom: 28 }}>
             <Link href="/sign-up">
               <button style={{ ...S.btnPrimary, fontSize: 16, padding: "14px 28px" }}>
-                Try the Tour Calculator <ArrowRight size={16} />
+                Start calculating free <ArrowRight size={16} />
               </button>
             </Link>
             <a href={PAYHIP_URL} target="_blank" rel="noopener noreferrer">
               <button style={{ ...S.btnOutline, fontSize: 16, padding: "14px 28px" }}>
-                Get the Touring Guide
+                Get the touring guide
               </button>
             </a>
           </div>
@@ -450,13 +438,13 @@ export default function Landing() {
           <div style={{ textAlign: "center", marginBottom: 48 }}>
             <p style={S.label}>The Problem</p>
             <h2 style={{ ...S.h2, fontSize: "clamp(26px, 4vw, 40px)", marginTop: 12 }}>
-              Most tours feel like guesswork
+              Stop making gig decisions on gut feel alone.
             </h2>
           </div>
           <div className="gt-3col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            <ProblemCard icon={Fuel}       text="Fuel, accommodation and fees add up quickly — and it's hard to see the full picture until after the fact." />
-            <ProblemCard icon={DollarSign} text="Hard to know if a show is actually worth doing until you do the maths — which most musicians never have time for." />
-            <ProblemCard icon={Music2}     text="Most business tools aren't built for independent musicians touring regional areas on lean margins." />
+            <ProblemCard icon={DollarSign} text="You say yes before knowing the real cost." />
+            <ProblemCard icon={Fuel}       text="Fuel, rooms, band fees, food and travel time get forgotten." />
+            <ProblemCard icon={TrendingUp} text="A sold-out show can still lose money if the numbers are wrong." />
           </div>
         </div>
       </section>
@@ -470,17 +458,18 @@ export default function Landing() {
             <div>
               <p style={S.label}>The Tool</p>
               <h2 style={{ ...S.h2, fontSize: "clamp(26px, 4vw, 40px)", marginTop: 12, marginBottom: 16 }}>
-                Start with the Tour Calculator
+                Built for real touring musicians, not spreadsheet people.
               </h2>
               <p style={{ color: C.body, fontSize: 17, lineHeight: 1.65, marginBottom: 28 }}>
-                A simple tool to test your shows before you commit.
+                Run a single-show calc, build a tour, compare deal types, and see break-even tickets in plain English.
               </p>
               <ul style={{ listStyle: "none", padding: 0, margin: "0 0 36px", display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  "Calculate real touring costs — fuel, accommodation, fees",
-                  "See break-even ticket numbers instantly",
-                  "Compare guarantee vs door split scenarios",
-                  "Plan smarter runs with actual numbers",
+                  "Fixed fee and ticketed show calculations",
+                  "Ticketed shows can include a guarantee/minimum fee",
+                  "Break-even ticket number shown clearly",
+                  "Fuel, accommodation, band fees and travel costs included",
+                  "Saved calculations help build your touring history",
                 ].map((item) => (
                   <li key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10, color: C.body, fontSize: 15, lineHeight: 1.5 }}>
                     <Check size={16} color={C.accent} style={{ flexShrink: 0, marginTop: 2 }} />
@@ -490,7 +479,7 @@ export default function Landing() {
               </ul>
               <Link href="/sign-up">
                 <button style={{ ...S.btnPrimary, fontSize: 15 }}>
-                  Try the Tour Calculator <ArrowRight size={15} />
+                  Start calculating free <ArrowRight size={15} />
                 </button>
               </Link>
             </div>
@@ -581,23 +570,19 @@ export default function Landing() {
 
       <SectionDivider />
 
-      {/* ── 6. FUTURE ── */}
+      {/* ── 6. ALPHA ACCESS / WHAT'S NEXT ── */}
       <section style={{ ...S.sectionDeep, padding: "72px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <p style={S.label}>What's Coming</p>
-            <h2 style={{ ...S.h2, fontSize: "clamp(24px, 4vw, 36px)", marginTop: 12 }}>
-              Built for where touring is heading
-            </h2>
-          </div>
-          <div className="gt-3col" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            <FeatureCard icon={Map}        title="Venue database"      text="A growing directory of venues with historical data on fees, draw, and value for touring acts." />
-            <FeatureCard icon={Calendar}   title="Tour tracking"       text="Log your actual results against projections. See how each show performed and learn from each run." />
-            <FeatureCard icon={Users}      title="Band & crew planning" text="Split costs and income across your crew. Know what everyone takes home before you load the van." />
-            <FeatureCard icon={Zap}        title="Booking workflows"   text="Streamlined tools for reaching out to venues, tracking conversations, and confirming shows." />
-            <FeatureCard icon={TrendingUp} title="Profit analytics"    text="See trends across your tours. Which routes work? Which venues pay? Know your numbers." />
-            <FeatureCard icon={Star}       title="Route optimisation"  text="Smarter tour routing to reduce dead kilometres and maximise income per day on the road." />
-          </div>
+        <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
+          <p style={S.label}>Alpha Access</p>
+          <h2 style={{ ...S.h2, fontSize: "clamp(24px, 4vw, 36px)", marginTop: 12, marginBottom: 16 }}>
+            Alpha access now open
+          </h2>
+          <p style={{ color: C.body, fontSize: 16, lineHeight: 1.65, margin: "0 auto 28px", maxWidth: 560 }}>
+            Free plan includes 5 calculations per week. Pro unlocks more saved calculations and deeper touring tools as they roll out.
+          </p>
+          <p style={{ color: C.muted, fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+            More touring tools coming during beta — for now the focus is the calculator.
+          </p>
         </div>
       </section>
 
@@ -626,17 +611,17 @@ export default function Landing() {
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
           <OrnaDivider />
           <h2 style={{ ...S.h2, fontSize: "clamp(24px, 4vw, 38px)", margin: "32px 0 14px" }}>
-            Make better touring decisions<br />before you lock it in
+            Know if the gig pays<br />before you say yes.
           </h2>
           <p style={{ color: C.body, fontSize: 16, marginBottom: 36 }}>Free to start. No credit card needed.</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center" }}>
             <Link href="/sign-up">
               <button style={{ ...S.btnPrimary, fontSize: 16, padding: "14px 28px" }}>
-                Try the Tour Calculator <ArrowRight size={16} />
+                Start calculating free <ArrowRight size={16} />
               </button>
             </Link>
             <a href={PAYHIP_URL} target="_blank" rel="noopener noreferrer">
-              <button style={{ ...S.btnOutline, fontSize: 16, padding: "14px 28px" }}>Get the Touring Guide</button>
+              <button style={{ ...S.btnOutline, fontSize: 16, padding: "14px 28px" }}>Get the touring guide</button>
             </a>
           </div>
           <div style={{ marginTop: 40 }}>

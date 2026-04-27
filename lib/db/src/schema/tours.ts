@@ -28,6 +28,15 @@ export const toursTable = pgTable("tours", {
   fuelPricePetrol: numeric("fuel_price_petrol", { precision: 6, scale: 3 }).default("1.90"),
   fuelPriceDiesel: numeric("fuel_price_diesel", { precision: 6, scale: 3 }).default("1.95"),
   fuelPriceLpg: numeric("fuel_price_lpg", { precision: 6, scale: 3 }).default("0.95"),
+  fuelConsumption: numeric("fuel_consumption", { precision: 10, scale: 2 }),
+  fuelPrice: numeric("fuel_price", { precision: 6, scale: 3 }),
+  travelingWithPa: boolean("traveling_with_pa").notNull().default(false),
+  extraCrew: boolean("extra_crew").notNull().default(false),
+  towingTrailer: boolean("towing_trailer").notNull().default(false),
+  flightsCost: numeric("flights_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  ferriesTollsCost: numeric("ferries_tolls_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  gearHireCost: numeric("gear_hire_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  otherCosts: numeric("other_costs", { precision: 10, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

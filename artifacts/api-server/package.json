@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "node ./scripts/dev.mjs",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/src/index.mjs",
     "bootstrap": "pnpm run build && node --enable-source-maps ./dist/scripts/bootstrap.mjs",
@@ -21,7 +21,8 @@
     "express": "^5",
     "http-proxy-middleware": "^3.0.5",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

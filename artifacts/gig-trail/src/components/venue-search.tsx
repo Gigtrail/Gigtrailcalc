@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { MapPin, Search, X, Building2, PenLine, Clock, ChevronRight } from "lucide-react";
+import { MapPin, Search, X, Building2, PenLine, Clock, ChevronRight, BookmarkPlus, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PlacesAutocomplete, loadGoogleMaps, onGoogleMapsReady } from "@/components/places-autocomplete";
-import { useSearchVenues } from "@workspace/api-client-react";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { getSearchVenuesQueryKey, useSearchVenues, useCreateOrUpdateVenue } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getGoogleMapsApiKey, getGoogleMapsLoadError, loadGoogleMaps, parseAddressComponents } from "@/lib/google-maps";
+import { buildAppLocation, type AppLocation } from "@/lib/location";
+import { useToast } from "@/hooks/use-toast";
 
 export interface VenueSelection {
   venueName: string;
@@ -10,8 +14,7 @@ export interface VenueSelection {
   suburb?: string;
   state?: string;
   country?: string;
-  lat?: number;
-  lng?: number;
+  location?: AppLocation;
   /** Set when the venue was selected from the user's own venue database */
   venueId?: number;
 }
@@ -75,9 +78,14 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   const [mode, setMode] = useState<"search" | "manual">("search");
   const [query, setQuery] = useState("");
   const [isSelected, setIsSelected] = useState(!!(venueName || destination));
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const createOrUpdateVenue = useCreateOrUpdateVenue();
+  const [savedVenueId, setSavedVenueId] = useState<number | null>(null);
   const [googlePredictions, setGooglePredictions] = useState<GooglePrediction[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [isLoadingPlace, setIsLoadingPlace] = useState(false);
+  const [mapsUnavailable, setMapsUnavailable] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const acServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -86,17 +94,26 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   const debouncedQuery = useDebounce(query, 280);
   const { data: pastVenues } = useSearchVenues(
     { q: debouncedQuery },
-    { query: { enabled: debouncedQuery.length >= 2 } }
+    { query: { enabled: debouncedQuery.length >= 2, queryKey: getSearchVenuesQueryKey({ q: debouncedQuery }) } }
   );
 
   const selectedVenueName = venueName || "";
   const selectedDestination = destination || "";
 
+  // If the user edits the manual venue fields after saving, the saved-id no
+  // longer applies — clear it so the "Save as new venue" button re-enables.
+  useEffect(() => {
+    if (savedVenueId !== null) {
+      setSavedVenueId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVenueName, selectedDestination]);
+
   useEffect(() => {
     if (venueName) setIsSelected(true);
   }, [venueName]);
 
-  const envApiKey = apiKey || (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined);
+  const envApiKey = apiKey || getGoogleMapsApiKey() || undefined;
 
   const initGoogleServices = useCallback(() => {
     if (!window.google?.maps?.places) return;
@@ -109,9 +126,30 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
   }, []);
 
   useEffect(() => {
-    if (!envApiKey) return;
-    loadGoogleMaps(envApiKey);
-    onGoogleMapsReady(initGoogleServices);
+    if (!envApiKey) {
+      setMapsUnavailable(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void loadGoogleMaps(envApiKey).then((loaded) => {
+      if (cancelled) {
+        return;
+      }
+
+      setMapsUnavailable(!loaded);
+      if (!loaded) {
+        console.error("[VenueSearch] %s", getGoogleMapsLoadError() ?? "Location services unavailable");
+        return;
+      }
+
+      initGoogleServices();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [envApiKey, initGoogleServices]);
 
   useEffect(() => {
@@ -168,30 +206,24 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
         setIsLoadingPlace(false);
         if (status !== "OK" || !place) return;
 
-        let suburb = "";
-        let state = "";
-        let country = "";
-
-        place.address_components?.forEach((c) => {
-          if (c.types.includes("locality") || c.types.includes("sublocality_level_1")) {
-            suburb = c.long_name;
-          }
-          if (c.types.includes("administrative_area_level_1")) {
-            state = c.short_name;
-          }
-          if (c.types.includes("country")) {
-            country = c.long_name;
-          }
-        });
+        const parsed = place.address_components
+          ? parseAddressComponents(place.address_components)
+          : undefined;
+        const destinationLabel = place.formatted_address || prediction.secondaryText;
+        const location = buildAppLocation(
+          destinationLabel,
+          place.geometry?.location?.lat(),
+          place.geometry?.location?.lng(),
+          "autocomplete",
+        );
 
         selectVenue({
           venueName: place.name || prediction.mainText,
-          destination: place.formatted_address || prediction.secondaryText,
-          suburb,
-          state,
-          country,
-          lat: place.geometry?.location?.lat(),
-          lng: place.geometry?.location?.lng(),
+          destination: destinationLabel,
+          suburb: parsed?.suburb,
+          state: parsed?.state,
+          country: parsed?.country,
+          location: location ?? undefined,
         });
       }
     );
@@ -212,8 +244,53 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
     setIsSelected(false);
     setQuery("");
     setGooglePredictions([]);
+    setSavedVenueId(null);
     onSelect({ venueName: "", destination: "" });
     setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  async function saveCurrentAsVenue() {
+    const name = (selectedVenueName || "").trim();
+    if (!name) {
+      toast({ title: "Add a venue name first", variant: "destructive" });
+      return;
+    }
+    // Try to derive a city from the destination/suburb so the venue endpoint
+    // (which now requires city) accepts the create.
+    const guessCity = (() => {
+      const dest = (selectedDestination || "").trim();
+      if (!dest) return null;
+      const firstPart = dest.split(",")[0]?.trim();
+      return firstPart || dest;
+    })();
+    try {
+      const created = await createOrUpdateVenue.mutateAsync({
+        data: {
+          venueName: name,
+          city: guessCity || "Unknown",
+        },
+      });
+      const newId = (created as { id?: number } | null | undefined)?.id ?? null;
+      setSavedVenueId(newId);
+      // Re-emit selection with the venueId attached so the parent form persists
+      // the link instead of just the text fallback.
+      onSelect({
+        venueName: name,
+        destination: selectedDestination,
+        suburb: guessCity ?? undefined,
+        venueId: newId ?? undefined,
+      });
+      // Refresh any cached venue lists so the new venue shows up immediately.
+      queryClient.invalidateQueries({ queryKey: ["/api/venues"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/venues"] });
+      toast({ title: "Venue saved", description: name });
+    } catch (error) {
+      const status = (error as { status?: number } | undefined)?.status;
+      const message = status === 409
+        ? "A venue with that name already exists in your library"
+        : "Could not save venue. Please try again.";
+      toast({ title: message, variant: "destructive" });
+    }
   }
 
   const recentVenues = getRecentVenues();
@@ -247,8 +324,7 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
                 onSelect({
                   venueName: selectedVenueName,
                   destination: text,
-                  lat: place?.lat,
-                  lng: place?.lng,
+                  location: place,
                 });
               }}
               placeholder="City or address"
@@ -261,13 +337,33 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
             />
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setMode("search")}
-          className="text-xs text-primary underline underline-offset-2"
-        >
-          ← Back to venue search
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setMode("search")}
+            className="text-xs text-primary underline underline-offset-2"
+          >
+            ← Back to venue search
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveCurrentAsVenue()}
+            disabled={createOrUpdateVenue.isPending || !selectedVenueName.trim() || savedVenueId !== null}
+            className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-card px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {savedVenueId !== null ? (
+              <>
+                <Check className="h-3 w-3 text-emerald-600" /> Venue saved
+              </>
+            ) : createOrUpdateVenue.isPending ? (
+              <>Saving…</>
+            ) : (
+              <>
+                <BookmarkPlus className="h-3 w-3" /> Save as new venue
+              </>
+            )}
+          </button>
+        </div>
       </div>
     );
   }
@@ -407,6 +503,10 @@ export function VenueSearch({ venueName, destination, onSelect, apiKey }: VenueS
         <PenLine className="w-3 h-3" />
         Can't find venue? Enter manually
       </button>
+
+      {mapsUnavailable && (
+        <p className="text-xs text-muted-foreground">Location services unavailable</p>
+      )}
     </div>
   );
 }

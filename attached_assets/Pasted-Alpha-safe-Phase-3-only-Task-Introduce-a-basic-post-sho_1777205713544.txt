@@ -1,0 +1,114 @@
+Alpha-safe Phase 3 only.
+
+Task:
+Introduce a basic post-show completion + actuals capture flow.
+
+Apply to:
+- Saved Single Show calculations
+- Tour shows (only if already using same data structure; otherwise skip tours for now)
+
+DO NOT:
+- Build a full dashboard system
+- Add complex filtering or sorting
+- Refactor venue system
+- Break existing save/load behaviour
+
+GOAL:
+Allow users to mark a show as complete and enter post-show actuals AFTER the show date.
+
+-----------------------------------
+1. Detect past shows
+-----------------------------------
+
+For any saved show:
+- If show date < today
+- AND show is not marked as completed
+→ it should be eligible for post-show input
+
+Add a simple boolean field:
+- isCompleted (default false)
+
+-----------------------------------
+2. Add “Mark as complete” action
+-----------------------------------
+
+In the saved show view / results view:
+
+If:
+- show date is in the past
+- AND isCompleted = false
+
+Show a button:
+“Mark show as complete”
+
+-----------------------------------
+3. Completion prompt (simple modal or section)
+-----------------------------------
+
+When clicked, show a simple form:
+
+Prompt:
+“Did this show go ahead?”
+
+Options:
+- Yes → continue to actuals form
+- No → mark as cancelled (isCompleted = true, status = cancelled)
+- Skip → close
+
+-----------------------------------
+4. Actuals form (only if YES)
+-----------------------------------
+
+Collect:
+
+- actual attendance
+- actual ticket sales (if applicable)
+- merch sales
+- actual pay received
+- actual expenses (optional override)
+- was accommodation provided? (yes/no)
+- was rider provided? (yes/no)
+- would you play here again? (yes / no / unsure)
+- notes (free text)
+
+Keep it simple. No heavy validation.
+
+-----------------------------------
+5. Save behaviour
+-----------------------------------
+
+On submit:
+- set isCompleted = true
+- save actuals to the show record (do NOT overwrite projected values)
+- do NOT delete any existing data
+
+-----------------------------------
+6. UI after completion
+-----------------------------------
+
+Once completed:
+- Replace button with:
+“Show completed”
+- Allow user to re-open and edit actuals
+
+-----------------------------------
+7. Safety rules
+-----------------------------------
+
+- Must not break existing saved calculations
+- Must not affect pre-show calculator logic
+- Must not interfere with venue saving
+- Must not require a migration
+
+If schema change is needed:
+- make all new fields optional
+
+-----------------------------------
+8. Testing
+-----------------------------------
+
+- Create a show with a past date → confirm “Mark as complete” appears
+- Create a future show → confirm it does NOT appear
+- Complete a show → confirm actuals save
+- Reload → confirm data persists
+- Ensure no crashes on old saved data

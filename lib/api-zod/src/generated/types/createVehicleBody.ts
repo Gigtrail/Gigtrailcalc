@@ -8,10 +8,19 @@
 
 export interface CreateVehicleBody {
   name: string;
+  /** @nullable */
+  vehicleType?: string | null;
   fuelType: string;
   avgConsumption: number;
   /** @nullable */
+  tankSizeLitres?: number | null;
+  /** @nullable */
   maxPassengers?: number | null;
+  isDefault?: boolean;
+  /** @nullable */
+  assignedMemberIds?: string | null;
+  actIds?: number[];
+  defaultForActIds?: number[];
   /** @nullable */
   notes?: string | null;
 }

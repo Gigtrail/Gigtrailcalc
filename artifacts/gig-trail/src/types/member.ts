@@ -6,4 +6,5 @@ export type Member = {
   role?: string;
   expectedGigFee?: number;
   feeType?: FeeType;
+  email?: string;
 };

@@ -1,0 +1,132 @@
+You are working in the GigTrailCalc repo.
+
+Goal:
+Quick-fix the Tour Builder vehicle step so it no longer dead-ends when the user has no saved vehicles.
+
+Important:
+This is not just a temporary UI patch.
+If the user chooses a preset or adds a vehicle during setup, that vehicle must be saved to the user’s profile/garage so it exists going forward.
+
+Context:
+In Tour Setup Step 3 (“What’s your main vehicle?”), the current empty state is confusing and weak.
+The user should be able to:
+1. add a real vehicle
+2. choose an existing preset
+3. have that choice saved to their profile
+4. use that saved vehicle immediately in the current tour setup
+
+We already have vehicle presets in the app, so reuse those if they exist.
+Do not create duplicate preset logic unless absolutely necessary.
+
+Make these changes:
+
+1. EMPTY STATE COPY
+Replace the current empty state with clearer, value-driven copy.
+
+Use something like:
+- Title: “Add a vehicle to estimate fuel costs”
+- Body: “Your vehicle helps GigTrail estimate fuel costs and tour profit. Add one now or choose a preset to get started.”
+
+Tone:
+- plain English
+- simple
+- musician-friendly
+
+2. ACTIONS
+On the empty state, show these actions:
+
+Primary:
+- “Add Vehicle”
+
+Secondary:
+- “Choose Preset”
+
+Tertiary:
+- “Skip for now”
+
+Do not leave the user stuck with only “skip”.
+
+3. ADD VEHICLE FLOW
+When user clicks “Add Vehicle”:
+- send them to the existing add-vehicle flow, OR open the existing add-vehicle modal/form if one already exists
+- after save, the new vehicle must:
+  a) be saved to the user’s profile/garage
+  b) immediately become selectable in this Tour Builder step
+  c) be auto-selected as the current main vehicle for this tour if appropriate
+
+Use the existing save/profile flow already in repo.
+Do not build a parallel temporary-only version.
+
+4. CHOOSE PRESET FLOW
+Reuse the existing vehicle presets already in the codebase.
+
+When user clicks “Choose Preset”:
+- show the existing preset options
+- when a preset is selected, convert that preset into a saved vehicle record for the user profile/garage
+- then immediately select that saved vehicle as the current vehicle for this tour
+
+Important:
+A preset choice should not remain just a loose temporary estimate.
+It should create/save a real vehicle entry for the user so it persists across the app.
+
+Example:
+If they choose “Van — 12.0 L/100km”
+that should create a saved vehicle in profile/garage with sensible default fields, marked as preset/generated if needed.
+
+5. SKIP FOR NOW
+If user clicks “Skip for now”:
+- allow them to continue setup
+- store a clear no-vehicle-selected state
+- ensure later calculations do not crash
+- use safe fallbacks or warnings where needed
+
+But do NOT save fake data to the profile when they skip.
+
+6. TOUR BUILDER INTEGRATION
+After a vehicle is added or a preset is chosen:
+- the Tour Builder step should refresh immediately
+- the new saved vehicle should appear in the list
+- it should be selected as the main vehicle for that draft/setup
+- user should be able to continue without manual refresh
+
+7. DATA / SAVE RULES
+Use existing vehicle/profile schema if possible.
+
+If needed, add only minimal fields to support preset-created vehicles, such as:
+- source = "manual" | "preset"
+or similar
+
+But keep schema changes minimal.
+Do not overengineer.
+
+8. IMPORTANT RULES
+- Reuse existing vehicle presets if already present
+- Reuse existing vehicle save/profile logic if already present
+- Do not create duplicate preset systems
+- Do not create a temporary tour-only vehicle if the user picked a preset or added a car — it must save to profile
+- Do not break the current saved vehicle flow
+- Keep it alpha-safe, minimal, and stable
+
+9. FILES TO CHECK FIRST
+Before changing code, inspect the relevant files for:
+- Tour Builder / tour setup vehicle step
+- user profile / settings / garage vehicle storage
+- existing vehicle presets
+- existing add vehicle form/modal/page
+- draft tour wizard state
+
+Likely areas include:
+- artifacts/gig-trail/src/pages/*
+- artifacts/gig-trail/src/components/*
+- settings / vehicles / profile related files
+- API routes for vehicles
+- DB schema for vehicles
+
+10. OUTPUT
+Implement the quick fix and report back with:
+- files changed
+- how Add Vehicle now works
+- how Choose Preset now works
+- confirmation that preset choice creates a saved vehicle in user profile
+- confirmation that added vehicle or preset auto-selects for current tour setup
+- any follow-up cleanup suggested for v2

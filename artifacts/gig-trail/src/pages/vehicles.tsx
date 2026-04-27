@@ -3,6 +3,7 @@ import {
   useDeleteVehicle,
   useGetProfiles,
   useUpdateProfile,
+  type UpdateProfileMutationBody,
   useSetVehicleActAssignments,
   getGetVehiclesQueryKey,
   getGetProfilesQueryKey,
@@ -70,8 +71,9 @@ export default function Garage() {
   };
 
   const handleSetDefault = (vehicleId: number, actId: number, actName: string) => {
+    const profileVehiclePatch: UpdateProfileMutationBody = { defaultVehicleId: vehicleId };
     updateProfile.mutate(
-      { id: actId, data: { defaultVehicleId: vehicleId } as never },
+      { id: actId, data: profileVehiclePatch },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });

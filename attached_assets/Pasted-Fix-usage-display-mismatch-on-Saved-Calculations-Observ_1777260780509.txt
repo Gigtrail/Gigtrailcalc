@@ -1,0 +1,92 @@
+Fix usage display mismatch on Saved Calculations.
+
+Observed:
+Sidebar shows:
+- 3 / 5 calculations used this week
+
+Saved Calculations page shows:
+- 5 of 5 saved calculations used
+- Upgrade for more
+
+This is wrong because it mixes two different concepts:
+1. Weekly calculation usage limit
+2. Number of saved calculations / saved runs
+
+Goal:
+Create one clear source of truth for weekly calculation usage and remove misleading saved-calculation limit wording.
+
+Rules:
+- FREE tier limit is 5 calculations per week.
+- This limit applies to calculation executions, not saved calculations.
+- Saved calculations page must not display “5 of 5 saved calculations used” unless there is a real saved-calculation storage limit.
+- Frontend must not derive weekly usage from saved runs.
+- Backend usage endpoint/client response should be the source of truth.
+
+Tasks:
+1. Find the Saved Calculations page component.
+   Likely:
+   artifacts/gig-trail/src/pages/runs.tsx
+   or
+   artifacts/gig-trail/src/pages/saved-calculations.tsx
+   or similar.
+
+2. Remove this incorrect UI copy:
+   “X of 5 saved calculations used”
+
+3. Replace it with weekly calculation usage from the same source used by the sidebar:
+   Example:
+   “3 of 5 weekly calculations used”
+   or:
+   “3 / 5 calculations used this week”
+
+4. The progress bar on Saved Calculations must use the same values as the sidebar:
+   - calculationsThisWeek
+   - calculationLimit
+   - resetAt / reset label
+
+5. Keep saved-run stats separate:
+   Cards can still show:
+   - Saved Calculations: 5
+   - Draft: 3
+   - Current Shows: 0
+   - Past Shows: 2
+
+6. Do not use saved calculation count to calculate usage.
+   Saved count is just library/history count.
+
+7. Search the frontend for duplicate usage wording:
+   - “saved calculations used”
+   - “calculations used”
+   - “Upgrade for more”
+   - “5 of 5”
+   - “3 / 5”
+   Standardise the wording.
+
+8. If there is no shared hook yet, create a small shared frontend hook:
+   useUsageSummary()
+   that reads from the backend usage endpoint or same query source as sidebar.
+   Then use it in both sidebar and saved calculations page.
+
+9. Make sure usage labels are product-clear:
+   Correct:
+   - “3 / 5 calculations used this week”
+   - “resets in 1d”
+   Incorrect:
+   - “5 of 5 saved calculations used”
+
+10. Run:
+   pnpm run typecheck
+   pnpm run build
+
+Manual test:
+- Sidebar and Saved Calculations page must show the same weekly usage count.
+- Saved Calculations total card can still show total saved runs.
+- Draft/current/past cards remain unchanged.
+- No UI should imply that saved calculations are capped at 5 unless that is actually enforced.
+
+Report:
+- files changed
+- source of usage data
+- final wording used in sidebar
+- final wording used on Saved Calculations page
+- typecheck/build result

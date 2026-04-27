@@ -1,0 +1,212 @@
+Update the Act Setup and calculator system for alpha with the following changes. Keep everything simple, stable, and aligned with real-world musician workflows.
+
+---
+
+## 1. Increase Band Member Cap
+
+* Change band member limit from 3 → 5
+* Update all validation, UI, and backend constraints accordingly
+* Update helper text:
+  From: “Band is capped at 3 members for alpha”
+  To: “Band is capped at 5 members for alpha”
+* Ensure add/remove member logic works correctly up to 5 members
+* Ensure persistence works (profile + saved calculations)
+
+---
+
+## 2. Add Payout Mode Toggle
+
+Add a new band-level field:
+
+payoutMode: "fixed" | "split"
+Default: "fixed"
+
+---
+
+### UI
+
+Add a section in Act Setup:
+
+“How are you paying the band?”
+
+Options:
+(•) Fixed Pay
+( ) Profit Split
+
+---
+
+### Behavior
+
+If payoutMode = "fixed":
+
+* Show existing member fee inputs (current system)
+
+If payoutMode = "split":
+
+* Hide ALL member fee inputs
+* Replace with text:
+  “Remaining profit will be split evenly between X members”
+
+---
+
+## 3. Add Minimum Act Take-Home
+
+Add a new band-level numeric field:
+
+minimumActTakeHome (number, optional, default = 0)
+
+Label:
+Minimum Act Take-Home
+
+Helper text:
+“The amount the act keeps before any remaining profit is considered surplus or split”
+
+---
+
+### Placement
+
+* This should sit at band level (not per member)
+* Visible in BOTH payout modes
+
+---
+
+## 4. Calculation Logic
+
+Keep logic simple and separated by payout mode.
+
+---
+
+### Mode A — Fixed Pay
+
+grossIncome
+
+* expenses
+* totalMemberFees
+* minimumActTakeHome
+  = remainingSurplus
+
+---
+
+### Mode B — Profit Split
+
+grossIncome
+
+* expenses
+* minimumActTakeHome
+  = splitPool
+
+perMember = splitPool / numberOfMembers
+
+---
+
+## 5. Results UI (Plain English — very important)
+
+---
+
+### Fixed Mode Display
+
+* “You need $X to cover expenses and band fees”
+* “You need $Y to also hit your minimum take-home”
+* “Surplus after target: $Z”
+
+Where:
+X = expenses + memberFees
+Y = expenses + memberFees + minimumActTakeHome
+Z = remainingSurplus
+
+---
+
+### Split Mode Display
+
+* “Minimum take-home target: $X”
+* “Split pool: $Y”
+* “Per member: $Z”
+
+Where:
+X = minimumActTakeHome
+Y = splitPool
+Z = perMember
+
+---
+
+## 6. Warnings / Validation
+
+* Do NOT block calculations if values go negative
+* Show warning states instead
+
+---
+
+### Fixed Mode Warnings
+
+If remainingSurplus < 0:
+
+* “This show does not cover your costs, fees, and minimum take-home”
+
+---
+
+### Split Mode Warnings
+
+If splitPool < 0:
+
+* “This show does not cover your costs and minimum take-home”
+
+---
+
+## 7. Data Persistence
+
+Ensure the following fields are fully wired through:
+
+* payoutMode
+* minimumActTakeHome
+* member data (existing)
+* calculations
+* saved shows
+* profile defaults
+
+Must persist across:
+
+* reload
+* saved calculations
+* editing existing setups
+
+---
+
+## 8. Backwards Compatibility
+
+* Existing users default to payoutMode = "fixed"
+* Existing member fees remain unchanged
+* minimumActTakeHome defaults to 0 (no impact unless used)
+
+---
+
+## 9. Alpha Scope Guardrails (DO NOT IMPLEMENT)
+
+Do NOT add:
+
+* percentage splits
+* weighted splits
+* hybrid fee + split logic
+* leader overrides
+
+Keep this version clean and stable.
+
+---
+
+## 10. UX Principles (Critical)
+
+* Keep everything readable in plain English
+* Avoid financial jargon
+* Prioritise “Can I take this gig?” clarity
+* Make outputs feel like real touring decisions, not spreadsheets
+
+---
+
+## Goal
+
+This feature should help musicians instantly understand:
+
+* Will this show cover costs?
+* Will we actually take money home?
+* If it goes well, what do we each make?
+
+Keep it fast, simple, and rock solid for alpha.

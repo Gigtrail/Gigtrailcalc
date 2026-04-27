@@ -2,7 +2,7 @@ import { Lock, Zap, History, TrendingUp, Calendar, DollarSign, Users, ArrowRight
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useGetVenue } from "@workspace/api-client-react";
+import { getGetVenueQueryKey, useGetVenue } from "@workspace/api-client-react";
 import { usePlan } from "@/hooks/use-plan";
 import type { VenueShow } from "@workspace/api-client-react";
 
@@ -111,7 +111,7 @@ export function VenueIntelligence({ venueId, venueName, onUseDeal }: VenueIntell
 
   // Fetch full venue detail only for Pro users with a known venueId
   const { data: venue, isLoading } = useGetVenue(venueId ?? 0, {
-    query: { enabled: isPro && venueId != null && venueId > 0 },
+    query: { enabled: isPro && venueId != null && venueId > 0, queryKey: getGetVenueQueryKey(venueId ?? 0) },
   });
 
   // Nothing to show if no venue name yet (user hasn't selected anything)

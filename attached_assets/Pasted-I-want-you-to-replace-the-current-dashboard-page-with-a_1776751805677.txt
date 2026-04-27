@@ -1,0 +1,192 @@
+I want you to replace the current /dashboard page with a new “Tour View” designed specifically for musicians managing live shows.
+
+IMPORTANT CONTEXT (DO NOT IGNORE):
+
+The current dashboard is a summary/report page:
+- Profit Health
+- Cost Pressure
+- Show Performance
+- Insights
+- Recent Shows
+
+This is already working and should NOT be rebuilt into something bigger.
+
+Instead:
+We are replacing the *purpose* of the dashboard.
+
+NEW GOAL:
+Turn /dashboard into a VISUAL TOUR VIEW that helps users quickly understand:
+
+- What shows are coming up
+- Where the gaps in their tour are
+- What their upcoming run looks like
+
+This must feel like:
+A TOURING TOOL — not a finance dashboard.
+
+--------------------------------
+CORE PRODUCT RULES
+--------------------------------
+
+- Fast to understand (under 3 seconds)
+- Visual first, numbers second
+- Simple, not feature-heavy
+- No complex interactions
+- No “enterprise dashboard” feel
+- Do NOT recreate Google Calendar
+
+--------------------------------
+PHASE 1: LAYOUT CHANGE
+--------------------------------
+
+Replace the current dashboard layout entirely.
+
+New structure:
+
+1. Header
+   - Title: “Tour View”
+   - Short subtext (plain English)
+   - Buttons:
+     - New Show
+     - New Tour
+
+2. View Toggle
+   - [ Calendar ] [ Map ]
+   - Default = Calendar
+
+3. Main Content Area
+   - Calendar OR Map depending on toggle
+
+4. Optional small summary strip (minimal)
+   - Upcoming shows count
+   - Simple status (e.g. “3 shows this week”)
+
+REMOVE:
+- KPI cards as main feature
+- Heavy analytics panels
+- Large insights sections
+
+--------------------------------
+PHASE 2: DATA USAGE (CRITICAL)
+--------------------------------
+
+DO NOT rely on:
+- dashboard summary endpoint
+- createdAt sorting
+
+Instead:
+Use existing run/tour data but prioritise:
+
+- showDate
+- upcoming shows (future dates)
+
+If needed:
+Add a lightweight backend adjustment to:
+- sort runs by showDate
+- filter upcoming runs
+
+DO NOT:
+- rebuild the backend
+- create complex new models
+
+--------------------------------
+PHASE 3: CALENDAR VIEW (PRIMARY FEATURE)
+--------------------------------
+
+Use existing libraries (react-day-picker if possible).
+
+Calendar must:
+- Display upcoming shows on correct dates
+- Show each show as a small readable item
+- Allow clicking → open detail (reuse existing run/tour pages)
+
+Each show entry:
+- Venue name (short)
+- Optional location
+- Status colour
+
+Status colours:
+- Green = solid
+- Amber = uncertain
+- Red = risky
+- Grey = no data
+
+IMPORTANT:
+Calendar must clearly show empty days.
+This is for spotting touring gaps.
+
+--------------------------------
+PHASE 4: MAP VIEW (SECONDARY - KEEP LIGHT)
+--------------------------------
+
+Map is secondary to calendar.
+
+Before adding anything:
+Check if a map solution already exists in the repo.
+
+If not:
+Add the lightest possible implementation.
+
+Map must:
+- Show pins for upcoming shows
+- Be clickable
+- Show:
+  - Venue
+  - Date
+  - Basic status
+
+Optional (only if easy):
+- simple line between shows (route feel)
+
+DO NOT:
+- build advanced routing
+- add heavy interactions
+- slow down the app
+
+--------------------------------
+PHASE 5: NAVIGATION + REUSE
+--------------------------------
+
+Reuse existing structure:
+
+- Clicking a show should go to existing run/tour detail pages
+- Do not duplicate detail logic
+- Keep sidebar and layout unchanged
+
+--------------------------------
+PHASE 6: RESPONSIVENESS
+--------------------------------
+
+Mobile:
+- Calendar becomes simpler list if needed
+- Map still usable but minimal
+- Keep everything clean and readable
+
+--------------------------------
+IMPLEMENTATION RULES
+--------------------------------
+
+- Keep it fast
+- Keep it clean
+- Keep it minimal
+- Reuse existing components where possible
+- Do not bolt this onto the old dashboard
+- Replace the experience
+
+--------------------------------
+SUCCESS CRITERIA
+--------------------------------
+
+When I open /dashboard:
+
+I should instantly feel:
+- “I can see my tour”
+- “I can see when I’m playing next”
+- “I can see gaps in my schedule”
+
+NOT:
+- “Here are some numbers”
+- “Here’s a report”
+
+This should feel like:
+A touring companion, not an accounting tool.

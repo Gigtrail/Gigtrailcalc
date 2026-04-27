@@ -1,0 +1,68 @@
+Revise the GigTrail Calc landing page only.
+
+File:
+artifacts/gig-trail/src/pages/landing.tsx
+
+Goal:
+Make the landing page sharper for alpha launch. Keep the existing parchment/Americana brand style, logo assets, nav, Clerk sign-in/sign-up routing, Payhip link, and early-access form logic. Do not touch calculator logic, billing, auth, dashboard, venues, tours, or API code.
+
+Messaging direction:
+GigTrail Calc helps independent musicians stop guessing and know if a gig or tour pays before they say yes.
+
+Hero:
+Change headline to:
+Know if the gig pays before you say yes.
+
+Subtext:
+GigTrail Calc helps independent musicians price shows, plan tours, and see the real costs — fuel, accommodation, band fees, food, travel, and break-even tickets — before they lock it in.
+
+Primary CTA:
+Start calculating free
+
+Secondary CTA:
+Get the touring guide
+
+Keep “Free to start · No credit card needed”.
+
+Problem section:
+Retitle to:
+Stop making gig decisions on gut feel alone.
+
+Use 3 cards:
+1. You say yes before knowing the real cost.
+2. Fuel, rooms, band fees, food and travel time get forgotten.
+3. A sold-out show can still lose money if the numbers are wrong.
+
+Tool section:
+Retitle:
+Built for real touring musicians, not spreadsheet people.
+
+Body:
+Run a single-show calc, build a tour, compare deal types, and see break-even tickets in plain English.
+
+Bullets:
+- Fixed fee and ticketed show calculations
+- Ticketed shows can include a guarantee/minimum fee
+- Break-even ticket number shown clearly
+- Fuel, accommodation, band fees and travel costs included
+- Saved calculations help build your touring history
+
+Important product wording:
+Remove “Hybrid” anywhere on the landing page if present.
+Do not overpromise AI, booking automation, venue intelligence, or beta features that are not alpha-ready.
+You may mention “More touring tools coming during beta” softly, but keep the main page focused on the calculator.
+
+Pricing/CTA:
+If there is a pricing or beta section, frame it as:
+Alpha access now open
+Free plan includes 5 calculations per week
+Pro unlocks more saved calculations and deeper touring tools as they roll out
+
+Testing:
+Run:
+pnpm run typecheck
+
+Return:
+- files changed
+- short summary
+- typecheck result

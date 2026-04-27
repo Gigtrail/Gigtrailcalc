@@ -11,13 +11,48 @@ import {
   UpdateRunResponse,
   DeleteRunParams,
   GetRunsResponse,
+  CompleteRunBody,
 } from "@workspace/api-zod";
+import {
+  getDefaultSavedCalculationStatus,
+  getRunStatus,
+  getTodayIsoDateFromRequest,
+  isPastRun,
+} from "../lib/run-lifecycle";
+import { logger } from "../lib/logger";
+import { saveDealAndUpsertVenue, syncVenueDealSnapshotFromRun } from "../lib/deal-persistence";
 
 const router: IRouter = Router();
 
-function serializeRun(r: typeof runsTable.$inferSelect) {
+function serializeRun(r: typeof runsTable.$inferSelect, todayIsoDate: string) {
+  const raw = r as typeof runsTable.$inferSelect & {
+    totalCost?: string | number | null;
+    totalIncome?: string | number | null;
+    totalProfit?: string | number | null;
+    actualTicketIncome?: string | number | null;
+    actualOtherIncome?: string | number | null;
+    actualProfit?: string | number | null;
+    actualIncome?: string | number | null;
+    merch?: string | number | null;
+    attendance?: number | null;
+    actualAttendance?: number | null;
+    notes?: string | null;
+    showNotes?: string | null;
+    calculationSnapshot?: Record<string, unknown> | null;
+  };
+  const actualIncome = raw.actualIncome != null ? Number(raw.actualIncome) : null;
+  const actualExpenses = r.actualExpenses != null ? Number(r.actualExpenses) : null;
+  const derivedProfit =
+    actualIncome != null && actualExpenses != null
+      ? actualIncome - actualExpenses
+      : raw.actualProfit != null
+        ? Number(raw.actualProfit)
+        : raw.totalProfit != null
+          ? Number(raw.totalProfit)
+          : null;
   return {
     ...r,
+    status: getRunStatus(r, todayIsoDate),
     originLat: r.originLat != null ? Number(r.originLat) : null,
     originLng: r.originLng != null ? Number(r.originLng) : null,
     destinationLat: r.destinationLat != null ? Number(r.destinationLat) : null,
@@ -37,43 +72,60 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
     accommodationCost: r.accommodationCost != null ? Number(r.accommodationCost) : null,
     foodCost: r.foodCost != null ? Number(r.foodCost) : null,
     extraCosts: r.extraCosts != null ? Number(r.extraCosts) : null,
-    totalCost: r.totalCost != null ? Number(r.totalCost) : null,
-    totalIncome: r.totalIncome != null ? Number(r.totalIncome) : null,
-    totalProfit: r.totalProfit != null ? Number(r.totalProfit) : null,
-    actualTicketIncome: r.actualTicketIncome != null ? Number(r.actualTicketIncome) : null,
-    actualOtherIncome: r.actualOtherIncome != null ? Number(r.actualOtherIncome) : null,
+    totalCost: raw.totalCost != null ? Number(raw.totalCost) : actualExpenses,
+    totalIncome: raw.totalIncome != null ? Number(raw.totalIncome) : actualIncome,
+    totalProfit: derivedProfit,
+    soundcheckTime: r.soundcheckTime ?? null,
+    playingTime: r.playingTime ?? null,
+    actualAttendance: raw.attendance ?? raw.actualAttendance ?? null,
+    actualTicketIncome: raw.actualTicketIncome != null ? Number(raw.actualTicketIncome) : actualIncome,
+    actualOtherIncome: raw.merch != null ? Number(raw.merch) : raw.actualOtherIncome != null ? Number(raw.actualOtherIncome) : null,
     actualExpenses: r.actualExpenses != null ? Number(r.actualExpenses) : null,
-    actualProfit: r.actualProfit != null ? Number(r.actualProfit) : null,
+    actualProfit: derivedProfit,
+    notes: raw.showNotes ?? raw.notes ?? null,
+    // Phase 3 — post-show completion + actuals (alpha-safe)
+    isCompleted: Boolean(r.isCompleted),
+    completionStatus: r.completionStatus ?? null,
+    accommodationProvided: r.accommodationProvided ?? null,
+    riderProvided: r.riderProvided ?? null,
+    completedAt:
+      r.completedAt instanceof Date
+        ? r.completedAt.toISOString()
+        : r.completedAt ?? null,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
 
-function toDbRun(data: Record<string, unknown>) {
-  const result: Record<string, unknown> = {};
-  const numericFields = new Set([
-    'distanceKm', 'fuelPrice', 'fee', 'ticketPrice', 'expectedAttendancePct',
-    'splitPct', 'guarantee', 'merchEstimate', 'marketingCost', 'bookingFeePerTicket', 'supportActCost',
-    'accommodationNights', 'accommodationCost',
-    'foodCost', 'extraCosts', 'totalCost', 'totalIncome', 'totalProfit',
-    'actualTicketIncome', 'actualOtherIncome', 'actualExpenses', 'actualProfit',
-  ]);
-  const dateFields = new Set(['showDate']);
-  for (const [k, v] of Object.entries(data)) {
-    if (typeof v === 'number' && numericFields.has(k)) {
-      result[k] = String(v);
-    } else if (dateFields.has(k)) {
-      result[k] = (v === "" || v == null) ? null : v;
-    } else {
-      result[k] = v;
-    }
-  }
-  return result;
+function logSavedRun(stage: "created" | "updated", run: typeof runsTable.$inferSelect) {
+  const raw = run as typeof runsTable.$inferSelect & {
+    actualIncome?: string | number | null;
+    totalCost?: string | number | null;
+    totalProfit?: string | number | null;
+    calculationSnapshot?: Record<string, unknown> | null;
+  };
+  logger.info(
+    {
+      stage,
+      id: run.id,
+      status: run.status,
+      showDate: run.showDate,
+      totalIncome: raw.actualIncome,
+      totalExpenses: raw.totalCost,
+      netProfit: raw.totalProfit,
+      actualExpenses: run.actualExpenses,
+      hasCalculationSnapshot: raw.calculationSnapshot != null,
+      importedFromTour: run.importedFromTour,
+      sourceStopId: run.sourceStopId,
+    },
+    "[Runs] Saved run financial snapshot",
+  );
 }
 
 router.get("/runs", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const runs = await db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt));
-  res.json(GetRunsResponse.parse(runs.map(serializeRun)));
+  res.json(GetRunsResponse.parse(runs.map((run) => serializeRun(run, todayIsoDate))));
 });
 
 router.post("/runs", requireAuth, async (req, res): Promise<void> => {
@@ -92,33 +144,33 @@ router.post("/runs", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Duplicate detection: if same userId + profileId + venueName + showDate + status=draft, update in place
-  if (parsed.data.venueName && parsed.data.profileId && parsed.data.showDate) {
-    const [existing] = await db.select().from(runsTable).where(
-      and(
-        eq(runsTable.userId, userId),
-        eq(runsTable.profileId, parsed.data.profileId),
-        eq(runsTable.venueName, parsed.data.venueName),
-        eq(runsTable.showDate, parsed.data.showDate),
-        eq(runsTable.status, "draft")
-      )
-    ).limit(1);
-    if (existing) {
-      const [updated] = await db.update(runsTable)
-        .set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>)
-        .where(eq(runsTable.id, existing.id))
-        .returning();
-      res.json(GetRunResponse.parse(serializeRun(updated)));
-      return;
-    }
-  }
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+  const derivedStatus = getDefaultSavedCalculationStatus(parsed.data.showDate, todayIsoDate);
+  const runData: Record<string, unknown> = {
+    ...parsed.data,
+    status: derivedStatus,
+  };
 
-  const [run] = await db.insert(runsTable).values({ ...toDbRun(parsed.data as Record<string, unknown>) as typeof runsTable.$inferInsert, userId }).returning();
-  res.status(201).json(GetRunResponse.parse(serializeRun(run)));
+  // Multiple runs for the same venue/date are valid GigTrail scenarios.
+  // Preserve them instead of auto-collapsing drafts.
+  const saved = await saveDealAndUpsertVenue({
+    userId,
+    runData,
+    dealSource: "single_show",
+  });
+  const { run } = saved;
+  logSavedRun("created", run);
+  res.status(201).json({
+    ...GetRunResponse.parse(serializeRun(run, todayIsoDate)),
+    dealId: saved.dealId,
+    runId: saved.runId,
+    createdVenue: saved.createdVenue,
+  });
 });
 
 router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = GetRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -129,11 +181,12 @@ router.get("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Run not found" });
     return;
   }
-  res.json(GetRunResponse.parse(serializeRun(run)));
+  res.json(GetRunResponse.parse(serializeRun(run, todayIsoDate)));
 });
 
 router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = UpdateRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -144,21 +197,173 @@ router.patch("/runs/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [run] = await db.update(runsTable).set(toDbRun(parsed.data as Record<string, unknown>) as Partial<typeof runsTable.$inferInsert>).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
-  if (!run) {
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
     res.status(404).json({ error: "Run not found" });
     return;
   }
-  res.json(UpdateRunResponse.parse(serializeRun(run)));
+
+  if (isPastRun(existingRun, todayIsoDate)) {
+    res.status(409).json({
+      error: "Past shows are read-only once their date has passed.",
+      code: "PAST_RUN_READ_ONLY",
+    });
+    return;
+  }
+
+  const effectiveShowDate =
+    parsed.data.showDate !== undefined
+      ? parsed.data.showDate
+      : existingRun.showDate;
+
+  const runData: Record<string, unknown> = { ...parsed.data };
+  const saved = await saveDealAndUpsertVenue({
+    userId,
+    runData: {
+      ...runData,
+      status: getDefaultSavedCalculationStatus(effectiveShowDate, todayIsoDate),
+    },
+    dealSource: existingRun.dealSource === "tour_show" ? "tour_show" : "single_show",
+    existingRun,
+  });
+  const savedRun = saved.run;
+  logSavedRun("updated", savedRun);
+  res.json({
+    ...UpdateRunResponse.parse(serializeRun(savedRun, todayIsoDate)),
+    dealId: saved.dealId,
+    runId: saved.runId,
+    createdVenue: saved.createdVenue,
+  });
+});
+
+// POST /runs/:id/complete — Phase 3 post-show completion + actuals capture.
+// Bypasses the normal "past show is read-only" guard because the entire purpose
+// of this endpoint is to record what actually happened after the show date.
+// Existing projection fields are NEVER overwritten — only actuals + completion
+// flags are mutated.
+router.post("/runs/:id/complete", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+  const params = GetRunParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = CompleteRunBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  const body = parsed.data;
+  const cancelled = body.cancelled === true;
+
+  // Build a partial update with ONLY completion + actuals fields.
+  const update: Partial<typeof runsTable.$inferInsert> = {
+    isCompleted: true,
+    completionStatus: cancelled ? "cancelled" : "completed",
+    completedAt: new Date(),
+  };
+
+  if (!cancelled) {
+    if (body.actualAttendance !== undefined) {
+      update.attendance = body.actualAttendance ?? null;
+    }
+    if (body.actualTicketSales !== undefined) {
+      update.actualTicketSales = body.actualTicketSales ?? null;
+    }
+    if (body.actualMerch !== undefined) {
+      update.merch = body.actualMerch != null ? String(body.actualMerch) : null;
+    }
+    if (body.actualIncome !== undefined) {
+      update.actualIncome = body.actualIncome != null ? String(body.actualIncome) : null;
+    }
+    if (body.actualExpenses !== undefined) {
+      update.actualExpenses = body.actualExpenses != null ? String(body.actualExpenses) : null;
+    }
+    if (body.accommodationProvided !== undefined) {
+      update.accommodationProvided = body.accommodationProvided ?? null;
+    }
+    if (body.riderProvided !== undefined) {
+      update.riderProvided = body.riderProvided ?? null;
+    }
+    if (body.wouldDoAgain !== undefined) {
+      update.wouldDoAgain = body.wouldDoAgain ?? null;
+    }
+    if (body.notes !== undefined) {
+      update.showNotes = body.notes ?? null;
+    }
+  }
+
+  const [updated] = await db
+    .update(runsTable)
+    .set(update)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  logger.info(
+    {
+      stage: "completed",
+      id: updated.id,
+      cancelled,
+      isCompleted: updated.isCompleted,
+      completionStatus: updated.completionStatus,
+    },
+    "[Runs] Show completion recorded",
+  );
+
+  await syncVenueDealSnapshotFromRun(updated);
+
+  res.json(GetRunResponse.parse(serializeRun(updated, todayIsoDate)));
 });
 
 router.delete("/runs/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
   const params = DeleteRunParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const [existingRun] = await db
+    .select()
+    .from(runsTable)
+    .where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId)))
+    .limit(1);
+  if (!existingRun) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  if (isPastRun(existingRun, todayIsoDate)) {
+    res.status(409).json({
+      error: "Past shows are read-only once their date has passed.",
+      code: "PAST_RUN_READ_ONLY",
+    });
+    return;
+  }
+
   const [run] = await db.delete(runsTable).where(and(eq(runsTable.id, params.data.id), eq(runsTable.userId, userId))).returning();
   if (!run) {
     res.status(404).json({ error: "Run not found" });

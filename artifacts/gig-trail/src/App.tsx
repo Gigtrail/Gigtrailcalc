@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth, useUser } from "@clerk/react";
 import { initAnalytics, identifyUser, resetAnalytics, trackEvent } from "@/lib/analytics";
-import { usePlan } from "@/hooks/use-plan";
+import { PROMO_SESSION_KEY, usePlan, useRedeemPromo } from "@/hooks/use-plan";
 import { Toaster } from "@/components/ui/toaster";
+import { useToast } from "@/hooks/use-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Layout from "@/components/layout";
 import Landing from "@/pages/landing";
@@ -33,6 +34,7 @@ import Feedback from "@/pages/feedback";
 import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 import { useGetProfiles, setAuthTokenGetter } from "@workspace/api-client-react";
+import { findFirstCompleteProfile } from "@/lib/profile-setup";
 
 function ClerkTokenProvider() {
   const { getToken } = useAuth();
@@ -49,6 +51,9 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+const DevUserStatePanel = import.meta.env.DEV
+  ? lazy(() => import("@/components/dev-user-state-panel"))
+  : null;
 
 // Clerk passes full paths to routerPush/routerReplace, but wouter's
 // setLocation prepends the base — strip it to avoid doubling.
@@ -62,7 +67,22 @@ if (!clerkPubKey) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Don't retry 4xx (client errors) — those won't recover.
+      // Only retry network/5xx once to avoid hammering the server.
+      retry: (failureCount, error: unknown) => {
+        const status = (error as { status?: number; response?: { status?: number } })?.status
+          ?? (error as { response?: { status?: number } })?.response?.status;
+        if (typeof status === "number" && status >= 400 && status < 500) return false;
+        return failureCount < 1;
+      },
+      retryDelay: 1500,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -118,6 +138,47 @@ function AnalyticsIdentifier() {
   return null;
 }
 
+function PendingPromoRedeemer() {
+  const { isLoaded, isSignedIn } = useUser();
+  const redeemPromo = useRedeemPromo();
+  const { toast } = useToast();
+  const redeemingRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || typeof window === "undefined") return;
+
+    const pendingCode = sessionStorage.getItem(PROMO_SESSION_KEY)?.trim().toUpperCase();
+    if (!pendingCode || redeemingRef.current === pendingCode) return;
+
+    redeemingRef.current = pendingCode;
+    console.log("[PendingPromoRedeemer] redeeming pending promo code", { code: pendingCode });
+
+    void redeemPromo.mutateAsync(pendingCode)
+      .then((response) => {
+        sessionStorage.removeItem(PROMO_SESSION_KEY);
+        console.log("[PendingPromoRedeemer] promo redeemed", response);
+        toast({
+          title: "Promo code redeemed",
+          description: response.accessSource === "promo" ? "Tester access is active." : "Your access has been updated.",
+        });
+      })
+      .catch((error: unknown) => {
+        sessionStorage.removeItem(PROMO_SESSION_KEY);
+        console.error("[PendingPromoRedeemer] promo redemption failed", error);
+        toast({
+          title: "Promo code could not be redeemed",
+          description: error instanceof Error ? error.message : "Please try again after signing in.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        redeemingRef.current = null;
+      });
+  }, [isLoaded, isSignedIn, redeemPromo, toast]);
+
+  return null;
+}
+
 function SignedInRedirect() {
   const { data: profiles, isLoading } = useGetProfiles();
 
@@ -125,11 +186,13 @@ function SignedInRedirect() {
     return <div className="min-h-screen bg-background" />;
   }
 
-  if (!profiles || profiles.length === 0) {
+  const completeProfile = findFirstCompleteProfile(profiles);
+
+  if (!completeProfile) {
     return <Redirect to="/onboarding" />;
   }
 
-  return <Redirect to="/runs/new" />;
+  return <Redirect to={`/runs/new?profileId=${completeProfile.id}`} />;
 }
 
 function HomeRedirect() {
@@ -145,13 +208,51 @@ function HomeRedirect() {
   );
 }
 
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+function RequireCompletedProfile({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  const { data: profiles, isLoading } = useGetProfiles();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  if (findFirstCompleteProfile(profiles)) {
+    return <>{children}</>;
+  }
+
+  const params = new URLSearchParams();
+  const returnTo =
+    typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : location;
+  if (returnTo) {
+    params.set("returnTo", returnTo);
+  }
+
+  return <Redirect to={`/onboarding${params.toString() ? `?${params.toString()}` : ""}`} />;
+}
+
+function ProtectedRoute({
+  component: Component,
+  allowIncompleteProfile = false,
+}: {
+  component: ComponentType;
+  allowIncompleteProfile?: boolean;
+}) {
   return (
     <>
       <Show when="signed-in">
-        <Layout>
-          <Component />
-        </Layout>
+        {allowIncompleteProfile ? (
+          <Layout>
+            <Component />
+          </Layout>
+        ) : (
+          <RequireCompletedProfile>
+            <Layout>
+              <Component />
+            </Layout>
+          </RequireCompletedProfile>
+        )}
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
@@ -160,17 +261,48 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
-function ProtectedFullPage({ component: Component }: { component: React.ComponentType }) {
+function ProtectedFullPage({
+  component: Component,
+  allowIncompleteProfile = false,
+}: {
+  component: ComponentType;
+  allowIncompleteProfile?: boolean;
+}) {
   return (
     <>
       <Show when="signed-in">
-        <Component />
+        {allowIncompleteProfile ? (
+          <Component />
+        ) : (
+          <RequireCompletedProfile>
+            <Component />
+          </RequireCompletedProfile>
+        )}
       </Show>
       <Show when="signed-out">
         <Redirect to="/" />
       </Show>
     </>
   );
+}
+
+function NewProfileRedirect() {
+  return <Redirect to="/onboarding?start=1" />;
+}
+
+function OnboardingRoutePage() {
+  const { data: profiles, isLoading } = useGetProfiles();
+
+  if (isLoading) {
+    return <div className="min-h-screen bg-background" />;
+  }
+
+  const completeProfile = findFirstCompleteProfile(profiles);
+  if (completeProfile) {
+    return <Redirect to={`/runs/new?profileId=${completeProfile.id}`} />;
+  }
+
+  return <Onboarding />;
 }
 
 function ClerkProviderWithRoutes() {
@@ -186,26 +318,32 @@ function ClerkProviderWithRoutes() {
       <QueryClientProvider client={queryClient}>
         <ClerkTokenProvider />
         <ClerkQueryClientCacheInvalidator />
+        <PendingPromoRedeemer />
         <AnalyticsIdentifier />
         <TooltipProvider>
+          {DevUserStatePanel && (
+            <Suspense fallback={null}>
+              <DevUserStatePanel />
+            </Suspense>
+          )}
           <Switch>
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route path="/onboarding">
-              {() => <ProtectedFullPage component={Onboarding} />}
+              {() => <ProtectedFullPage component={OnboardingRoutePage} allowIncompleteProfile />}
             </Route>
             <Route path="/dashboard">
               {() => <ProtectedRoute component={Dashboard} />}
             </Route>
             <Route path="/billing">
-              {() => <ProtectedRoute component={Billing} />}
+              {() => <ProtectedRoute component={Billing} allowIncompleteProfile />}
             </Route>
             <Route path="/privacy">
-              {() => <ProtectedRoute component={Privacy} />}
+              {() => <ProtectedRoute component={Privacy} allowIncompleteProfile />}
             </Route>
             <Route path="/feedback">
-              {() => <ProtectedRoute component={Feedback} />}
+              {() => <ProtectedRoute component={Feedback} allowIncompleteProfile />}
             </Route>
             <Route path="/admin">
               {() => <ProtectedRoute component={Admin} />}
@@ -214,10 +352,10 @@ function ClerkProviderWithRoutes() {
               {() => <ProtectedRoute component={Profiles} />}
             </Route>
             <Route path="/profiles/new">
-              {() => <ProtectedRoute component={ProfileForm} />}
+              {() => <ProtectedFullPage component={NewProfileRedirect} allowIncompleteProfile />}
             </Route>
             <Route path="/profiles/:id/edit">
-              {() => <ProtectedRoute component={ProfileForm} />}
+              {() => <ProtectedRoute component={ProfileForm} allowIncompleteProfile />}
             </Route>
             <Route path="/garage">
               {() => <ProtectedRoute component={Garage} />}

@@ -1,0 +1,167 @@
+We have passed the Stripe TS2742 issue.
+
+Now pnpm run typecheck is failing in the frontend (artifacts/gig-trail).
+
+Your job is to FIX ALL TypeScript errors properly (not suppress them).
+
+-----------------------------------
+STEP 1 — FIX GOOGLE MAPS TYPES
+-----------------------------------
+
+Problem:
+Errors like:
+- Cannot find namespace 'google'
+- Property 'google' does not exist on Window
+
+Fix:
+
+1. Install types:
+pnpm add -D @types/google.maps
+
+2. In artifacts/gig-trail/tsconfig.json add:
+"types": ["google.maps"]
+
+3. Create or update:
+src/types/google.d.ts
+
+Add:
+declare global {
+  interface Window {
+    google: typeof google;
+  }
+}
+export {};
+
+4. Ensure all files using google maps reference correct types:
+Use:
+google.maps.PlacesService
+google.maps.Geocoder
+etc.
+
+-----------------------------------
+STEP 2 — FIX REACT QUERY ERRORS
+-----------------------------------
+
+Problem:
+"Property 'queryKey' is missing"
+
+Fix ALL useQuery calls.
+
+Pattern:
+WRONG:
+useQuery({
+  enabled: something
+})
+
+CORRECT:
+useQuery({
+  queryKey: ["some-key", param],
+  queryFn: async () => {...},
+  enabled: something
+})
+
+Apply this fix everywhere:
+- venue-search.tsx
+- venue-intelligence.tsx
+- dashboard.tsx
+- run-form.tsx
+- tour-detail.tsx
+- venue-detail.tsx
+
+-----------------------------------
+STEP 3 — FIX "implicit any" ERRORS
+-----------------------------------
+
+Add proper typing:
+
+Examples:
+(predictions: any, status: any) → replace with correct Google types if possible
+
+Fallback (acceptable for now):
+(predictions: any[], status: string)
+
+Do NOT leave implicit any.
+
+-----------------------------------
+STEP 4 — FIX NULL / UNDEFINED ERRORS
+-----------------------------------
+
+Fix properly (no hacks):
+
+Replace:
+string | undefined → ensure fallback:
+value ?? ""
+
+string | null → handle:
+if (!value) return
+
+For objects:
+if (!selectedProfile) return null;
+
+Fix all:
+- profile-form.tsx
+- run-form.tsx
+- tour-detail.tsx
+
+-----------------------------------
+STEP 5 — FIX TYPE MISMATCHES
+-----------------------------------
+
+Examples to fix:
+
+1.
+Type 'Dispatch<SetStateAction<...>>' not assignable
+→ wrap setter:
+
+(v: string) => setVehicleType(v as VehicleType)
+
+2.
+fuelType: string | null → string | undefined
+
+→ convert:
+fuelType ?? undefined
+
+3.
+Timeout | null error
+
+→ fix:
+if (timeout) clearTimeout(timeout);
+
+-----------------------------------
+STEP 6 — FIX MISSING FUNCTIONS
+-----------------------------------
+
+Error:
+Cannot find name 'syncPlan'
+
+→ locate intended import or remove usage if obsolete
+
+-----------------------------------
+STEP 7 — RUN FULL CHECK
+-----------------------------------
+
+Run:
+pnpm run typecheck
+
+Then:
+pnpm run build
+
+-----------------------------------
+RULES
+-----------------------------------
+
+- DO NOT use ts-ignore unless absolutely unavoidable
+- DO NOT change product logic unless required
+- Prefer safe fallbacks over breaking changes
+- Keep fixes clean and minimal
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Return:
+
+1. Files changed
+2. Errors fixed (grouped)
+3. Any remaining blockers
+4. Any risky areas that still need runtime testing

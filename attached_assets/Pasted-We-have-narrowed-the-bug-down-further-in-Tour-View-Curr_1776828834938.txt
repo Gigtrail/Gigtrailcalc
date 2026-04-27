@@ -1,0 +1,173 @@
+We have narrowed the bug down further in Tour View.
+
+Current behaviour:
+- driving segment tooltip is rendering
+- the app knows the date span
+- the app knows the FROM and TO venues
+- but estimated drive time is still missing
+- the calendar is not showing real driving time between shows
+
+The tooltip currently says:
+"Estimated drive time will appear here once route data is available."
+
+This means the UI fallback is working, but the actual route/distance/time calculation is not.
+
+I need you to debug and fix the real drive-time calculation pipeline.
+
+GOAL
+Make driving segments calculate and display actual estimated drive time between consecutive shows wherever location data exists.
+
+-----------------------------------
+WHAT TO DEBUG
+-----------------------------------
+
+Please inspect the full route-calculation chain:
+
+1. how consecutive shows are paired
+2. what location fields are available on each show / venue
+3. whether the app is using:
+   - lat/lng
+   - full address
+   - city/state/country
+4. what route helper / distance helper is being called
+5. whether that helper is:
+   - never called
+   - failing silently
+   - returning null
+   - missing required input fields
+6. whether the result is saved onto the driving segment object
+7. whether the tooltip/calendar display is reading the correct field
+
+-----------------------------------
+EXPECTED BEHAVIOUR
+-----------------------------------
+
+For each pair of consecutive shows:
+
+- get origin location
+- get destination location
+- calculate travel time and distance
+- attach results to the driving segment
+- display estimated drive time in tooltip/popover
+- optionally display distance too
+- render the segment as a valid driving block on the calendar
+
+Example:
+Wooli Hotel Motel → Wagga Wagga
+should produce an estimated drive duration and distance if location data exists.
+
+-----------------------------------
+IMPORTANT LOGIC
+-----------------------------------
+
+1. Prefer exact coordinates if available
+- origin lat/lng
+- destination lat/lng
+
+2. If coordinates are missing, fall back to best available venue data:
+- formatted address
+- suburb/city
+- state
+- country
+
+3. If exact routing API is unavailable, do NOT leave the segment blank.
+Generate a fallback estimate using:
+- geocoded coordinates if possible
+- straight-line distance adjusted by a sensible road multiplier
+- or at minimum mark that an approximate estimate was used
+
+4. Do not silently fail when one location field is missing.
+Use defensive fallback logic.
+
+-----------------------------------
+WHAT I SUSPECT
+-----------------------------------
+
+Please specifically check if one of these is happening:
+
+- venue records do not have usable coordinates
+- show records are not pulling venue coordinates through
+- route calculation helper is not being called from Tour View
+- async route lookup is failing and result is discarded
+- driving segment object does not store estimatedDriveMinutes
+- UI is reading the wrong field name
+- there is no fallback estimation when route API data is unavailable
+
+-----------------------------------
+IMPLEMENTATION REQUIREMENTS
+-----------------------------------
+
+Please fix this properly by:
+
+1. tracing the current source of venue/show location data
+2. ensuring consecutive shows pass usable origin/destination info
+3. calculating estimated distance and drive time
+4. storing the result on the driving segment object
+5. rendering the value in the tooltip/popover
+6. keeping a graceful fallback if exact routing still cannot be resolved
+
+-----------------------------------
+FALLBACK ESTIMATION
+-----------------------------------
+
+If exact route data is unavailable, create a fallback estimate.
+
+Acceptable fallback flow:
+- use coordinates if available
+- calculate straight-line distance
+- multiply by a sensible factor for road travel (for example 1.2–1.35 depending on your current utility patterns)
+- estimate drive time from average road speed
+- label as approximate if needed
+
+Driving segment object should end up with fields like:
+{
+  id,
+  fromShowId,
+  toShowId,
+  fromLocation,
+  toLocation,
+  estimatedDistanceKm,
+  estimatedDriveMinutes,
+  isApproximate,
+  hasExactRouteData
+}
+
+-----------------------------------
+UI REQUIREMENTS
+-----------------------------------
+
+In the tooltip/popover:
+- show estimated drive time
+- show distance if available
+- show whether estimate is exact or approximate if relevant
+
+Example:
+Drive: 7h 45m
+Distance: 615 km
+Approximate estimate
+
+Do not keep showing the fallback message if enough data exists to calculate an estimate.
+
+-----------------------------------
+DEBUGGING
+-----------------------------------
+
+Add temporary logging for:
+- origin location payload
+- destination location payload
+- route helper input
+- route helper output
+- final driving segment object
+
+Then remove debug logs after confirming the fix.
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Please return:
+- root cause
+- files changed
+- whether drive time now comes from exact route data or fallback estimation
+- what fields were missing before
+- any remaining limitations

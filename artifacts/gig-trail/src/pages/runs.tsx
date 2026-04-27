@@ -1,42 +1,38 @@
-import { useState, useMemo } from "react";
-import { useGetRuns, useDeleteRun, getGetRunsQueryKey } from "@workspace/api-client-react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Plus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Search, SlidersHorizontal, X, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { usePlan } from "@/hooks/use-plan";
+import { useGetRuns, type Run } from "@workspace/api-client-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Minus,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
+import { endOfDay, format, parseISO, startOfDay } from "date-fns";
+import { usePlan, useWeeklyUsage } from "@/hooks/use-plan";
 import { UsageMeter } from "@/components/usage-meter";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { getRunLifecycleState, getRunStatusMeta, isDraftRun, isPastRun, isPlannedRun, type RunLifecycleState } from "@/lib/run-lifecycle";
 
 type SortKey = "date" | "fee" | "totalCost" | "profit" | "merch";
 type SortDir = "asc" | "desc";
 type ProfitFilter = "all" | "profit" | "tight" | "loss";
 type WouldDoFilter = "all" | "yes" | "maybe" | "no";
+type StatusFilterTab = "all" | RunLifecycleState;
 
 const fmt = (n: number | null | undefined) =>
-  n == null ? "—" : `$${Math.round(Math.abs(n)).toLocaleString()}`;
+  n == null ? "-" : `$${Math.round(Math.abs(n)).toLocaleString()}`;
 
 function profitCategory(profit: number | null | undefined, income: number | null | undefined): "profit" | "tight" | "loss" {
   const p = profit ?? 0;
@@ -55,34 +51,40 @@ function ProfitCell({ profit, income }: { profit?: number | null; income?: numbe
         "inline-flex items-center gap-1 font-semibold tabular-nums",
         cat === "profit" && "text-emerald-700",
         cat === "tight" && "text-amber-600",
-        cat === "loss" && "text-red-600"
+        cat === "loss" && "text-red-600",
       )}
     >
-      {cat === "profit" && <TrendingUp className="w-3 h-3 flex-shrink-0" />}
-      {cat === "tight" && <Minus className="w-3 h-3 flex-shrink-0" />}
-      {cat === "loss" && <TrendingDown className="w-3 h-3 flex-shrink-0" />}
-      {val < 0 ? "−" : ""}{fmt(val)}
+      {cat === "profit" && <TrendingUp className="h-3 w-3 shrink-0" />}
+      {cat === "tight" && <Minus className="h-3 w-3 shrink-0" />}
+      {cat === "loss" && <TrendingDown className="h-3 w-3 shrink-0" />}
+      {val < 0 ? "-" : ""}
+      {fmt(val)}
     </span>
   );
 }
 
-
 function SortHeader({
-  label, sortKey: key, current, dir, onSort,
-}: { label: string; sortKey: SortKey; current: SortKey; dir: SortDir; onSort: (k: SortKey) => void }) {
+  label,
+  sortKey: key,
+  current,
+  dir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
   const active = current === key;
   return (
     <th
-      className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer select-none hover:text-foreground transition-colors whitespace-nowrap"
+      className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
       onClick={() => onSort(key)}
     >
       <span className="flex items-center gap-1">
         {label}
-        {active ? (
-          dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-        ) : (
-          <ArrowUpDown className="w-3 h-3 opacity-40" />
-        )}
+        {active ? (dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
       </span>
     </th>
   );
@@ -90,21 +92,155 @@ function SortHeader({
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-card/60 border border-border/50 rounded-lg px-4 py-3">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-xl font-bold leading-tight mt-0.5">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    <div className="rounded-lg border border-border/50 bg-card/60 px-4 py-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-xl font-bold leading-tight">{value}</p>
+      {sub ? <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p> : null}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: RunLifecycleState }) {
+  const meta = getRunStatusMeta(status);
+  return (
+    <Badge variant="outline" className={meta.badgeClassName}>
+      {meta.label}
+    </Badge>
+  );
+}
+
+function CalculationCard({ run, onOpen }: { run: Run; onOpen: (id: number) => void }) {
+  const status = getRunLifecycleState(run);
+  const dateStr = run.showDate
+    ? format(parseISO(`${run.showDate}T00:00:00`), "d MMM yy")
+    : format(parseISO(run.createdAt), "d MMM yy");
+  const venueName = run.venueName || `${run.origin || "?"} -> ${run.destination || "?"}`;
+  const location = [run.city, run.state].filter(Boolean).join(", ") || run.destination || "-";
+
+  return (
+    <button
+      type="button"
+      className="rounded-xl border border-border/60 bg-card/50 p-4 text-left transition-colors hover:bg-primary/5"
+      onClick={() => onOpen(run.id)}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{venueName}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{location}</p>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+        <span>{dateStr}</span>
+        <span>{fmt(run.totalProfit)} projected</span>
+      </div>
+    </button>
+  );
+}
+
+function SectionEmptyState({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-dashed border-border/60 bg-muted/15 px-4 py-8 text-center text-sm text-muted-foreground">
+      {message}
+    </div>
+  );
+}
+
+function PastShowsTable({
+  runs,
+  navigate,
+  sortKey,
+  sortDir,
+  handleSort,
+}: {
+  runs: Run[];
+  navigate: (path: string) => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  handleSort: (key: SortKey) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border/60 bg-muted/40">
+            <tr>
+              <SortHeader label="Date" sortKey="date" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Venue</th>
+              <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Location</th>
+              <SortHeader label="Income" sortKey="fee" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortHeader label="Costs" sortKey="totalCost" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <th className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accommodation</th>
+              <SortHeader label="Net Profit" sortKey="profit" current={sortKey} dir={sortDir} onSort={handleSort} />
+              <SortHeader label="Merch" sortKey="merch" current={sortKey} dir={sortDir} onSort={handleSort} />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/40">
+            {runs.map((run, index) => {
+              const dateStr = run.showDate
+                ? format(parseISO(`${run.showDate}T00:00:00`), "d MMM yy")
+                : format(parseISO(run.createdAt), "d MMM yy");
+              const venueName = run.venueName || `${run.origin || "?"} -> ${run.destination || "?"}`;
+              const location = [run.city, run.state].filter(Boolean).join(", ") || run.destination || "-";
+
+              return (
+                <tr
+                  key={run.id}
+                  className={cn(
+                    "group cursor-pointer transition-colors hover:bg-primary/5",
+                    index % 2 === 0 ? "bg-card/20" : "bg-transparent",
+                  )}
+                  onClick={() => navigate(`/runs/results?runId=${run.id}`)}
+                >
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground">{dateStr}</td>
+                  <td className="max-w-[220px] px-3 py-2.5 font-medium">
+                    {run.venueId ? (
+                      <button
+                        className="block w-full truncate text-left transition-colors hover:text-primary hover:underline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/venues/${run.venueId}`);
+                        }}
+                      >
+                        {venueName}
+                      </button>
+                    ) : (
+                      <span className="block truncate">{venueName}</span>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <StatusBadge status={getRunLifecycleState(run)} />
+                      {run.importedFromTour && run.tourName ? (
+                        <span className="truncate text-[10px] text-primary/60">Tour: {run.tourName}</span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-muted-foreground">{location}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">{fmt(run.totalIncome)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground">{fmt(run.totalCost)}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground">
+                    {run.accommodationRequired && run.accommodationCost ? fmt(run.accommodationCost) : <span className="text-muted-foreground/40">-</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    <ProfitCell profit={run.totalProfit} income={run.totalIncome} />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-muted-foreground">
+                    {run.merchEstimate ? fmt(run.merchEstimate) : <span className="text-muted-foreground/40">-</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 export default function Runs() {
   const { data: runs, isLoading } = useGetRuns();
-  const deleteRun = useDeleteRun();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { plan, isPro, limits } = usePlan();
+  const { isPro, limits } = usePlan();
+  const { data: weeklyUsage } = useWeeklyUsage();
 
   const [search, setSearch] = useState("");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
@@ -115,203 +251,230 @@ export default function Runs() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-  const handleDelete = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    deleteRun.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetRunsQueryKey() });
-          toast({ title: "Show deleted" });
-        },
-        onError: () => toast({ title: "Failed to delete show", variant: "destructive" }),
-      }
-    );
-  };
+  const [statusTab, setStatusTab] = useState<StatusFilterTab>("all");
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("desc"); }
+    if (sortKey === key) {
+      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir("desc");
   };
 
   const allStates = useMemo(() => {
     const states = new Set<string>();
-    runs?.forEach(r => { if (r.state) states.add(r.state); });
+    runs?.forEach((run) => {
+      if (run.state) states.add(run.state);
+    });
     return Array.from(states).sort();
   }, [runs]);
 
-  const summaryStats = useMemo(() => {
-    if (!runs?.length) return null;
-    const total = runs.length;
-    const totalRevenue = runs.reduce((s, r) => s + (r.totalIncome ?? 0), 0);
-    const totalProfit = runs.reduce((s, r) => s + (r.totalProfit ?? 0), 0);
-    const avgProfit = total ? totalProfit / total : 0;
-    const venueProfits: Record<string, number> = {};
-    runs.forEach(r => {
-      if (r.venueName) {
-        venueProfits[r.venueName] = (venueProfits[r.venueName] ?? 0) + (r.totalProfit ?? 0);
-      }
-    });
-    const bestVenue = Object.entries(venueProfits).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-    return { total, totalRevenue, totalProfit, avgProfit, bestVenue };
-  }, [runs]);
-
-  const filtered = useMemo(() => {
+  const filteredRuns = useMemo(() => {
     if (!runs) return [];
+
     let result = [...runs];
 
     if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(r =>
-        r.venueName?.toLowerCase().includes(q) ||
-        r.destination?.toLowerCase().includes(q) ||
-        r.city?.toLowerCase().includes(q) ||
-        r.state?.toLowerCase().includes(q) ||
-        r.origin?.toLowerCase().includes(q)
+      const query = search.toLowerCase();
+      result = result.filter((run) =>
+        run.venueName?.toLowerCase().includes(query) ||
+        run.destination?.toLowerCase().includes(query) ||
+        run.city?.toLowerCase().includes(query) ||
+        run.state?.toLowerCase().includes(query) ||
+        run.origin?.toLowerCase().includes(query),
       );
     }
 
     if (profitFilter !== "all") {
-      result = result.filter(r => profitCategory(r.totalProfit, r.totalIncome) === profitFilter);
+      result = result.filter((run) => profitCategory(run.totalProfit, run.totalIncome) === profitFilter);
     }
 
     if (wouldDoFilter !== "all") {
-      result = result.filter(r => r.wouldDoAgain?.toLowerCase() === wouldDoFilter);
+      result = result.filter((run) => run.wouldDoAgain?.toLowerCase() === wouldDoFilter);
     }
 
     if (stateFilter !== "all") {
-      result = result.filter(r => r.state === stateFilter);
+      result = result.filter((run) => run.state === stateFilter);
     }
 
     if (dateFrom) {
       const from = startOfDay(parseISO(dateFrom));
-      result = result.filter(r => {
-        const d = r.showDate ? parseISO(r.showDate) : parseISO(r.createdAt);
-        return d >= from;
+      result = result.filter((run) => {
+        const runDate = run.showDate ? parseISO(run.showDate) : parseISO(run.createdAt);
+        return runDate >= from;
       });
     }
 
     if (dateTo) {
       const to = endOfDay(parseISO(dateTo));
-      result = result.filter(r => {
-        const d = r.showDate ? parseISO(r.showDate) : parseISO(r.createdAt);
-        return d <= to;
+      result = result.filter((run) => {
+        const runDate = run.showDate ? parseISO(run.showDate) : parseISO(run.createdAt);
+        return runDate <= to;
       });
     }
 
     result.sort((a, b) => {
-      let av = 0, bv = 0;
+      let aValue = 0;
+      let bValue = 0;
+
       if (sortKey === "date") {
-        av = new Date(a.showDate ?? a.createdAt).getTime();
-        bv = new Date(b.showDate ?? b.createdAt).getTime();
+        aValue = new Date(a.showDate ?? a.createdAt).getTime();
+        bValue = new Date(b.showDate ?? b.createdAt).getTime();
       } else if (sortKey === "fee") {
-        av = a.totalIncome ?? 0; bv = b.totalIncome ?? 0;
+        aValue = a.totalIncome ?? 0;
+        bValue = b.totalIncome ?? 0;
       } else if (sortKey === "totalCost") {
-        av = a.totalCost ?? 0; bv = b.totalCost ?? 0;
+        aValue = a.totalCost ?? 0;
+        bValue = b.totalCost ?? 0;
       } else if (sortKey === "profit") {
-        av = a.totalProfit ?? 0; bv = b.totalProfit ?? 0;
+        aValue = a.totalProfit ?? 0;
+        bValue = b.totalProfit ?? 0;
       } else if (sortKey === "merch") {
-        av = a.merchEstimate ?? 0; bv = b.merchEstimate ?? 0;
+        aValue = a.merchEstimate ?? 0;
+        bValue = b.merchEstimate ?? 0;
       }
-      return sortDir === "asc" ? av - bv : bv - av;
+
+      return sortDir === "asc" ? aValue - bValue : bValue - aValue;
     });
 
     return result;
   }, [runs, search, profitFilter, wouldDoFilter, stateFilter, dateFrom, dateTo, sortKey, sortDir]);
 
-  const hasActiveFilters = profitFilter !== "all" || wouldDoFilter !== "all" || stateFilter !== "all" || dateFrom || dateTo;
+  const drafts = useMemo(() => filteredRuns.filter((run) => isDraftRun(run)), [filteredRuns]);
+  const plannedRuns = useMemo(() => filteredRuns.filter((run) => isPlannedRun(run)), [filteredRuns]);
+  const pastShows = useMemo(() => filteredRuns.filter((run) => isPastRun(run)), [filteredRuns]);
+
+  const draftCount = useMemo(() => (runs ?? []).filter((run) => isDraftRun(run)).length, [runs]);
+  const plannedCount = useMemo(() => (runs ?? []).filter((run) => isPlannedRun(run)).length, [runs]);
+  const pastShowCount = useMemo(() => (runs ?? []).filter((run) => isPastRun(run)).length, [runs]);
+  const totalSavedCount = runs?.length ?? 0;
+
+  const hasActiveFilters =
+    profitFilter !== "all" ||
+    wouldDoFilter !== "all" ||
+    stateFilter !== "all" ||
+    !!dateFrom ||
+    !!dateTo;
 
   const clearFilters = () => {
-    setProfitFilter("all"); setWouldDoFilter("all");
-    setStateFilter("all"); setDateFrom(""); setDateTo("");
+    setProfitFilter("all");
+    setWouldDoFilter("all");
+    setStateFilter("all");
+    setDateFrom("");
+    setDateTo("");
   };
 
+  const emptyTabMessage = useMemo(() => {
+    if (statusTab === "draft") {
+      return draftCount === 0 ? "No draft calculations yet." : "No draft calculations match your current filters.";
+    }
+    if (statusTab === "planned") {
+      return plannedCount === 0 ? "No current shows yet." : "No current shows match your current filters.";
+    }
+    if (statusTab === "past") {
+      return pastShowCount === 0
+        ? "No Past Shows yet. Any show dated before today moves here automatically and becomes read-only."
+        : "No Past Shows match your current filters.";
+    }
+    return "No calculations match your filters.";
+  }, [draftCount, pastShowCount, plannedCount, statusTab]);
+
+  const openRun = (id: number) => navigate(`/runs/results?runId=${id}`);
+
+  const showDraftSection = statusTab === "all" || statusTab === "draft";
+  const showPlannedSection = statusTab === "all" || statusTab === "planned";
+  const showPastSection = statusTab === "all" || statusTab === "past";
+
   return (
-    <div className="space-y-5 animate-in fade-in duration-500">
-      {/* Header */}
+    <div className="animate-in fade-in duration-500 space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Past Shows</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">Your touring spreadsheet.</p>
-          <p className="text-[11px] text-muted-foreground/60 mt-1 flex items-center gap-1">
-            <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <h1 className="text-3xl font-bold tracking-tight">Saved Calculations</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Drafts stay flexible, current shows stay editable, and Past Shows lock automatically once their date has passed.
+          </p>
+          <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
+            <svg className="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
             Your deal history is private to you
           </p>
         </div>
         <Button asChild>
           <Link href="/runs/new">
-            <Plus className="w-4 h-4 mr-1.5" />
+            <Plus className="mr-1.5 h-4 w-4" />
             New Calculation
           </Link>
         </Button>
       </div>
 
-      {/* Free plan saved show usage */}
-      {!isPro && limits.maxRuns !== Infinity && (
-        <UsageMeter
-          used={runs?.length ?? 0}
-          limit={limits.maxRuns}
-          label="saved shows"
-          className="max-w-xs"
-        />
-      )}
-
-      {/* Summary Stats */}
-      {summaryStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total Shows" value={summaryStats.total.toString()} />
-          <StatCard label="Total Revenue" value={`$${Math.round(summaryStats.totalRevenue).toLocaleString()}`} />
-          <StatCard
-            label="Total Profit"
-            value={`${summaryStats.totalProfit < 0 ? "−" : ""}$${Math.round(Math.abs(summaryStats.totalProfit)).toLocaleString()}`}
-            sub={`avg $${Math.round(Math.abs(summaryStats.avgProfit)).toLocaleString()} / show`}
+      {!isPro && weeklyUsage && weeklyUsage.limit != null ? (
+        <div className="space-y-1 max-w-xs" data-testid="usage-meter-weekly-calculations">
+          <UsageMeter
+            used={weeklyUsage.used}
+            limit={weeklyUsage.limit}
+            label="weekly calculations"
           />
-          <StatCard label="Best Venue" value={summaryStats.bestVenue} />
+          {weeklyUsage.resetsIn != null ? (
+            <p className="text-[11px] text-muted-foreground/70">
+              resets in {weeklyUsage.resetsIn}d
+            </p>
+          ) : null}
         </div>
-      )}
+      ) : null}
 
-      {/* Search + Filters */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Saved Calculations" value={totalSavedCount.toString()} />
+        <StatCard label="Draft" value={draftCount.toString()} sub="Early ideas and test runs" />
+        <StatCard label="Current Shows" value={plannedCount.toString()} sub="Today and upcoming shows" />
+        <StatCard label="Past Shows" value={pastShowCount.toString()} sub="Real completed gigs only" />
+      </div>
+
       <div className="space-y-2">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search venue, location…"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search venue or location..."
               className="pl-8"
             />
           </div>
           <Button
             variant={showFilters || hasActiveFilters ? "default" : "outline"}
             size="icon"
-            onClick={() => setShowFilters(v => !v)}
-            className="flex-shrink-0"
+            onClick={() => setShowFilters((current) => !current)}
+            className="shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className="h-4 w-4" />
           </Button>
-          {hasActiveFilters && (
-            <Button variant="ghost" size="icon" onClick={clearFilters} className="flex-shrink-0 text-muted-foreground">
-              <X className="w-4 h-4" />
+          {hasActiveFilters ? (
+            <Button variant="ghost" size="icon" onClick={clearFilters} className="shrink-0 text-muted-foreground">
+              <X className="h-4 w-4" />
             </Button>
-          )}
+          ) : null}
         </div>
 
-        {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 p-3 bg-muted/30 border border-border/50 rounded-lg">
+        {showFilters ? (
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/50 bg-muted/30 p-3 md:grid-cols-3 lg:grid-cols-5">
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">From</label>
-              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 text-xs" />
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">From</label>
+              <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-8 text-xs" />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">To</label>
-              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 text-xs" />
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">To</label>
+              <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-8 text-xs" />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Profit</label>
-              <Select value={profitFilter} onValueChange={v => setProfitFilter(v as ProfitFilter)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Profit</label>
+              <Select value={profitFilter} onValueChange={(value) => setProfitFilter(value as ProfitFilter)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="profit">Strong profit</SelectItem>
@@ -321,9 +484,11 @@ export default function Runs() {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Would Do Again</label>
-              <Select value={wouldDoFilter} onValueChange={v => setWouldDoFilter(v as WouldDoFilter)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Would Do Again</label>
+              <Select value={wouldDoFilter} onValueChange={(value) => setWouldDoFilter(value as WouldDoFilter)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="yes">Yes</SelectItem>
@@ -332,150 +497,127 @@ export default function Runs() {
                 </SelectContent>
               </Select>
             </div>
-            {allStates.length > 0 && (
+            {allStates.length > 0 ? (
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">State</label>
+                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">State</label>
                 <Select value={stateFilter} onValueChange={setStateFilter}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All states</SelectItem>
-                    {allStates.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {allStates.map((state) => (
+                      <SelectItem key={state} value={state}>
+                        {state}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Table */}
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full rounded-md" />
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-10 w-full rounded-md" />
           ))}
         </div>
       ) : !runs?.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-sm">No past shows yet — run your first calculation to see it here.</p>
+        <div className="py-16 text-center text-muted-foreground">
+          <p className="text-sm">No saved calculations yet. Start with a draft, keep current shows separate, and past shows will lock automatically after their date passes.</p>
           <Button asChild className="mt-4">
             <Link href="/runs/new">Start a Calculation</Link>
           </Button>
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          <p className="text-sm">No shows match your filters.</p>
-          <button onClick={clearFilters} className="text-primary text-sm underline underline-offset-2 mt-1">Clear filters</button>
-        </div>
       ) : (
-        <div className="border border-border/60 rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 border-b border-border/60">
-                <tr>
-                  <SortHeader label="Date" sortKey="date" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Venue</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Location</th>
-                  <SortHeader label="Fee" sortKey="fee" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <SortHeader label="Costs" sortKey="totalCost" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Accommodation</th>
-                  <SortHeader label="Net Profit" sortKey="profit" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <SortHeader label="Merch" sortKey="merch" current={sortKey} dir={sortDir} onSort={handleSort} />
-                  <th className="px-3 py-2.5 w-8" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {filtered.map((run, idx) => {
-                  const dateStr = run.showDate
-                    ? format(parseISO(run.showDate + "T00:00:00"), "d MMM yy")
-                    : format(parseISO(run.createdAt), "d MMM yy");
-                  const venueName = run.venueName || `${run.origin || "?"} → ${run.destination || "?"}`;
-                  const location = [run.city, run.state].filter(Boolean).join(", ") || run.destination || "—";
+        <div className="space-y-6">
+          <Tabs value={statusTab} onValueChange={(value) => setStatusTab(value as StatusFilterTab)}>
+            <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+              <TabsTrigger value="all">All ({totalSavedCount})</TabsTrigger>
+              <TabsTrigger value="draft">Draft ({draftCount})</TabsTrigger>
+              <TabsTrigger value="planned">Current ({plannedCount})</TabsTrigger>
+              <TabsTrigger value="past">Past Shows ({pastShowCount})</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-                  return (
-                    <tr
-                      key={run.id}
-                      className={cn(
-                        "group cursor-pointer transition-colors",
-                        idx % 2 === 0 ? "bg-card/20" : "bg-transparent",
-                        "hover:bg-primary/5"
-                      )}
-                      onClick={() => navigate(`/runs/results?runId=${run.id}`)}
-                    >
-                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-xs">{dateStr}</td>
-                      <td className="px-3 py-2.5 font-medium max-w-[200px]">
-                        {run.venueId ? (
-                          <button
-                            className="truncate block text-left hover:text-primary hover:underline underline-offset-2 transition-colors w-full"
-                            onClick={e => { e.stopPropagation(); navigate(`/venues/${run.venueId}`); }}
-                          >
-                            {venueName}
-                          </button>
-                        ) : (
-                          <span className="truncate block">{venueName}</span>
-                        )}
-                        {run.importedFromTour && run.tourName && (
-                          <span className="text-[10px] font-normal text-primary/60 mt-0.5 block truncate">
-                            Tour: {run.tourName}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{location}</td>
-                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmt(run.totalIncome)}</td>
-                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground">{fmt(run.totalCost)}</td>
-                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground text-xs">
-                        {run.accommodationRequired && run.accommodationCost ? fmt(run.accommodationCost) : <span className="text-muted-foreground/40">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <ProfitCell profit={run.totalProfit} income={run.totalIncome} />
-                      </td>
-                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground text-xs">
-                        {run.merchEstimate ? fmt(run.merchEstimate) : <span className="text-muted-foreground/40">—</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Show</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Permanently delete <strong>{venueName}</strong>? This cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={e => handleDelete(e, run.id)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-4 py-2 border-t border-border/40 bg-muted/20">
-            <p className="text-xs text-muted-foreground">
-              {filtered.length} of {runs?.length ?? 0} show{runs?.length !== 1 ? "s" : ""}
-              {hasActiveFilters && " (filtered)"}
-              {" · "}Click any row to view saved result
-            </p>
-          </div>
+          {filteredRuns.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground">
+              <p className="text-sm">No calculations match your filters.</p>
+              <button onClick={clearFilters} className="mt-1 text-sm text-primary underline underline-offset-2">
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {showDraftSection ? (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold">Draft</h2>
+                      <p className="text-xs text-muted-foreground">Uncommitted calculations and test scenarios.</p>
+                    </div>
+                    <Badge variant="secondary">{draftCount}</Badge>
+                  </div>
+                  {drafts.length === 0 ? (
+                    statusTab === "draft" ? <SectionEmptyState message={emptyTabMessage} /> : null
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {drafts.map((run) => (
+                        <CalculationCard key={run.id} run={run} onOpen={openRun} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {showPlannedSection ? (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold">Current Shows</h2>
+                      <p className="text-xs text-muted-foreground">Shows scheduled for today or later that are still editable.</p>
+                    </div>
+                    <Badge variant="secondary">{plannedCount}</Badge>
+                  </div>
+                  {plannedRuns.length === 0 ? (
+                    statusTab === "planned" ? <SectionEmptyState message={emptyTabMessage} /> : null
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {plannedRuns.map((run) => (
+                        <CalculationCard key={run.id} run={run} onOpen={openRun} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : null}
+
+              {showPastSection ? (
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold">Past Shows</h2>
+                      <p className="text-xs text-muted-foreground">Shows move here automatically once their date is before today and then become read-only.</p>
+                    </div>
+                    <Badge>{pastShowCount}</Badge>
+                  </div>
+                  {pastShows.length === 0 ? (
+                    <SectionEmptyState message={emptyTabMessage} />
+                  ) : (
+                    <PastShowsTable
+                      runs={pastShows}
+                      navigate={navigate}
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      handleSort={handleSort}
+                    />
+                  )}
+                </section>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
     </div>

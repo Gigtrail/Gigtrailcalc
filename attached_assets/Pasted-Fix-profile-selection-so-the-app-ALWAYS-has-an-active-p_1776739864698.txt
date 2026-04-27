@@ -1,0 +1,165 @@
+Fix profile selection so the app ALWAYS has an active profile.
+
+CURRENT BUG
+- Profile shows as "None"
+- Default profile is not being used
+- Last used profile is not remembered
+- Calculator can run without a profile (this should NEVER happen)
+
+GOAL
+- A profile must ALWAYS be selected
+- The app should automatically select:
+  1. Last used profile (highest priority)
+  2. Default profile
+  3. First available profile
+- "None" should never appear in the UI
+
+==================================================
+PART 1 — DEFINE SOURCE OF TRUTH
+==================================================
+
+Create ONE clear source of truth for active profile:
+
+activeProfileId
+
+This should come from:
+- localStorage (last used profile)
+- OR backend defaultProfileId
+- OR fallback to first profile in list
+
+==================================================
+PART 2 — PERSIST LAST USED PROFILE
+==================================================
+
+When user selects a profile:
+- Save it to localStorage:
+
+localStorage.setItem("lastProfileId", profileId)
+
+This should happen:
+- on manual profile change
+- on onboarding completion
+- on calculator load if auto-selected
+
+==================================================
+PART 3 — AUTO-SELECT LOGIC (CRITICAL)
+==================================================
+
+On calculator load:
+
+1. Load all profiles
+2. Resolve active profile using:
+
+const lastProfileId = localStorage.getItem("lastProfileId")
+
+IF lastProfileId exists AND matches a valid profile:
+  → use it
+
+ELSE IF defaultProfileId exists:
+  → use default profile
+
+ELSE IF profiles.length > 0:
+  → use profiles[0]
+
+ELSE:
+  → create a fallback profile automatically
+
+==================================================
+PART 4 — NEVER ALLOW EMPTY STATE
+==================================================
+
+Remove any logic that allows:
+- selectedProfile = null
+- selectedProfile = undefined
+
+Replace with:
+- always resolve a valid profile before rendering calculator
+
+If profiles are still loading:
+- show loading state
+- DO NOT render calculator with "None"
+
+==================================================
+PART 5 — FIX STATE SYNC BUGS
+==================================================
+
+Check for:
+- selectedProfile set before profiles load
+- useEffect missing dependencies
+- profile list updating but selectedProfile not updating
+- summary panel using different state than calculator
+
+Ensure:
+- when profiles load → active profile is re-resolved
+- when profile changes → ALL dependent state updates:
+  - origin/home base
+  - vehicle
+  - fuel inputs
+
+==================================================
+PART 6 — ONBOARDING FIX
+==================================================
+
+After profile creation:
+- immediately set as:
+  - defaultProfileId
+  - lastProfileId (localStorage)
+- navigate to calculator
+- calculator should auto-load this profile instantly
+
+==================================================
+PART 7 — UI FIX
+==================================================
+
+- Remove "Profile: None"
+- Always show a valid profile name
+- If no profiles exist:
+  → auto-create a basic profile like:
+
+{
+  name: "My Profile",
+  homeBase: null,
+  vehicle: null
+}
+
+==================================================
+PART 8 — ACCEPTANCE TESTS
+==================================================
+
+TEST 1 — Fresh user
+- completes onboarding
+Expected:
+- profile is selected automatically
+- never shows "None"
+
+TEST 2 — Returning user
+- reloads app
+Expected:
+- last used profile is selected
+
+TEST 3 — Multiple profiles
+- user switches profiles
+- refreshes page
+Expected:
+- last selected profile is restored
+
+TEST 4 — No profiles exist (edge case)
+Expected:
+- app creates a fallback profile automatically
+- calculator still works
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+1. Root cause of "Profile: None"
+2. Files changed
+3. Where activeProfileId is now resolved
+4. Where lastProfileId is stored
+5. Confirmation that profile can never be empty
+
+IMPORTANT
+- Keep logic simple (alpha build)
+- Do not break profile switching
+- Do not break onboarding
+- One source of truth for active profile

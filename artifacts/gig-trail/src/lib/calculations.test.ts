@@ -601,4 +601,62 @@ describe("calculateSingleShow", () => {
     expect(result.totalIncome).toBe(0);
     expect(result.totalCost).toBe(0);
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Spec example (v2.0.0):  45 × $55 ticketed show, $658.83 base expenses,
+  // $325 in member fees, capacity 120.  Documents the fee-inclusive math.
+  // ─────────────────────────────────────────────────────────────────────────
+  it("v2.0.0 spec: ticketed show folds member fees into totalCost / netProfit", () => {
+    const result = calculateSingleShow({
+      showType: "Ticketed Show",
+      dealType: "100% door",
+      capacity: 120,
+      ticketPrice: 55,
+      expectedAttendancePct: 37.5, // 45 / 120 = 37.5%
+      // Operating costs that sum to $658.83 (the spec figure):
+      distanceKm: 100,             // 100 km × 8 L/100 × $1.50 = $12.00 fuel
+      vehicleConsumptionLPer100: 8,
+      fuelPricePerLitre: 1.50,
+      foodCost: 80,
+      marketingCost: 466.83,
+      extraCosts: 100,
+      totalMemberFees: 325,
+    });
+
+    // Income side
+    expect(result.expectedTicketsSold).toBe(45);
+    expect(result.grossRevenue).toBeCloseTo(2475, 2);
+
+    // Cost decomposition
+    expect(result.baseExpenses).toBeCloseTo(658.83, 2);
+    expect(result.bandMemberFees).toBe(325);
+    expect(result.totalCost).toBeCloseTo(983.83, 2);
+
+    // Net profit = totalIncome (= 2475) − totalCost (= 983.83) = 1491.17
+    expect(result.netProfit).toBeCloseTo(1491.17, 2);
+
+    // Break-even ladders
+    // Full BE = ceil(983.83 / 55) = 18
+    expect(result.breakEvenTickets).toBe(18);
+    expect(result.fullBandBreakEvenTickets).toBe(18);
+    // Base-expenses BE = ceil(658.83 / 55) = 12
+    expect(result.baseExpensesBreakEvenTickets).toBe(12);
+
+    // Sell-out scenario revenue = 120 × 55 = 6600 (totalIncome at 100% pct)
+    const sellOut = result.scenarios.find(s => s.pct === 100);
+    expect(sellOut).toBeDefined();
+    expect(sellOut!.totalIncome).toBeCloseTo(6600, 2);
+    // ...and at sell-out the show clearly covers band fees.
+    expect(sellOut!.coversCosts).toBe(true);
+    expect(sellOut!.coversFullBandFees).toBe(true);
+
+    // Expected (45 tickets) row covers both base expenses AND band fees.
+    const expectedRow = result.scenarios.find(s => s.isExpected);
+    expect(expectedRow).toBeDefined();
+    expect(expectedRow!.tickets).toBe(45);
+    expect(expectedRow!.coversCosts).toBe(true);
+    expect(expectedRow!.coversFullBandFees).toBe(true);
+    // netAfterMemberFees alias must match netProfit (v2.0.0 contract).
+    expect(expectedRow!.netAfterMemberFees).toBeCloseTo(expectedRow!.netProfit, 2);
+  });
 });

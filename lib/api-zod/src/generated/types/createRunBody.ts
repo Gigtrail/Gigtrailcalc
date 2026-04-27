@@ -5,6 +5,7 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { RunStatus } from "./runStatus";
 
 export interface CreateRunBody {
   /** @nullable */
@@ -23,8 +24,7 @@ export interface CreateRunBody {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  /** @nullable */
-  status?: string | null;
+  status?: RunStatus | null;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -77,7 +77,13 @@ export interface CreateRunBody {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */

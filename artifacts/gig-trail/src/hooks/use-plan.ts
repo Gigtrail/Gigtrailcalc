@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser, useAuth } from "@clerk/react";
 
 /**
@@ -56,16 +56,25 @@ export interface MeResponse {
 
 const FREE_ENTITLEMENTS = getEntitlements("free");
 
+async function fetchMe(getToken: () => Promise<string | null>): Promise<MeResponse> {
+  const res = await authedFetch("/api/me", () => getToken());
+  if (!res.ok) throw new Error(`Failed to fetch plan (${res.status})`);
+  const data = await res.json() as MeResponse;
+  console.log("[usePlan] /api/me response", {
+    role: data.role,
+    plan: data.plan,
+    accessSource: data.accessSource,
+    entitlements: data.entitlements,
+  });
+  return data;
+}
+
 export function usePlan() {
   const { isSignedIn } = useUser();
   const { getToken } = useAuth();
   const { data, isLoading, refetch } = useQuery<MeResponse>({
     queryKey: ["/api/me"],
-    queryFn: async () => {
-      const res = await authedFetch("/api/me", () => getToken());
-      if (!res.ok) throw new Error(`Failed to fetch plan (${res.status})`);
-      return res.json();
-    },
+    queryFn: () => fetchMe(getToken),
     enabled: !!isSignedIn,
     staleTime: 30_000,
   });
@@ -161,13 +170,13 @@ export function useStripePlans() {
 }
 
 export function useCreateCheckout() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (priceId: string) => {
-      const res = await fetch("/api/stripe/checkout", {
+      const res = await authedFetch("/api/stripe/checkout", () => getToken(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ priceId }),
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Checkout failed");
@@ -177,11 +186,11 @@ export function useCreateCheckout() {
 }
 
 export function useCustomerPortal() {
+  const { getToken } = useAuth();
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/stripe/portal", {
+      const res = await authedFetch("/api/stripe/portal", () => getToken(), {
         method: "POST",
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Portal failed");
@@ -196,6 +205,17 @@ export interface AdminUser {
   role: string;
   accessSource: string;
   plan: string;
+  createdAt: string | null;
+  profileCount: number;
+  vehicleCount: number;
+  runCount: number;
+}
+
+export interface AdminResetProfileSummary {
+  profilesDeleted: number;
+  vehiclesDeleted: number;
+  runsPreserved: number;
+  toursPreserved: number;
 }
 
 export function useAdminUsers() {
@@ -229,9 +249,103 @@ export function useUpdateUserRole() {
   });
 }
 
+export function useRefreshAdminUser() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await authedFetch(`/api/admin/users/${userId}/refresh`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Refresh failed");
+      return data as { user: AdminUser };
+    },
+  });
+}
+
+export function useResetAdminUserProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await authedFetch(`/api/admin/users/${userId}/reset-profile`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      return data as { user: AdminUser | null; summary: AdminResetProfileSummary };
+    },
+  });
+}
+
 /** @deprecated Use useUpdateUserRole instead */
 export function useUpdateUserPlan() {
   return useUpdateUserRole();
+}
+
+// ─── Admin: profile archive (soft delete) ───────────────────────────────────
+
+export interface AdminProfile {
+  id: number;
+  userId: string | null;
+  name: string;
+  actType: string;
+  createdAt: string | null;
+  archivedAt: string | null;
+  archivedByUserId: string | null;
+  archiveReason: string | null;
+  ownerEmail: string | null;
+  isArchived: boolean;
+}
+
+export type AdminProfileStatusFilter = "active" | "archived" | "all";
+
+export function useAdminProfiles(params: { status: AdminProfileStatusFilter; q?: string }) {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  const q = params.q?.trim() ?? "";
+  return useQuery<{ profiles: AdminProfile[] }>({
+    queryKey: ["/api/admin/profiles", params.status, q],
+    queryFn: async () => {
+      const search = new URLSearchParams();
+      search.set("status", params.status);
+      if (q.length >= 2) search.set("q", q);
+      const res = await authedFetch(`/api/admin/profiles?${search.toString()}`, () => getToken());
+      if (!res.ok) throw new Error("Failed to fetch profiles");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useArchiveAdminProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async ({ profileId, reason }: { profileId: number; reason?: string }) => {
+      const res = await authedFetch(`/api/admin/profiles/${profileId}/archive`, () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason ?? null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Archive failed");
+      return data as { profile: AdminProfile | null; alreadyArchived?: boolean };
+    },
+  });
+}
+
+export function useRestoreAdminProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (profileId: number) => {
+      const res = await authedFetch(`/api/admin/profiles/${profileId}/restore`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Restore failed");
+      return data as { profile: AdminProfile | null; alreadyActive?: boolean };
+    },
+  });
 }
 
 export interface PromoCode {
@@ -339,18 +453,179 @@ export function usePromoCodeRedemptions(id: number | null) {
   });
 }
 
+export type VenueImportStatus =
+  | "unverified"
+  | "ready_to_import"
+  | "needs_review"
+  | "duplicate"
+  | "missing_required"
+  | "imported"
+  | "skipped";
+
+export interface VenueImportSummary {
+  totalRows: number;
+  readyRows: number;
+  duplicateRows: number;
+  needsReviewRows: number;
+  missingRequiredRows: number;
+}
+
+export interface VenueImportBatch {
+  id: number;
+  sourceDatabase: string;
+  fileName: string;
+  uploadedByUserId: string | null;
+  totalRows: number;
+  readyRows: number;
+  duplicateRows: number;
+  needsReviewRows: number;
+  missingRequiredRows: number;
+  createdAt: string;
+}
+
+export interface VenueImportRow {
+  id?: number;
+  importBatchId?: number;
+  sourceDatabase: string;
+  sourceSheet: string | null;
+  sourceRowNumber: number | null;
+  venueName: string | null;
+  cityTown: string | null;
+  country: string | null;
+  bookingEmail: string | null;
+  bookingContactName: string | null;
+  bookingPhone: string | null;
+  website: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  notes: string | null;
+  rawAction: string | null;
+  duplicateKey: string | null;
+  importStatus: VenueImportStatus;
+  duplicateStatus: string | null;
+  matchedVenueId: number | null;
+  createdAt?: string;
+}
+
+export function usePreviewVenueImport() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async ({ csvText }: { csvText: string }) => {
+      const res = await authedFetch("/api/admin/venue-imports/preview", () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to preview venue import");
+      return json as { summary: VenueImportSummary; rows: VenueImportRow[] };
+    },
+  });
+}
+
+export function useAdminVenueImports() {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  return useQuery<{ batches: VenueImportBatch[] }>({
+    queryKey: ["/api/admin/venue-imports"],
+    queryFn: async () => {
+      const res = await authedFetch("/api/admin/venue-imports", () => getToken());
+      if (!res.ok) throw new Error("Failed to fetch venue imports");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useSaveVenueImport() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ csvText, fileName }: { csvText: string; fileName: string }) => {
+      const res = await authedFetch("/api/admin/venue-imports", () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csvText, fileName }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to save venue import");
+      return json as { batch: VenueImportBatch; summary: VenueImportSummary; rows: VenueImportRow[] };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/admin/venue-imports"] });
+    },
+  });
+}
+
+export function useVenueImportRows(batchId: number | null, status?: VenueImportStatus | "") {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useQuery<{ batch: VenueImportBatch; rows: VenueImportRow[] }>({
+    queryKey: ["/api/admin/venue-imports", batchId, "rows", status ?? ""],
+    queryFn: async () => {
+      const res = await authedFetch(`/api/admin/venue-imports/${batchId}/rows${qs}`, () => getToken());
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to fetch import rows");
+      return json as { batch: VenueImportBatch; rows: VenueImportRow[] };
+    },
+    enabled: !!isSignedIn && batchId !== null,
+    staleTime: 0,
+  });
+}
+
+export function useImportReadyVenueRows() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (batchId: number) => {
+      const res = await authedFetch(`/api/admin/venue-imports/${batchId}/import-ready`, () => getToken(), {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to import ready rows");
+      return json as { imported: number; skipped: number };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["/api/admin/venue-imports"] });
+    },
+  });
+}
+
 export function useRedeemPromo() {
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (code: string) => {
-      const res = await fetch("/api/me/redeem-promo", {
+      const res = await authedFetch("/api/me/redeem-promo", () => getToken(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code }),
-        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to redeem promo code");
-      return data as { role: string; plan: string };
+      console.log("[useRedeemPromo] promo redemption response", data);
+      return data as { role: string; plan: string; accessSource?: string };
+    },
+    onSuccess: async () => {
+      try {
+        await queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+        await queryClient.invalidateQueries({ queryKey: ["/api/profiles/weekly-usage"] });
+        const me = await queryClient.fetchQuery({
+          queryKey: ["/api/me"],
+          queryFn: () => fetchMe(getToken),
+          staleTime: 0,
+        });
+        console.log("[useRedeemPromo] /api/me after redeem", {
+          role: me.role,
+          plan: me.plan,
+          accessSource: me.accessSource,
+          entitlements: me.entitlements,
+        });
+      } catch (error) {
+        console.error("[useRedeemPromo] Failed to refetch /api/me after redeem", error);
+      }
     },
   });
 }
@@ -470,6 +745,20 @@ export function useValidatePromoCode() {
       const res = await fetch(`/api/promo-codes/validate?code=${encodeURIComponent(code)}`);
       const data = await res.json();
       return data as { valid: boolean; grantsRole?: string; error?: string };
+    },
+  });
+}
+
+export function useSyncPlan() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await authedFetch("/api/me/sync-plan", () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to sync plan");
+      return data as { role: string; plan: string };
     },
   });
 }

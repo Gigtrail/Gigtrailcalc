@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { db, feedbackPostsTable, feedbackVotesTable } from "@workspace/db";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import { parseIntegerParam } from "../lib/request-params";
 
 const router: IRouter = Router();
 
@@ -71,14 +72,14 @@ router.post("/feedback", requireAuth, async (req, res): Promise<void> => {
 
 router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
   const { userId, entitlements } = req as AuthenticatedRequest;
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;
   }
 
   const { status, category } = req.body ?? {};
-  const updates: Record<string, string | Date> = {};
+  const updates: Partial<typeof feedbackPostsTable.$inferInsert> = {};
   if (status && STATUSES.has(status)) updates.status = status;
   if (category && CATEGORIES.has(category)) updates.category = category;
 
@@ -119,7 +120,7 @@ router.patch("/feedback/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/feedback/:id/vote", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const postId = Number(req.params.id);
+  const postId = parseIntegerParam(req.params.id);
   if (isNaN(postId)) {
     res.status(400).json({ error: "Invalid post id" });
     return;

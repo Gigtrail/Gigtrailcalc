@@ -1,0 +1,148 @@
+We have a bug in Tour View:
+
+The driving time / driving lane is not being calculated or shown on the calendar.
+
+Current state:
+- tour/show markers are rendering
+- tour line is rendering
+- driving information is missing from the calendar
+- no visible driving lane / driving duration on the affected dates
+
+I need you to debug and fix this properly.
+
+GOAL
+Make the calendar calculate and display driving segments between shows using real data where possible, and sensible fallback logic where needed.
+
+-----------------------------------
+DEBUG THIS FULL PIPELINE
+-----------------------------------
+
+Please inspect the full data flow:
+
+1. show dates being loaded into Tour View
+2. shows being sorted chronologically
+3. gaps between shows being identified
+4. driving segments being generated between consecutive shows
+5. estimated drive time / distance being calculated
+6. driving segments being passed into calendar week rows
+7. driving lane being rendered when segment data exists
+
+Find where this chain is breaking.
+
+-----------------------------------
+EXPECTED BEHAVIOUR
+-----------------------------------
+
+For consecutive shows, the app should:
+
+- sort shows by date
+- identify the previous and next show
+- compare their locations
+- calculate estimated distance and drive time between them
+- create a driving segment object
+- render that driving segment on the correct calendar row/lane
+- make the segment interactive if interaction is already implemented
+
+Example:
+If there is a show on Apr 24 and another on Apr 27,
+the app should create a driving/travel segment between them if travel is required.
+
+-----------------------------------
+IMPORTANT LOGIC RULES
+-----------------------------------
+
+1. Driving segments should be based on consecutive shows in the timeline
+
+2. If both shows have usable coordinates:
+   - calculate proper drive distance/time from location data
+
+3. If coordinates are missing but addresses/cities exist:
+   - use fallback location logic if already available in app
+
+4. If real route calculation is not available yet:
+   - still generate a fallback driving segment object so the lane can render
+   - mark drive time as estimated / unavailable if needed
+
+5. Do not silently fail just because one field is missing
+
+-----------------------------------
+UI REQUIREMENTS
+-----------------------------------
+
+Once the driving segment exists, render it on the calendar:
+- in the driving lane
+- on the correct week row(s)
+- with the road/highway styling already introduced
+- with tooltip/popover support if that system exists
+
+Also show drive details where appropriate:
+- estimated drive time
+- distance if available
+- from / to location
+- date span
+
+-----------------------------------
+WHAT TO CHECK IN CODE
+-----------------------------------
+
+Please inspect:
+- Tour View page/component
+- calendar month view
+- week row rendering
+- lane rendering logic
+- whatever function derives tour segments
+- whatever function derives driving segments
+- any location/distance helper utilities
+- any filtering that hides empty/invalid segments
+
+I suspect one of these is happening:
+- drivingSegments array is never being built
+- drive calculation is returning null
+- missing coordinates are causing the segment to be dropped
+- segments are being calculated but not passed into the week row
+- week row only renders touring segments and not driving ones
+- row visibility logic is filtering out driving-only content
+
+-----------------------------------
+IMPLEMENTATION REQUIREMENTS
+-----------------------------------
+
+Please:
+1. find the exact bug
+2. fix the calculation pipeline
+3. add defensive fallback logic
+4. make sure driving segments still render even with partial data
+5. explain clearly what the root cause was
+
+-----------------------------------
+FALLBACK DATA SHAPE
+-----------------------------------
+
+Driving segment objects should support something like:
+
+{
+  id,
+  startDate,
+  endDate,
+  fromShowId,
+  toShowId,
+  fromLocation,
+  toLocation,
+  estimatedDriveMinutes,
+  estimatedDistanceKm,
+  hasExactRouteData,
+  status
+}
+
+If exact route data cannot be calculated, still create the object with fallback values.
+
+-----------------------------------
+OUTPUT
+-----------------------------------
+
+Please return:
+- root cause
+- files changed
+- what logic was added/fixed
+- whether drive time is real route data or fallback estimate
+- any remaining limitations

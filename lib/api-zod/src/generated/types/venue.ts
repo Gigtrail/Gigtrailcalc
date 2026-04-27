@@ -5,6 +5,9 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { VenueVenueStatus } from "./venueVenueStatus";
+import type { VenueVenueType } from "./venueVenueType";
+import type { VenueWillPlayAgain } from "./venueWillPlayAgain";
 
 export interface Venue {
   id: number;
@@ -15,6 +18,8 @@ export interface Venue {
   venueName: string;
   normalizedVenueName: string;
   /** @nullable */
+  venueType?: VenueVenueType;
+  /** @nullable */
   city?: string | null;
   /** @nullable */
   state?: string | null;
@@ -23,7 +28,57 @@ export interface Venue {
   /** @nullable */
   lastTotalProfit?: number | null;
   /** @nullable */
+  showCount?: number | null;
+  /** @nullable */
+  lastPlayed?: string | null;
+  /** @nullable */
+  avgProfit?: number | null;
+  /** @nullable */
   lastStatus?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  postcode?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
+  /** @nullable */
+  venueStatus?: VenueVenueStatus;
+  /** @nullable */
+  willPlayAgain?: VenueWillPlayAgain;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 }

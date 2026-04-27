@@ -1,0 +1,228 @@
+Replit Task: Fix Ticketed Show Profit Calculation + Enforce Correct Break-Even Logic (Single + Tour)
+
+Priority: CRITICAL (trust-breaking bug)
+
+---
+
+## 🧠 Problem Summary
+
+The app is currently calculating profit incorrectly.
+
+It is doing:
+Revenue - Expenses
+
+It is NOT subtracting band/member payouts.
+
+This results in inflated profit and false “covers band fees” messaging.
+
+---
+
+## 🔍 Verified Bug Example (must match this logic)
+
+Inputs:
+- Tickets sold: 45
+- Ticket price: $55
+- Revenue: 45 × 55 = $2,475 ✅
+- Expenses: $658.83
+- Member payouts: $325
+
+Current (WRONG):
+$2,475 - $658.83 = $1,816.17 ❌
+
+Correct:
+$2,475 - ($658.83 + $325) = $1,491.17 ✅
+
+The difference ($325) = member payouts not being deducted.
+
+---
+
+## ✅ Required Fix
+
+### 1. Define Costs Properly
+
+baseExpenses =
+  fuel + accommodation + venue + production + marketing + other
+
+bandMemberFees =
+  total of all member payouts
+
+totalCosts =
+  baseExpenses + bandMemberFees
+
+---
+
+### 2. Fix Net Calculation (EVERYWHERE)
+
+Replace ALL net/profit logic with:
+
+net =
+  (ticketsSold × ticketPrice)
+  + otherIncome (ONLY if explicitly entered)
+  - totalCosts
+
+---
+
+### 3. Break-even Logic (KEEP — already correct)
+
+fullBreakEvenTickets =
+  ceil(totalCosts / ticketPrice)
+
+baseExpenseBreakEvenTickets =
+  ceil(baseExpenses / ticketPrice)
+
+Hero UI:
+
+YOU NEED X TICKETS TO BREAK EVEN
+(covers base expenses + band/member fees)
+
+Y tickets covers base expenses only
+
+---
+
+### 4. Scenario Logic (CRITICAL RULE)
+
+Scenarios must ONLY change ticket count.
+
+DO NOT:
+- add expected attendance as money
+- add capacity as money
+- add scenario % as money
+
+ONLY:
+
+scenarioRevenue = scenarioTickets × ticketPrice
+
+scenarioNet =
+  scenarioRevenue
+  - totalCosts
+  + otherIncome (if explicitly entered)
+
+---
+
+### 5. Validate Sell-Out Math
+
+Example must pass:
+
+capacity = 120
+ticketPrice = 55
+
+sellOutRevenue = 120 × 55 = 6,600
+
+net = 6,600 - totalCosts
+
+App must NEVER show revenue higher than 6,600 unless clearly showing additional income separately.
+
+---
+
+### 6. Expected Attendance
+
+Expected turnout:
+"How many people do you think will turn up?"
+
+This should:
+- directly feed Expected scenario ticket count
+- NOT be used as income
+
+Expected scenario tickets = user input (no hidden rounding to 49 etc)
+
+---
+
+### 7. Tour Calc Alignment
+
+Each ticketed show must follow SAME logic:
+
+showRevenue = tickets × ticketPrice
+showNet = showRevenue - totalCosts + otherIncome
+
+Tour total:
+
+tourNet = sum(all showNet) - shared tour costs
+
+Do NOT:
+- aggregate attendance as money
+- inflate tour totals via scenarios
+
+---
+
+### 8. UI: Add “Show the Math”
+
+Add expandable section:
+
+Revenue:
+- Tickets: [tickets] × [$price] = [$revenue]
+
+Costs:
+- Base expenses: [$baseExpenses]
+- Band/member fees: [$bandMemberFees]
+- Total costs: [$totalCosts]
+
+Net:
+- Revenue - costs = [$net]
+
+Break-even:
+- Full: ceil(totalCosts ÷ ticket price)
+- Expenses only: ceil(baseExpenses ÷ ticket price)
+
+---
+
+### 9. Fix Status Messaging
+
+“Covers band fees” should ONLY show if:
+
+scenarioRevenue >= totalCosts
+
+NOT based on incorrect net.
+
+---
+
+### 10. Audit Required
+
+Search and fix across codebase:
+- any place using expenses without band fees
+- duplicated revenue calculations
+- scenario math using wrong variables
+- tour aggregation logic
+
+---
+
+### 11. Tests (must pass)
+
+1.
+45 × 55 = 2,475 revenue
+
+net = 2,475 - (658.83 + 325)
+= 1,491.17
+
+2.
+fullBreakEven =
+ceil((658.83 + 325) / 55) = 18
+
+3.
+baseBreakEven =
+ceil(658.83 / 55) = 12
+
+4.
+sellOut:
+120 × 55 = 6,600 revenue
+net = 6,600 - totalCosts
+
+---
+
+## 🎯 Goal
+
+Make the math:
+- transparent
+- consistent
+- impossible to misinterpret
+
+No hidden additions.
+No inflated outcomes.
+
+This is core trust logic — do not shortcut.
+
+---
+
+After implementation:
+- run typecheck
+- verify UI numbers match manual math
+- confirm Single + Tour behave identically

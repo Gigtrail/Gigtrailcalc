@@ -1,0 +1,235 @@
+You are doing a full-stack sweep of the GigTrailCalc monorepo to fix the Saved Venues system.
+
+Repository:
+https://github.com/Gigtrail/Gigtrailcalc.git
+
+Main user-reported problems:
+1. Saved venues are not showing up
+2. `/api/venues` has been returning 500 errors
+3. Even when the page loads, it can show “No venues saved yet” when there should be linked venue data from past shows
+4. I want a broad audit for missing links between tours, tour stops, past shows, runs, and venues
+
+IMPORTANT:
+Do not do a narrow patch.
+Do a proper sweep of the full Saved Venues pipeline.
+
+==================================================
+PHASE 1 — TRACE THE FULL DATA FLOW
+==================================================
+
+Start by tracing this end-to-end chain:
+
+Tour Stop
+→ Save to Past Shows action
+→ Run/Past Show creation
+→ Venue create or venue upsert
+→ run.venueId linkage
+→ venue listing endpoint
+→ venue detail endpoint
+→ venues page UI
+
+Read these files first:
+- artifacts/api-server/src/routes/venues.ts
+- artifacts/gig-trail/src/pages/venues.tsx
+- artifacts/gig-trail/src/pages/venue-detail.tsx
+- lib/db/src/schema/venues.ts
+- lib/db/src/schema/runs.ts
+- lib/db/src/schema/tourStops.ts
+- lib/db/src/schema/tours.ts
+
+Then find and read ALL files related to:
+- “Save to Past Shows”
+- run creation
+- past show creation
+- venue creation/upsert
+- venueId assignment
+- venue detail loading
+- tour stop updates
+- API client hooks for venues
+
+Search for terms like:
+- venueId
+- normalizedVenueName
+- importedFromTour
+- sourceTourId
+- sourceStopId
+- Save to Past Shows
+- past shows
+- useGetVenues
+- getVenues
+- createVenue
+- updateVenue
+- createRun
+- updateRun
+
+==================================================
+PHASE 2 — FIX THE 500 ERROR FIRST
+==================================================
+
+Find the exact cause of the `/api/venues` 500.
+
+Tasks:
+1. Run the backend and inspect the real server error
+2. Add temporary logging around GET /venues if needed
+3. Identify the exact failing line
+4. Fix the root cause properly
+
+Check especially for:
+- venues table schema out of sync with DB
+- missing migrations for newer venue fields
+- select/map logic assuming columns exist when DB does not
+- old rows with null/legacy values crashing transforms
+- bad SQL in the venue stats query
+- response serialization issues
+
+Harden GET /venues so that:
+- old rows do not crash the endpoint
+- nullable fields are handled safely
+- missing optional data does not kill the whole response
+
+==================================================
+PHASE 3 — VERIFY VENUE CREATION / UPSERT FLOW
+==================================================
+
+Audit whether venues are actually being created when a stop is saved to Past Shows.
+
+Questions to answer in code:
+- When a tour stop is saved to Past Shows, is a venue record created if one does not already exist?
+- If a similar venue already exists, is it being reused via normalized venue matching?
+- Is the resulting venue ID written back onto the run?
+- Is the tour stop also linked to the venue?
+- If the venue already exists, is it being updated with better details?
+- Are there cases where the run saves successfully but the venue link is skipped?
+
+Fix any missing links so the logic is reliable.
+
+Target behavior:
+- Saving a stop to Past Shows should always result in:
+  - a valid run record
+  - a valid venue record
+  - run.venueId populated
+  - venue visible on Saved Venues page
+  - venue detail page able to show history for that venue
+
+==================================================
+PHASE 4 — AUDIT FOR MISSING LINKS ACROSS THE SYSTEM
+==================================================
+
+Do a broader sweep for missing or inconsistent relationships.
+
+Verify these links:
+- run.venueId ↔ venues.id
+- tourStops.venueId ↔ venues.id
+- sourceTourId/sourceStopId linkage
+- importedFromTour flags
+- venue name normalization consistency
+- city/state/country carry-through
+- venue detail history queries
+- upcoming/pending stop queries on venue detail page
+
+Look for failure cases such as:
+- venue created but run.venueId left null
+- run saved but venue never created
+- stop saved but not marked imported
+- duplicate venues caused by inconsistent normalization
+- venue search/list page reading one shape while detail page expects another
+- stale frontend caching hiding new venues
+- empty state showing because the list endpoint silently fails or returns [] after partial errors
+
+==================================================
+PHASE 5 — FRONTEND RESILIENCE
+==================================================
+
+On the frontend, improve venues loading behavior.
+
+Requirements:
+- If `/api/venues` fails, show a useful error state
+- Do not spam repeated requests if the endpoint is 500ing
+- Avoid noisy retry loops
+- Keep the empty state only for true empty data, not hidden backend errors
+
+Check:
+- `useGetVenues()` config
+- retry behavior
+- loading state vs error state
+- venues page assumptions around missing fields
+
+==================================================
+PHASE 6 — SCHEMA / MIGRATION CLEANUP
+==================================================
+
+Compare code schema vs actual DB needs.
+
+In `lib/db/src/schema/venues.ts`, verify all fields used by routes and UI are really present in the database.
+
+If migrations are missing, create them properly.
+
+Be especially careful with these venue fields:
+- venueName
+- normalizedVenueName
+- city
+- state
+- country
+- lastTotalProfit
+- lastStatus
+- address
+- suburb
+- fullAddress
+- postcode
+- capacity
+- website
+- contactEmail
+- contactPhone
+- roomNotes
+
+Also verify whether newer venue dashboard fields were partially introduced somewhere else but not fully wired through.
+
+==================================================
+PHASE 7 — MAKE THE SYSTEM BACKWARD-COMPATIBLE
+==================================================
+
+Make the system safe for legacy data.
+
+Requirements:
+- old runs without venueId should not crash the UI
+- old venues missing optional fields should still load
+- old imported shows should still appear if venue matching can be recovered
+- use sensible null handling/defaults
+- do not require perfect data to render venue pages
+
+If needed:
+- add a lightweight backfill path
+- infer and reconnect venue links where safe
+- avoid destructive changes
+
+==================================================
+DELIVERABLES
+==================================================
+
+When done, provide:
+
+1. Root cause summary
+2. Files changed
+3. Exact fixes made
+4. Any migrations added
+5. Any data backfill or repair logic added
+6. Any commands I need to run in Replit
+7. Confirmation of these outcomes:
+   - `/api/venues` returns 200
+   - Saved Venues page loads
+   - Saving a stop to Past Shows creates/links the venue correctly
+   - Venue detail page shows history correctly
+
+==================================================
+IMPORTANT IMPLEMENTATION RULES
+==================================================
+
+- Fix root causes, not surface symptoms
+- Keep types strict
+- Do not remove venue features unless absolutely necessary
+- Prefer backward-compatible fixes
+- Do not leave TODOs where a real fix is possible
+- If there are multiple broken links, fix the whole chain
+- If a migration is required, create it
+- If there is retry spam on the frontend, stop it
+- If there are hidden assumptions around nulls, harden them

@@ -1,0 +1,72 @@
+Alpha-safe Phase 2 only.
+
+Task:
+Separate pre-show projection fields from post-show actual fields in the calculator UI.
+
+Apply to:
+- Single Show Calculator
+- Tour Ticketed Show Calculator, only if the same actuals fields appear there
+
+Do NOT build the dashboard “After the Show” system yet.
+Do NOT create new post-show prompt logic yet.
+Do NOT change venue history logic yet.
+Do NOT change calculation maths unless it is currently using an actuals field incorrectly.
+
+Goal:
+The calculator should only collect information needed BEFORE the show.
+
+Rule:
+If the field can only be known after the gig happens, it does not belong in the pre-show calculator.
+
+Remove or hide from the main calculator flow:
+- actual attendance
+- actual ticket sales
+- actual merch sales
+- actual pay received
+- actual expenses
+- would you play here again?
+- post-show notes
+- rider provided
+- accommodation provided, if it is being asked as an after-the-show result rather than a pre-show planning detail
+
+Keep in the calculator:
+- venue
+- date
+- deal type
+- capacity
+- ticket price
+- expected turnout
+- projected income
+- projected expenses
+- travel/fuel/accommodation estimates
+- soundcheck time
+- load-in time
+- set time / playing time
+- production/contact notes
+- planning notes
+
+Important distinction:
+- “Accommodation needed?” can stay as a pre-show planning input.
+- “Was accommodation actually provided?” should move out of the pre-show calc.
+- “Rider required/requested” can stay as planning.
+- “Rider actually provided” should move out of the pre-show calc.
+
+Save behaviour:
+- Existing saved calculations must still load without crashing, even if old actuals data exists.
+- Do not delete existing actuals data from the database.
+- Do not migrate data.
+- Just stop showing actuals fields in the pre-show calculator for now.
+
+Compatibility:
+- If hidden actuals fields are currently required by validation, make them optional.
+- If calculation logic depends on actuals fields, replace that dependency with projected fields.
+- Keep ticketed calculation results based on projected values only.
+
+Testing:
+After changes:
+- Run typecheck.
+- Test creating a new Single Show ticketed calculation.
+- Test loading an existing saved calculation that may contain old actuals fields.
+- Test Tour ticketed flow if applicable.
+- Confirm no actuals fields appear during the pre-show calculation flow.
+- Confirm projected results still calculate correctly.

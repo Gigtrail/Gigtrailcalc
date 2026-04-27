@@ -1,0 +1,106 @@
+You are fixing the Venue form location UX in the GigTrailCalc app.
+
+Read the current venue form code first and identify:
+
+* the venue create/edit page/component
+* the location/address input component
+* the form schema / default values
+* the API save/load path for venues
+
+Goal:
+Change the location flow so the user first interacts with a single searchable location field, and the detailed address fields stay hidden behind an Edit Address button.
+
+Problem to fix:
+Right now the form appears to default focus/behaviour to suburb-style address fields, which makes the UX feel backward. I want:
+
+1. a primary “Search location / address” input
+2. when the user selects a place, the full address is stored automatically
+3. the detailed fields are hidden by default after selection
+4. detailed fields can be manually changed only after clicking an “Edit address details” button
+5. the saved address must still persist correctly in the database and reload correctly when reopening the venue
+
+Desired UX:
+
+* On create/edit venue, show:
+
+  * Location search input at the top
+  * A compact read-only address summary underneath once selected
+  * Button: “Edit address details”
+* Hidden by default:
+
+  * suburb
+  * city
+  * state
+  * postcode
+  * country
+* Clicking “Edit address details” expands those fields for manual editing
+* Clicking again can collapse them
+* Manual edits must update the saved venue record
+* If no address has been selected yet, the user should still be able to type/search a location first
+
+Functional requirements:
+
+* Keep autocomplete / place lookup working while typing
+* Selecting a suggestion should populate:
+
+  * formatted address
+  * suburb
+  * city
+  * state
+  * postcode
+  * country
+  * lat/lng if already supported
+* Do not default the user into editing suburb/city/state fields unless they explicitly click edit
+* Existing saved venues should load with:
+
+  * the address summary visible
+  * detailed fields hidden by default
+* If a venue has partial legacy address data, gracefully build the best possible summary line
+* Preserve form validation and save behaviour
+
+Implementation requirements:
+
+* Add a local UI state like `isEditingAddressDetails`
+* Default it to:
+
+  * false when an address exists
+  * false on new form as well, unless no address structure exists and user explicitly chooses to expand
+* Keep address fields in the form state even while hidden
+* Do not lose hidden field values on collapse
+* Make sure save uses the actual form state, not just visible inputs
+* Avoid layout jumpiness
+* Make mobile layout clean
+
+Design requirements:
+
+* The top of the section should feel simple and modern
+* Primary input label should be something like:
+
+  * “Search location”
+    or
+  * “Venue address”
+* Under it show a muted summary row/card with the resolved address
+* “Edit address details” should be a secondary button, not the main action
+* Keep the interface musician-friendly, simple first, nerdy second
+
+Please do all of the following:
+
+1. Find the current bug/UX cause
+2. Refactor the location section to match the flow above
+3. Update default values and load logic if needed
+4. Ensure existing saved venues still work
+5. Add a short code comment explaining the hidden/editable address pattern
+6. Return a summary of:
+
+   * files changed
+   * root cause
+   * what was fixed
+   * any follow-up recommendations
+
+Important:
+
+* Do not break existing venue saves
+* Do not remove detailed address support
+* Do not introduce placeholder mock logic
+* Use the existing project patterns and component style
+* If there is duplicated location logic elsewhere, extract a small reusable helper instead of copying logic again

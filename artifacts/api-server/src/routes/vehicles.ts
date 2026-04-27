@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { eq, and, ne, inArray } from "drizzle-orm";
 import { db, vehiclesTable, vehicleActAssignmentsTable, profilesTable } from "@workspace/db";
 import { requireAuth, getPlanLimits, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
@@ -11,9 +12,17 @@ import {
   UpdateVehicleResponse,
   DeleteVehicleParams,
   GetVehiclesResponse,
-  SetVehicleActAssignmentsParams,
-  SetVehicleActAssignmentsBody,
 } from "@workspace/api-zod";
+import { checkLikelyVehicleDuplicate } from "../lib/duplicate-protection";
+
+// Pre-existing alpha tech-debt: these route handlers exist but their
+// matching openapi schemas have never been added. Inline-define here so the
+// server can build until the openapi spec is brought into line with the routes.
+const SetVehicleActAssignmentsParams = z.object({ id: z.coerce.number().int() });
+const SetVehicleActAssignmentsBody = z.object({
+  actIds: z.array(z.number().int()),
+  defaultForActIds: z.array(z.number().int()).optional(),
+});
 
 const router: IRouter = Router();
 
@@ -31,6 +40,8 @@ async function setActAssignments(
   actIds: number[],
   defaultForActIds: number[]
 ): Promise<void> {
+  const currentAssignedActIds = await getAssignedActIds(vehicleId);
+
   // Verify all actIds belong to this user
   if (actIds.length > 0) {
     const validProfiles = await db
@@ -42,27 +53,56 @@ async function setActAssignments(
     defaultForActIds = defaultForActIds.filter((id) => validIds.has(id));
   }
 
+  const nextActIds = Array.from(new Set(actIds));
+  const nextDefaultActIds = Array.from(
+    new Set(defaultForActIds.filter((id) => nextActIds.includes(id)))
+  );
+  const clearedDefaultActIds = currentAssignedActIds.filter(
+    (actId) => !nextDefaultActIds.includes(actId)
+  );
+
+  console.log("[Vehicles] Syncing act assignments", {
+    vehicleId,
+    userId,
+    previousActIds: currentAssignedActIds,
+    nextActIds,
+    nextDefaultActIds,
+  });
+
   // Replace assignments (delete all then re-insert)
   await db
     .delete(vehicleActAssignmentsTable)
     .where(eq(vehicleActAssignmentsTable.vehicleId, vehicleId));
 
-  if (actIds.length > 0) {
+  if (nextActIds.length > 0) {
     await db.insert(vehicleActAssignmentsTable).values(
-      actIds.map((actId) => ({ vehicleId, actId }))
+      nextActIds.map((actId) => ({ vehicleId, actId }))
     );
   }
 
-  // Update defaultVehicleId on profiles where this vehicle should be the default
-  if (defaultForActIds.length > 0) {
-    for (const actId of defaultForActIds) {
-      if (actIds.includes(actId)) {
-        await db
-          .update(profilesTable)
-          .set({ defaultVehicleId: vehicleId })
-          .where(and(eq(profilesTable.id, actId), eq(profilesTable.userId, userId)));
-      }
-    }
+  if (clearedDefaultActIds.length > 0) {
+    await db
+      .update(profilesTable)
+      .set({ defaultVehicleId: null })
+      .where(
+        and(
+          eq(profilesTable.userId, userId),
+          eq(profilesTable.defaultVehicleId, vehicleId),
+          inArray(profilesTable.id, clearedDefaultActIds)
+        )
+      );
+  }
+
+  if (nextDefaultActIds.length > 0) {
+    await db
+      .update(profilesTable)
+      .set({ defaultVehicleId: vehicleId })
+      .where(
+        and(
+          eq(profilesTable.userId, userId),
+          inArray(profilesTable.id, nextDefaultActIds)
+        )
+      );
   }
 }
 
@@ -116,12 +156,14 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
+  const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData);
   if (vehicleData.isDefault) {
     await db.update(vehiclesTable).set({ isDefault: false }).where(eq(vehiclesTable.userId, userId));
   }
   const [vehicle] = await db.insert(vehiclesTable).values({
     ...vehicleData,
     userId,
+    isDefault: vehicleData.isDefault ?? undefined,
     avgConsumption: String(vehicleData.avgConsumption),
     tankSizeLitres: vehicleData.tankSizeLitres != null ? String(vehicleData.tankSizeLitres) : null,
   }).returning();
@@ -131,7 +173,8 @@ router.post("/vehicles", requireAuth, async (req, res): Promise<void> => {
   await setActAssignments(vehicle.id, userId, resolvedActIds, resolvedDefaultForActIds);
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  res.status(201).json(GetVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds)));
+  const response = GetVehicleResponse.parse({ ...serializeVehicle(vehicle, assignedActIds), duplicateProtection });
+  res.status(201).json(response);
 });
 
 router.get("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -163,9 +206,22 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { actIds, defaultForActIds, ...vehicleData } = parsed.data;
-  const updateData: Record<string, unknown> = { ...vehicleData };
-  if (vehicleData.avgConsumption != null) updateData.avgConsumption = String(vehicleData.avgConsumption);
-  if (vehicleData.tankSizeLitres != null) updateData.tankSizeLitres = String(vehicleData.tankSizeLitres);
+  const duplicateProtection = await checkLikelyVehicleDuplicate(userId, vehicleData, params.data.id);
+  const updateData: Partial<typeof vehiclesTable.$inferInsert> = {};
+  if (vehicleData.name !== undefined) updateData.name = vehicleData.name;
+  if (vehicleData.vehicleType !== undefined) updateData.vehicleType = vehicleData.vehicleType;
+  if (vehicleData.fuelType !== undefined) updateData.fuelType = vehicleData.fuelType;
+  if (vehicleData.avgConsumption !== undefined) updateData.avgConsumption = String(vehicleData.avgConsumption);
+  if (vehicleData.tankSizeLitres !== undefined) {
+    updateData.tankSizeLitres =
+      vehicleData.tankSizeLitres === null ? null : String(vehicleData.tankSizeLitres);
+  }
+  if (vehicleData.maxPassengers !== undefined) updateData.maxPassengers = vehicleData.maxPassengers;
+  if (vehicleData.isDefault !== undefined && vehicleData.isDefault !== null) {
+    updateData.isDefault = vehicleData.isDefault;
+  }
+  if (vehicleData.assignedMemberIds !== undefined) updateData.assignedMemberIds = vehicleData.assignedMemberIds;
+  if (vehicleData.notes !== undefined) updateData.notes = vehicleData.notes;
   if (vehicleData.isDefault) {
     await db.update(vehiclesTable).set({ isDefault: false }).where(
       and(eq(vehiclesTable.userId, userId), ne(vehiclesTable.id, params.data.id))
@@ -182,7 +238,8 @@ router.patch("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
   }
   const assignedActIds = await getAssignedActIds(vehicle.id);
 
-  res.json(UpdateVehicleResponse.parse(serializeVehicle(vehicle, assignedActIds)));
+  const response = UpdateVehicleResponse.parse({ ...serializeVehicle(vehicle, assignedActIds), duplicateProtection });
+  res.json(response);
 });
 
 router.put("/vehicles/:id/act-assignments", requireAuth, async (req, res): Promise<void> => {
@@ -216,11 +273,30 @@ router.delete("/vehicles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [vehicle] = await db.delete(vehiclesTable).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId))).returning();
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)));
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
+
+  console.log("[Vehicles] Deleting vehicle", { vehicleId: vehicle.id, userId });
+
+  await db
+    .update(profilesTable)
+    .set({ defaultVehicleId: null })
+    .where(and(eq(profilesTable.userId, userId), eq(profilesTable.defaultVehicleId, vehicle.id)));
+
+  await db
+    .delete(vehicleActAssignmentsTable)
+    .where(eq(vehicleActAssignmentsTable.vehicleId, vehicle.id));
+
+  await db
+    .delete(vehiclesTable)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.userId, userId)));
+
   res.sendStatus(204);
 });
 

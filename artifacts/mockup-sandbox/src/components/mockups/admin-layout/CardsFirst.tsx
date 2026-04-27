@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { hasProAccess } from "@workspace/entitlements";
 
 const USERS = [
   { id: "usr_2vX9kLp", email: "sarah.jenkins@example.com", name: "Sarah Jenkins", role: "pro", initials: "SJ" },
@@ -168,7 +169,7 @@ export function CardsFirst() {
                     <p className="text-sm font-semibold text-slate-900 truncate">{user.name}</p>
                     <p className="text-xs text-slate-500 truncate mb-1.5">{user.email}</p>
                     <div className="flex items-center gap-2">
-                      {user.role === 'pro' && <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-none font-semibold text-[10px] px-2 py-0">PRO</Badge>}
+                      {hasProAccess(user.role) && <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-none font-semibold text-[10px] px-2 py-0">PRO ACCESS</Badge>}
                       {user.role === 'admin' && <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 hover:bg-indigo-100 border-none font-semibold text-[10px] px-2 py-0">ADMIN</Badge>}
                       {user.role === 'tester' && <Badge variant="secondary" className="bg-purple-100 text-purple-800 hover:bg-purple-100 border-none font-semibold text-[10px] px-2 py-0">TESTER</Badge>}
                       {user.role === 'free' && <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-100 border-none font-semibold text-[10px] px-2 py-0">FREE</Badge>}

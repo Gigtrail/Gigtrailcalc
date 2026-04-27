@@ -1,0 +1,250 @@
+You are working inside the GigTrail monorepo.
+
+Repo context already confirmed:
+- Frontend result page: artifacts/gig-trail/src/pages/run-results.tsx
+- Shared calculation engine: artifacts/gig-trail/src/lib/calculations.ts
+
+Goal:
+Redesign the SINGLE SHOW RESULTS experience for Ticketed Show and Hybrid so it reads like a working musician’s decision tool, not a finance dashboard.
+
+Main problem to fix:
+The current run-results page leads with one “Net result” number, then separately shows “Short $X to cover band fees”, while the break-even card says the show is above break-even. This creates conflicting narratives.
+We need one clean story:
+1. How many tickets do I need to cover costs?
+2. How many tickets do I need to cover costs + full band fees?
+3. If I sell what I expect to sell, what do I walk away with?
+4. What happens at different attendance levels?
+
+IMPORTANT:
+Do not break existing saved runs, snapshots, or non-ticketed runs.
+Do not duplicate financial logic inside the page.
+Keep calculation logic in shared engine files, and keep UI composition in run-results.tsx or extracted small components if needed.
+
+==================================================
+PART 1 — CALC ENGINE IMPROVEMENTS
+==================================================
+
+In artifacts/gig-trail/src/lib/calculations.ts:
+
+1. Add a shared reusable scenario generator for single-show ticketed results.
+   Build this as a pure helper and wire it into calculateSingleShow.
+
+2. For Ticketed Show and Hybrid, return attendance scenarios for:
+   - 20%
+   - 50%
+   - expected attendance percent from the form
+   - 100%
+   Avoid duplicates if expected equals one of those values.
+
+3. Each scenario should return:
+   - pct
+   - tickets
+   - grossRevenue
+   - netTicketRevenue
+   - showIncome / doorIncome after deal structure
+   - totalIncome including merch and hybrid guarantee where relevant
+   - totalCost
+   - netProfit before member fees
+   - netAfterMemberFees
+   - perPersonAfterFees (if members exist)
+   - flags:
+     - coversCosts
+     - coversFullBandFees
+     - guaranteeApplied if relevant
+
+4. Add a second break-even number for results:
+   - breakEvenTickets = tickets needed to cover all operating/show costs only
+   - fullBandBreakEvenTickets = tickets needed to cover all operating/show costs + all expected member fees
+
+5. Important logic:
+   - “cost break-even” should mean the show is no longer losing money operationally
+   - “full band break-even” should mean all expected member fees are fully covered as well
+   - if there are no member fees, fullBandBreakEvenTickets should equal breakEvenTickets
+   - respect booking fees, split deals, guarantee vs door, and hybrid logic
+   - do not double-count hybrid guarantee
+   - keep old result fields intact for backward compatibility
+
+6. If useful, create small pure helpers such as:
+   - calculateArtistNetPerTicket(...)
+   - calculateFullBandBreakEven(...)
+   - generateSingleShowAttendanceScenarios(...)
+
+7. Extend SingleShowResult carefully instead of replacing existing fields.
+   Preserve old consumers.
+
+==================================================
+PART 2 — RUN RESULTS PAGE RESTRUCTURE
+==================================================
+
+In artifacts/gig-trail/src/pages/run-results.tsx:
+
+Redesign the top of the result page for Ticketed Show and Hybrid only.
+
+For Flat Fee, keep the current flow mostly unchanged.
+
+For Ticketed + Hybrid:
+replace the current top summary with this order:
+
+A. HERO SECTION = “IF YOU SELL YOUR EXPECTED CROWD”
+- Replace vague “Net result” language with clearer musician-facing language.
+- Use wording like:
+  - “If you sell 25 tickets”
+  - “Expected crowd: 25 tickets”
+  - “At your expected crowd”
+- Primary large number should be:
+  - “You walk away with +$X” if positive after operating costs
+  - or a clear loss number if negative
+- Under it, show 2 very simple status lines:
+  - “Covers costs” yes/no
+  - “Covers full band fees” yes/no or “Short $X”
+- Do NOT show contradictory language in different styles.
+
+B. TICKET LADDER / SCENARIO BAR
+Show 4 clean scenario cards or rows using the new calculation data:
+- 20%
+- 50%
+- expected attendance
+- 100%
+
+Each row/card should show:
+- label (20%, 50%, Expected, Sell Out)
+- tickets
+- net result
+- small badge:
+  - “Below costs”
+  - “Covers costs”
+  - “Covers band”
+Use very plain English.
+
+This should be one of the most prominent sections near the top.
+
+C. BREAK-EVEN SECTION
+Replace the current single break-even framing with 2 clear numbers:
+- “You need X tickets to cover costs”
+- “You need Y tickets to cover full band fees”
+
+If full band fees are already included or there are none, handle gracefully.
+
+Also show capacity percentage if available, but as secondary text only.
+
+D. RENAME / REFRAME THE EXPECTED RESULT LANGUAGE
+Avoid:
+- “Likely Net”
+- “Margins are tight”
+unless it is only a small badge and not the main story.
+
+Preferred wording:
+- “Expected crowd”
+- “If this crowd turns up”
+- “You walk away with”
+- “Still short on band fees”
+- “Covers everything”
+
+E. MEMBER PAYOUTS SECTION
+Keep the existing section, but make its language match the new top story.
+Rename toggle labels if needed:
+- “Expected Fees” -> “Target Pay”
+- “Even Split” can stay, or become “Real Split”
+The warning in this section should match the same wording used in the hero and break-even areas.
+
+F. INSIGHTS SECTION
+Shorten and simplify copy.
+Examples:
+- “Long drive — consider arriving the day before.”
+- “Fuel is 76% of income — high road-cost show.”
+- “You’re still $351 short on full band fees.”
+
+Keep it musician-friendly, not corporate.
+
+==================================================
+PART 3 — UX / COPY RULES
+==================================================
+
+Use plain-English labels throughout.
+
+Preferred wording:
+- “Cover costs”
+- “Cover full band fees”
+- “Expected crowd”
+- “Sell out”
+- “You walk away with”
+- “Short on full band fees”
+
+Avoid or reduce:
+- “Likely Net”
+- “Margins”
+- “Operational profit”
+- “Expected fees”
+- overly financial language
+
+This app is for musicians making quick booking decisions.
+The page should answer, at a glance:
+- Is this worth doing?
+- How many tickets do I really need?
+- What happens if ticket sales are weak / okay / strong?
+
+==================================================
+PART 4 — DESIGN / LAYOUT RULES
+==================================================
+
+1. Keep the current visual style and component library.
+2. Do not make the page heavier or more cluttered.
+3. Prioritize scanning on desktop and mobile.
+4. The top section should feel like:
+   - first glance = answer
+   - second glance = scenarios
+   - third glance = details
+
+5. Suggested layout:
+- Header
+- New expected crowd hero card
+- Scenario row/card section
+- Break-even section
+- Existing income / expenses
+- Member payouts
+- Insights
+
+6. Preserve snapshot mode behavior and saved-run compatibility.
+
+==================================================
+PART 5 — IMPLEMENTATION NOTES
+==================================================
+
+- Reuse the shared calculation engine.
+- Do not embed scenario math ad hoc inside run-results.
+- If needed, create a small presentational component under src/components for the scenario ladder.
+- Handle old saved snapshots that do not yet have the new fields:
+  - compute graceful fallbacks in the page when possible
+  - never crash on undefined new properties
+
+- Ensure ticketed and hybrid both work.
+- Ensure flat fee still renders cleanly.
+
+==================================================
+PART 6 — ACCEPTANCE CRITERIA
+==================================================
+
+Done means:
+
+1. Ticketed/Hybrid results no longer show contradictory messaging.
+2. Top of page clearly shows:
+   - expected crowd outcome
+   - ticket scenarios
+   - cost break-even
+   - full-band-fee break-even
+3. Scenario outputs respect deal type and booking fees.
+4. Old saved runs still open without crashing.
+5. Flat fee results are unaffected.
+6. Types compile cleanly.
+7. Keep changes focused — no unrelated refactors.
+
+==================================================
+PART 7 — OUTPUT I WANT FROM YOU
+==================================================
+
+Please:
+1. Make the code changes
+2. Summarize exactly which files changed
+3. Explain the new data fields added
+4. Call out any backward-compatibility fallback added for older snapshots
+5. Note anything I should manually test in the UI

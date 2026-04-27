@@ -1,0 +1,137 @@
+I want you to do a focused logic + UI pass on the Tour View calendar.
+
+IMPORTANT:
+This must stay linked to current systems and existing routes.
+Do not invent a separate scheduling product.
+Reuse existing runs / tours / detail flows wherever possible.
+
+PRIMARY PROBLEMS TO FIX:
+1. Shows appear visually at the end/start of months in a confusing way
+2. Show markers are too subtle and not prominent enough
+3. Calendar lines / day structure need to be more defined
+4. Previous / next month buttons need to be bigger and more obvious
+5. This must continue to work with current run/tour systems
+
+--------------------------------------------------
+PHASE 1 — FIX DATE PLACEMENT LOGIC
+--------------------------------------------------
+
+Inspect the Tour View calendar implementation and fix month/day placement logic.
+
+Rules:
+- Calendar placement must use showDate only
+- Do NOT use createdAt for calendar placement
+- Parse showDate safely as a local calendar date
+- Avoid timezone drift from naive use of new Date(showDate)
+- Group shows by real local date key
+- Confirm month boundary rendering works correctly
+
+Check especially for:
+- off-by-one day errors
+- UTC/local conversion mistakes
+- outside-day rendering confusion
+- wrong month placement caused by parsing
+
+If outside days are intentionally shown:
+- keep them
+- but make them visually distinct from current month days
+
+--------------------------------------------------
+PHASE 2 — MAKE SHOWS MORE PROMINENT
+--------------------------------------------------
+
+The current tiny dots are too subtle.
+
+I want show dates to stand out more clearly.
+
+Preferred direction:
+- if a day contains a show, give the day cell a subtle tinted background
+- render a small show chip / label inside the day cell when space allows
+- if there are multiple shows, show the first one plus a “+X more” indicator
+
+Booking statuses should remain visually clear:
+- Draft = muted grey
+- Pitched = amber
+- Confirmed = green
+- Cancelled = muted red
+
+Do NOT overload cells.
+Keep it clean and fast to scan.
+
+If needed, use:
+- chip
+- icon
+- coloured pill
+- small badge
+
+A dot alone is not enough.
+
+--------------------------------------------------
+PHASE 3 — OUTSIDE DAYS / MONTH EDGES
+--------------------------------------------------
+
+If days from the previous or next month are displayed in the current month grid:
+- make those cells visibly faded
+- reduce visual weight
+- ensure shows on those days do not look like they belong to the current month
+
+The user should instantly understand:
+- this is an outside-month date
+- but it still has a show on it
+
+--------------------------------------------------
+PHASE 4 — STRONGER CALENDAR UI
+--------------------------------------------------
+
+Improve the calendar structure visually:
+
+- make day boundaries / rhythm more defined
+- improve cell readability
+- make selected day state clearer
+- keep the layout warm and premium but easier to scan
+
+Do not over-style it.
+Just make it feel clearer and more deliberate.
+
+--------------------------------------------------
+PHASE 5 — BIGGER MONTH NAV BUTTONS
+--------------------------------------------------
+
+Make previous / next month buttons:
+- bigger
+- easier to click
+- more visually prominent
+- more obviously interactive
+
+They should feel like proper navigation controls, not tiny hidden chevrons.
+
+--------------------------------------------------
+PHASE 6 — KEEP IT LINKED TO CURRENT SYSTEMS
+--------------------------------------------------
+
+This Tour View must continue to integrate with the current app structure.
+
+Reuse and respect existing flows:
+- clicking a show should connect to existing run/tour detail flows
+- starting a new calculation from a show should use existing calculator flow
+- do not create duplicate systems
+
+Current routes already exist for runs, tours, and details.
+Build on those instead of replacing them.
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+After this pass:
+
+- show dates appear on the correct month/day
+- outside-month dates are visually understandable
+- show days are much easier to spot
+- the calendar feels clearer and more premium
+- next/previous month buttons are more obvious
+- the dashboard still connects cleanly into current systems
+
+IMPORTANT:
+Do not give me a generic redesign.
+Inspect the current Tour View implementation and improve the actual logic and UI directly.

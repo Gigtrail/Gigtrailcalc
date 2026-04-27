@@ -5,6 +5,7 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { DuplicateProtection } from "./duplicateProtection";
 import type { TourStop } from "./tourStop";
 
 export interface TourWithStops {
@@ -17,7 +18,15 @@ export interface TourWithStops {
   /** @nullable */
   startLocation: string | null;
   /** @nullable */
+  startLocationLat?: number | null;
+  /** @nullable */
+  startLocationLng?: number | null;
+  /** @nullable */
   endLocation: string | null;
+  /** @nullable */
+  endLocationLat?: number | null;
+  /** @nullable */
+  endLocationLng?: number | null;
   returnHome: boolean;
   /** @nullable */
   startDate: string | null;
@@ -28,6 +37,8 @@ export interface TourWithStops {
   /** @nullable */
   notes: string | null;
   /** @nullable */
+  daysOnTour?: number | null;
+  /** @nullable */
   totalDistance: number | null;
   /** @nullable */
   totalCost: number | null;
@@ -35,6 +46,30 @@ export interface TourWithStops {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  /** @nullable */
+  fuelType?: string | null;
+  /** @nullable */
+  fuelPricePetrol?: number | null;
+  /** @nullable */
+  fuelPriceDiesel?: number | null;
+  /** @nullable */
+  fuelPriceLpg?: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   createdAt: string;
   stops: TourStop[];
+  duplicateProtection?: DuplicateProtection;
 }

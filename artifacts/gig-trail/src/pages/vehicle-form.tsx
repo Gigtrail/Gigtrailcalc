@@ -2,7 +2,19 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateVehicle, useUpdateVehicle, useGetVehicle, useGetProfiles, useSetVehicleActAssignments, getGetVehiclesQueryKey, getGetProfilesQueryKey } from "@workspace/api-client-react";
+import {
+  useCreateVehicle,
+  useUpdateVehicle,
+  useGetVehicle,
+  useGetVehicles,
+  useGetProfiles,
+  useSetVehicleActAssignments,
+  getGetVehiclesQueryKey,
+  getGetProfilesQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { usePlan } from "@/hooks/use-plan";
 import { Button } from "@/components/ui/button";
@@ -30,6 +42,7 @@ import { useEffect, useState } from "react";
 import { STANDARD_VEHICLES, normaliseVehicleKey } from "@/lib/garage-constants";
 import { trackEvent } from "@/lib/analytics";
 import { useQueryClient } from "@tanstack/react-query";
+import { findLikelyDuplicateVehicle, formatVehicleLabel } from "@/lib/duplicate-protection";
 
 const garageVehicleSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -57,6 +70,7 @@ export default function GarageVehicleForm() {
   const { data: vehicle, isLoading: isLoadingVehicle } = useGetVehicle(vehicleId, {
     query: { enabled: isEditing, queryKey: ["vehicle", vehicleId] },
   });
+  const { data: vehicles } = useGetVehicles();
   const { data: profiles } = useGetProfiles();
 
   const createVehicle = useCreateVehicle();
@@ -81,6 +95,19 @@ export default function GarageVehicleForm() {
   });
 
   const vehicleTypeWatch = form.watch("vehicleType");
+  const watchedVehicleName = form.watch("name");
+  const watchedFuelType = form.watch("fuelType");
+  const watchedAvgConsumption = form.watch("avgConsumption");
+  const likelyDuplicateVehicle = findLikelyDuplicateVehicle(
+    vehicles,
+    {
+      name: watchedVehicleName,
+      fuelType: watchedFuelType,
+      avgConsumption: watchedAvgConsumption,
+      vehicleType: vehicleTypeWatch,
+    },
+    isEditing ? vehicleId : undefined,
+  );
 
   useEffect(() => {
     if (vehicle) {
@@ -139,6 +166,9 @@ export default function GarageVehicleForm() {
           onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
             toast({ title: "Vehicle updated" });
             setLocation("/garage");
           },
@@ -151,12 +181,26 @@ export default function GarageVehicleForm() {
       createVehicle.mutate(
         { data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (created) => {
             queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetProfilesQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
             trackEvent("vehicle_added");
             toast({ title: "Vehicle added to garage" });
-            setLocation("/garage");
+            // If we were sent here from another flow (e.g. Tour Builder Step 3),
+            // honour the round-trip and pass the new vehicle id back so the
+            // caller can auto-select it.
+            const params = new URLSearchParams(window.location.search);
+            const returnTo = params.get("returnTo");
+            const autoSelect = params.get("autoSelectVehicle") === "1";
+            if (returnTo) {
+              const sep = returnTo.includes("?") ? "&" : "?";
+              const idPart = autoSelect && created?.id ? `${sep}selectVehicleId=${created.id}` : "";
+              setLocation(`${returnTo}${idPart}`);
+            } else {
+              setLocation("/garage");
+            }
           },
           onError: () => {
             toast({ title: "Failed to add vehicle", variant: "destructive" });
@@ -234,6 +278,25 @@ export default function GarageVehicleForm() {
                       <FormControl>
                         <Input placeholder="Tour Van, The Beast..." {...field} />
                       </FormControl>
+                      {likelyDuplicateVehicle && (
+                        <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          <p className="font-semibold">Looks like you may already have this vehicle saved.</p>
+                          <p className="mt-1">Existing: {formatVehicleLabel(likelyDuplicateVehicle.vehicle)}</p>
+                          <p className="mt-1">Matched on {likelyDuplicateVehicle.reasons.join(", ")}.</p>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 border-amber-300 bg-white/70 px-2 text-xs text-amber-950 hover:bg-white"
+                              onClick={() => setLocation(`/garage/${likelyDuplicateVehicle.vehicle.id}/edit`)}
+                            >
+                              Use existing
+                            </Button>
+                            <span className="self-center text-[11px] text-amber-800">Save anyway is allowed.</span>
+                          </div>
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

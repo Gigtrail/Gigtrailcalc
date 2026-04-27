@@ -1,0 +1,260 @@
+You are working inside the GigTrail monorepo.
+
+We are doing a focused overhaul of the Ticketed Show Results screen so it becomes a fast decision tool for musicians, not a busy financial report.
+
+Repo context:
+
+* Frontend results page: `artifacts/gig-trail/src/pages/run-results.tsx`
+* Shared calculation engine: `artifacts/gig-trail/src/lib/calculations.ts`
+* Keep backward compatibility with saved runs / snapshots
+* Do not break Flat Fee results
+
+## PRIMARY GOAL
+
+Restructure the Ticketed Show / Hybrid results screen so the hierarchy is:
+
+1. Main stat = tickets needed to cover costs + full band fees
+2. Secondary stat = tickets needed to cover expenses only
+3. Expected outcome = what happens at expected crowd
+4. Scenarios = what happens if sales are weaker or stronger
+5. Insights = only unique risk/logistics notes
+6. Breakdown = collapsed detail section
+
+This must be simple, scannable, and remove duplication hard.
+
+## PART 1 — HERO RESTRUCTURE
+
+For Ticketed Show and Hybrid only:
+
+Replace the current hero with this structure:
+
+Primary hero:
+**YOU NEED TO SELL [X] TICKETS**
+to pay everyone
+
+Secondary line:
+**[Y] tickets to cover expenses only**
+
+Optional context line:
+**[Z]% of [capacity] cap**
+
+Add one short verdict line under that if possible, derived from margin:
+
+* Safe show — your expected crowd covers everyone
+* Tight show — you’re close, but need a solid crowd
+* Risky show — your expected crowd is below full break-even
+
+Rules:
+
+* X = tickets needed to cover all costs + expected band fees
+* Y = tickets needed to cover expenses only
+* Do not show profit in hero
+* Do not show repeated shortfall lines
+* Do not show distance / per-person / duplicate break-even copy
+* This becomes the ONLY place break-even appears
+
+## PART 2 — EXPECTED OUTCOME SECTION
+
+Immediately below hero, add:
+
+**IF YOU SELL [expected tickets] TICKETS**
+
+**[+/-$result]**
+
+Then max 2 status lines:
+
+* Covers costs
+* Covers band fees
+  OR
+* Short on band fees — $[X]
+
+Also add a small margin line if useful:
+
+* You’re [N] tickets above expense break-even
+  OR
+* You’re [N] tickets short of full band pay
+
+Rules:
+
+* This section must include the actual dollar result
+* Keep it tight
+* Do not repeat hero numbers
+* No extra explainer text
+
+## PART 3 — SCENARIO SECTION
+
+Title:
+**IF TICKET SALES LAND HERE**
+
+Show exactly 4 rows:
+
+* 20%
+* 50%
+* Expected
+* Sell out
+
+Important:
+Order rows by ticket count ascending, not by label order, so Expected does not appear out of sequence if it lands above/below 50%.
+
+Each row should show only:
+
+* label
+* ticket count
+* result amount
+* one badge
+
+Badge states:
+
+* Below costs
+* Covers costs
+* Covers band
+
+Rules:
+
+* No “Net” label
+* No footnotes
+* No helper text
+* Expected row should be visually highlighted with a subtle accent
+* Keep this compact and highly scannable
+
+## PART 4 — INSIGHTS CLEANUP
+
+Keep an Insights / Heads Up section only if there are unique things to say.
+
+Allowed insights:
+
+* Long drive
+* Fuel-heavy show
+* Accommodation/logistics warning
+* Other unique risk notes
+
+Not allowed:
+
+* Repeating break-even
+* Repeating expected result
+* Repeating short on band fees
+* Repeating scenario outcomes
+
+Max 2–3 lines.
+
+## PART 5 — BREAKDOWN SECTION
+
+Keep the detailed financial breakdown, but:
+
+* collapsed by default
+* visually secondary
+* no totals row that repeats hero or scenario numbers
+
+Suggested label:
+**SHOW BREAKDOWN ↓**
+
+Inside it, keep:
+
+* Income
+* Expenses
+* Payouts
+
+This is the “in-depth” layer.
+Do not add a separate simple/advanced toggle — use progressive disclosure only.
+
+## PART 6 — REMOVE DUPLICATION
+
+Remove entirely:
+
+* second break-even section anywhere below hero
+* progress bars
+* “you should cover costs” text
+* repeated band shortfall messaging
+* duplicate profit summaries
+* duplicate cost coverage statements
+* scenario explanation text
+* any repeated visual summaries of the same fact
+
+Rule:
+Each fact should appear once only.
+
+* break-even = hero
+* expected result = expected section
+* scenario outcomes = scenario section
+* detail math = breakdown
+* logistics/risk = insights
+
+## PART 7 — CALC ENGINE SUPPORT
+
+In `artifacts/gig-trail/src/lib/calculations.ts`, make sure the results support this cleanly.
+
+If not already present or not robust enough, add / confirm:
+
+* `fullBandBreakEvenTickets`
+* `expenseBreakEvenTickets` (can map from current `breakEvenTickets` if already correct)
+* scenario rows for 20 / 50 / expected / 100
+* scenario results that include:
+
+  * tickets
+  * result amount
+  * `coversCosts` boolean
+  * `coversBand` boolean
+* any helper needed for verdict line / margin-to-safety copy
+
+Preserve backward compatibility for old snapshots.
+
+If old saved results do not have new fields:
+
+* derive safe fallbacks in the page
+* do not crash
+
+## PART 8 — MICROCOPY TO USE
+
+Hero:
+**YOU NEED TO SELL [X] TICKETS**
+to pay everyone
+
+Secondary:
+**[Y] tickets to cover expenses only**
+
+Expected:
+**IF YOU SELL [N] TICKETS**
+
+**[+/-$result]**
+
+Covers costs
+Covers band fees
+OR
+Short on band fees — $[X]
+
+Scenario title:
+**IF TICKET SALES LAND HERE**
+
+Breakdown toggle:
+**SHOW BREAKDOWN ↓**
+**SHOW BREAKDOWN ↑**
+
+Verdict line options:
+
+* Safe show — your expected crowd covers everyone
+* Tight show — you’re close, but need a solid crowd
+* Risky show — your expected crowd is below full break-even
+
+## PART 9 — ACCEPTANCE CRITERIA
+
+Done means:
+
+1. Ticketed / Hybrid results are much simpler to scan
+2. Full-band break-even is the main hero stat
+3. Expense-only break-even is secondary
+4. Expected result includes the dollar outcome
+5. Scenario section is compact and not repetitive
+6. Insights add only new information
+7. Breakdown is the in-depth layer, collapsed by default
+8. Flat Fee results are unaffected
+9. Saved runs / snapshots still work
+10. Types compile cleanly
+
+## PART 10 — REPORT BACK
+
+After changes, report:
+
+1. files changed
+2. what UI sections were removed
+3. what new fields or fallbacks were added
+4. what still needs manual testing

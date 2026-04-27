@@ -173,6 +173,17 @@ export interface CalcSnapshot {
   // They are re-derivable from formInputs + outputs.
 
   distanceKm: number;
+  /**
+   * How `distanceKm` was determined at calculation time:
+   * - `"google"`  — resolved automatically by the Google Maps Directions API
+   * - `"manual"`  — user toggled to Manual mode and entered the distance
+   * - `"unavailable"` — Maps could not return a route (e.g. ZERO_RESULTS) and
+   *                    the user proceeded anyway; `distanceKm` will be 0 and
+   *                    fuel/travel costs are 0
+   * Optional for backward compatibility with older snapshots that predate this
+   * field — readers should treat `undefined` as `"google"`.
+   */
+  distanceSource?: "google" | "manual" | "unavailable";
   driveTimeMinutes: number | null;
   recommendedNights: number;
   maxDriveHoursPerDay: number;

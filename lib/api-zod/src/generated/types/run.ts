@@ -5,6 +5,9 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { RunCalculationSnapshot } from "./runCalculationSnapshot";
+import type { RunCompletionStatus } from "./runCompletionStatus";
+import type { RunStatus } from "./runStatus";
 
 export interface Run {
   id: number;
@@ -24,7 +27,7 @@ export interface Run {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  status: string;
+  status: RunStatus;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -59,9 +62,17 @@ export interface Run {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  /** @nullable */
+  bookingFeePerTicket?: number | null;
+  /** @nullable */
+  supportActCost?: number | null;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
+  /** @nullable */
+  singleRooms?: number | null;
+  /** @nullable */
+  doubleRooms?: number | null;
   /** @nullable */
   accommodationNights?: number | null;
   /** @nullable */
@@ -77,7 +88,13 @@ export interface Run {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
@@ -90,5 +107,19 @@ export interface Run {
   wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
+  isCompleted?: boolean;
+  /** @nullable */
+  completionStatus?: RunCompletionStatus;
+  /** @nullable */
+  accommodationProvided?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  completedAt?: string | null;
+  importedFromTour?: boolean;
+  /** @nullable */
+  tourName?: string | null;
+  /** @nullable */
+  calculationSnapshot?: RunCalculationSnapshot;
   createdAt: string;
 }

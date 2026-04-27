@@ -13,6 +13,14 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface DuplicateProtection {
+  duplicateFound: boolean;
+  matchingRecordIds?: number[];
+  summaries?: unknown[];
+  matchingRecords?: unknown[];
+  rules?: string[];
+}
+
 export interface Profile {
   id: number;
   name: string;
@@ -25,35 +33,36 @@ export interface Profile {
   homeBaseLng?: number | null;
   peopleCount: number;
   /** @nullable */
-  bandMembers: string | null;
+  bandMembers?: string | null;
   /** @nullable */
   activeMemberIds?: string | null;
   /** @nullable */
   defaultVehicleId: number | null;
   vehicleType: string;
   /** @nullable */
-  vehicleName: string | null;
+  vehicleName?: string | null;
   fuelConsumption: number;
   expectedGigFee: number;
-  /** @deprecated — no longer used in UI; kept for backward compat */
-  minTakeHomePerPerson?: number;
+  minTakeHomePerPerson: number;
+  payoutMode: string;
+  minimumActTakeHome: number;
   accommodationRequired: boolean;
   /** @nullable */
-  accommodationType: string | null;
+  accommodationType?: string | null;
   avgAccomPerNight: number;
-  singleRoomsDefault: number;
-  doubleRoomsDefault: number;
+  singleRoomsDefault?: number;
+  doubleRoomsDefault?: number;
   avgFoodPerDay: number;
   /** @nullable */
-  maxDriveHoursPerDay: number | null;
+  maxDriveHoursPerDay?: number | null;
   /** @nullable */
   defaultFuelPrice: number | null;
   /** @nullable */
-  defaultPetrolPrice: number | null;
+  defaultPetrolPrice?: number | null;
   /** @nullable */
-  defaultDieselPrice: number | null;
+  defaultDieselPrice?: number | null;
   /** @nullable */
-  defaultLpgPrice: number | null;
+  defaultLpgPrice?: number | null;
   /** @nullable */
   notes: string | null;
   calculationsThisWeek: number;
@@ -91,6 +100,8 @@ export interface CreateProfileBody {
   fuelConsumption?: number;
   expectedGigFee?: number;
   minTakeHomePerPerson?: number;
+  payoutMode?: string;
+  minimumActTakeHome?: number;
   accommodationRequired?: boolean;
   /** @nullable */
   accommodationType?: string | null;
@@ -112,24 +123,70 @@ export interface CreateProfileBody {
   notes?: string | null;
 }
 
+export interface UpdateProfileBody {
+  name?: string;
+  actType?: string;
+  /** @nullable */
+  homeBase?: string | null;
+  /** @nullable */
+  homeBaseLat?: number | null;
+  /** @nullable */
+  homeBaseLng?: number | null;
+  peopleCount?: number;
+  /** @nullable */
+  bandMembers?: string | null;
+  /** @nullable */
+  activeMemberIds?: string | null;
+  /** @nullable */
+  defaultVehicleId?: number | null;
+  vehicleType?: string;
+  /** @nullable */
+  vehicleName?: string | null;
+  fuelConsumption?: number;
+  expectedGigFee?: number;
+  minTakeHomePerPerson?: number;
+  payoutMode?: string;
+  minimumActTakeHome?: number;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  avgAccomPerNight?: number;
+  singleRoomsDefault?: number;
+  doubleRoomsDefault?: number;
+  avgFoodPerDay?: number;
+  /** @nullable */
+  maxDriveHoursPerDay?: number | null;
+  /** @nullable */
+  defaultFuelPrice?: number | null;
+  /** @nullable */
+  defaultPetrolPrice?: number | null;
+  /** @nullable */
+  defaultDieselPrice?: number | null;
+  /** @nullable */
+  defaultLpgPrice?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface Vehicle {
   id: number;
   name: string;
   /** @nullable */
-  vehicleType: string | null;
+  vehicleType?: string | null;
   fuelType: string;
   avgConsumption: number;
   /** @nullable */
-  tankSizeLitres: number | null;
+  tankSizeLitres?: number | null;
   /** @nullable */
   maxPassengers: number | null;
-  isDefault: boolean;
+  isDefault?: boolean;
   /** @nullable */
-  assignedMemberIds: string | null;
+  assignedMemberIds?: string | null;
+  assignedActIds?: number[];
   /** @nullable */
   notes: string | null;
   createdAt: string;
-  assignedActIds: number[];
+  duplicateProtection?: DuplicateProtection;
 }
 
 export interface CreateVehicleBody {
@@ -142,19 +199,53 @@ export interface CreateVehicleBody {
   tankSizeLitres?: number | null;
   /** @nullable */
   maxPassengers?: number | null;
-  isDefault?: boolean | null;
+  isDefault?: boolean;
   /** @nullable */
   assignedMemberIds?: string | null;
+  actIds?: number[];
+  defaultForActIds?: number[];
   /** @nullable */
   notes?: string | null;
-  actIds?: number[] | null;
-  defaultForActIds?: number[] | null;
 }
 
-export interface SetVehicleActAssignmentsBody {
-  actIds: number[];
-  defaultForActIds?: number[];
-}
+/**
+ * @nullable
+ */
+export type VenueVenueType =
+  | (typeof VenueVenueType)[keyof typeof VenueVenueType]
+  | null;
+
+export const VenueVenueType = {
+  personal: "personal",
+  imported: "imported",
+} as const;
+
+/**
+ * @nullable
+ */
+export type VenueVenueStatus =
+  | (typeof VenueVenueStatus)[keyof typeof VenueVenueStatus]
+  | null;
+
+export const VenueVenueStatus = {
+  great: "great",
+  risky: "risky",
+  avoid: "avoid",
+  untested: "untested",
+} as const;
+
+/**
+ * @nullable
+ */
+export type VenueWillPlayAgain =
+  | (typeof VenueWillPlayAgain)[keyof typeof VenueWillPlayAgain]
+  | null;
+
+export const VenueWillPlayAgain = {
+  yes: "yes",
+  no: "no",
+  unsure: "unsure",
+} as const;
 
 export interface Venue {
   id: number;
@@ -165,6 +256,8 @@ export interface Venue {
   venueName: string;
   normalizedVenueName: string;
   /** @nullable */
+  venueType?: VenueVenueType;
+  /** @nullable */
   city?: string | null;
   /** @nullable */
   state?: string | null;
@@ -172,6 +265,12 @@ export interface Venue {
   country?: string | null;
   /** @nullable */
   lastTotalProfit?: number | null;
+  /** @nullable */
+  showCount?: number | null;
+  /** @nullable */
+  lastPlayed?: string | null;
+  /** @nullable */
+  avgProfit?: number | null;
   /** @nullable */
   lastStatus?: string | null;
   /** @nullable */
@@ -181,22 +280,43 @@ export interface Venue {
   /** @nullable */
   fullAddress?: string | null;
   /** @nullable */
+  postcode?: string | null;
+  /** @nullable */
   capacity?: number | null;
   /** @nullable */
   website?: string | null;
+  /** @nullable */
+  contactName?: string | null;
   /** @nullable */
   contactEmail?: string | null;
   /** @nullable */
   contactPhone?: string | null;
   /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
+  /** @nullable */
   roomNotes?: string | null;
   /** @nullable */
-  postcode?: string | null;
-  showCount?: number;
+  venueStatus?: VenueVenueStatus;
   /** @nullable */
-  lastPlayed?: string | null;
+  willPlayAgain?: VenueWillPlayAgain;
   /** @nullable */
-  avgProfit?: number | null;
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -204,101 +324,89 @@ export interface Venue {
 export interface VenueStats {
   timesPlayed: number;
   /** @nullable */
-  lastPlayed?: string | null;
-  /** @nullable */
-  avgFee?: number | null;
-  /** @nullable */
   avgProfit?: number | null;
   /** @nullable */
-  avgMerch?: number | null;
-  /** @nullable */
-  avgAudience?: number | null;
-  /** @nullable */
-  wouldPlayAgainRatio?: number | null;
+  lastPlayed?: string | null;
 }
 
 export interface VenueShow {
-  id: number;
+  id?: number;
   /** @nullable */
   showDate?: string | null;
   /** @nullable */
-  venueName?: string | null;
-  /** @nullable */
-  city?: string | null;
-  /** @nullable */
-  state?: string | null;
-  showType: string;
+  showType?: string | null;
   /** @nullable */
   fee?: number | null;
   /** @nullable */
-  guarantee?: number | null;
+  capacity?: number | null;
+  /** @nullable */
+  ticketPrice?: number | null;
   /** @nullable */
   dealType?: string | null;
   /** @nullable */
   splitPct?: number | null;
   /** @nullable */
-  ticketPrice?: number | null;
-  /** @nullable */
-  capacity?: number | null;
-  /** @nullable */
-  totalProfit?: number | null;
-  /** @nullable */
-  totalIncome?: number | null;
-  /** @nullable */
-  actualAttendance?: number | null;
-  /** @nullable */
-  actualProfit?: number | null;
+  guarantee?: number | null;
   /** @nullable */
   merchEstimate?: number | null;
   /** @nullable */
-  actualOtherIncome?: number | null;
+  actualAttendance?: number | null;
   /** @nullable */
-  wouldDoAgain?: string | null;
+  totalProfit?: number | null;
   /** @nullable */
-  notes?: string | null;
-  importedFromTour: boolean;
-  /** @nullable */
-  tourName?: string | null;
-  /** @nullable */
-  sourceTourId?: number | null;
-  /** @nullable */
-  sourceStopId?: number | null;
-  status: string;
-  createdAt: string;
-}
-
-export interface VenueStop {
-  id: number;
-  tourId: number;
-  /** @nullable */
-  tourName?: string | null;
-  /** @nullable */
-  date?: string | null;
-  /** @nullable */
-  venueName?: string | null;
-  city: string;
-  /** @nullable */
-  state?: string | null;
-  showType: string;
-  /** @nullable */
-  fee?: number | null;
-  /** @nullable */
-  guarantee?: number | null;
-  /** @nullable */
-  bookingStatus?: string | null;
+  actualProfit?: number | null;
   /** @nullable */
   notes?: string | null;
+  [key: string]: unknown;
 }
 
-export interface VenueDetail extends Venue {
-  stats: VenueStats;
-  shows: VenueShow[];
-  upcomingStops: VenueStop[];
-  pendingStops: VenueStop[];
+export type VenueDetail = Venue & {
+  stats?: VenueStats;
+  shows?: VenueShow[];
+};
+
+export type VenueListResponsePagination = {
+  page: number;
+  limit: number;
+  total: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
+export interface VenueListResponse {
+  items: Venue[];
+  pagination: VenueListResponsePagination;
 }
+
+/**
+ * @nullable
+ */
+export type CreateVenueBodyVenueStatus =
+  | (typeof CreateVenueBodyVenueStatus)[keyof typeof CreateVenueBodyVenueStatus]
+  | null;
+
+export const CreateVenueBodyVenueStatus = {
+  great: "great",
+  risky: "risky",
+  avoid: "avoid",
+  untested: "untested",
+} as const;
+
+/**
+ * @nullable
+ */
+export type CreateVenueBodyWillPlayAgain =
+  | (typeof CreateVenueBodyWillPlayAgain)[keyof typeof CreateVenueBodyWillPlayAgain]
+  | null;
+
+export const CreateVenueBodyWillPlayAgain = {
+  yes: "yes",
+  no: "no",
+  unsure: "unsure",
+} as const;
 
 export interface CreateVenueBody {
-  venueName: string;
+  venueName?: string;
   /** @nullable */
   profileId?: number | null;
   /** @nullable */
@@ -324,41 +432,63 @@ export interface CreateVenueBody {
   /** @nullable */
   website?: string | null;
   /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
   contactEmail?: string | null;
   /** @nullable */
   contactPhone?: string | null;
   /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
+  /** @nullable */
   roomNotes?: string | null;
+  /** @nullable */
+  venueStatus?: CreateVenueBodyVenueStatus;
+  /** @nullable */
+  willPlayAgain?: CreateVenueBodyWillPlayAgain;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
 }
 
-export interface PatchVenueBody {
-  /** @nullable */
-  venueName?: string;
-  /** @nullable */
-  city?: string | null;
-  /** @nullable */
-  state?: string | null;
-  /** @nullable */
-  country?: string | null;
-  /** @nullable */
-  address?: string | null;
-  /** @nullable */
-  suburb?: string | null;
-  /** @nullable */
-  fullAddress?: string | null;
-  /** @nullable */
-  postcode?: string | null;
-  /** @nullable */
-  capacity?: number | null;
-  /** @nullable */
-  website?: string | null;
-  /** @nullable */
-  contactEmail?: string | null;
-  /** @nullable */
-  contactPhone?: string | null;
-  /** @nullable */
-  roomNotes?: string | null;
-}
+/**
+ * @nullable
+ */
+export type RunCompletionStatus =
+  | (typeof RunCompletionStatus)[keyof typeof RunCompletionStatus]
+  | null;
+
+export const RunCompletionStatus = {
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+/**
+ * @nullable
+ */
+export type RunCalculationSnapshot = { [key: string]: unknown } | null;
+
+export type RunStatus = (typeof RunStatus)[keyof typeof RunStatus];
+
+export const RunStatus = {
+  draft: "draft",
+  planned: "planned",
+  past: "past",
+} as const;
 
 export interface Run {
   id: number;
@@ -378,9 +508,7 @@ export interface Run {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  status: string;
-  /** @nullable */
-  actType?: string | null;
+  status: RunStatus;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -441,7 +569,13 @@ export interface Run {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
@@ -454,17 +588,20 @@ export interface Run {
   wouldDoAgain?: string | null;
   /** @nullable */
   notes?: string | null;
+  isCompleted?: boolean;
   /** @nullable */
-  calculationSnapshot?: Record<string, unknown> | null;
+  completionStatus?: RunCompletionStatus;
   /** @nullable */
-  sourceTourId?: number | null;
+  accommodationProvided?: boolean | null;
   /** @nullable */
-  sourceStopId?: number | null;
+  riderProvided?: boolean | null;
+  /** @nullable */
+  completedAt?: string | null;
   importedFromTour?: boolean;
   /** @nullable */
-  importedAt?: string | null;
-  /** @nullable */
   tourName?: string | null;
+  /** @nullable */
+  calculationSnapshot?: RunCalculationSnapshot;
   createdAt: string;
 }
 
@@ -485,10 +622,7 @@ export interface CreateRunBody {
   country?: string | null;
   /** @nullable */
   showDate?: string | null;
-  /** @nullable */
-  status?: string | null;
-  /** @nullable */
-  actType?: string | null;
+  status?: RunStatus | null;
   /** @nullable */
   origin?: string | null;
   /** @nullable */
@@ -523,11 +657,116 @@ export interface CreateRunBody {
   merchEstimate?: number | null;
   /** @nullable */
   marketingCost?: number | null;
+  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationType?: string | null;
+  /** @nullable */
+  accommodationNights?: number | null;
+  /** @nullable */
+  accommodationCost?: number | null;
+  /** @nullable */
+  foodCost?: number | null;
+  /** @nullable */
+  extraCosts?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  actualTicketIncome?: number | null;
+  /** @nullable */
+  actualOtherIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  actualProfit?: number | null;
+  /** @nullable */
+  wouldDoAgain?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type UpdateRunBodyCalculationSnapshot = {
+  [key: string]: unknown;
+} | null;
+
+export interface UpdateRunBody {
+  /** @nullable */
+  profileId?: number | null;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  venueId?: number | null;
+  /** @nullable */
+  venueName?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  state?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  showDate?: string | null;
+  status?: RunStatus | null;
+  /** @nullable */
+  actType?: string | null;
+  /** @nullable */
+  origin?: string | null;
+  /** @nullable */
+  originLat?: number | null;
+  /** @nullable */
+  originLng?: number | null;
+  /** @nullable */
+  destination?: string | null;
+  /** @nullable */
+  destinationLat?: number | null;
+  /** @nullable */
+  destinationLng?: number | null;
+  /** @nullable */
+  distanceKm?: number | null;
+  /** @nullable */
+  returnTrip?: boolean | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  /** @nullable */
+  showType?: string | null;
+  /** @nullable */
+  fee?: number | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  ticketPrice?: number | null;
+  /** @nullable */
+  expectedAttendancePct?: number | null;
+  /** @nullable */
+  dealType?: string | null;
+  /** @nullable */
+  splitPct?: number | null;
+  /** @nullable */
+  guarantee?: number | null;
+  /** @nullable */
+  merchEstimate?: number | null;
+  /** @nullable */
+  marketingCost?: number | null;
   /** @nullable */
   bookingFeePerTicket?: number | null;
   /** @nullable */
   supportActCost?: number | null;
-  accommodationRequired?: boolean;
+  /** @nullable */
+  accommodationRequired?: boolean | null;
   /** @nullable */
   accommodationType?: string | null;
   /** @nullable */
@@ -549,7 +788,13 @@ export interface CreateRunBody {
   /** @nullable */
   totalProfit?: number | null;
   /** @nullable */
+  soundcheckTime?: string | null;
+  /** @nullable */
+  playingTime?: string | null;
+  /** @nullable */
   actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
   /** @nullable */
   actualTicketIncome?: number | null;
   /** @nullable */
@@ -563,8 +808,57 @@ export interface CreateRunBody {
   /** @nullable */
   notes?: string | null;
   /** @nullable */
-  calculationSnapshot?: Record<string, unknown> | null;
+  calculationSnapshot?: UpdateRunBodyCalculationSnapshot;
 }
+
+/**
+ * @nullable
+ */
+export type CompleteRunBodyWouldDoAgain =
+  | (typeof CompleteRunBodyWouldDoAgain)[keyof typeof CompleteRunBodyWouldDoAgain]
+  | null;
+
+export const CompleteRunBodyWouldDoAgain = {
+  yes: "yes",
+  no: "no",
+  unsure: "unsure",
+} as const;
+
+/**
+ * Body for `POST /runs/{id}/complete`. When `cancelled` is true the show is marked
+as cancelled (no actuals required). Otherwise actuals fields are persisted as
+provided; nothing else on the run is overwritten.
+
+ */
+export interface CompleteRunBody {
+  cancelled?: boolean;
+  /** @nullable */
+  actualAttendance?: number | null;
+  /** @nullable */
+  actualTicketSales?: number | null;
+  /** @nullable */
+  actualMerch?: number | null;
+  /** @nullable */
+  actualIncome?: number | null;
+  /** @nullable */
+  actualExpenses?: number | null;
+  /** @nullable */
+  accommodationProvided?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  wouldDoAgain?: CompleteRunBodyWouldDoAgain;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * Response from `POST /runs/{id}/complete`. Currently identical in shape to a
+regular `Run`, but defined as its own schema so the contract for completion
+can evolve (e.g. extra metadata) without churning the base run schema.
+
+ */
+export type CompleteRunResponse = Run;
 
 export interface Tour {
   id: number;
@@ -593,9 +887,9 @@ export interface Tour {
   /** @nullable */
   defaultFoodCost: number | null;
   /** @nullable */
-  daysOnTour?: number | null;
-  /** @nullable */
   notes: string | null;
+  /** @nullable */
+  daysOnTour?: number | null;
   /** @nullable */
   totalDistance: number | null;
   /** @nullable */
@@ -604,6 +898,7 @@ export interface Tour {
   totalIncome: number | null;
   /** @nullable */
   totalProfit: number | null;
+  stopCount: number;
   /** @nullable */
   fuelType?: string | null;
   /** @nullable */
@@ -612,8 +907,23 @@ export interface Tour {
   fuelPriceDiesel?: number | null;
   /** @nullable */
   fuelPriceLpg?: number | null;
-  stopCount: number;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   createdAt: string;
+  duplicateProtection?: DuplicateProtection;
 }
 
 export interface CreateTourBody {
@@ -642,10 +952,11 @@ export interface CreateTourBody {
   /** @nullable */
   defaultFoodCost?: number | null;
   /** @nullable */
+  notes?: string | null;
+  /** @nullable */
   daysOnTour?: number | null;
   /** @nullable */
-  notes?: string | null;
-  fuelType?: string;
+  fuelType?: string | null;
   /** @nullable */
   fuelPricePetrol?: number | null;
   /** @nullable */
@@ -653,20 +964,27 @@ export interface CreateTourBody {
   /** @nullable */
   fuelPriceLpg?: number | null;
   /** @nullable */
-  totalDistance?: number | null;
+  fuelConsumption?: number | null;
   /** @nullable */
-  totalCost?: number | null;
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
   /** @nullable */
-  totalIncome?: number | null;
+  flightsCost?: number | null;
   /** @nullable */
-  totalProfit?: number | null;
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
 }
 
 export interface TourStop {
   id: number;
   tourId: number;
   /** @nullable */
-  venueId?: number | null;
+  venueId: number | null;
   /** @nullable */
   bookingStatus?: string | null;
   stopOrder: number;
@@ -701,13 +1019,13 @@ export interface TourStop {
   /** @nullable */
   accommodationCost: number | null;
   /** @nullable */
-  accommodationMode?: string | null;
-  /** @nullable */
   extraCosts: number | null;
   /** @nullable */
   distanceOverride: number | null;
   /** @nullable */
   fuelPriceOverride: number | null;
+  /** @nullable */
+  accommodationMode: string | null;
   /** @nullable */
   notes: string | null;
 }
@@ -749,13 +1067,13 @@ export interface CreateTourStopBody {
   /** @nullable */
   accommodationCost?: number | null;
   /** @nullable */
-  accommodationMode?: string | null;
-  /** @nullable */
   extraCosts?: number | null;
   /** @nullable */
   distanceOverride?: number | null;
   /** @nullable */
   fuelPriceOverride?: number | null;
+  /** @nullable */
+  accommodationMode?: string | null;
   /** @nullable */
   notes?: string | null;
 }
@@ -787,9 +1105,9 @@ export interface TourWithStops {
   /** @nullable */
   defaultFoodCost: number | null;
   /** @nullable */
-  daysOnTour?: number | null;
-  /** @nullable */
   notes: string | null;
+  /** @nullable */
+  daysOnTour?: number | null;
   /** @nullable */
   totalDistance: number | null;
   /** @nullable */
@@ -806,8 +1124,63 @@ export interface TourWithStops {
   fuelPriceDiesel?: number | null;
   /** @nullable */
   fuelPriceLpg?: number | null;
+  /** @nullable */
+  fuelConsumption?: number | null;
+  /** @nullable */
+  fuelPrice?: number | null;
+  travelingWithPa?: boolean;
+  extraCrew?: boolean;
+  towingTrailer?: boolean;
+  /** @nullable */
+  flightsCost?: number | null;
+  /** @nullable */
+  ferriesTollsCost?: number | null;
+  /** @nullable */
+  gearHireCost?: number | null;
+  /** @nullable */
+  otherCosts?: number | null;
   createdAt: string;
   stops: TourStop[];
+  duplicateProtection?: DuplicateProtection;
+}
+
+export interface SetVehicleActAssignmentsBody {
+  actIds: number[];
+  defaultForActIds?: number[];
+}
+
+export interface TourVehicleItem {
+  id: number;
+  tourId: number;
+  vehicleId: number;
+  vehicle: Vehicle;
+}
+
+export interface AddTourVehicleBody {
+  vehicleId: number;
+}
+
+export interface VenueMapItem {
+  id: number;
+  venueName: string;
+  /** @nullable */
+  city: string | null;
+  /** @nullable */
+  state: string | null;
+  /** @nullable */
+  fullAddress: string | null;
+  /** @nullable */
+  latitude: number | null;
+  /** @nullable */
+  longitude: number | null;
+  upcomingShowsCount: number;
+  pastShowsCount: number;
+  /** @nullable */
+  nextShowDate: string | null;
+  /** @nullable */
+  lastShowDate: string | null;
+  /** @nullable */
+  totalProfit?: number | null;
 }
 
 export interface DashboardSummary {
@@ -818,9 +1191,6 @@ export interface DashboardSummary {
   totalKmDriven: number;
   totalIncome: number;
   totalProfit: number;
-  totalExpenses: number;
-  avgRunProfit: number;
-  bestRunProfit: number;
   worthTheDrive: number;
   tightMargins: number;
   notWorthIt: number;
@@ -831,23 +1201,77 @@ export interface DashboardRecent {
   recentTours: Tour[];
 }
 
+export type TourItemType = (typeof TourItemType)[keyof typeof TourItemType];
+
+export const TourItemType = {
+  run: "run",
+  tour_stop: "tour_stop",
+} as const;
+
+export type TourItemStatus =
+  (typeof TourItemStatus)[keyof typeof TourItemStatus];
+
+export const TourItemStatus = {
+  draft: "draft",
+  pitched: "pitched",
+  confirmed: "confirmed",
+  cancelled: "cancelled",
+} as const;
+
+export interface TourItem {
+  id: string;
+  sourceId: number;
+  type: TourItemType;
+  showDate: string;
+  /** @nullable */
+  venueName: string | null;
+  /** @nullable */
+  location: string | null;
+  /** @nullable */
+  latitude: number | null;
+  /** @nullable */
+  longitude: number | null;
+  status: TourItemStatus;
+  /** @nullable */
+  tourId: number | null;
+  /** @nullable */
+  tourName: string | null;
+  /** @nullable */
+  tourStartDate: string | null;
+  /** @nullable */
+  tourEndDate: string | null;
+  /** @nullable */
+  tourOrderIndex: number | null;
+  linkPath: string;
+}
+
+export type GetVenuesParams = {
+  /**
+   * @minimum 1
+   */
+  page?: number;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+  type?: GetVenuesType;
+  country?: string;
+  q?: string;
+};
+
+export type GetVenuesType = (typeof GetVenuesType)[keyof typeof GetVenuesType];
+
+export const GetVenuesType = {
+  played: "played",
+  lead: "lead",
+  all: "all",
+} as const;
+
 export type SearchVenuesParams = {
   q: string;
 };
 
-export interface TourVehicleAssignment {
-  id: number;
-  tourId: number;
-  vehicleId: number;
-  vehicle: {
-    id: number;
-    name: string;
-    fuelType: string;
-    avgConsumption: number;
-    vehicleType: string | null;
-  };
-}
+export type SyncStopToPastShow200 = { [key: string]: unknown };
 
-export interface AddTourVehicleBody {
-  vehicleId: number;
-}
+export type SyncStopToPastShow201 = { [key: string]: unknown };

@@ -5,9 +5,11 @@
  * Gig Trail Tour Calculator API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateVenueBodyVenueStatus } from "./createVenueBodyVenueStatus";
+import type { CreateVenueBodyWillPlayAgain } from "./createVenueBodyWillPlayAgain";
 
 export interface CreateVenueBody {
-  venueName: string;
+  venueName?: string;
   /** @nullable */
   profileId?: number | null;
   /** @nullable */
@@ -20,4 +22,48 @@ export interface CreateVenueBody {
   lastTotalProfit?: number | null;
   /** @nullable */
   lastStatus?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  suburb?: string | null;
+  /** @nullable */
+  fullAddress?: string | null;
+  /** @nullable */
+  postcode?: string | null;
+  /** @nullable */
+  capacity?: number | null;
+  /** @nullable */
+  website?: string | null;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  productionContactName?: string | null;
+  /** @nullable */
+  productionContactPhone?: string | null;
+  /** @nullable */
+  productionContactEmail?: string | null;
+  /** @nullable */
+  productionNotes?: string | null;
+  /** @nullable */
+  techSpecs?: string | null;
+  /** @nullable */
+  stagePlotNotes?: string | null;
+  /** @nullable */
+  roomNotes?: string | null;
+  /** @nullable */
+  venueStatus?: CreateVenueBodyVenueStatus;
+  /** @nullable */
+  willPlayAgain?: CreateVenueBodyWillPlayAgain;
+  /** @nullable */
+  accommodationAvailable?: boolean | null;
+  /** @nullable */
+  riderProvided?: boolean | null;
+  /** @nullable */
+  playingDays?: string[] | null;
+  /** @nullable */
+  venueNotes?: string | null;
 }

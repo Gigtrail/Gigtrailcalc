@@ -1,13 +1,40 @@
 import { Router, type IRouter } from "express";
-import { db, runsTable, toursTable, profilesTable, vehiclesTable } from "@workspace/db";
-import { desc, eq } from "drizzle-orm";
+import { z } from "zod";
+import { db, runsTable, toursTable, tourStopsTable, profilesTable, vehiclesTable, venuesTable } from "@workspace/db";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import {
   GetDashboardSummaryResponse,
   GetDashboardRecentResponse,
+  GetDashboardTourItemsResponse,
 } from "@workspace/api-zod";
 import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
+import {
+  buildDashboardSummary,
+  buildUpcomingTours,
+} from "./dashboardSummary";
+import { loadTourDerivations } from "../lib/tour-derivations";
+import { getTodayIsoDateFromRequest, isCompletedRun } from "../lib/run-lifecycle";
+
+// Pre-existing alpha tech-debt: /dashboard/venues handler exists without a
+// matching openapi schema. Inline-define so the server can build until
+// openapi.yaml is brought into line with the route.
+const GetDashboardVenuesResponse = z.array(
+  z.object({
+    id: z.number().int(),
+    venueName: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    fullAddress: z.string().nullable(),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    upcomingShowsCount: z.number().int(),
+    pastShowsCount: z.number().int(),
+  }),
+);
 
 const router: IRouter = Router();
+const DASHBOARD_COLLECTION_LIMIT = 500;
+const DASHBOARD_MAP_VENUE_LIMIT = 500;
 
 function serializeRun(r: typeof runsTable.$inferSelect) {
   return {
@@ -40,112 +67,305 @@ function serializeRun(r: typeof runsTable.$inferSelect) {
   };
 }
 
-function serializeTour(t: typeof toursTable.$inferSelect) {
-  return {
-    ...t,
-    totalDistance: t.totalDistance != null ? Number(t.totalDistance) : null,
-    totalCost: t.totalCost != null ? Number(t.totalCost) : null,
-    totalIncome: t.totalIncome != null ? Number(t.totalIncome) : null,
-    totalProfit: t.totalProfit != null ? Number(t.totalProfit) : null,
-    defaultFoodCost: t.defaultFoodCost != null ? Number(t.defaultFoodCost) : null,
-    createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
-  };
+function getIsoDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.split("T")[0] ?? null;
 }
 
 router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
   const [runs, tours, profiles, vehicles] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)),
-    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)),
-    db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(profilesTable).where(eq(profilesTable.userId, userId)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.userId, userId)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
 
-  let totalKmDriven = 0;
-  let totalIncome = 0;
-  let totalProfit = 0;
-  let totalExpenses = 0;
-  let runProfitSum = 0;
-  let bestRunProfit: number | null = null;
-  let worstRunProfit: number | null = null;
-  let profitableRunCount = 0;
-  let worthTheDrive = 0;
-  let tightMargins = 0;
-  let notWorthIt = 0;
-  let totalAccommodationCost = 0;
-  let totalFoodCost = 0;
-  let totalMarketingCost = 0;
-  for (const run of runs) {
-    const km = Number(run.distanceKm) * (run.returnTrip ? 2 : 1);
-    totalKmDriven += km;
-    const income = run.totalIncome != null ? Number(run.totalIncome) : 0;
-    const profit = run.totalProfit != null ? Number(run.totalProfit) : 0;
-    const cost = run.totalCost != null ? Number(run.totalCost) : 0;
-    totalIncome += income;
-    totalProfit += profit;
-    totalExpenses += cost;
-    runProfitSum += profit;
-
-    if (bestRunProfit === null || profit > bestRunProfit) bestRunProfit = profit;
-    if (worstRunProfit === null || profit < worstRunProfit) worstRunProfit = profit;
-    if (profit >= 0) profitableRunCount++;
-
-    totalAccommodationCost += run.accommodationCost != null ? Number(run.accommodationCost) : 0;
-    totalFoodCost += run.foodCost != null ? Number(run.foodCost) : 0;
-    totalMarketingCost += run.marketingCost != null ? Number(run.marketingCost) : 0;
-
-    if (income > 0) {
-      const margin = profit / income;
-      if (margin > 0.2) worthTheDrive++;
-      else if (margin >= 0) tightMargins++;
-      else notWorthIt++;
-    } else if (profit < 0) {
-      notWorthIt++;
-    }
-  }
-
-  for (const tour of tours) {
-    totalKmDriven += tour.totalDistance != null ? Number(tour.totalDistance) : 0;
-    totalIncome += tour.totalIncome != null ? Number(tour.totalIncome) : 0;
-    totalProfit += tour.totalProfit != null ? Number(tour.totalProfit) : 0;
-    totalExpenses += tour.totalCost != null ? Number(tour.totalCost) : 0;
-  }
-
-  const avgRunProfit = runs.length > 0 ? runProfitSum / runs.length : 0;
-
-  res.json(GetDashboardSummaryResponse.parse({
-    totalRuns: runs.length,
-    totalTours: tours.length,
+  const summary = buildDashboardSummary({
+    runs,
+    tours,
     totalProfiles: profiles.length,
     totalVehicles: vehicles.length,
-    totalKmDriven,
-    totalIncome,
-    totalProfit,
-    totalExpenses,
-    avgRunProfit,
-    bestRunProfit: bestRunProfit ?? 0,
-    worstRunProfit: worstRunProfit ?? 0,
-    profitableRunCount,
-    totalAccommodationCost,
-    totalFoodCost,
-    totalMarketingCost,
-    worthTheDrive,
-    tightMargins,
-    notWorthIt,
-  }));
+    todayIsoDate,
+  });
+
+  res.json(GetDashboardSummaryResponse.parse(summary));
 });
 
 router.get("/dashboard/recent", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
-  const [recentRuns, recentTours] = await Promise.all([
-    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(6),
-    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(5),
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
+  const [runs, tours] = await Promise.all([
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
   ]);
+
+  const { metricsByTourId, stopsByTourId } = await loadTourDerivations(userId, tours);
+
+  const recentRuns = runs
+    .filter(run => isCompletedRun(run, todayIsoDate))
+    .sort((left, right) => {
+      const leftDate = getIsoDate(left.showDate) ?? "";
+      const rightDate = getIsoDate(right.showDate) ?? "";
+      if (leftDate !== rightDate) {
+        return leftDate < rightDate ? 1 : -1;
+      }
+
+      const leftCreated = left.createdAt instanceof Date ? left.createdAt.getTime() : new Date(left.createdAt).getTime();
+      const rightCreated = right.createdAt instanceof Date ? right.createdAt.getTime() : new Date(right.createdAt).getTime();
+      return rightCreated - leftCreated;
+    })
+    .slice(0, 6);
+
+  const upcomingTours = buildUpcomingTours(
+    tours,
+    stopsByTourId,
+    metricsByTourId,
+    todayIsoDate,
+    4,
+  );
 
   res.json(GetDashboardRecentResponse.parse({
     recentRuns: recentRuns.map(serializeRun),
-    recentTours: recentTours.map(serializeTour),
+    upcomingTours,
   }));
+});
+
+type RawTourItem = {
+  id: string;
+  sourceId: number;
+  type: "run" | "tour_stop";
+  showDate: string;
+  venueName: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: "draft" | "pitched" | "confirmed" | "cancelled";
+  tourId: number | null;
+  tourName: string | null;
+  tourStartDate: string | null;
+  tourEndDate: string | null;
+  tourOrderIndex: number | null;
+  linkPath: string;
+};
+
+function normalizeRunStatusForTourItem(
+  run: typeof runsTable.$inferSelect,
+): RawTourItem["status"] {
+  const raw = (run.status ?? "draft").toLowerCase();
+  if (raw === "draft") return "draft";
+  if (raw === "cancelled" || raw === "canceled") return "cancelled";
+  if (raw === "pitched" || raw === "tentative" || raw === "pending") return "pitched";
+  if (raw === "past" || raw === "planned" || raw === "completed" || raw === "confirmed") return "confirmed";
+  return "draft";
+}
+
+function normalizeStopStatus(value: string | null): RawTourItem["status"] {
+  const raw = (value ?? "confirmed").toLowerCase();
+  if (raw === "draft") return "draft";
+  if (raw === "pitched" || raw === "pending" || raw === "tentative") return "pitched";
+  if (raw === "cancelled" || raw === "canceled") return "cancelled";
+  return "confirmed";
+}
+
+function buildRunLocation(run: typeof runsTable.$inferSelect): string | null {
+  const parts = [run.city, run.state, run.country].filter(Boolean) as string[];
+  if (parts.length > 0) return parts.join(", ");
+  return run.destination ?? null;
+}
+
+router.get("/dashboard/tour-items", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
+  const [runs, tours] = await Promise.all([
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+  ]);
+
+  const tourIds = tours.map(t => t.id);
+  const stops = tourIds.length === 0
+    ? []
+    : await db
+        .select()
+        .from(tourStopsTable)
+        .where(inArray(tourStopsTable.tourId, tourIds));
+
+  const tourById = new Map(tours.map(t => [t.id, t]));
+
+  const items: RawTourItem[] = [];
+
+  for (const run of runs) {
+    const date = (run.showDate ?? "").split("T")[0] ?? "";
+    if (!date || date < todayIsoDate) continue;
+    items.push({
+      id: `run:${run.id}`,
+      sourceId: run.id,
+      type: "run",
+      showDate: date,
+      venueName: run.venueName ?? null,
+      location: buildRunLocation(run),
+      latitude: run.destinationLat != null ? Number(run.destinationLat) : null,
+      longitude: run.destinationLng != null ? Number(run.destinationLng) : null,
+      status: normalizeRunStatusForTourItem(run),
+      tourId: null,
+      tourName: null,
+      tourStartDate: null,
+      tourEndDate: null,
+      tourOrderIndex: null,
+      linkPath: `/runs/${run.id}`,
+    });
+  }
+
+  for (const stop of stops) {
+    const date = (stop.date ?? "").split("T")[0] ?? "";
+    if (!date || date < todayIsoDate) continue;
+    const tour = tourById.get(stop.tourId);
+    items.push({
+      id: `stop:${stop.id}`,
+      sourceId: stop.id,
+      type: "tour_stop",
+      showDate: date,
+      venueName: stop.venueName ?? null,
+      location: stop.city ?? null,
+      latitude: stop.cityLat != null ? Number(stop.cityLat) : null,
+      longitude: stop.cityLng != null ? Number(stop.cityLng) : null,
+      status: normalizeStopStatus(stop.bookingStatus),
+      tourId: stop.tourId,
+      tourName: tour?.name ?? null,
+      tourStartDate: tour?.startDate ?? null,
+      tourEndDate: tour?.endDate ?? null,
+      tourOrderIndex: stop.stopOrder ?? null,
+      linkPath: `/tours/${stop.tourId}`,
+    });
+  }
+
+  items.sort((a, b) => {
+    if (a.showDate !== b.showDate) return a.showDate < b.showDate ? -1 : 1;
+    const at = a.tourOrderIndex ?? 0;
+    const bt = b.tourOrderIndex ?? 0;
+    return at - bt;
+  });
+
+  res.json(GetDashboardTourItemsResponse.parse(items));
+});
+
+type RawVenueMapItem = {
+  id: number;
+  venueName: string;
+  city: string | null;
+  state: string | null;
+  fullAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  upcomingShowsCount: number;
+  pastShowsCount: number;
+};
+
+function normalizeName(s: string | null | undefined): string {
+  return (s ?? "").trim().toLowerCase();
+}
+
+router.get("/dashboard/venues", requireAuth, async (req, res): Promise<void> => {
+  const { userId } = req as AuthenticatedRequest;
+  const todayIsoDate = getTodayIsoDateFromRequest(req);
+
+  const [venues, runs, userTours] = await Promise.all([
+    db.select().from(venuesTable).where(eq(venuesTable.userId, userId)).orderBy(desc(venuesTable.updatedAt)).limit(DASHBOARD_MAP_VENUE_LIMIT),
+    db.select().from(runsTable).where(eq(runsTable.userId, userId)).orderBy(desc(runsTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+    db.select().from(toursTable).where(eq(toursTable.userId, userId)).orderBy(desc(toursTable.createdAt)).limit(DASHBOARD_COLLECTION_LIMIT),
+  ]);
+
+  const tourIds = userTours.map(t => t.id);
+  const stops = tourIds.length > 0
+    ? await db.select().from(tourStopsTable).where(inArray(tourStopsTable.tourId, tourIds))
+        .orderBy(sql`${tourStopsTable.date} asc nulls last`)
+        .limit(DASHBOARD_COLLECTION_LIMIT)
+    : [];
+
+  const runsByVenueId = new Map<number, typeof runsTable.$inferSelect[]>();
+  for (const r of runs) {
+    if (r.venueId == null) continue;
+    const arr = runsByVenueId.get(r.venueId);
+    if (arr) arr.push(r);
+    else runsByVenueId.set(r.venueId, [r]);
+  }
+
+  const stopsByVenueId = new Map<number, typeof tourStopsTable.$inferSelect[]>();
+  const stopsByVenueName = new Map<string, typeof tourStopsTable.$inferSelect[]>();
+  for (const s of stops) {
+    if (s.venueId != null) {
+      const byId = stopsByVenueId.get(s.venueId);
+      if (byId) byId.push(s);
+      else stopsByVenueId.set(s.venueId, [s]);
+    }
+    const key = normalizeName(s.venueName);
+    if (key) {
+      const byName = stopsByVenueName.get(key);
+      if (byName) byName.push(s);
+      else stopsByVenueName.set(key, [s]);
+    }
+  }
+
+  // Tour stops are indexed by normalized venue name as a coordinate fallback.
+  const stopCoordsByName = new Map<string, { lat: number; lng: number }>();
+  for (const s of stops) {
+    const key = normalizeName(s.venueName);
+    if (!key) continue;
+    if (stopCoordsByName.has(key)) continue;
+    if (s.cityLat != null && s.cityLng != null) {
+      stopCoordsByName.set(key, { lat: Number(s.cityLat), lng: Number(s.cityLng) });
+    }
+  }
+
+  const items: RawVenueMapItem[] = venues.map(v => {
+    const vRuns = runsByVenueId.get(v.id) ?? [];
+    const vStops = [
+      ...(stopsByVenueId.get(v.id) ?? []),
+      ...(stopsByVenueName.get(normalizeName(v.name)) ?? []).filter(s => s.venueId == null),
+    ];
+    let upcoming = 0;
+    let past = 0;
+    let lat: number | null = null;
+    let lng: number | null = null;
+    for (const r of vRuns) {
+      const date = (r.showDate ?? "").split("T")[0] ?? "";
+      if (date && date >= todayIsoDate) upcoming += 1;
+      else if (date && date < todayIsoDate) past += 1;
+      if (lat == null && r.destinationLat != null) lat = Number(r.destinationLat);
+      if (lng == null && r.destinationLng != null) lng = Number(r.destinationLng);
+    }
+    for (const s of vStops) {
+      const date = (s.date ?? "").split("T")[0] ?? "";
+      if (date && date >= todayIsoDate) upcoming += 1;
+      else if (date && date < todayIsoDate) past += 1;
+      if (lat == null && s.cityLat != null) lat = Number(s.cityLat);
+      if (lng == null && s.cityLng != null) lng = Number(s.cityLng);
+    }
+    if (lat == null || lng == null) {
+      const stopHit = stopCoordsByName.get(normalizeName(v.name));
+      if (stopHit) {
+        lat = lat ?? stopHit.lat;
+        lng = lng ?? stopHit.lng;
+      }
+    }
+    return {
+      id: v.id,
+      venueName: v.name,
+      city: v.city ?? null,
+      state: v.state ?? null,
+      fullAddress: v.fullAddress ?? v.address ?? null,
+      latitude: lat,
+      longitude: lng,
+      upcomingShowsCount: upcoming,
+      pastShowsCount: past,
+    };
+  });
+
+  res.json(GetDashboardVenuesResponse.parse(items));
 });
 
 export default router;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useParams } from "wouter";
-import { useCreateTour, useUpdateTour, useGetTour, useGetProfiles, useGetVehicles } from "@workspace/api-client-react";
+import { useCreateTour, useUpdateTour, useGetTour, useGetTours, useGetProfiles, useGetVehicles, useCreateVehicle, getGetVehiclesQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   ChevronLeft,
   ChevronRight,
@@ -39,12 +40,28 @@ import {
   Pencil,
   RotateCcw,
   CloudOff,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { STANDARD_VEHICLES, type StandardVehicle } from "@/lib/garage-constants";
 import { SYSTEM_FUEL_DEFAULTS, normalizeFuelType } from "@/lib/fuel-price-provider";
 import { trackEvent } from "@/lib/analytics";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { differenceInDays, parseISO, format } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getGetTourQueryKey,
+  getGetToursQueryKey,
+  getGetDashboardSummaryQueryKey,
+  getGetDashboardRecentQueryKey,
+} from "@workspace/api-client-react";
+import {
+  findDuplicateTourName,
+  formatTourLabel,
+  formatVehicleLabel,
+  getTourRenameSuggestions,
+} from "@/lib/duplicate-protection";
 
 // ─── Tour draft persistence ──────────────────────────────────────────────────
 
@@ -115,10 +132,19 @@ const tourSchema = z.object({
   defaultFoodCost: z.coerce.number().optional().nullable(),
   daysOnTour: z.coerce.number().min(1).optional().nullable(),
   notes: z.string().optional().nullable(),
-  fuelType: z.string().optional().nullable(),
+  fuelType: z.string().optional(),
+  fuelConsumption: z.coerce.number().optional().nullable(),
+  fuelPrice: z.coerce.number().optional().nullable(),
   fuelPricePetrol: z.coerce.number().optional().nullable(),
   fuelPriceDiesel: z.coerce.number().optional().nullable(),
   fuelPriceLpg: z.coerce.number().optional().nullable(),
+  travelingWithPa: z.boolean().optional(),
+  extraCrew: z.boolean().optional(),
+  towingTrailer: z.boolean().optional(),
+  flightsCost: z.coerce.number().optional().nullable(),
+  ferriesTollsCost: z.coerce.number().optional().nullable(),
+  gearHireCost: z.coerce.number().optional().nullable(),
+  otherCosts: z.coerce.number().optional().nullable(),
 });
 
 type TourFormValues = z.infer<typeof tourSchema>;
@@ -140,9 +166,18 @@ const FORM_DEFAULTS: TourFormValues = {
   daysOnTour: null,
   notes: "",
   fuelType: "petrol",
+  fuelConsumption: null,
+  fuelPrice: null,
   fuelPricePetrol: SYSTEM_FUEL_DEFAULTS.petrol,
   fuelPriceDiesel: SYSTEM_FUEL_DEFAULTS.diesel,
   fuelPriceLpg: SYSTEM_FUEL_DEFAULTS.lpg,
+  travelingWithPa: false,
+  extraCrew: false,
+  towingTrailer: false,
+  flightsCost: 0,
+  ferriesTollsCost: 0,
+  gearHireCost: 0,
+  otherCosts: 0,
 };
 
 const TOTAL_STEPS = 7;
@@ -155,7 +190,7 @@ const STEP_META = [
   { label: "Vehicles",     icon: Car },
   { label: "Your Crew",    icon: Users },
   { label: "Accom",        icon: BedDouble },
-  { label: "Income",       icon: DollarSign },
+  { label: "Setup",        icon: DollarSign },
   { label: "Review",       icon: CheckCircle2 },
 ];
 
@@ -291,6 +326,7 @@ export default function TourForm() {
   const [, setLocation] = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
 
   // Draft state
@@ -310,9 +346,21 @@ export default function TourForm() {
   });
   const { data: profiles, isLoading: isLoadingProfiles } = useGetProfiles();
   const { data: vehicles, isLoading: isLoadingVehicles } = useGetVehicles();
+  const { data: tours } = useGetTours();
 
   const createTour = useCreateTour();
   const updateTour = useUpdateTour();
+  const createVehicleMutation = useCreateVehicle();
+  const [presetPickerOpen, setPresetPickerOpen] = useState(false);
+  const [creatingPresetKey, setCreatingPresetKey] = useState<string | null>(null);
+
+  const invalidateTourSummaryQueries = (nextTourId: number) => {
+    queryClient.invalidateQueries({ queryKey: ["tour", nextTourId] });
+    queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(nextTourId) });
+    queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  };
 
   const form = useForm<TourFormValues>({
     resolver: zodResolver(tourSchema),
@@ -352,9 +400,18 @@ export default function TourForm() {
         daysOnTour: tour.daysOnTour ?? null,
         notes: tour.notes || "",
         fuelType: tour.fuelType ?? "petrol",
+        fuelConsumption: tour.fuelConsumption ?? null,
+        fuelPrice: tour.fuelPrice ?? null,
         fuelPricePetrol: tour.fuelPricePetrol ?? 1.90,
         fuelPriceDiesel: tour.fuelPriceDiesel ?? 1.95,
         fuelPriceLpg: tour.fuelPriceLpg ?? 0.95,
+        travelingWithPa: tour.travelingWithPa ?? false,
+        extraCrew: tour.extraCrew ?? false,
+        towingTrailer: tour.towingTrailer ?? false,
+        flightsCost: tour.flightsCost ?? 0,
+        ferriesTollsCost: tour.ferriesTollsCost ?? 0,
+        gearHireCost: tour.gearHireCost ?? 0,
+        otherCosts: tour.otherCosts ?? 0,
       });
     }
   }, [tour, profiles, vehicles, form, isEditing]);
@@ -365,6 +422,86 @@ export default function TourForm() {
     returnHome, daysOnTour, defaultFoodCost, fuelType, fuelPricePetrol,
     fuelPriceDiesel, fuelPriceLpg,
   } = watchedValues;
+
+  // ── Step 3 helpers: navigate to add-vehicle, save tour draft first ──────
+  const goAddVehicle = useCallback(() => {
+    // Persist current wizard state so the user comes back to Step 3 with
+    // their inputs intact, and tell the garage form where to send them
+    // after a successful save (with the new vehicle id).
+    saveTourDraft(3, form.getValues());
+    const returnTo = isEditing ? `/tours/edit/${tourId}` : "/tours/new";
+    setLocation(`/garage/new?returnTo=${encodeURIComponent(returnTo)}&autoSelectVehicle=1`);
+  }, [form, setLocation, isEditing, tourId]);
+
+  // ── Auto-select vehicle when returning from /garage/new with ?selectVehicleId=N
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("selectVehicleId");
+    if (!raw) return;
+    const id = parseInt(raw, 10);
+    if (!Number.isFinite(id)) return;
+    // Wait until vehicles list has loaded so the auto-selected id matches
+    // a real entry (and the fuel-type sync effect can use it).
+    if (!vehicles?.some((v) => v.id === id)) return;
+    form.setValue("vehicleId", id, { shouldDirty: true });
+    setStep(3);
+    // Clean the query string so a refresh doesn't re-trigger this.
+    params.delete("selectVehicleId");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    toast({ title: "Vehicle selected for this tour" });
+  }, [vehicles, form, toast]);
+
+  // ── Step 3 helpers: turn a preset into a real saved garage vehicle ──────
+  const handleChoosePreset = useCallback(
+    (preset: StandardVehicle) => {
+      if (creatingPresetKey) return;
+      setCreatingPresetKey(preset.key);
+      createVehicleMutation.mutate(
+        {
+          data: {
+            name: preset.displayName,
+            vehicleType: preset.key,
+            fuelType: preset.defaultFuelType,
+            avgConsumption: preset.fuelConsumptionL100km,
+            tankSizeLitres: preset.tankSizeLitres,
+            maxPassengers: null,
+            notes: `Added from tour setup preset (${preset.displayName})`,
+            isDefault: false,
+            actIds: [],
+            defaultForActIds: [],
+          },
+        },
+        {
+          onSuccess: (created) => {
+            queryClient.invalidateQueries({ queryKey: getGetVehiclesQueryKey() });
+            // Auto-select the newly created vehicle for this tour.
+            if (created?.id) {
+              form.setValue("vehicleId", created.id, { shouldDirty: true });
+            }
+            setPresetPickerOpen(false);
+            trackEvent("vehicle_added");
+            toast({
+              title: "Vehicle added to your garage",
+              description: `${preset.displayName} is selected for this tour. You can edit it later in Settings.`,
+            });
+          },
+          onError: (err: unknown) => {
+            const status = (err as { status?: number } | undefined)?.status;
+            const description = status === 403
+              ? "You've hit your plan's vehicle limit. Upgrade or remove a vehicle to continue."
+              : "Could not save the vehicle. Please try again.";
+            toast({ title: "Couldn't add vehicle", description, variant: "destructive" });
+          },
+          onSettled: () => {
+            setCreatingPresetKey(null);
+          },
+        },
+      );
+    },
+    [creatingPresetKey, createVehicleMutation, form, queryClient, toast],
+  );
 
   // ── Auto-sync fuel type when vehicle is selected in Step 3 ──────────────
   const prevVehicleIdRef = useRef<number | null | undefined>(undefined);
@@ -379,10 +516,29 @@ export default function TourForm() {
     if (vehicleId && vehicles) {
       const v = vehicles.find(v => v.id === vehicleId);
       if (v?.fuelType) {
-        form.setValue("fuelType", normalizeFuelType(v.fuelType));
+        const ft = normalizeFuelType(v.fuelType);
+        form.setValue("fuelType", ft);
+        if (v.avgConsumption != null) {
+          form.setValue("fuelConsumption", Number(v.avgConsumption));
+        }
+        // Pre-fill the single tour-level fuel price from the profile's saved
+        // price for this vehicle's fuel type, falling back to the system default.
+        const profile = profiles?.find(p => p.id === form.getValues("profileId"));
+        const profilePrice =
+          ft === "diesel" ? profile?.defaultDieselPrice
+          : ft === "lpg" ? profile?.defaultLpgPrice
+          : profile?.defaultPetrolPrice;
+        const fallback =
+          ft === "diesel" ? SYSTEM_FUEL_DEFAULTS.diesel
+          : ft === "lpg" ? SYSTEM_FUEL_DEFAULTS.lpg
+          : SYSTEM_FUEL_DEFAULTS.petrol;
+        const current = form.getValues("fuelPrice");
+        if (current == null) {
+          form.setValue("fuelPrice", profilePrice ?? fallback);
+        }
       }
     }
-  }, [vehicleId, vehicles, form]);
+  }, [vehicleId, vehicles, profiles, form]);
 
   // ── Auto-calculate days on tour ──────────────────────────────────────────
   useEffect(() => {
@@ -470,6 +626,8 @@ export default function TourForm() {
 
   const selectedProfile = profiles?.find(p => p.id === profileId);
   const selectedVehicle = vehicles?.find(v => v.id === vehicleId);
+  const duplicateTour = findDuplicateTourName(tours, name, isEditing ? tourId : undefined);
+  const tourRenameSuggestions = duplicateTour ? getTourRenameSuggestions(name ?? "", startDate) : [];
 
   const handleProfileChange = (val: string) => {
     const pId = val === "none" ? null : parseInt(val);
@@ -477,12 +635,15 @@ export default function TourForm() {
     if (pId) {
       const profile = profiles?.find(p => p.id === pId);
       if (profile) {
-        // Vehicle — auto-select profile's default and sync fuel type
+        // Vehicle — auto-select profile's default and sync fuel type/consumption
         if (profile.defaultVehicleId) {
           form.setValue("vehicleId", profile.defaultVehicleId);
           const linkedVehicle = vehicles?.find(v => v.id === profile.defaultVehicleId);
           if (linkedVehicle?.fuelType) {
             form.setValue("fuelType", normalizeFuelType(linkedVehicle.fuelType));
+          }
+          if (linkedVehicle?.avgConsumption != null) {
+            form.setValue("fuelConsumption", Number(linkedVehicle.avgConsumption));
           }
         }
         // Location — only pre-fill if not already set
@@ -496,6 +657,17 @@ export default function TourForm() {
         form.setValue("fuelPricePetrol", profile.defaultPetrolPrice ?? SYSTEM_FUEL_DEFAULTS.petrol);
         form.setValue("fuelPriceDiesel", profile.defaultDieselPrice ?? SYSTEM_FUEL_DEFAULTS.diesel);
         form.setValue("fuelPriceLpg", profile.defaultLpgPrice ?? SYSTEM_FUEL_DEFAULTS.lpg);
+        // Tour-level single fuel price — based on the (now resolved) vehicle's fuel type
+        const ft = normalizeFuelType(form.getValues("fuelType") ?? "petrol");
+        const profilePrice =
+          ft === "diesel" ? profile.defaultDieselPrice
+          : ft === "lpg" ? profile.defaultLpgPrice
+          : profile.defaultPetrolPrice;
+        const fallback =
+          ft === "diesel" ? SYSTEM_FUEL_DEFAULTS.diesel
+          : ft === "lpg" ? SYSTEM_FUEL_DEFAULTS.lpg
+          : SYSTEM_FUEL_DEFAULTS.petrol;
+        form.setValue("fuelPrice", profilePrice ?? fallback);
       }
     }
   };
@@ -506,6 +678,7 @@ export default function TourForm() {
         { id: tourId, data },
         {
           onSuccess: () => {
+            invalidateTourSummaryQueries(tourId);
             toast({ title: "Tour updated" });
             setLocation(`/tours/${tourId}`);
           },
@@ -517,6 +690,7 @@ export default function TourForm() {
         { data },
         {
           onSuccess: (newTour) => {
+            invalidateTourSummaryQueries(newTour.id);
             trackEvent("tour_saved", { tour_id: newTour.id, total_shows: 0, total_profit: 0 });
             clearTourDraft();
             toast({ title: "Tour created! Now add your stops." });
@@ -534,10 +708,13 @@ export default function TourForm() {
     return <div className="p-8 text-center text-muted-foreground">Loading tour...</div>;
   }
 
+  const singleFuelPrice = watchedValues.fuelPrice;
   const fuelPriceForType = Number(
-    fuelType === "diesel" ? (fuelPriceDiesel ?? 1.95)
-    : fuelType === "lpg" ? (fuelPriceLpg ?? 0.95)
-    : (fuelPricePetrol ?? 1.90)
+    singleFuelPrice != null
+      ? singleFuelPrice
+      : fuelType === "diesel" ? (fuelPriceDiesel ?? 1.95)
+      : fuelType === "lpg" ? (fuelPriceLpg ?? 0.95)
+      : (fuelPricePetrol ?? 1.90)
   );
 
   const estimatedFoodTotal = (() => {
@@ -580,6 +757,24 @@ export default function TourForm() {
                 <FormItem>
                   <FormLabel>Tour Name</FormLabel>
                   <FormControl><Input placeholder="Summer Run 2025" {...field} /></FormControl>
+                  {duplicateTour && (
+                    <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="font-semibold">You already have a tour with this name.</p>
+                      <p className="mt-1">Existing: {formatTourLabel(duplicateTour)}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {tourRenameSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => form.setValue("name", suggestion, { shouldDirty: true })}
+                            className="rounded-md border border-amber-300/70 bg-white/70 px-2 py-1 text-[11px] font-medium text-amber-950 hover:bg-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -604,7 +799,7 @@ export default function TourForm() {
                       <FormControl><SelectTrigger><SelectValue placeholder="Select vehicle" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {vehicles?.map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>)}
+                        {vehicles?.map(v => <SelectItem key={v.id} value={v.id.toString()}>{formatVehicleLabel(v)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -674,8 +869,9 @@ export default function TourForm() {
               </div>
             </section>
 
-            <section className="space-y-4 p-5 rounded-xl border border-border/50 bg-card/50">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Fuel & defaults</p>
+            <section className="space-y-5 p-5 rounded-xl border border-border/50 bg-card/50">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Tour Setup & Notes</p>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="defaultFoodCost" render={({ field }) => (
                   <FormItem>
@@ -686,55 +882,123 @@ export default function TourForm() {
                   </FormItem>
                 )} />
               </div>
-              <div className="border-t border-border/40 pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Fuel className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-semibold">Fuel costs</span>
+
+              <div className="border-t border-border/40 pt-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Fuel className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-semibold">Fuel</span>
+                  </div>
+                  {selectedVehicle && (
+                    <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium capitalize">
+                      {selectedVehicle.fuelType} · {Number(selectedVehicle.avgConsumption)} L/100km
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Pre-filled from your profile. Change these for this tour only.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <FormField control={form.control} name="fuelType" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fuel Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? "petrol"}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          <SelectItem value="petrol">Petrol</SelectItem>
-                          <SelectItem value="diesel">Diesel</SelectItem>
-                          <SelectItem value="lpg">LPG</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )} />
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { name: "fuelPricePetrol" as const, label: "Petrol $/L", fallback: SYSTEM_FUEL_DEFAULTS.petrol },
-                    { name: "fuelPriceDiesel" as const, label: "Diesel $/L", fallback: SYSTEM_FUEL_DEFAULTS.diesel },
-                    { name: "fuelPriceLpg"    as const, label: "LPG $/L",    fallback: SYSTEM_FUEL_DEFAULTS.lpg   },
-                  ].map(f => (
-                    <FormField key={f.name} control={form.control} name={f.name} render={({ field }) => (
+                {selectedVehicle ? (
+                  <p className="text-xs text-muted-foreground">
+                    Fuel type and consumption come from <span className="font-medium text-foreground">{selectedVehicle.name}</span>. Just enter the price you'll be paying at the bowser.
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600">No vehicle picked yet — pick one above. Fuel calculations need a vehicle.</p>
+                )}
+                {selectedVehicle && (
+                  <FormField control={form.control} name="fuelPrice" render={({ field }) => {
+                    const ft = normalizeFuelType(selectedVehicle.fuelType);
+                    const fallback =
+                      ft === "diesel" ? SYSTEM_FUEL_DEFAULTS.diesel
+                      : ft === "lpg" ? SYSTEM_FUEL_DEFAULTS.lpg
+                      : SYSTEM_FUEL_DEFAULTS.petrol;
+                    return (
                       <FormItem>
-                        <FormLabel className="text-xs">{f.label}</FormLabel>
+                        <FormLabel className="text-xs"><span className="capitalize">{ft}</span> $/L</FormLabel>
                         <FormControl>
-                          <Input type="number" min="0" step="0.01" placeholder={f.fallback.toFixed(2)} {...field} value={field.value ?? f.fallback} />
+                          <Input
+                            type="number" min="0" step="0.01"
+                            placeholder={fallback.toFixed(2)}
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                            className="h-11 max-w-[140px]"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground/70">
+                          Leave blank to use the Australian average (${fallback.toFixed(2)}/L).
+                        </p>
+                      </FormItem>
+                    );
+                  }} />
+                )}
+              </div>
+
+              <div className="border-t border-border/40 pt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">What are you bringing?</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { name: "travelingWithPa" as const, label: "Traveling with a PA system", hint: "Loaded gear means heavier loads & more fuel — flag it for accurate planning." },
+                    { name: "extraCrew" as const, label: "Extra crew on board", hint: "Sound techs, roadies, mates — bumps up food / accom estimates." },
+                    { name: "towingTrailer" as const, label: "Towing a trailer", hint: "Trailers add drag and bump fuel use noticeably." },
+                  ].map(t => (
+                    <FormField key={t.name} control={form.control} name={t.name} render={({ field }) => (
+                      <FormItem className="flex items-start justify-between gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <FormLabel className="text-sm font-medium">{t.label}</FormLabel>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t.hint}</p>
+                        </div>
+                        <FormControl>
+                          <Switch checked={!!field.value} onCheckedChange={field.onChange} />
                         </FormControl>
                       </FormItem>
                     )} />
                   ))}
                 </div>
               </div>
-            </section>
 
-            <section className="space-y-4 p-5 rounded-xl border border-border/50 bg-card/50">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Notes</p>
-              <FormField control={form.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Trail Notes</FormLabel>
-                  <FormControl><Textarea placeholder="Overall tour goals, logistics..." className="min-h-[80px]" {...field} value={field.value || ""} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <div className="border-t border-border/40 pt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">Other tour costs <span className="text-muted-foreground font-normal text-xs">(optional)</span></span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { name: "flightsCost" as const, label: "Flights" },
+                    { name: "ferriesTollsCost" as const, label: "Ferries / Tolls" },
+                    { name: "gearHireCost" as const, label: "Gear hire" },
+                    { name: "otherCosts" as const, label: "Other" },
+                  ].map(c => (
+                    <FormField key={c.name} control={form.control} name={c.name} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">{c.label} ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number" min="0" step="1"
+                            placeholder="0"
+                            {...field}
+                            value={field.value === null || field.value === undefined ? "" : field.value}
+                            onChange={e => field.onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )} />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground/70">
+                  These are added to your tour total, on top of fuel, food, accommodation and per-stop costs.
+                </p>
+              </div>
+
+              <div className="border-t border-border/40 pt-4">
+                <FormField control={form.control} name="notes" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tour Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                    <FormControl><Textarea placeholder="Overall tour goals, logistics..." className="min-h-[80px]" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
             </section>
 
             <div className="flex justify-end gap-3">
@@ -829,6 +1093,24 @@ export default function TourForm() {
                       autoFocus
                     />
                   </FormControl>
+                  {duplicateTour && (
+                    <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                      <p className="font-semibold">You already have a tour with this name.</p>
+                      <p className="mt-1">Existing: {formatTourLabel(duplicateTour)}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {tourRenameSuggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => form.setValue("name", suggestion, { shouldDirty: true })}
+                            className="rounded-md border border-amber-300/70 bg-white/70 px-2 py-1 text-[11px] font-medium text-amber-950 hover:bg-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -979,12 +1261,89 @@ export default function TourForm() {
               nextLabel={vehicleId ? "Next" : "Skip — no vehicle"}
             >
               {!vehicles?.length ? (
-                <div className="text-center py-8 text-muted-foreground space-y-3">
-                  <Car className="w-10 h-10 mx-auto opacity-30" />
-                  <div>
-                    <p className="text-sm font-medium">No vehicles in your garage</p>
-                    <p className="text-xs mt-1">Add vehicles in Settings → Vehicles, or skip this step.</p>
+                <div className="space-y-4">
+                  <div className="text-center py-6 space-y-2">
+                    <Car className="w-10 h-10 mx-auto text-primary/60" />
+                    <p className="text-base font-semibold text-foreground">
+                      Add a vehicle to estimate fuel costs
+                    </p>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      Your vehicle helps GigTrail estimate fuel costs and tour profit. Add one now or
+                      choose a preset to get started.
+                    </p>
                   </div>
+
+                  {!presetPickerOpen ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+                      <Button
+                        type="button"
+                        onClick={goAddVehicle}
+                        className="gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Vehicle
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPresetPickerOpen(true)}
+                        className="gap-2"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Choose Preset
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => goToStep(4)}
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 rounded-xl border border-border/40 bg-card/40 p-3">
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Pick a preset — we'll save it to your garage
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setPresetPickerOpen(false)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          disabled={!!creatingPresetKey}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {STANDARD_VEHICLES.map((preset) => {
+                          const PresetIcon = preset.Icon;
+                          const isCreating = creatingPresetKey === preset.key;
+                          const disabled = !!creatingPresetKey;
+                          return (
+                            <button
+                              key={preset.key}
+                              type="button"
+                              onClick={() => handleChoosePreset(preset)}
+                              disabled={disabled}
+                              className="flex items-start gap-3 px-3 py-2.5 rounded-lg border-2 border-border/40 bg-card/60 text-left transition-all hover:border-primary/40 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <PresetIcon className="w-5 h-5 shrink-0 text-primary mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground">{preset.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {preset.fuelConsumptionL100km} L/100km · {preset.tankSizeLitres}L tank
+                                </p>
+                                <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                                  {isCreating ? "Saving…" : preset.shortDescription}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1004,7 +1363,7 @@ export default function TourForm() {
                         <Car className={`w-5 h-5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-medium truncate ${isSelected ? "text-primary" : "text-foreground"}`}>{v.name}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{v.fuelType} · {v.avgConsumption} L/100km</p>
+                          <p className="text-xs text-muted-foreground capitalize">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</p>
                         </div>
                         {isSelected && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
                       </button>
@@ -1134,12 +1493,12 @@ export default function TourForm() {
             </StepShell>
           )}
 
-          {/* ── Step 6: Fuel & defaults ────────────────────────────────── */}
+          {/* ── Step 6: Tour Setup & Notes ─────────────────────────────── */}
           {step === 6 && (
             <StepShell
               step={6}
-              title="Fuel & defaults"
-              subtitle="These are pulled from your profile. Change anything for this tour only — your profile won't be affected."
+              title="Tour Setup & Notes"
+              subtitle="Lock in the price you'll pay at the bowser, the extras you're bringing along, and any one-off costs for this tour."
               chips={
                 <>
                   <SummaryChip label="Tour" value={name || "—"} />
@@ -1163,11 +1522,6 @@ export default function TourForm() {
                         <span className="font-medium">${selectedProfile.expectedGigFee ?? 0}</span>
                         <span className="text-muted-foreground"> expected fee per show</span>
                       </p>
-                      {(selectedProfile.avgMerchPerGig ?? 0) > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          + ${selectedProfile.avgMerchPerGig} merch per show
-                        </p>
-                      )}
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground px-0.5">
@@ -1181,78 +1535,125 @@ export default function TourForm() {
                 </div>
               )}
 
-              {/* Fuel section */}
+              {/* Fuel section — single price, keyed off the vehicle's fuel type */}
               <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Fuel className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-semibold">Fuel costs</span>
+                    <span className="text-sm font-semibold">Fuel cost</span>
                   </div>
                   {selectedVehicle && (
                     <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium capitalize">
-                      {selectedVehicle.fuelType} · {selectedVehicle.name}
+                      {selectedVehicle.fuelType} · {Number(selectedVehicle.avgConsumption)} L/100km
                     </span>
                   )}
                 </div>
 
-                {selectedProfile ? (
+                {selectedVehicle ? (
                   <p className="text-xs text-muted-foreground -mt-1">
-                    Pre-filled from your profile — adjust for this tour if prices have changed at the servo.
+                    Fuel type and consumption come from <span className="font-medium text-foreground">{selectedVehicle.name}</span>. Just enter the price you'll be paying at the bowser.
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground -mt-1">
-                    What was the last price you saw at the servo? Leave blank to use regional averages.
+                  <p className="text-xs text-amber-600 -mt-1">
+                    No vehicle picked yet — go back to Step 3 to select one. Fuel calculations need a vehicle.
                   </p>
                 )}
 
-                <FormField control={form.control} name="fuelType" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs text-muted-foreground">Fuel type used on this tour</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value ?? "petrol"}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="petrol">Petrol</SelectItem>
-                        <SelectItem value="diesel">Diesel</SelectItem>
-                        <SelectItem value="lpg">LPG</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {selectedVehicle && (
-                      <p className="text-xs text-muted-foreground">Auto-set from your vehicle — change if needed.</p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { name: "fuelPricePetrol" as const, label: "Petrol $/L", fallback: SYSTEM_FUEL_DEFAULTS.petrol },
-                    { name: "fuelPriceDiesel" as const, label: "Diesel $/L", fallback: SYSTEM_FUEL_DEFAULTS.diesel },
-                    { name: "fuelPriceLpg"    as const, label: "LPG $/L",    fallback: SYSTEM_FUEL_DEFAULTS.lpg   },
-                  ].map(f => (
-                    <FormField key={f.name} control={form.control} name={f.name} render={({ field }) => (
+                {selectedVehicle && (
+                  <FormField control={form.control} name="fuelPrice" render={({ field }) => {
+                    const ft = normalizeFuelType(selectedVehicle.fuelType);
+                    const fallback =
+                      ft === "diesel" ? SYSTEM_FUEL_DEFAULTS.diesel
+                      : ft === "lpg" ? SYSTEM_FUEL_DEFAULTS.lpg
+                      : SYSTEM_FUEL_DEFAULTS.petrol;
+                    return (
                       <FormItem>
-                        <FormLabel className="text-xs">{f.label}</FormLabel>
+                        <FormLabel className="text-xs">
+                          <span className="capitalize">{ft}</span> $/L
+                        </FormLabel>
                         <FormControl>
                           <Input
                             type="number" min="0" step="0.01"
-                            placeholder={f.fallback.toFixed(2)}
+                            placeholder={fallback.toFixed(2)}
                             {...field}
-                            value={field.value ?? f.fallback}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : parseFloat(e.target.value))}
+                            className="h-11 max-w-[140px]"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground/70">
+                          Leave blank to use the Australian average (${fallback.toFixed(2)}/L).
+                        </p>
+                      </FormItem>
+                    );
+                  }} />
+                )}
+              </div>
+
+              {/* Tour toggles */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">What are you bringing?</span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    { name: "travelingWithPa" as const, label: "Traveling with a PA system", hint: "Loaded gear means heavier loads & more fuel — flag it for accurate planning." },
+                    { name: "extraCrew" as const, label: "Extra crew on board", hint: "Sound techs, roadies, mates — bumps up food / accom estimates." },
+                    { name: "towingTrailer" as const, label: "Towing a trailer", hint: "Trailers add drag and bump fuel use noticeably." },
+                  ].map(t => (
+                    <FormField key={t.name} control={form.control} name={t.name} render={({ field }) => (
+                      <FormItem className="flex items-start justify-between gap-3 rounded-lg border border-border/40 bg-card/40 px-3 py-2.5">
+                        <div className="min-w-0">
+                          <FormLabel className="text-sm font-medium">{t.label}</FormLabel>
+                          <p className="text-xs text-muted-foreground mt-0.5">{t.hint}</p>
+                        </div>
+                        <FormControl>
+                          <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Other tour-level costs */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold">Other tour costs <span className="text-muted-foreground font-normal text-xs">(optional)</span></span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { name: "flightsCost" as const, label: "Flights" },
+                    { name: "ferriesTollsCost" as const, label: "Ferries / Tolls" },
+                    { name: "gearHireCost" as const, label: "Gear hire" },
+                    { name: "otherCosts" as const, label: "Other" },
+                  ].map(c => (
+                    <FormField key={c.name} control={form.control} name={c.name} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">{c.label} ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number" min="0" step="1"
+                            placeholder="0"
+                            {...field}
+                            value={field.value === null || field.value === undefined ? "" : field.value}
+                            onChange={e => field.onChange(e.target.value === "" ? 0 : parseFloat(e.target.value))}
                           />
                         </FormControl>
                       </FormItem>
                     )} />
                   ))}
                 </div>
-
-                <p className="text-xs text-muted-foreground/60">
-                  Leave blank to fall back to Australian averages (Petrol ${SYSTEM_FUEL_DEFAULTS.petrol} / Diesel ${SYSTEM_FUEL_DEFAULTS.diesel} / LPG ${SYSTEM_FUEL_DEFAULTS.lpg}).
+                <p className="text-xs text-muted-foreground/70">
+                  These are added to your tour total, on top of fuel, food, accommodation and per-stop costs.
                 </p>
               </div>
 
               <FormField control={form.control} name="notes" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Trail Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
+                  <FormLabel>Tour Notes <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl><Textarea placeholder="Overall goals, logistics notes..." className="min-h-[70px]" {...field} value={field.value || ""} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1292,7 +1693,7 @@ export default function TourForm() {
                   />
                 )}
                 {selectedVehicle && (
-                  <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle" value={`${selectedVehicle.name} (${selectedVehicle.fuelType})`} />
+                  <ReviewRow icon={<Car className="w-4 h-4 text-muted-foreground" />} label="Vehicle" value={`${selectedVehicle.name} · ${selectedVehicle.fuelType} · ${Number(selectedVehicle.avgConsumption)} L/100km`} />
                 )}
                 {(defaultFoodCost ?? 0) > 0 && (
                   <ReviewRow
@@ -1309,6 +1710,29 @@ export default function TourForm() {
                 {accomSummary && (
                   <ReviewRow icon={<BedDouble className="w-4 h-4 text-muted-foreground" />} label="Accom" value={accomSummary} />
                 )}
+                {(() => {
+                  const extras: string[] = [];
+                  if (watchedValues.travelingWithPa) extras.push("PA");
+                  if (watchedValues.extraCrew) extras.push("Extra crew");
+                  if (watchedValues.towingTrailer) extras.push("Trailer");
+                  return extras.length > 0 ? (
+                    <ReviewRow icon={<Users className="w-4 h-4 text-muted-foreground" />} label="Bringing" value={extras.join(" · ")} />
+                  ) : null;
+                })()}
+                {(() => {
+                  const total =
+                    Number(watchedValues.flightsCost ?? 0) +
+                    Number(watchedValues.ferriesTollsCost ?? 0) +
+                    Number(watchedValues.gearHireCost ?? 0) +
+                    Number(watchedValues.otherCosts ?? 0);
+                  return total > 0 ? (
+                    <ReviewRow
+                      icon={<DollarSign className="w-4 h-4 text-muted-foreground" />}
+                      label="Other costs"
+                      value={`$${total.toFixed(0)}`}
+                    />
+                  ) : null;
+                })()}
               </div>
 
               <div className="bg-muted/40 border border-border/30 rounded-lg px-4 py-3 text-xs text-muted-foreground">

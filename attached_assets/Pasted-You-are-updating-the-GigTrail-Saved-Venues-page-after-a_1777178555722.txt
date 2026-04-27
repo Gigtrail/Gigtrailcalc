@@ -1,0 +1,190 @@
+You are updating the GigTrail Saved Venues page after a backend scalability upgrade.
+
+IMPORTANT:
+- DO NOT remove pagination
+- DO NOT load all venues client-side
+- DO NOT reintroduce client-side full dataset filtering
+- Only work on frontend (venues page + minor hook usage if needed)
+
+---
+
+## CONTEXT
+
+GET /venues now returns:
+
+{
+  items: Venue[],
+  pagination: {
+    page: number,
+    limit: number,
+    total: number,
+    hasNextPage: boolean,
+    hasPreviousPage: boolean
+  }
+}
+
+The frontend must use paginated results.
+
+---
+
+## FILE
+
+artifacts/gig-trail/src/pages/venues.tsx
+
+---
+
+## GOALS
+
+1. Fix data usage to match new API shape
+2. Improve UX to clearly distinguish:
+   - Played venues
+   - Venue leads
+3. Keep UI fast and simple for alpha
+
+---
+
+## STEP 1 — FIX DATA HANDLING
+
+Replace any usage like:
+
+const venues = data
+
+With:
+
+const venues = data?.items ?? []
+const pagination = data?.pagination
+
+Remove any logic that assumes a full dataset exists.
+
+---
+
+## STEP 2 — REMOVE CLIENT-SIDE FILTERING
+
+- Remove useMemo filtering over full venue arrays
+- Search must call API using query param (q/search)
+- Filters must call API (type, country if available)
+
+---
+
+## STEP 3 — ADD FILTER BAR
+
+Add simple filter buttons:
+
+- All
+- Played
+- Leads
+- Needs Action
+
+When selected:
+- Call API with appropriate params
+- Do NOT filter locally
+
+---
+
+## STEP 4 — UPDATE VENUE CARDS
+
+Each venue must show a clear type:
+
+### Played venue (has runs/shows)
+
+- Badge: "Played"
+- venue name
+- city/state/country
+- show count (only if > 0)
+- last played (if available)
+- avg profit (ONLY if meaningful)
+- next action:
+  - "Rebook" (if past show exists)
+
+---
+
+### Lead venue (no runs)
+
+- Badge: "Lead"
+- venue name
+- city/state/country
+- text: "No show history yet"
+- contact signal:
+  - "Email available" if email exists
+  - "Needs research" if no email
+- next action:
+  - "Contact" if email exists
+  - "Research" if no email
+
+---
+
+## STEP 5 — REMOVE BAD UI
+
+Remove:
+
+- "0 shows"
+- empty avg profit
+- "Untested"
+- any placeholder stats with no data
+
+---
+
+## STEP 6 — PAGINATION UI
+
+Add:
+
+- Previous / Next buttons
+- Display:
+  "Page X · Showing Y of Z venues"
+
+Disable buttons when:
+- loading
+- no next/previous page
+
+---
+
+## STEP 7 — LOADING + EMPTY STATES
+
+Loading:
+- Keep skeleton UI
+
+Empty states:
+
+No venues:
+"No venues saved yet"
+
+No results (search/filter):
+"No venues match this search"
+
+---
+
+## STEP 8 — KEEP DESIGN LIGHT
+
+- Do NOT redesign entire page
+- Improve clarity, not complexity
+- Keep existing layout structure
+
+---
+
+## STEP 9 — TYPE SAFETY
+
+Ensure:
+
+- No TypeScript errors
+- Correct types from API client
+- No assumptions of array response
+
+---
+
+## STEP 10 — VERIFY
+
+Run:
+
+pnpm run typecheck
+pnpm run build
+
+---
+
+## DELIVERABLE
+
+Return:
+
+- Files changed
+- Summary of changes
+- Confirmation pagination is respected
+- Any remaining type issues

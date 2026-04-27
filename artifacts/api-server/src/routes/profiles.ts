@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import type { z } from "zod";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, profilesTable } from "@workspace/db";
 import {
   CreateProfileBody,
@@ -14,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, countUserRecords, type AuthenticatedRequest } from "../middlewares/auth";
 import { FREE_CALC_LIMIT_PER_WEEK, getPlanLimits, hasProAccess } from "@workspace/entitlements";
+import { parseIntegerParam } from "../lib/request-params";
 
 const FREE_CALC_LIMIT = FREE_CALC_LIMIT_PER_WEEK;
 
@@ -29,6 +31,37 @@ function daysDiff(dateStr: string) {
 
 const router: IRouter = Router();
 
+type CreateProfilePayload = z.infer<typeof CreateProfileBody>;
+type UpdateProfilePayload = z.infer<typeof UpdateProfileBody>;
+
+function getWeeklyUsagePayload(
+  userRole: AuthenticatedRequest["userRole"],
+  profile?: typeof profilesTable.$inferSelect,
+) {
+  if (hasProAccess(userRole)) {
+    return { used: 0, limit: null, resetsIn: null, isPro: true };
+  }
+
+  if (!profile) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const lastCalculationReset = profile.lastCalculationReset;
+  if (!lastCalculationReset) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const daysSinceReset = daysDiff(lastCalculationReset);
+  if (daysSinceReset >= 7) {
+    return { used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false };
+  }
+
+  const used = profile.calculationsThisWeek ?? 0;
+  const resetsIn = Math.ceil(7 - daysSinceReset);
+
+  return { used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false };
+}
+
 function serializeProfile(p: typeof profilesTable.$inferSelect) {
   return {
     ...p,
@@ -37,6 +70,8 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
     avgAccomPerNight: Number(p.avgAccomPerNight),
     avgFoodPerDay: Number(p.avgFoodPerDay),
     minTakeHomePerPerson: Number(p.minTakeHomePerPerson),
+    payoutMode: p.payoutMode ?? "fixed",
+    minimumActTakeHome: Number(p.minimumActTakeHome ?? 0),
     defaultFuelPrice: p.defaultFuelPrice != null ? Number(p.defaultFuelPrice) : null,
     defaultPetrolPrice: p.defaultPetrolPrice != null ? Number(p.defaultPetrolPrice) : null,
     defaultDieselPrice: p.defaultDieselPrice != null ? Number(p.defaultDieselPrice) : null,
@@ -47,12 +82,80 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
   };
 }
 
+function decimalString(value: number | null | undefined, fallback: number): string {
+  return String(value ?? fallback);
+}
+
+function nullableDecimalString(value: number | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  return value === null ? null : String(value);
+}
+
+function createProfileInsertData(
+  data: CreateProfilePayload,
+  userId: string,
+): typeof profilesTable.$inferInsert {
+  return {
+    ...data,
+    userId,
+    avgAccomPerNight: decimalString(data.avgAccomPerNight, 0),
+    avgFoodPerDay: decimalString(data.avgFoodPerDay, 0),
+    fuelConsumption: decimalString(data.fuelConsumption, 10),
+    expectedGigFee: decimalString(data.expectedGigFee, 0),
+    minTakeHomePerPerson: decimalString(data.minTakeHomePerPerson, 0),
+    payoutMode: data.payoutMode ?? "fixed",
+    minimumActTakeHome: decimalString(data.minimumActTakeHome, 0),
+    homeBaseLat: nullableDecimalString(data.homeBaseLat) ?? null,
+    homeBaseLng: nullableDecimalString(data.homeBaseLng) ?? null,
+    defaultFuelPrice: nullableDecimalString(data.defaultFuelPrice) ?? null,
+    defaultPetrolPrice: nullableDecimalString(data.defaultPetrolPrice) ?? null,
+    defaultDieselPrice: nullableDecimalString(data.defaultDieselPrice) ?? null,
+    defaultLpgPrice: nullableDecimalString(data.defaultLpgPrice) ?? null,
+  };
+}
+
+function createProfileUpdateData(data: UpdateProfilePayload): Partial<typeof profilesTable.$inferInsert> {
+  const {
+    fuelConsumption,
+    expectedGigFee,
+    avgAccomPerNight,
+    avgFoodPerDay,
+    minTakeHomePerPerson,
+    minimumActTakeHome,
+    homeBaseLat,
+    homeBaseLng,
+    defaultFuelPrice,
+    defaultPetrolPrice,
+    defaultDieselPrice,
+    defaultLpgPrice,
+    ...nonDecimalFields
+  } = data;
+  const updateData: Partial<typeof profilesTable.$inferInsert> = { ...nonDecimalFields };
+  if (fuelConsumption !== undefined) updateData.fuelConsumption = decimalString(fuelConsumption, 10);
+  if (expectedGigFee !== undefined) updateData.expectedGigFee = decimalString(expectedGigFee, 0);
+  if (avgAccomPerNight !== undefined) updateData.avgAccomPerNight = decimalString(avgAccomPerNight, 0);
+  if (avgFoodPerDay !== undefined) updateData.avgFoodPerDay = decimalString(avgFoodPerDay, 0);
+  if (minTakeHomePerPerson !== undefined) updateData.minTakeHomePerPerson = decimalString(minTakeHomePerPerson, 0);
+  if (minimumActTakeHome !== undefined) updateData.minimumActTakeHome = decimalString(minimumActTakeHome, 0);
+  if (homeBaseLat !== undefined) updateData.homeBaseLat = nullableDecimalString(homeBaseLat);
+  if (homeBaseLng !== undefined) updateData.homeBaseLng = nullableDecimalString(homeBaseLng);
+  if (defaultFuelPrice !== undefined) updateData.defaultFuelPrice = nullableDecimalString(defaultFuelPrice);
+  if (defaultPetrolPrice !== undefined) updateData.defaultPetrolPrice = nullableDecimalString(defaultPetrolPrice);
+  if (defaultDieselPrice !== undefined) updateData.defaultDieselPrice = nullableDecimalString(defaultDieselPrice);
+  if (defaultLpgPrice !== undefined) updateData.defaultLpgPrice = nullableDecimalString(defaultLpgPrice);
+  return updateData;
+}
+
+// Match active (non-archived) profiles owned by the given user.
+const ownedActiveProfile = (userId: string) =>
+  and(eq(profilesTable.userId, userId), isNull(profilesTable.archivedAt));
+
 router.get("/profiles", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const profiles = await db
     .select()
     .from(profilesTable)
-    .where(eq(profilesTable.userId, userId))
+    .where(ownedActiveProfile(userId))
     .orderBy(profilesTable.createdAt);
   res.json(GetProfilesResponse.parse(profiles.map(serializeProfile)));
 });
@@ -61,8 +164,20 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userRole);
   const count = await countUserRecords(profilesTable, userId);
-  if (count >= limits.maxProfiles) {
-    res.status(403).json({ error: "Plan limit reached", code: "LIMIT_PROFILES", limit: limits.maxProfiles, plan: userPlan });
+  // Alpha-safe rule: an authenticated user with zero profiles must always be
+  // able to create their first profile, regardless of plan limit. Plan-based
+  // gating only applies once the user already has at least one profile.
+  if (count > 0 && count >= limits.maxProfiles) {
+    console.warn(
+      `[profiles.create.denied] userId=${userId} role=${userRole} plan=${userPlan} ` +
+      `existingCount=${count} limit=${limits.maxProfiles} reason=plan_limit_reached`,
+    );
+    res.status(403).json({
+      error: "Plan limit reached",
+      code: "LIMIT_PROFILES",
+      limit: limits.maxProfiles,
+      plan: userPlan,
+    });
     return;
   }
   const parsed = CreateProfileBody.safeParse(req.body);
@@ -70,19 +185,7 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [profile] = await db.insert(profilesTable).values({
-    ...parsed.data,
-    userId,
-    avgAccomPerNight: String(parsed.data.avgAccomPerNight ?? 0),
-    avgFoodPerDay: String(parsed.data.avgFoodPerDay ?? 0),
-    fuelConsumption: String(parsed.data.fuelConsumption ?? 10),
-    expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
-    minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
-    defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
-    defaultPetrolPrice: parsed.data.defaultPetrolPrice != null ? String(parsed.data.defaultPetrolPrice) : null,
-    defaultDieselPrice: parsed.data.defaultDieselPrice != null ? String(parsed.data.defaultDieselPrice) : null,
-    defaultLpgPrice: parsed.data.defaultLpgPrice != null ? String(parsed.data.defaultLpgPrice) : null,
-  }).returning();
+  const [profile] = await db.insert(profilesTable).values(createProfileInsertData(parsed.data, userId)).returning();
   res.status(201).json(GetProfileResponse.parse(serializeProfile(profile)));
 });
 
@@ -90,27 +193,8 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
 // otherwise Express matches the wildcard first and treats "weekly-usage" as an id.
 router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole } = req as AuthenticatedRequest;
-
-  if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
-    return;
-  }
-
-  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
-
-  if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
-    return;
-  }
-
-  const profile = profiles[0];
-  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
-  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
-  const resetsIn = needsReset
-    ? 7
-    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
-
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
+  const profiles = await db.select().from(profilesTable).where(ownedActiveProfile(userId));
+  res.json(getWeeklyUsagePayload(userRole, profiles[0]));
 });
 
 router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
@@ -120,7 +204,7 @@ router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId)));
+  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId)));
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -140,21 +224,8 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const updateData: Record<string, unknown> = { ...parsed.data };
-  if (parsed.data.fuelConsumption != null) updateData.fuelConsumption = String(parsed.data.fuelConsumption);
-  if (parsed.data.expectedGigFee != null) updateData.expectedGigFee = String(parsed.data.expectedGigFee);
-  if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
-  if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
-  if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
-  if (parsed.data.defaultFuelPrice != null) updateData.defaultFuelPrice = String(parsed.data.defaultFuelPrice);
-  else if (parsed.data.defaultFuelPrice === null) updateData.defaultFuelPrice = null;
-  if (parsed.data.defaultPetrolPrice != null) updateData.defaultPetrolPrice = String(parsed.data.defaultPetrolPrice);
-  else if (parsed.data.defaultPetrolPrice === null) updateData.defaultPetrolPrice = null;
-  if (parsed.data.defaultDieselPrice != null) updateData.defaultDieselPrice = String(parsed.data.defaultDieselPrice);
-  else if (parsed.data.defaultDieselPrice === null) updateData.defaultDieselPrice = null;
-  if (parsed.data.defaultLpgPrice != null) updateData.defaultLpgPrice = String(parsed.data.defaultLpgPrice);
-  else if (parsed.data.defaultLpgPrice === null) updateData.defaultLpgPrice = null;
-  const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
+  const updateData = createProfileUpdateData(parsed.data);
+  const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -169,7 +240,7 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [profile] = await db.delete(profilesTable).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
+  const [profile] = await db.delete(profilesTable).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -179,13 +250,13 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole } = req as AuthenticatedRequest;
-  const id = parseInt(req.params.id);
+  const id = parseIntegerParam(req.params.id);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid profile id" });
     return;
   }
 
-  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, id), eq(profilesTable.userId, userId)));
+  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, id), ownedActiveProfile(userId)));
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -216,32 +287,6 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
     .where(eq(profilesTable.id, id));
 
   res.json(TrackCalculationResponse.parse({ allowed: true, count, limit: FREE_CALC_LIMIT }));
-});
-
-// ─── GET weekly usage (read-only, no increment) ───────────────────────────────
-router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
-  const { userId, userRole } = req as AuthenticatedRequest;
-
-  if (hasProAccess(userRole)) {
-    res.json({ used: 0, limit: null, resetsIn: null, isPro: true });
-    return;
-  }
-
-  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
-
-  if (profiles.length === 0) {
-    res.json({ used: 0, limit: FREE_CALC_LIMIT, resetsIn: 7, isPro: false });
-    return;
-  }
-
-  const profile = profiles[0];
-  const needsReset = !profile.lastCalculationReset || daysDiff(profile.lastCalculationReset) >= 7;
-  const used = needsReset ? 0 : (profile.calculationsThisWeek ?? 0);
-  const resetsIn = needsReset
-    ? 7
-    : Math.ceil(7 - daysDiff(profile.lastCalculationReset!));
-
-  res.json({ used, limit: FREE_CALC_LIMIT, resetsIn: Math.max(1, resetsIn), isPro: false });
 });
 
 export default router;

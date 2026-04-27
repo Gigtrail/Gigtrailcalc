@@ -249,6 +249,11 @@
     border-left: 3px solid rgb(224 122 31 / 0.35);
     color: #8A8176;
   }
+  .trail-leg-warning-extreme {
+    background-color: rgb(194 90 0 / 0.14);
+    border-left: 4px solid rgb(194 90 0 / 0.75);
+    color: #5A3000;
+  }
 
   /* Subtle paper texture overlay */
   .paper-texture {
@@ -338,5 +343,53 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+}
+
+.calc-reward-badge {
+  animation: calc-reward-pop 900ms ease-out forwards;
+}
+
+.calc-burst-dot {
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, hsl(var(--primary)) 74%, white);
+  opacity: 0;
+  pointer-events: none;
+  animation: calc-burst 850ms ease-out forwards;
+}
+
+@keyframes calc-reward-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(0.3rem) scale(0.92);
+  }
+
+  25% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes calc-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+
+  20% {
+    opacity: 0.95;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-1.2rem) scale(1.4);
   }
 }

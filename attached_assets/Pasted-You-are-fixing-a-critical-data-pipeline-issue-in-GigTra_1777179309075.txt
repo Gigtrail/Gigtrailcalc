@@ -1,0 +1,118 @@
+You are fixing a critical data pipeline issue in GigTrail.
+
+Context:
+Recent scalability changes introduced proper pagination and stricter venue handling.
+
+Problem:
+Saved Venues page is empty even when runs (shows) exist.
+
+Root cause:
+Runs are being saved, but venues are not being reliably created or linked.
+
+---
+
+## GOAL
+
+Ensure every saved run feeds the venue system correctly.
+
+This is a core product requirement.
+
+---
+
+## REQUIRED BEHAVIOUR
+
+When a run is created (via calculator, tour, or manual save):
+
+1. Resolve venue identity using:
+
+   * venueName
+   * city
+   * country
+
+2. Generate:
+   normalizedVenueKey =
+   lower(trim(venueName)) + "|" + lower(trim(city)) + "|" + lower(trim(country))
+
+3. Check for existing venue:
+   WHERE userId AND normalizedVenueKey match
+
+4. If NOT found:
+
+   * Create venue
+   * Set:
+     venueType = "personal"
+     userId
+     name
+     city
+     country
+     normalizedVenueKey
+
+5. If found:
+
+   * Use existing venue.id
+
+6. Save run with:
+   venueId (REQUIRED — never null)
+
+---
+
+## WHERE TO IMPLEMENT
+
+Check and fix:
+
+* artifacts/api-server/src/routes/runs.ts
+* artifacts/api-server/src/routes/tours.ts
+* any logic that saves calculations or tour stops
+
+Ensure:
+Venue resolution happens BEFORE run insert
+
+---
+
+## VALIDATION RULES
+
+* No run should exist without venueId
+* No venue should be created without userId
+* No duplicate venues per user + normalizedVenueKey
+
+---
+
+## BACKFILL EXISTING DATA
+
+Fix current broken state:
+
+1. Find runs with null or missing venueId
+2. Group by:
+   venueName + city + country
+3. Create venues (if needed)
+4. Update runs to assign correct venueId
+
+---
+
+## DO NOT
+
+* Do not change pagination logic
+* Do not touch frontend UI
+* Do not mix imported leads into personal venues
+* Do not modify import staging system
+
+---
+
+## SUCCESS CRITERIA
+
+After fix:
+
+* Saving a show creates or updates a venue
+* Saved Venues page populates correctly
+* Played filter returns real data
+
+---
+
+## DELIVERABLE
+
+* Files changed
+* Explanation of fix
+* Confirmation that run → venue linkage is enforced
+* Backfill script (if needed)
+
+END.

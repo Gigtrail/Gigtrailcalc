@@ -1,0 +1,87 @@
+Add admin-only profile archive/delete controls with legacy data preservation.
+
+Goal:
+Admins need to remove bad/test/duplicate profiles, but we must not permanently destroy useful historical data.
+
+Use a soft-delete/archive approach, not hard delete.
+
+Scope:
+Admin area + profiles API/database only.
+Do not change billing, auth, calculation math, tour math, or normal user profile editing except to hide archived profiles.
+
+Requirements:
+
+1. Database
+Add soft-delete fields to profiles:
+- archivedAt timestamp nullable
+- archivedByUserId text nullable
+- archiveReason text nullable
+
+If the project already uses deletedAt/deletedBy fields, reuse those instead of creating duplicate concepts.
+
+2. Normal app behaviour
+Archived profiles must:
+- not appear in normal profile lists
+- not be selectable for new calculations/tours
+- not be used as default active profile
+- keep existing saved calculations, tours, venues, and historical data intact
+
+Existing historical records linked to that profile should still render with fallback text if needed, e.g.
+“Archived profile”
+
+3. Admin UI
+In the Admin page, add a Profiles section or extend existing user/profile admin tools.
+
+Admins should be able to:
+- search profiles by user email, artist/profile name, or profile ID
+- view profile owner email and created date
+- click “Archive profile”
+- enter optional reason
+- confirm before archiving
+
+Confirmation text:
+“Archive this profile? It will disappear from normal app views but historical calculations will be preserved.”
+
+4. Legacy Bin
+Add an admin-only “Archived Profiles” / “Legacy Bin” view.
+
+Show:
+- profile name
+- owner email/user ID
+- archived date
+- archived by
+- archive reason
+- number of saved calculations/tours if available
+
+Include “Restore profile” if easy and low-risk.
+If restore is too much for this pass, leave the backend structured for it and show archived profiles read-only.
+
+5. Permissions
+Only admins can archive or view archived profiles.
+Use the existing admin entitlement/role guard already used elsewhere.
+Non-admin users must not be able to hit archive endpoints.
+
+6. API
+Add endpoints or extend existing admin endpoints:
+- GET admin profiles including active/archived filter
+- POST/PATCH archive profile
+- POST/PATCH restore profile if implemented
+
+7. Safety
+Do not physically delete rows.
+Do not cascade-delete calculations, tours, venues, vehicles, or history.
+Do not remove user accounts.
+
+8. Tests/checks
+- Admin can archive a profile
+- Archived profile disappears from normal profile selector/list
+- Archived profile appears in admin Legacy Bin
+- Historical calculations still open
+- Non-admin request is rejected
+- pnpm run typecheck passes
+
+Return:
+- files changed
+- migration details
+- manual test steps
+- typecheck result

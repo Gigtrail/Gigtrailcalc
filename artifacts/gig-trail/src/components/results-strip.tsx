@@ -77,7 +77,7 @@ export function ResultsStrip({ result, isStale, celebrate, isPro, calcUsage }: R
             </div>
             <div>
               <div className="text-base font-bold text-foreground leading-tight">Run the numbers</div>
-              <div className="text-xs text-muted-foreground">Fill in a few details, then hit Calculate Gig.</div>
+              <div className="text-xs text-muted-foreground">Set a few fast inputs, then press Calculate whenever you want a fresh read.</div>
             </div>
           </div>
           {showUsage && (
@@ -112,7 +112,7 @@ export function ResultsStrip({ result, isStale, celebrate, isPro, calcUsage }: R
   return (
     <div
       className={cn(
-        "sticky top-2 z-20 rounded-xl border bg-card/95 backdrop-blur-sm shadow-sm p-4 space-y-3 transition-all",
+        "relative sticky top-2 z-20 rounded-xl border bg-card/95 backdrop-blur-sm shadow-sm p-4 space-y-3 transition-all overflow-hidden",
         isStale ? "border-dashed border-border/60 opacity-80" : "border-border/60",
         celebrate && !isStale && "ring-2 ring-offset-2 ring-offset-background animate-in fade-in zoom-in-95 duration-300",
         celebrate && !isStale && v.ring
@@ -133,9 +133,14 @@ export function ResultsStrip({ result, isStale, celebrate, isPro, calcUsage }: R
                   Out of date
                 </span>
               )}
+              {celebrate && !isStale && (
+                <span className="calc-reward-badge text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/20">
+                  Fresh calc
+                </span>
+              )}
             </div>
             <div className="text-sm font-medium text-foreground mt-1 leading-tight truncate">
-              {isStale ? "Inputs changed — hit Calculate to refresh" : v.headline}
+              {isStale ? "Inputs changed. Hit Calculate to refresh." : v.headline}
             </div>
           </div>
         </div>
@@ -152,6 +157,14 @@ export function ResultsStrip({ result, isStale, celebrate, isPro, calcUsage }: R
           </div>
         </div>
       </div>
+
+      {celebrate && !isStale && (
+        <>
+          <span className="calc-burst-dot left-6 top-6" />
+          <span className="calc-burst-dot left-16 top-8" />
+          <span className="calc-burst-dot right-12 top-10" />
+        </>
+      )}
 
       {/* Supporting metrics */}
       <div className="flex items-center gap-4 text-xs text-muted-foreground border-t border-border/40 pt-2.5">

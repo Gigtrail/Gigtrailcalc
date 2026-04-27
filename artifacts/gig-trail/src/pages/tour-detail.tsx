@@ -3,12 +3,14 @@ import {
   useGetTour, useGetTourStops, useGetProfile,
   useDeleteTourStop, useGetVehicles, useGetRuns, useCreateTourStop, useUpdateTour,
   useGetTourVehicles, useAddTourVehicle, useDeleteTourVehicle,
-  getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey,
+  getGetTourVehiclesQueryKey, getGetToursQueryKey, useSyncStopToPastShow, getGetVenuesQueryKey, getGetRunsQueryKey,
+  getGetDashboardSummaryQueryKey, getGetDashboardRecentQueryKey,
   syncStopToPastShow as syncStopRaw,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChevronLeft, Edit, TrendingUp, AlertTriangle, XCircle, Truck, Users,
   Receipt, Calendar, MapPin, Plus, Trash2, Fuel, Navigation, ChevronDown,
@@ -19,6 +21,8 @@ import { format, parseISO, getDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetTourStopsQueryKey, getGetTourQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { formatVehicleLabel } from "@/lib/duplicate-protection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,14 +53,29 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { calculateTour, fmt, formatDriveTime, type TourLeg } from "@/lib/tour-calculator";
 import { generateTourICS, downloadICS, type ICSOptions, type ICSStop, type ICSLeg } from "@/lib/tour-ics";
+import { getTodayIsoDate } from "@/lib/run-lifecycle";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { SINGLE_ROOM_RATE, DOUBLE_ROOM_RATE, DEFAULT_MAX_DRIVE_HOURS_PER_DAY } from "@/lib/gig-constants";
+import {
+  SINGLE_ROOM_RATE,
+  DOUBLE_ROOM_RATE,
+  DEFAULT_MAX_DRIVE_HOURS_PER_DAY,
+  EXTREME_DRIVE_HOURS_THRESHOLD,
+  getDriveSeverity,
+  type DriveSeverity,
+} from "@/lib/gig-constants";
 import {
   migrateOldMembers, resolveActiveMembers, calculateMemberEarnings,
 } from "@/lib/member-utils";
 import { calculateTicketRecovery } from "@/lib/ticket-recovery";
 import { trackEvent } from "@/lib/analytics";
+import {
+  analyzeTourRisk,
+  buildTourRiskShowSnapshot,
+  createTourRiskSnapshot,
+  type TourRiskResult,
+  type TourRiskSnapshot,
+} from "@/lib/tour-risk";
 
 export default function TourDetail() {
   const [, setLocation] = useLocation();
@@ -74,6 +93,11 @@ export default function TourDetail() {
   const [showMemberPayouts, setShowMemberPayouts] = useState(false);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = useState(false);
   const [showExpensesBreakdown, setShowExpensesBreakdown] = useState(false);
+  const [riskAnalysis, setRiskAnalysis] = useState<TourRiskResult | null>(null);
+  const [riskSnapshotForDisplay, setRiskSnapshotForDisplay] = useState<TourRiskSnapshot | null>(null);
+  const [riskAnalysisKey, setRiskAnalysisKey] = useState<string | null>(null);
+  const [activeResultsTab, setActiveResultsTab] = useState<"overview" | "risk">("overview");
+  const [showRiskNumbers, setShowRiskNumbers] = useState(false);
   const toggleDay = (date: string) =>
     setExpandedDays(prev => { const next = new Set(prev); next.has(date) ? next.delete(date) : next.add(date); return next; });
   const toggleStop = (id: number) =>
@@ -104,9 +128,9 @@ export default function TourDetail() {
   });
   const { data: allVehicles } = useGetVehicles();
   const { data: tourVehicles, isLoading: isLoadingTourVehicles } = useGetTourVehicles(tourId, {
-    query: { enabled: !!tourId },
+    query: { enabled: !!tourId, queryKey: getGetTourVehiclesQueryKey(tourId) },
   });
-  const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal } });
+  const { data: pastRuns } = useGetRuns({ query: { enabled: showPastShowModal, queryKey: getGetRunsQueryKey() } });
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
 
@@ -119,20 +143,14 @@ export default function TourDetail() {
     includeNotes: false,
   });
 
-  const [localFuelType, setLocalFuelType] = useState("petrol");
-  const [localFuelPricePetrol, setLocalFuelPricePetrol] = useState("1.90");
-  const [localFuelPriceDiesel, setLocalFuelPriceDiesel] = useState("1.95");
-  const [localFuelPriceLpg, setLocalFuelPriceLpg] = useState("0.95");
+  const [localFuelPrice, setLocalFuelPrice] = useState("");
   const [fuelBreakdownOpen, setFuelBreakdownOpen] = useState(false);
   const fuelSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fuelInitialised = useRef(false);
 
   useEffect(() => {
     if (!tour) return;
-    setLocalFuelType(tour.fuelType ?? "petrol");
-    setLocalFuelPricePetrol(String(tour.fuelPricePetrol ?? "1.90"));
-    setLocalFuelPriceDiesel(String(tour.fuelPriceDiesel ?? "1.95"));
-    setLocalFuelPriceLpg(String(tour.fuelPriceLpg ?? "0.95"));
+    setLocalFuelPrice(tour.fuelPrice != null ? String(tour.fuelPrice) : "");
     fuelInitialised.current = true;
   }, [tour?.id]);
 
@@ -140,19 +158,17 @@ export default function TourDetail() {
     if (!fuelInitialised.current || !tour) return;
     if (fuelSaveTimerRef.current) clearTimeout(fuelSaveTimerRef.current);
     fuelSaveTimerRef.current = setTimeout(() => {
+      const parsed = parseFloat(localFuelPrice);
       updateTour.mutate(
         {
           id: tourId,
           data: {
             name: tour.name,
-            fuelType: localFuelType,
-            fuelPricePetrol: parseFloat(localFuelPricePetrol) || 1.90,
-            fuelPriceDiesel: parseFloat(localFuelPriceDiesel) || 1.95,
-            fuelPriceLpg: parseFloat(localFuelPriceLpg) || 0.95,
+            fuelPrice: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
           },
         },
         {
-          onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tour", tourId] }),
+          onSuccess: () => invalidateTourSummaryQueries(),
         }
       );
     }, 800);
@@ -160,7 +176,7 @@ export default function TourDetail() {
       if (fuelSaveTimerRef.current) clearTimeout(fuelSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
+  }, [localFuelPrice]);
 
   const deleteStop = useDeleteTourStop();
   const createStop = useCreateTourStop();
@@ -175,9 +191,9 @@ export default function TourDetail() {
   useEffect(() => {
     if (autoSyncRun.current) return;
     if (!stops || stops.length === 0 || !tourId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayIsoDate();
     const eligible = stops.filter(
-      s => s.date && s.date <= today && s.venueName && s.venueName.trim().length > 0
+      s => s.date && s.date < today && s.venueName && s.venueName.trim().length > 0
     );
     if (eligible.length === 0) return;
     autoSyncRun.current = true;
@@ -205,13 +221,22 @@ export default function TourDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stops, tourId]);
 
+  const invalidateTourSummaryQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["tour", tourId] });
+    queryClient.invalidateQueries({ queryKey: ["tourStops", tourId] });
+    queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+    queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
+  };
+
   const handleDeleteStop = (stopId: number) => {
     deleteStop.mutate(
       { tourId, stopId },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
-          queryClient.invalidateQueries({ queryKey: getGetTourQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           toast({ title: "Stop deleted" });
         },
         onError: () => {
@@ -222,18 +247,50 @@ export default function TourDetail() {
   };
 
   const handleAddTourVehicle = (vehicleId: number, vehicleName: string) => {
-    addTourVehicleMutation.mutate(
-      { tourId, data: { vehicleId } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
-          toast({ title: `"${vehicleName}" added to tour fleet` });
-        },
-        onError: () => {
-          toast({ title: "Failed to add vehicle", variant: "destructive" });
-        },
-      }
-    );
+    // If the tour still relies on the old single-vehicle field (legacyVehicle)
+    // and has no rows in tour_vehicles yet, the first add would silently drop
+    // that legacy vehicle (the UI flips from "show legacy" to "show tour_vehicles"
+    // and the legacy id is no longer rendered or used for fuel). Migrate the
+    // legacy vehicle into tour_vehicles first so adding a new one truly adds.
+    const legacyId =
+      (tourVehicles?.length ?? 0) === 0 && tour?.vehicleId
+        ? tour.vehicleId
+        : null;
+    const needsLegacyMigration = legacyId !== null && legacyId !== vehicleId;
+
+    const addPrimary = () => {
+      addTourVehicleMutation.mutate(
+        { tourId, data: { vehicleId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+            invalidateTourSummaryQueries();
+            toast({ title: `"${vehicleName}" added to tour fleet` });
+          },
+          onError: () => {
+            toast({ title: "Failed to add vehicle", variant: "destructive" });
+          },
+        }
+      );
+    };
+
+    if (needsLegacyMigration) {
+      addTourVehicleMutation.mutate(
+        { tourId, data: { vehicleId: legacyId } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+            addPrimary();
+          },
+          onError: () => {
+            // Legacy already migrated elsewhere or conflict — proceed with the new add anyway.
+            addPrimary();
+          },
+        }
+      );
+    } else {
+      addPrimary();
+    }
   };
 
   const handleRemoveTourVehicle = (vehicleId: number, vehicleName: string) => {
@@ -242,6 +299,7 @@ export default function TourDetail() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetTourVehiclesQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           toast({ title: `"${vehicleName}" removed from tour fleet` });
         },
         onError: () => {
@@ -285,6 +343,7 @@ export default function TourDetail() {
       {
         tourId,
         data: {
+          venueId: run.venueId ?? null,
           city: run.destination || run.city || "Unknown",
           venueName: run.venueName ?? null,
           date: pendingDate ?? run.showDate ?? null,
@@ -305,7 +364,7 @@ export default function TourDetail() {
       },
       {
         onSuccess: (newStop) => {
-          queryClient.invalidateQueries({ queryKey: getGetTourStopsQueryKey(tourId) });
+          invalidateTourSummaryQueries();
           closePastShowModal();
           setImportingRunId(null);
           toast({ title: `"${run.venueName || run.destination || run.city}" added to trail` });
@@ -347,12 +406,33 @@ export default function TourDetail() {
         avgConsumption: Number(legacyVehicle.avgConsumption),
       }];
     }
+    // Active fuel type comes from the (first) vehicle if present; otherwise legacy tour.fuelType.
+    const activeFuelType = (
+      vehicles?.[0]?.fuelType
+      ?? tour?.fuelType
+      ?? "petrol"
+    ).toString().toLowerCase();
+    const parsedSingle = parseFloat(localFuelPrice);
+    const fallback =
+      activeFuelType === "diesel" ? 1.95
+      : activeFuelType === "lpg" ? 0.95
+      : 1.90;
+    const priceForActive =
+      Number.isFinite(parsedSingle) && parsedSingle > 0
+        ? parsedSingle
+        : (tour?.fuelPrice != null ? Number(tour.fuelPrice) : fallback);
     const fuelPrices = {
-      petrol: parseFloat(localFuelPricePetrol) || 1.90,
-      diesel: parseFloat(localFuelPriceDiesel) || 1.95,
-      lpg: parseFloat(localFuelPriceLpg) || 0.95,
+      petrol: activeFuelType === "petrol" ? priceForActive : 1.90,
+      diesel: activeFuelType === "diesel" ? priceForActive : 1.95,
+      lpg: activeFuelType === "lpg" ? priceForActive : 0.95,
     };
-    return calculateTour(
+    // Tour-level extras are added on top of calculateTour's totalCost.
+    const tourExtras =
+      Number(tour?.flightsCost ?? 0) +
+      Number(tour?.ferriesTollsCost ?? 0) +
+      Number(tour?.gearHireCost ?? 0) +
+      Number(tour?.otherCosts ?? 0);
+    const baseCalc = calculateTour(
       stops,
       tour?.startLocation,
       tour?.endLocation,
@@ -369,10 +449,16 @@ export default function TourDetail() {
       tour?.startLocationLng ?? null,
       tour?.endLocationLat ?? null,
       tour?.endLocationLng ?? null,
-      localFuelType,
+      activeFuelType,
       fuelPrices,
     );
-  }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelType, localFuelPricePetrol, localFuelPriceDiesel, localFuelPriceLpg]);
+    return {
+      ...baseCalc,
+      tourExtras,
+      totalExpenses: baseCalc.totalExpenses + tourExtras,
+      netProfit: baseCalc.netProfit - tourExtras,
+    };
+  }, [stops, tour, tourVehicles, legacyVehicle, nightlyAccomRate, profile, localFuelPrice]);
 
   // ── Persist computed financial totals so the tours list stays accurate ─────
   // Always save the latest calc result (including on first load) so the tours
@@ -381,38 +467,8 @@ export default function TourDetail() {
   // that drive calc, so calc will not re-run after the write.
   const calcSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!calc || !tour) return;
-    if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    const netProfit  = Math.round((calc.netProfit    ?? 0) * 100) / 100;
-    const grossIncome = Math.round((calc.grossIncome  ?? 0) * 100) / 100;
-    console.debug(
-      `[GigTrail] Tour ${tourId} calc → grossIncome=${grossIncome} netProfit=${netProfit}`,
-    );
-    calcSaveTimerRef.current = setTimeout(() => {
-      updateTour.mutate(
-        {
-          id: tourId,
-          data: {
-            name: tour.name,
-            totalDistance: Math.round(calc.totalDistance ?? 0),
-            totalIncome: grossIncome,
-            totalCost: Math.round((calc.totalExpenses ?? 0) * 100) / 100,
-            totalProfit: netProfit,
-          },
-        },
-        {
-          onSuccess: () => {
-            console.debug(
-              `[GigTrail] Tour ${tourId} saved → totalProfit=${netProfit} totalIncome=${grossIncome}`,
-            );
-            queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
-          },
-        }
-      );
-    }, 1500);
-    return () => {
-      if (calcSaveTimerRef.current) clearTimeout(calcSaveTimerRef.current);
-    };
+    // Auto-save of computed totals is currently disabled.
+    return;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calc]);
 
@@ -441,6 +497,50 @@ export default function TourDetail() {
       is_profitable: (calc.netProfit ?? 0) > 0,
     });
   }, [calc, tourId]);
+
+  const riskResetKey = useMemo(() => {
+    if (!calc) return "tour-risk:none";
+    return JSON.stringify({
+      tourId,
+      grossIncome: calc.grossIncome,
+      totalExpenses: calc.totalExpenses,
+      netProfit: calc.netProfit,
+      totalDistance: calc.totalDistance,
+      totalDriveTimeMinutes: calc.totalDriveTimeMinutes,
+      totalFuelCost: calc.totalFuelCost,
+      totalAccommodation: calc.totalAccommodation,
+      localFuelPrice,
+      profilePayouts: profile
+        ? {
+            bandMembers: profile.bandMembers,
+            activeMemberIds: profile.activeMemberIds,
+          }
+        : null,
+      stops: (stops ?? []).map((stop) => ({
+        id: stop.id,
+        showType: stop.showType,
+        dealType: stop.dealType,
+        fee: stop.fee,
+        guarantee: stop.guarantee,
+        merchEstimate: stop.merchEstimate,
+        marketingCost: stop.marketingCost,
+        accommodationCost: stop.accommodationCost,
+        extraCosts: stop.extraCosts,
+        distanceOverride: stop.distanceOverride,
+        expectedAttendancePct: stop.expectedAttendancePct,
+        capacity: stop.capacity,
+        ticketPrice: stop.ticketPrice,
+      })),
+    });
+  }, [calc, localFuelPrice, profile, stops, tourId]);
+
+  useEffect(() => {
+    if (riskResetKey === "tour-risk:none") {
+      setRiskAnalysis(null);
+      setRiskSnapshotForDisplay(null);
+      setRiskAnalysisKey(null);
+    }
+  }, [riskResetKey]);
 
   if (isLoadingTour || isLoadingStops) {
     return <div className="p-8 text-center text-muted-foreground">Loading tour details...</div>;
@@ -487,8 +587,9 @@ export default function TourDetail() {
   const accommodationNights = calc?.accommodationNights ?? (daysOnTour != null ? Math.max(0, daysOnTour - 1) : null);
   const daysWarning = daysOnTour != null && sortedStops.length > 0 && daysOnTour < sortedStops.length;
 
-  const netProfit = calc?.netProfit ?? 0;
-  const grossIncome = calc?.grossIncome ?? 0;
+  const totalDistanceKm = tour?.totalDistance ?? calc?.totalDistance ?? 0;
+  const grossIncome = tour?.totalIncome ?? calc?.grossIncome ?? 0;
+  const netProfit = tour?.totalProfit ?? calc?.netProfit ?? 0;
 
   const { library: memberLibrary, activeMemberIds: activeMemberIdList } = profile
     ? migrateOldMembers(profile.bandMembers, profile.activeMemberIds ?? null)
@@ -499,8 +600,10 @@ export default function TourDetail() {
     : sortedStops.filter((s) => (s.fee ?? 0) > 0 || (s.merchEstimate ?? 0) > 0).length;
   const memberEarnings = calculateMemberEarnings(activeMembers, qualifyingShowCount);
   const totalMemberPayout = memberEarnings.totalPayout;
-  const totalExpensesWithPayouts = (calc?.totalExpenses ?? 0) + totalMemberPayout;
+  const totalExpenses = tour?.totalCost ?? calc?.totalExpenses ?? 0;
+  const totalExpensesWithPayouts = totalExpenses + totalMemberPayout;
   const profitAfterMemberFees = netProfit - totalMemberPayout;
+  const avgNetPerShow = sortedStops.length > 0 ? netProfit / sortedStops.length : 0;
 
   const biggestCost = (() => {
     if (!calc) return null;
@@ -536,21 +639,158 @@ export default function TourDetail() {
 
   const margin = grossIncome > 0 ? profitAfterMemberFees / grossIncome : 0;
 
-  const renderLegRow = (leg: TourLeg, driveWarning: boolean, legKey: string) => {
+  const riskSnapshot = (() => {
+    if (!calc || sortedStops.length === 0) return null;
+
+    const daySlotByStopId = new Map<number, (typeof daySlots)[number]>();
+    for (const day of daySlots) {
+      if (day.stop) daySlotByStopId.set(day.stop.id, day);
+    }
+
+    const fallbackFoodCostPerShow = sortedStops.length > 0 ? calc.totalFoodCost / sortedStops.length : 0;
+    const memberPayoutPerShow = qualifyingShowCount > 0 ? totalMemberPayout / qualifyingShowCount : 0;
+
+    const showResults = sortedStops
+      .map((stop, index) => {
+        const stopCalc = calc.stopCalcs.find((entry) => entry.stopId === stop.id);
+        if (!stopCalc) return null;
+
+        const daySlot = daySlotByStopId.get(stop.id);
+        const legacyLegIndex = tour.startLocation ? index : index - 1;
+        const incomingLeg = daySlot?.incomingLeg ?? (legacyLegIndex >= 0 ? calc.legs[legacyLegIndex] : undefined);
+        const allocatedFoodCost = daySlot ? daySlot.dailyFoodCost : fallbackFoodCostPerShow;
+        const allocatedAccommodationCost = daySlot ? daySlot.dailyAccomCost : stopCalc.accommodation;
+        const allocatedMemberPayout =
+          stopCalc.totalIncome > 0 && qualifyingShowCount > 0 ? memberPayoutPerShow : 0;
+
+        const variableCostFlags: string[] = [];
+        if ((stop.accommodationMode ?? "") === "manual" && allocatedAccommodationCost > 0) {
+          variableCostFlags.push("manual_accommodation");
+        }
+        if ((stop.extraCosts ?? 0) > 0) variableCostFlags.push("extra_costs");
+        if ((stop.marketingCost ?? 0) > 0) variableCostFlags.push("marketing_cost");
+        if ((incomingLeg?.source ?? "") === "unknown") variableCostFlags.push("unknown_route_cost");
+        if (stop.dealType === "guarantee vs door" || stop.dealType === "percentage split") {
+          variableCostFlags.push("variable_deal_terms");
+        }
+
+        return buildTourRiskShowSnapshot({
+          showId: stop.id,
+          date: stop.date ? stop.date.split("T")[0] : null,
+          venueName: stop.venueName || stop.city,
+          showType: stop.showType,
+          dealType: stop.dealType,
+          fee: stop.fee,
+          capacity: stop.capacity,
+          ticketPrice: stop.ticketPrice,
+          expectedAttendancePct: stop.expectedAttendancePct,
+          splitPct: stop.splitPct,
+          guarantee: stop.guarantee,
+          merchEstimate: stop.merchEstimate,
+          totalCosts:
+            stopCalc.totalCosts +
+            (incomingLeg?.fuelCost ?? 0) +
+            allocatedFoodCost +
+            allocatedMemberPayout,
+          fuelCost: incomingLeg?.fuelCost ?? 0,
+          accommodationCost: allocatedAccommodationCost,
+          travelDistance: incomingLeg?.distanceKm ?? 0,
+          travelHours: (incomingLeg?.driveTimeMinutes ?? 0) / 60,
+          variableCostFlags,
+        });
+      })
+      .filter((show): show is NonNullable<typeof show> => !!show);
+
+    const showResultById = new Map(showResults.map((show) => [String(show.showId), show]));
+    const stopCalcById = new Map(calc.stopCalcs.map((entry) => [entry.stopId, entry]));
+    const dayResults = hasDaySlots
+      ? daySlots.map((day) => {
+          const showResult = day.stop ? showResultById.get(String(day.stop.id)) : undefined;
+          const stopCalc = day.stop ? stopCalcById.get(day.stop.id) : undefined;
+          const allocatedMemberPayout =
+            showResult && showResult.grossIncome > 0 && qualifyingShowCount > 0 ? memberPayoutPerShow : 0;
+          return {
+            date: day.date,
+            type: day.stop ? "show_day" as const : "day_off" as const,
+            hasShow: Boolean(day.stop),
+            showId: day.stop?.id ?? null,
+            revenue: showResult?.grossIncome ?? 0,
+            showSpecificCosts: day.stop ? (stopCalc?.marketing ?? 0) + (stopCalc?.extraCosts ?? 0) : 0,
+            fixedOperatingCosts: day.dailyFoodCost + allocatedMemberPayout,
+            accommodationCost: day.dailyAccomCost,
+            travelDistance: day.incomingLeg?.distanceKm ?? 0,
+            travelHours: (day.incomingLeg?.driveTimeMinutes ?? 0) / 60,
+            dailyTravelBurn: day.incomingLeg?.fuelCost ?? 0,
+          };
+        })
+      : undefined;
+
+    return createTourRiskSnapshot({
+      totalGrossIncome: grossIncome,
+      totalCosts: totalExpensesWithPayouts,
+      totalNetProfit: profitAfterMemberFees,
+      overallMarginPercent: margin,
+      totalFuelCost: calc.totalFuelCost,
+      totalAccommodationCost: calc.totalAccommodation,
+      totalDistance: calc.totalDistance,
+      totalTravelHours: calc.totalDriveTimeMinutes / 60,
+      breakEvenPoint:
+        ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible"
+          ? ticketRecovery.totalTicketsNeeded
+          : 0,
+      expectedTicketTotals: showResults.reduce((sum, show) => sum + show.expectedTickets, 0),
+      runDays: hasDaySlots ? daySlots.length : daysOnTour ?? sortedStops.length,
+      volatileCostFlags: [
+        ...(calc.totalStopAccommodation > 0 ? ["stop_accommodation"] : []),
+        ...(calc.blankDayAccomCost > 0 ? ["blank_day_accommodation"] : []),
+        ...(calc.totalExtraCosts > 0 ? ["tour_extra_costs"] : []),
+        ...(calc.totalMarketing > 0 ? ["tour_marketing_costs"] : []),
+        ...(calc.blankDayCount > 0 ? ["blank_days"] : []),
+        ...(calc.legs.some((leg) => leg.source === "unknown") ? ["unknown_route_distance"] : []),
+      ],
+      // Placeholder until the tour form has an explicit intent selector.
+      tourIntent: "profit",
+      dayResults,
+      showResults,
+    });
+  })();
+
+  const renderLegRow = (leg: TourLeg, severity: DriveSeverity, legKey: string) => {
     const legOpen = expandedLegs.has(legKey);
     const hasVehicleBreakdown =
       (calc?.vehicleFuelBreakdown?.length ?? 0) > 1 &&
       (calc?.totalDistance ?? 0) > 0 &&
       leg.distanceKm > 0;
+    const rowClass =
+      severity === "extreme" ? "trail-leg-warning-extreme"
+      : severity === "long" ? "trail-leg-warning"
+      : "trail-leg-row";
+    const iconClass =
+      severity === "extreme" ? "w-3.5 h-3.5 shrink-0 text-[#A03A00]"
+      : severity === "long" ? "w-3 h-3 shrink-0 text-[#C25A00]"
+      : "w-3 h-3 shrink-0 opacity-50";
+    const labelText =
+      severity === "extreme" ? `Over ${EXTREME_DRIVE_HOURS_THRESHOLD} hrs — add a travel day`
+      : severity === "long" ? "Long drive"
+      : null;
+    const labelClass =
+      severity === "extreme" ? "text-[#A03A00] font-bold"
+      : "text-[#C25A00] font-semibold";
+    const detailNote =
+      severity === "extreme"
+        ? `Over ${EXTREME_DRIVE_HOURS_THRESHOLD} hours — practically unachievable in a single day. Add a travel day.`
+        : "Long drive — may exceed comfortable daily limit";
     return (
       <>
         <div
-          className={`px-4 py-2 flex items-center gap-2.5 text-xs cursor-pointer transition-colors border-b border-border/20 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}
+          data-testid={`leg-row-${legKey}`}
+          data-drive-severity={severity}
+          className={`px-4 py-2 flex items-center gap-2.5 text-xs cursor-pointer transition-colors border-b border-border/20 ${rowClass}`}
           onClick={e => { e.stopPropagation(); toggleLeg(legKey); }}
         >
-          {driveWarning
-            ? <AlertTriangle className="w-3 h-3 shrink-0 text-[#C25A00]" />
-            : <Fuel className="w-3 h-3 shrink-0 opacity-50" />
+          {severity !== "none"
+            ? <AlertTriangle className={iconClass} />
+            : <Fuel className={iconClass} />
           }
           <span className="flex-1 min-w-0">
             {leg.driveTimeMinutes > 0
@@ -560,14 +800,14 @@ export default function TourDetail() {
             {leg.fuelCost > 0 && (
               <span className="text-muted-foreground"> · Fuel {fmt(leg.fuelCost)}</span>
             )}
-            {driveWarning && (
-              <span className="text-[#C25A00] font-semibold"> · Long drive</span>
+            {labelText && (
+              <span className={labelClass}> · {labelText}</span>
             )}
           </span>
           <ChevronDown className={`w-3 h-3 shrink-0 text-muted-foreground/50 transition-transform ${legOpen ? "rotate-180" : ""}`} />
         </div>
         {legOpen && (
-          <div className={`px-4 pb-3 pt-2 text-xs border-b border-border/20 space-y-2 ${driveWarning ? "trail-leg-warning" : "trail-leg-row"}`}>
+          <div className={`px-4 pb-3 pt-2 text-xs border-b border-border/20 space-y-2 ${rowClass}`}>
             <div>
               <span className="font-semibold text-foreground">{leg.from}</span>
               <span className="text-muted-foreground"> → </span>
@@ -605,10 +845,10 @@ export default function TourDetail() {
                 ))}
               </div>
             )}
-            {driveWarning && (
-              <div className="flex items-center gap-1 text-[#C25A00] font-medium pt-0.5">
+            {severity !== "none" && (
+              <div className={`flex items-center gap-1 ${severity === "extreme" ? "text-[#A03A00] font-bold" : "text-[#C25A00] font-medium"} pt-0.5`}>
                 <AlertTriangle className="w-3 h-3 shrink-0" />
-                Long drive — may exceed comfortable daily limit
+                {detailNote}
               </div>
             )}
           </div>
@@ -647,6 +887,153 @@ export default function TourDetail() {
       (r.showDate?.includes(q))
     );
   });
+
+  const riskBadgeClassName = (() => {
+    if (!riskAnalysis) return "bg-muted text-muted-foreground";
+    if (riskAnalysis.riskSummary.label === "Bulletproof") return "bg-emerald-100 text-emerald-800";
+    if (riskAnalysis.riskSummary.label === "Healthy") return "bg-green-100 text-green-800";
+    if (riskAnalysis.riskSummary.label === "Balanced / Caution") return "bg-amber-100 text-amber-800";
+    if (riskAnalysis.riskSummary.label === "Fragile") return "bg-orange-100 text-orange-800";
+    if (riskAnalysis.insufficientData) return "bg-slate-100 text-slate-800";
+    return "bg-red-100 text-red-800";
+  })();
+
+  const handleCalculateRisk = () => {
+    if (!riskSnapshot) return;
+    const nextRiskAnalysis = analyzeTourRisk(riskSnapshot);
+    setRiskAnalysis(nextRiskAnalysis);
+    setRiskSnapshotForDisplay(riskSnapshot);
+    setRiskAnalysisKey(riskResetKey);
+    setActiveResultsTab("risk");
+    trackEvent("tour_risk_calculated", {
+      tour_id: tourId,
+      risk_score: nextRiskAnalysis.riskSummary.overallScore,
+      risk_label: nextRiskAnalysis.riskSummary.label,
+      anchor_collapse_net: nextRiskAnalysis.stressTests.anchorCollapse.anchorCollapseNet,
+      distance_to_ruin_percent: nextRiskAnalysis.stressTests.distanceToRuin.distanceToRuinPercent,
+      post_spike_net: nextRiskAnalysis.stressTests.logisticsSpike.postSpikeNet,
+      red_flag_count: nextRiskAnalysis.flags.redFlags.length,
+    });
+  };
+
+  const riskCategoryRows = riskAnalysis
+    ? [
+        { label: "Relies on one show", category: riskAnalysis.categoryScores.concentrationRisk },
+        { label: "Room for error", category: riskAnalysis.categoryScores.liquidityRisk },
+        { label: "Falls apart if hit", category: riskAnalysis.categoryScores.structuralFragility },
+        { label: "Road cost pressure", category: riskAnalysis.categoryScores.logisticsPressure },
+        { label: "Ticket sales pressure", category: riskAnalysis.categoryScores.revenueVolatility },
+      ]
+    : [];
+
+  const riskIsStale = Boolean(riskAnalysis && riskAnalysisKey && riskAnalysisKey !== riskResetKey);
+  const hasValidRiskInput = Boolean(riskSnapshot && sortedStops.length > 0 && calc);
+  const showLegacyRiskPanel: boolean = false;
+  const displayRiskSnapshot = riskAnalysis ? riskSnapshotForDisplay : riskSnapshot;
+  const riskShowById = new Map((displayRiskSnapshot?.showResults ?? []).map((show) => [String(show.showId), show]));
+  const stopById = new Map(sortedStops.map((stop) => [String(stop.id), stop]));
+  const ticketRecoveryByStopId = new Map(ticketRecovery.rows.map((row) => [String(row.stopId), row]));
+  const weakestShowIds = new Set((riskAnalysis?.weakestShows ?? []).map((show) => String(show.showId)));
+  const anchorShowId = riskAnalysis?.stressTests.anchorCollapse.anchorShowId != null
+    ? String(riskAnalysis.stressTests.anchorCollapse.anchorShowId)
+    : null;
+  const allRiskFlags = riskAnalysis
+    ? [...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags]
+    : [];
+  const musicianRiskCopy = (text: string) =>
+    text
+      .replace(/structural fragility/gi, "not much room for error")
+      .replace(/structurally fragile/gi, "easy to knock over")
+      .replace(/liquidity risk/gi, "not enough cash buffer")
+      .replace(/liquidity/gi, "cash buffer")
+      .replace(/volatility/gi, "sales swing")
+      .replace(/volatile/gi, "uncertain")
+      .replace(/concentration risk/gi, "too reliant on one show")
+      .replace(/speculative backend revenue/gi, "uncertain ticket or merch money")
+      .replace(/speculative revenue/gi, "uncertain income")
+      .replace(/revenue buffer/gi, "sales buffer")
+      .replace(/guarantee coverage/gi, "guaranteed money")
+      .replace(/operating-cost spike/gi, "cost jump")
+      .replace(/logistics spike/gi, "road cost jump")
+      .replace(/structural score/gi, "risk score")
+      .replace(/directional/gi, "a guide")
+      .replace(/diversify/gi, "spread the risk");
+  const topRiskIssue = musicianRiskCopy(riskAnalysis?.riskSummary.primaryConcern ?? allRiskFlags[0]?.label ?? "No major weak spot found.");
+  const nextRiskMove =
+    (riskAnalysis?.recommendations[0]?.mitigation ? musicianRiskCopy(riskAnalysis.recommendations[0].mitigation) : null) ??
+    (riskAnalysis?.insufficientData
+      ? "Add clearer income and ticket details before you make the call."
+      : "Keep this plan as-is, then recheck risk after you add or edit shows.");
+  const formatRiskTimelineDate = (date: string) => {
+    if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+      try {
+        return format(parseISO(date), "EEE MMM d");
+      } catch {
+        return date;
+      }
+    }
+    return date.replace(/-/g, " ");
+  };
+  const musicianRiskVerdict = (() => {
+    if (!riskAnalysis) return "";
+    if (riskAnalysis.insufficientData) return "There is not enough clean data here yet to trust the risk score.";
+    if (profitAfterMemberFees < 0) return "This tour is losing money on the current numbers.";
+    if (riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet < 0) {
+      const anchor = riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "one key show";
+      return `This tour can make money, but it leans hard on ${anchor}.`;
+    }
+    if (riskAnalysis.riskSummary.overallScore >= 70) return "This tour has money in it, but there is not much room for things to go wrong.";
+    if (riskAnalysis.riskSummary.overallScore >= 45) return "This tour can work, but keep an eye on ticket sales and road costs.";
+    return "This tour looks workable on the current numbers.";
+  })();
+  const riskTimelineRows = [...(displayRiskSnapshot?.dayResults ?? [])]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .map((day, index) => {
+      const stop = day.showId != null ? stopById.get(String(day.showId)) : undefined;
+      const show = day.showId != null ? riskShowById.get(String(day.showId)) : undefined;
+      const ticketRow = day.showId != null ? ticketRecoveryByStopId.get(String(day.showId)) : undefined;
+      const isAnchor = day.showId != null && anchorShowId === String(day.showId);
+      const isWeak = day.showId != null && weakestShowIds.has(String(day.showId));
+      const isTicketedShow = stop?.showType === "Ticketed Show" || stop?.showType === "Hybrid";
+      const isLongTravel = day.travelDistance >= DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 80 || day.travelHours >= DEFAULT_MAX_DRIVE_HOURS_PER_DAY;
+      const isBurnDay = !day.hasShow && day.burnCost > 0;
+      const tags: { label: string; className: string }[] = [];
+
+      if (isAnchor) tags.push({ label: "Key show", className: "bg-secondary/10 text-secondary border-secondary/25" });
+      if (isWeak) tags.push({ label: "Weak spot", className: "bg-destructive/10 text-destructive border-destructive/25" });
+      if (isTicketedShow) tags.push({ label: "Ticketed", className: "bg-primary/10 text-primary border-primary/25" });
+      if (!day.hasShow && day.type === "travel_day") tags.push({ label: "Travel day", className: "bg-sky-100 text-sky-800 border-sky-200" });
+      if (!day.hasShow && day.type === "day_off") tags.push({ label: "Day off", className: "bg-muted text-muted-foreground border-border/50" });
+      if (isBurnDay) tags.push({ label: "Burn day", className: "bg-amber-100 text-amber-800 border-amber-200" });
+      if (isLongTravel) tags.push({ label: "Long drive", className: "bg-orange-100 text-orange-800 border-orange-200" });
+      if (day.hasShow && show?.netProfit != null && show.netProfit >= 0 && !isAnchor && !isWeak) {
+        tags.push({ label: "Good buffer", className: "bg-green-100 text-green-800 border-green-200" });
+      }
+
+      let note = "Good buffer here.";
+      if (!day.hasShow) {
+        if (isLongTravel) note = `Long travel day${day.travelDistance > 0 ? ` - ${Math.round(day.travelDistance)} km` : ""}. Keep this one light.`;
+        else if (isBurnDay) note = `Day off - burning ${fmt(day.burnCost)} with no show income.`;
+        else note = "Open day - no show booked.";
+      } else if (isAnchor) {
+        note = "Key show - carrying a lot of the tour result.";
+      } else if (isTicketedShow && (ticketRow || (show?.breakEvenTickets ?? 0) > 0)) {
+        const target = show?.expectedTickets ?? null;
+        const ticketsNeeded = ticketRow?.ticketsNeeded ?? show?.breakEvenTickets ?? 0;
+        note = `Needs ${ticketsNeeded} ticket${ticketsNeeded !== 1 ? "s" : ""} to work${target ? `; target is ${target}` : ""}.`;
+        if (target != null) {
+          note += target >= ticketsNeeded ? " There is breathing room." : " Not much breathing room.";
+        }
+      } else if (isWeak) {
+        note = show?.netProfit != null && show.netProfit < 0 ? "Not pulling its weight yet." : "Low return for the drive.";
+      } else if (show?.travelDistance && show.travelDistance >= 400) {
+        note = "Long drive into this show. Make sure the deal earns its place.";
+      } else if (show?.netProfit != null && show.netProfit < 0) {
+        note = "This date loses money on the current plan.";
+      }
+
+      return { day, stop, show, note, tags, isAnchor, isWeak, isBurnDay, isLongTravel, index };
+    });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto">
@@ -689,6 +1076,27 @@ export default function TourDetail() {
         </div>
       </div>
 
+      <Tabs value={activeResultsTab} onValueChange={(value) => setActiveResultsTab(value as "overview" | "risk")} className="space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="h-11 w-full justify-start rounded-xl border border-border/50 bg-card/70 p-1 sm:w-auto">
+            <TabsTrigger value="overview" className="h-9 flex-1 px-4 sm:flex-none">
+              Tour Overview
+            </TabsTrigger>
+            <TabsTrigger value="risk" className="h-9 flex-1 px-4 sm:flex-none">
+              Risk Analysis
+              {riskAnalysis && (
+                <span className={cn("ml-2 hidden rounded-full px-2 py-0.5 text-[10px] font-semibold sm:inline-flex", riskBadgeClassName)}>
+                  {riskIsStale ? "Recheck" : riskAnalysis.riskSummary.label}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <p className="text-xs text-muted-foreground">
+            Switch between the money view and the what-could-go-wrong view.
+          </p>
+        </div>
+
+        <TabsContent value="overview" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
 
@@ -849,7 +1257,7 @@ export default function TourDetail() {
                     const stop = day.stop;
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const leg = day.incomingLeg;
-                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+                    const legSeverity: DriveSeverity = leg ? getDriveSeverity(leg.driveTimeMinutes) : "none";
 
                     const isTicketed = stop.showType === "Ticketed Show" || stop.showType === "Hybrid";
                     const rowClass = isTicketed ? "trail-row-ticketed" : "trail-row-flat";
@@ -857,7 +1265,7 @@ export default function TourDetail() {
 
                     return (
                       <div key={day.date}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, day.date)}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, legSeverity, day.date)}
 
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${rowClass}`}
@@ -921,8 +1329,8 @@ export default function TourDetail() {
                                           queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
                                           toast({
                                             title: result.createdPastShow
-                                              ? "Saved to Past Shows"
-                                              : "Past Show updated",
+                                              ? "Show record saved"
+                                              : "Show record updated",
                                             description: stop.venueName ?? undefined,
                                           });
                                         },
@@ -934,7 +1342,7 @@ export default function TourDetail() {
                                   {syncedStopIds.has(stop.id) ? (
                                     <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
                                   ) : (
-                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save Show Record</>
                                   )}
                                 </Button>
                               )}
@@ -985,10 +1393,10 @@ export default function TourDetail() {
                     const stopCalc = calc?.stopCalcs.find(c => c.stopId === stop.id);
                     const legIndex = tour.startLocation ? i : i - 1;
                     const leg = legIndex >= 0 ? calc?.legs[legIndex] : undefined;
-                    const driveWarning = leg && leg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
+                    const legSeverity: DriveSeverity = leg ? getDriveSeverity(leg.driveTimeMinutes) : "none";
                     return (
                       <div key={stop.id}>
-                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, !!driveWarning, `stop-${stop.id}`)}
+                        {leg && (leg.distanceKm > 0 || leg.source === 'unknown') && renderLegRow(leg, legSeverity, `stop-${stop.id}`)}
                         <div
                           className={`px-4 py-3 flex items-center gap-3 transition-colors cursor-pointer ${stop.showType === "Ticketed Show" || stop.showType === "Hybrid" ? "trail-row-ticketed" : "trail-row-flat"}`}
                           onClick={() => toggleStop(stop.id)}
@@ -1046,8 +1454,8 @@ export default function TourDetail() {
                                           queryClient.invalidateQueries({ queryKey: getGetVenuesQueryKey() });
                                           toast({
                                             title: result.createdPastShow
-                                              ? "Saved to Past Shows"
-                                              : "Past Show updated",
+                                              ? "Show record saved"
+                                              : "Show record updated",
                                             description: stop.venueName ?? undefined,
                                           });
                                         },
@@ -1059,7 +1467,7 @@ export default function TourDetail() {
                                   {syncedStopIds.has(stop.id) ? (
                                     <><CheckCircle className="w-3 h-3 mr-1" /> Saved</>
                                   ) : (
-                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save to Past Shows</>
+                                    <><BookmarkPlus className="w-3 h-3 mr-1" /> Save Show Record</>
                                   )}
                                 </Button>
                               )}
@@ -1109,8 +1517,9 @@ export default function TourDetail() {
                     const returnLeg = calc?.legs[calc.legs.length - 1];
                     const isReturnLeg = tour.returnHome && returnLeg && sortedStops.length > 0 &&
                       returnLeg.to !== sortedStops[sortedStops.length - 1]?.city;
-                    const returnDriveWarn = isReturnLeg && returnLeg && returnLeg.driveTimeMinutes > DEFAULT_MAX_DRIVE_HOURS_PER_DAY * 60;
-                    return isReturnLeg ? renderLegRow(returnLeg!, !!returnDriveWarn, "return-leg") : null;
+                    const returnSeverity: DriveSeverity =
+                      isReturnLeg && returnLeg ? getDriveSeverity(returnLeg.driveTimeMinutes) : "none";
+                    return isReturnLeg ? renderLegRow(returnLeg!, returnSeverity, "return-leg") : null;
                   })()}
 
                   {tour.returnHome && (tour.endLocation || tour.startLocation) && (
@@ -1124,14 +1533,14 @@ export default function TourDetail() {
                     </div>
                   )}
 
-                  {calc && calc.totalDistance > 0 && (
+                  {calc && totalDistanceKm > 0 && (
                     <div className="bg-muted/10">
 
                       {/* Route summary */}
                       <div className="p-4 flex flex-wrap gap-x-6 gap-y-2 text-sm border-b border-border/30">
                         <div>
                           <span className="text-muted-foreground">Total Distance </span>
-                          <span className="font-semibold">{calc.totalDistance} km</span>
+                          <span className="font-semibold">{totalDistanceKm} km</span>
                         </div>
                         {calc.totalDriveTimeMinutes > 0 && (
                           <div>
@@ -1151,20 +1560,38 @@ export default function TourDetail() {
                           </div>
                         )}
                       </div>
+                      {calc.legs.some(l => getDriveSeverity(l.driveTimeMinutes) === "extreme") && (
+                        <div
+                          className="px-4 py-2 text-[11px] text-muted-foreground italic border-b border-border/30 flex items-start gap-1.5"
+                          data-testid="text-extreme-drive-helper"
+                        >
+                          <AlertTriangle className="w-3 h-3 shrink-0 text-[#A03A00] mt-0.5" />
+                          <span>
+                            Drives over {EXTREME_DRIVE_HOURS_THRESHOLD} hours between gigs are flagged because they are rarely achievable without a travel day.
+                          </span>
+                        </div>
+                      )}
 
-                      {/* Fuel Settings — always visible, no tab switching */}
+                      {/* Fuel Settings — always visible, single price keyed off vehicle */}
                       {(() => {
-                        // Derive active vehicles for fuel display
                         const activeVehicles = tourVehicles && tourVehicles.length > 0
                           ? tourVehicles
                           : legacyVehicle ? [{ vehicle: legacyVehicle }] : [];
                         const hasVehicles = activeVehicles.length > 0;
+                        const activeFuelType = (
+                          activeVehicles[0]?.vehicle?.fuelType
+                          ?? tour?.fuelType
+                          ?? "petrol"
+                        ).toString().toLowerCase();
+                        const fallback =
+                          activeFuelType === "diesel" ? 1.95
+                          : activeFuelType === "lpg" ? 0.95
+                          : 1.90;
 
                         return (
                           <div className="px-4 pt-3 pb-3 border-b border-border/30 space-y-2.5">
                             <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Fuel Settings</p>
 
-                            {/* Vehicle fuel source — replaces manual dropdown when vehicle present */}
                             {hasVehicles ? (
                               <div className="space-y-1.5">
                                 {activeVehicles.map(tv => (
@@ -1182,56 +1609,26 @@ export default function TourDetail() {
                                 </p>
                               </div>
                             ) : (
-                              /* No vehicle — manual fallback */
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Fuel Type</label>
-                                <select
-                                  value={localFuelType}
-                                  onChange={e => setLocalFuelType(e.target.value)}
-                                  className="h-8 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                                >
-                                  <option value="petrol">Petrol</option>
-                                  <option value="diesel">Diesel</option>
-                                  <option value="lpg">LPG</option>
-                                </select>
-                              </div>
-                            )}
-
-                            {/* Fuel price inputs — always shown, only the matching type is used */}
-                            <div className="flex flex-wrap gap-3 items-end">
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Petrol $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPricePetrol}
-                                  onChange={e => setLocalFuelPricePetrol(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">Diesel $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPriceDiesel}
-                                  onChange={e => setLocalFuelPriceDiesel(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[11px] text-muted-foreground">LPG $/L</label>
-                                <Input
-                                  type="number" min="0" step="0.01"
-                                  value={localFuelPriceLpg}
-                                  onChange={e => setLocalFuelPriceLpg(e.target.value)}
-                                  className="h-8 text-sm w-20"
-                                />
-                              </div>
-                            </div>
-                            {hasVehicles && (
-                              <p className="text-[11px] text-muted-foreground/60">
-                                Only the price matching your vehicle's fuel type is used in calculations.
+                              <p className="text-[11px] text-amber-600">
+                                No vehicle on this tour — fuel calc uses regional averages.
                               </p>
                             )}
+
+                            <div className="flex items-end gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground capitalize">{activeFuelType} $/L</label>
+                                <Input
+                                  type="number" min="0" step="0.01"
+                                  placeholder={fallback.toFixed(2)}
+                                  value={localFuelPrice}
+                                  onChange={e => setLocalFuelPrice(e.target.value)}
+                                  className="h-8 text-sm w-24"
+                                />
+                              </div>
+                              <p className="text-[11px] text-muted-foreground/60 pb-1.5">
+                                Leave blank to use the AU average (${fallback.toFixed(2)}).
+                              </p>
+                            </div>
                           </div>
                         );
                       })()}
@@ -1411,7 +1808,7 @@ export default function TourDetail() {
                       <span className="font-semibold text-sm group-hover:text-secondary transition-colors">Income</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="font-bold text-sm text-secondary">{fmt(calc.grossIncome)}</span>
+                      <span className="font-bold text-sm text-secondary">{fmt(grossIncome)}</span>
                       <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showIncomeBreakdown ? "rotate-180" : ""}`} />
                     </div>
                   </button>
@@ -1578,7 +1975,7 @@ export default function TourDetail() {
           {tour.notes && (
             <Card className="border-border/50 bg-card/50">
               <CardHeader>
-                <CardTitle>Trail Notes</CardTitle>
+                <CardTitle>Tour Notes</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="whitespace-pre-wrap text-muted-foreground">{tour.notes}</p>
@@ -1621,17 +2018,17 @@ export default function TourDetail() {
                 <div className="space-y-1.5 pt-4 border-t border-border/40 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Gross income</span>
-                    <span className="font-semibold text-secondary">{fmt(calc.grossIncome)}</span>
+                    <span className="font-semibold text-secondary">{fmt(grossIncome)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total expenses</span>
                     <span className="font-semibold text-destructive">{fmt(totalExpensesWithPayouts)}</span>
                   </div>
-                  {sortedStops.length > 0 && calc.avgPerShow !== 0 && (
+                  {sortedStops.length > 0 && avgNetPerShow !== 0 && (
                     <div className="flex justify-between border-t border-border/30 pt-1.5">
                       <span className="text-muted-foreground">Net per show</span>
-                      <span className={`font-semibold ${calc.avgPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
-                        {fmt(calc.avgPerShow)}
+                      <span className={`font-semibold ${avgNetPerShow >= 0 ? "text-foreground" : "text-destructive"}`}>
+                        {fmt(avgNetPerShow)}
                       </span>
                     </div>
                   )}
@@ -1660,8 +2057,8 @@ export default function TourDetail() {
               {calc && (() => {
                 const hasVehicles = (tourVehicles && tourVehicles.length > 0) || legacyVehicle;
                 const noRoute = hasVehicles && !calc.totalFuelCost && !(tour?.startLocation?.trim() || sortedStops.length > 1);
-                const showsNeeded = profitAfterMemberFees < 0 && calc.avgPerShow > 0
-                  ? Math.ceil(Math.abs(profitAfterMemberFees) / calc.avgPerShow)
+                const showsNeeded = profitAfterMemberFees < 0 && avgNetPerShow > 0
+                  ? Math.ceil(Math.abs(profitAfterMemberFees) / avgNetPerShow)
                   : null;
                 const noVehicle = (!tourVehicles || tourVehicles.length === 0) && !legacyVehicle && sortedStops.length > 0;
                 return (
@@ -1693,8 +2090,326 @@ export default function TourDetail() {
                   </div>
                 );
               })()}
+
+              {calc && sortedStops.length > 0 && (
+                <div className="rounded-xl border border-primary/15 bg-primary/[0.04] px-3 py-3 space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Risk Check
+                  </div>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    See how this tour holds up if one date dips or road costs rise.
+                  </p>
+                  <Button variant="outline" className="w-full" onClick={handleCalculateRisk}>
+                    <BarChart2 className="w-4 h-4 mr-2" />
+                    Calculate Risk
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {showLegacyRiskPanel && riskAnalysis && riskSnapshot && (
+            <Card className="border-border/50 bg-card/60">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <BarChart2 className="w-4 h-4 text-primary" />
+                      Risk Analysis
+                    </CardTitle>
+                    <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                      Structural stress testing based on the current tour result.
+                    </p>
+                  </div>
+                  <Badge className={riskBadgeClassName}>
+                    {riskAnalysis.riskSummary.label}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border border-border/50 bg-muted/15 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Tour Risk Score
+                  </div>
+                  <div className="mt-1 flex items-end justify-between gap-3">
+                    <div className="text-4xl font-bold tracking-tight">
+                      {riskAnalysis.riskSummary.overallScore}
+                      <span className="text-lg text-muted-foreground font-medium"> / 100</span>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      {riskAnalysis.flags.redFlags.length} red flag{riskAnalysis.flags.redFlags.length !== 1 ? "s" : ""}
+                      <br />
+                      {riskAnalysis.flags.amberFlags.length} amber flag{riskAnalysis.flags.amberFlags.length !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <div className="mt-3 border-t border-border/40 pt-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Primary Concern
+                    </div>
+                    <p className="text-sm text-foreground/85 mt-1">{riskAnalysis.riskSummary.primaryConcern}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{riskAnalysis.summaryText}</p>
+                  </div>
+                </div>
+
+                {(riskAnalysis.insufficientData || riskAnalysis.riskSummary.confidenceLevel !== "high") && (
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">
+                      Confidence
+                    </div>
+                    <p className="text-sm text-amber-800 mt-1">
+                      {riskAnalysis.insufficientData
+                        ? "Insufficient data for a reliable risk score. Add clearer revenue assumptions before relying on this analysis."
+                        : `Confidence is ${riskAnalysis.riskSummary.confidenceLevel}; treat this as directional because some route or revenue data is limited.`}
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Schedule Efficiency
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <div className="text-muted-foreground text-xs">Show Days</div>
+                      <div className="font-semibold">
+                        {riskAnalysis.scheduleMetrics.totalShowDays} / {riskAnalysis.scheduleMetrics.totalCalendarDays}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Off / Travel Days</div>
+                      <div className="font-semibold">
+                        {riskAnalysis.scheduleMetrics.deadDayCount}
+                        <span className="text-xs text-muted-foreground font-normal">
+                          {" "}({riskAnalysis.scheduleMetrics.totalTravelDays} travel)
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Efficiency Ratio</div>
+                      <div className="font-semibold">{Math.round(riskAnalysis.scheduleMetrics.efficiencyRatio * 100)}%</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground text-xs">Dead Day Ratio</div>
+                      <div className="font-semibold">{Math.round(riskAnalysis.scheduleMetrics.deadDayRatio * 100)}%</div>
+                    </div>
+                  </div>
+                  {(riskAnalysis.scheduleMetrics.consecutiveBurnDaysMax > 0 || riskAnalysis.scheduleMetrics.highBurnTravelDayCount > 0) && (
+                    <p className="text-xs text-muted-foreground leading-snug mt-3">
+                      Max burn-day run: {riskAnalysis.scheduleMetrics.consecutiveBurnDaysMax}. High-burn non-show travel days: {riskAnalysis.scheduleMetrics.highBurnTravelDayCount}.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-muted/10 px-4 py-3 space-y-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Structural Stress Tests
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Anchor Date Collapse</span>
+                        <span className={riskAnalysis.stressTests.anchorCollapse.remainsViableWithoutAnchor ? "text-xs font-semibold text-green-700" : "text-xs font-semibold text-red-700"}>
+                          {riskAnalysis.stressTests.anchorCollapse.remainsViableWithoutAnchor ? "Viable" : "Fails"}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Anchor</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "Not available"}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Profit share</div>
+                          <div className="font-semibold">
+                            {Math.round(riskAnalysis.stressTests.anchorCollapse.anchorProfitContributionShare * 100)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net impact</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.anchorCollapse.anchorNetImpact)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net without anchor</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet)}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Distance to Ruin</span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {riskAnalysis.stressTests.distanceToRuin.riskBand}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Revenue buffer</div>
+                          <div className="font-semibold">
+                            {Math.round(riskAnalysis.stressTests.distanceToRuin.distanceToRuinPercent)}%
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Variable revenue</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.distanceToRuin.revenueSensitiveIncome)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Loaded cost/show</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.distanceToRuin.costPerShowDay)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Load per show</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.distanceToRuin.operationalLoadPerShow} days</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold">Logistics Spike</span>
+                        <span className={riskAnalysis.stressTests.logisticsSpike.postSpikeNet >= 0 ? "text-xs font-semibold text-green-700" : "text-xs font-semibold text-red-700"}>
+                          {riskAnalysis.stressTests.logisticsSpike.postSpikeNet >= 0 ? "Survives" : "Negative"}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground">Logistics OpEx</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.logisticsOpEx)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">20% spike</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.spikeCostIncrease)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Post-spike net</div>
+                          <div className="font-semibold">{fmt(riskAnalysis.stressTests.logisticsSpike.postSpikeNet)}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Net erosion</div>
+                          <div className="font-semibold">
+                            {riskAnalysis.stressTests.logisticsSpike.netErosionPercent == null
+                              ? "N/A"
+                              : `${Math.round(riskAnalysis.stressTests.logisticsSpike.netErosionPercent * 100)}%`}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">High-burn travel days</div>
+                          <div className="font-semibold">{riskAnalysis.stressTests.logisticsSpike.highBurnTravelDayCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground">Worst travel day</div>
+                          <div className="font-semibold">{Math.round(riskAnalysis.stressTests.logisticsSpike.worstTravelDayDistance)} km</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Category Breakdown
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {riskCategoryRows.map(({ label, category }) => (
+                      <div key={label} className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-medium">{label}</span>
+                          <span className="text-sm font-bold">{category.score}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-snug mt-1">
+                          {category.explanation}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-xl border border-red-200/70 bg-red-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-red-700">
+                      Red Flags
+                    </div>
+                    {riskAnalysis.flags.redFlags.length === 0 ? (
+                      <p className="text-sm text-red-700/80 mt-1">No red flags triggered from the current tour result.</p>
+                    ) : (
+                      <div className="space-y-2 mt-2">
+                        {riskAnalysis.flags.redFlags.map((flag) => (
+                          <div key={flag.code}>
+                            <div className="text-sm font-semibold text-red-800">{flag.label}</div>
+                            <p className="text-xs leading-snug text-red-700/90">{flag.explanation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">
+                      Amber Flags
+                    </div>
+                    {riskAnalysis.flags.amberFlags.length === 0 ? (
+                      <p className="text-sm text-amber-700/80 mt-1">No amber flags triggered from the current tour result.</p>
+                    ) : (
+                      <div className="space-y-2 mt-2">
+                        {riskAnalysis.flags.amberFlags.map((flag) => (
+                          <div key={flag.code}>
+                            <div className="text-sm font-semibold text-amber-800">{flag.label}</div>
+                            <p className="text-xs leading-snug text-amber-700/90">{flag.explanation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {riskAnalysis.recommendations.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Recommendations
+                    </div>
+                    <div className="space-y-2">
+                      {riskAnalysis.recommendations.map((recommendation) => (
+                        <div key={recommendation.code} className="rounded-lg border border-primary/20 bg-primary/[0.05] px-3 py-2.5">
+                          <div className="text-sm font-semibold">{recommendation.message}</div>
+                          <p className="text-xs text-muted-foreground leading-snug mt-1">{recommendation.mitigation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {riskAnalysis.weakestShows.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Weakest Shows
+                    </div>
+                    <div className="space-y-2">
+                      {riskAnalysis.weakestShows.map((show) => (
+                        <div key={String(show.showId)} className="rounded-lg border border-border/40 bg-background/70 px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold">{show.venueName}</div>
+                              {show.date && (
+                                <div className="text-[11px] text-muted-foreground mt-0.5">{show.date}</div>
+                              )}
+                            </div>
+                            <div className="text-right text-xs">
+                              <div className={show.netProfit >= 0 ? "text-foreground font-semibold" : "text-destructive font-semibold"}>
+                                {fmt(show.netProfit)}
+                              </div>
+                              <div className="text-muted-foreground">
+                                travel {fmt(show.travelBurden)}
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-snug mt-2">{show.explanation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Ticket Recovery */}
           {calc && (ticketRecovery.state === "recovery" || ticketRecovery.state === "impossible" || ticketRecovery.state === "no_ticketed_shows") && (
@@ -1799,6 +2514,251 @@ export default function TourDetail() {
 
         </div>
       </div>
+        </TabsContent>
+
+        <TabsContent value="risk" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="space-y-6">
+            <Card className="overflow-hidden border-border/50 bg-card/70">
+              <CardContent className="p-0">
+                <div className="flex flex-col gap-5 border-b border-border/40 bg-muted/20 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="flex items-center gap-2">
+                      <BarChart2 className="h-5 w-5 text-primary" />
+                      <h2 className="text-2xl font-bold tracking-tight">Risk Analysis</h2>
+                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      See whether this tour still holds up if a key show dips, costs rise, or the road days get heavy.
+                    </p>
+                  </div>
+                  {riskAnalysis ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={riskBadgeClassName}>{riskAnalysis.riskSummary.label}</Badge>
+                      {riskIsStale && (
+                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
+                          Tour changed - recalculate risk
+                        </Badge>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                {!hasValidRiskInput && !riskAnalysis ? (
+                  <div className="grid gap-4 px-5 py-8 md:grid-cols-[1fr_auto] md:items-center">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background">
+                        <MapPin className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold">Add your dates and finish the tour first.</h3>
+                        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                          Risk needs at least one show and a current tour total before it can say anything useful.
+                        </p>
+                      </div>
+                    </div>
+                    <Button variant="secondary" onClick={() => setLocation(`/tours/${tourId}/stops/new`)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Stop
+                    </Button>
+                  </div>
+                ) : !riskAnalysis ? (
+                  <div className="grid gap-5 px-5 py-8 lg:grid-cols-[1fr_280px] lg:items-center">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+                        <Ticket className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold">Calculate risk to see what could go wrong.</h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                          We will check key shows, ticket pressure, blank days, road costs, and whether the tour still works if one date underperforms.
+                        </p>
+                      </div>
+                    </div>
+                    <Button size="lg" variant="secondary" onClick={handleCalculateRisk}>
+                      <BarChart2 className="mr-2 h-4 w-4" />
+                      Calculate Risk
+                    </Button>
+                  </div>
+                ) : (
+                  <div className={cn("space-y-6 px-5 py-5", riskIsStale && "opacity-70")}>
+                    {riskIsStale && (
+                      <div className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div>
+                            <div className="text-sm font-semibold">Tour changed - recalculate risk</div>
+                            <p className="text-xs text-amber-800/85">The notes below are from the previous version of this tour.</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" className="border-amber-300 bg-background" disabled={!hasValidRiskInput} onClick={handleCalculateRisk}>
+                          Recalculate Risk
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                      <div className="rounded-2xl border border-border/50 bg-background/70 p-5">
+                        <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Plain-English verdict</div>
+                        <p className="mt-2 text-2xl font-bold leading-tight">{musicianRiskVerdict}</p>
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-border/40 bg-muted/20 p-3">
+                            <div className="text-xs font-semibold text-muted-foreground">Biggest issue</div>
+                            <p className="mt-1 text-sm font-medium">{topRiskIssue}</p>
+                          </div>
+                          <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-3">
+                            <div className="text-xs font-semibold text-muted-foreground">Next move</div>
+                            <p className="mt-1 text-sm font-medium">{nextRiskMove}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Risk score</div>
+                          <div className="mt-1 text-3xl font-bold">{riskAnalysis.riskSummary.overallScore}<span className="text-base font-medium text-muted-foreground"> / 100</span></div>
+                        </div>
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Red flags</div>
+                          <div className="mt-1 text-3xl font-bold text-destructive">{riskAnalysis.flags.redFlags.length}</div>
+                        </div>
+                        <div className="rounded-2xl border border-border/50 bg-background/70 p-4">
+                          <div className="text-xs text-muted-foreground">Off / travel days</div>
+                          <div className="mt-1 text-3xl font-bold">{riskAnalysis.scheduleMetrics.deadDayCount}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Card className="border-border/50 bg-background/70">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Navigation className="h-4 w-4 text-primary" />
+                          Tour Date Notes
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground">A musician-friendly read of the run, date by date.</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {riskTimelineRows.map(({ day, stop, show, note, tags, isAnchor, isWeak, isBurnDay, isLongTravel, index }) => (
+                          <div
+                            key={`${day.date}-${day.showId ?? index}`}
+                            className={cn(
+                              "grid gap-3 rounded-xl border px-4 py-3 transition-colors md:grid-cols-[150px_1fr]",
+                              isAnchor && "border-secondary/40 bg-secondary/[0.06]",
+                              isWeak && "border-destructive/30 bg-destructive/[0.04]",
+                              isBurnDay && "border-amber-200 bg-amber-50/60",
+                              isLongTravel && !isAnchor && !isWeak && "border-orange-200 bg-orange-50/60",
+                              !isAnchor && !isWeak && !isBurnDay && !isLongTravel && "border-border/50 bg-card/70",
+                            )}
+                          >
+                            <div>
+                              <div className="text-sm font-bold">{formatRiskTimelineDate(day.date)}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {day.hasShow ? "Show day" : day.type === "travel_day" ? "Travel day" : "Day off"}
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-semibold">
+                                  {stop?.venueName || stop?.city || (day.type === "travel_day" ? "Travel day" : "No show booked")}
+                                </div>
+                                {stop?.city && stop.venueName && stop.city !== stop.venueName && (
+                                  <span className="text-xs text-muted-foreground">{stop.city}</span>
+                                )}
+                                {tags.map((tag) => (
+                                  <span key={tag.label} className={cn("rounded-full border px-2 py-0.5 text-[10px] font-semibold", tag.className)}>
+                                    {tag.label}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-sm leading-relaxed text-foreground/85">{note}</p>
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                {show && <span>Net {fmt(show.netProfit)}</span>}
+                                {day.travelDistance > 0 && <span>{Math.round(day.travelDistance)} km travel</span>}
+                                {day.burnCost > 0 && <span>{fmt(day.burnCost)} day cost</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex justify-end">
+                      <Button variant="outline" onClick={() => setShowRiskNumbers((value) => !value)}>
+                        {showRiskNumbers ? "Hide the numbers" : "Show the numbers"}
+                      </Button>
+                    </div>
+
+                    {showRiskNumbers && (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <Card className="border-border/50 bg-background/70">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">What Could Go Wrong</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {[...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags].length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No major risk flags triggered from the current tour result.</p>
+                            ) : (
+                              [...riskAnalysis.flags.redFlags, ...riskAnalysis.flags.amberFlags].map((flag) => (
+                                <div key={flag.code} className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5">
+                                  <div className="text-sm font-semibold">{musicianRiskCopy(flag.label)}</div>
+                                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{musicianRiskCopy(flag.explanation)}</p>
+                                </div>
+                              ))
+                            )}
+                          </CardContent>
+                        </Card>
+
+                        <Card className="border-border/50 bg-background/70">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Show Working</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              {riskCategoryRows.map(({ label, category }) => (
+                                <div key={label} className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs text-muted-foreground">{label}</span>
+                                    <span className="font-bold">{category.score}</span>
+                                  </div>
+                                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{musicianRiskCopy(category.explanation)}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                              <div className="font-semibold">Key show test</div>
+                              <p className="mt-1 text-muted-foreground">
+                                Without {riskAnalysis.stressTests.anchorCollapse.anchorShowName ?? "the key show"}, the tour lands at {fmt(riskAnalysis.stressTests.anchorCollapse.anchorCollapseNet)}.
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                              <div className="font-semibold">Cost spike test</div>
+                              <p className="mt-1 text-muted-foreground">
+                                If road and accommodation costs rise 20%, the tour lands at {fmt(riskAnalysis.stressTests.logisticsSpike.postSpikeNet)}.
+                              </p>
+                            </div>
+                            {riskAnalysis.recommendations.length > 0 && (
+                              <div className="rounded-lg border border-primary/20 bg-primary/[0.05] px-3 py-2.5 text-xs">
+                                <div className="font-semibold">What to fix first</div>
+                                <p className="mt-1 text-muted-foreground">{musicianRiskCopy(riskAnalysis.recommendations[0].mitigation)}</p>
+                              </div>
+                            )}
+                            {riskAnalysis.weakestShows.length > 0 && (
+                              <div className="rounded-lg border border-border/40 bg-card/70 px-3 py-2.5 text-xs">
+                                <div className="font-semibold">Weakest shows</div>
+                                <p className="mt-1 text-muted-foreground">
+                                  {riskAnalysis.weakestShows.map((show) => show.venueName).join(", ")}
+                                </p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Add Past Show Modal */}
       <Dialog open={showPastShowModal} onOpenChange={open => { if (!open) closePastShowModal(); else setShowPastShowModal(true); }}>
@@ -2098,6 +3058,9 @@ export default function TourDetail() {
           <div className="space-y-2 mt-2">
             {(() => {
               const assignedIds = new Set((tourVehicles ?? []).map(tv => tv.vehicle.id));
+              if ((tourVehicles?.length ?? 0) === 0 && tour?.vehicleId) {
+                assignedIds.add(tour.vehicleId);
+              }
               const available = (allVehicles ?? []).filter(v => !assignedIds.has(v.id));
               if (available.length === 0) {
                 return (
@@ -2120,7 +3083,7 @@ export default function TourDetail() {
                 >
                   <div>
                     <div className="text-sm font-medium">{v.name}</div>
-                    <div className="text-xs text-muted-foreground">{v.fuelType} · {Number(v.avgConsumption)} L/100km</div>
+                    <div className="text-xs text-muted-foreground">{formatVehicleLabel(v).replace(`${v.name} · `, "")}</div>
                   </div>
                   <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
                 </button>

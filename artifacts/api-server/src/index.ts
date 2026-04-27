@@ -38,7 +38,7 @@ async function initStripe() {
       await stripeSync.findOrCreateManagedWebhook(`${webhookBaseUrl}/api/stripe/webhook`);
     }
 
-    stripeSync.syncBackfill().catch((err: any) => {
+    stripeSync.syncBackfill().catch((err: unknown) => {
       logger.error({ err }, "Stripe syncBackfill error");
     });
 
@@ -52,23 +52,50 @@ async function seedPromoCodes() {
   try {
     const { db, promoCodesTable } = await import("@workspace/db");
     const { eq } = await import("drizzle-orm");
+    const { derivePlanFromRole } = await import("@workspace/entitlements");
 
     const [existing] = await db
-      .select({ id: promoCodesTable.id })
+      .select()
       .from(promoCodesTable)
       .where(eq(promoCodesTable.code, "TESTER101"));
+
+    const expected = {
+      isActive: true,
+      grantsRole: "tester",
+      maxUses: null,
+      expiresAt: null,
+      notes: "Internal tester access",
+    };
 
     if (!existing) {
       await db.insert(promoCodesTable).values({
         code: "TESTER101",
-        isActive: true,
-        grantsRole: "tester",
-        maxUses: null,
-        expiresAt: null,
-        notes: "Internal tester access",
+        ...expected,
       });
-      logger.info("Seeded TESTER101 promo code");
+      logger.info(`Seeded TESTER101 promo code (grantsRole=tester, plan=${derivePlanFromRole("tester")})`);
+      return;
     }
+
+    const needsRepair =
+      existing.isActive !== expected.isActive ||
+      existing.grantsRole !== expected.grantsRole ||
+      existing.maxUses !== expected.maxUses ||
+      existing.expiresAt !== expected.expiresAt;
+
+    if (needsRepair) {
+      await db
+        .update(promoCodesTable)
+        .set({ ...expected, updatedAt: new Date() })
+        .where(eq(promoCodesTable.id, existing.id));
+      logger.warn(
+        `Repaired TESTER101 promo code: ` +
+        `active ${existing.isActive}->true, grantsRole ${existing.grantsRole}->tester, ` +
+        `maxUses ${existing.maxUses}->null, expiresAt ${existing.expiresAt}->null`
+      );
+      return;
+    }
+
+    logger.info("TESTER101 promo code OK (active, grantsRole=tester, no expiry, unlimited uses)");
   } catch (err) {
     logger.error({ err }, "Promo code seed error (non-fatal)");
   }

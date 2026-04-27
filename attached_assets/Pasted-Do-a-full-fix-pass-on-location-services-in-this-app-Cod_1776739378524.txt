@@ -1,0 +1,254 @@
+Do a full fix pass on location services in this app. Codex did not complete it.
+
+CURRENT BROKEN BEHAVIOUR
+- Venue search is not working reliably
+- “Use my current location” falls back to raw lat/lng
+- Reverse geocoding is not producing a readable place label
+- Distance service is unavailable
+- Fuel stays at $0 because route distance is missing
+- Location issues appear across onboarding, profile setup, and the Single Show Calculator
+
+KNOWN CONSOLE CLUES
+- "No Google Maps API key found - falling back to manual entry"
+- "Distance Matrix service unavailable"
+
+GOAL
+Get location working properly across the entire app and restore fuel calculation by fixing:
+1. Google Maps API key loading
+2. Places autocomplete
+3. Reverse geocoding
+4. Distance lookup
+5. Shared location object usage
+6. Fuel calculation dependency on route distance
+
+IMPORTANT
+This is an alpha build. Keep it simple, robust, and explicit.
+Do not leave fake-success fallbacks in place.
+If a service is unavailable, surface a clear UI state instead of silently returning bad data.
+
+==================================================
+PART 1 — TRACE AND FIX GOOGLE MAPS API LOADING
+==================================================
+
+Audit the full app for how Google Maps is loaded.
+
+Check for:
+- wrong env var name
+- frontend expecting VITE_GOOGLE_MAPS_API_KEY but app uses another name
+- key only available server-side
+- key not passed into the maps loader
+- key missing in Replit secrets
+- maps libraries not loaded with `places`
+- duplicate loaders or conflicting helpers
+
+Fix so the frontend uses one source of truth only:
+VITE_GOOGLE_MAPS_API_KEY
+
+If the app uses a shared config helper, centralize it there.
+
+Add a safe dev warning if key is missing:
+- location search unavailable
+- reverse geocoding unavailable
+- route distance unavailable
+
+But do not silently pretend it is working.
+
+==================================================
+PART 2 — FIX PLACES AUTOCOMPLETE
+==================================================
+
+Make venue search work again using Google Places.
+
+Requirements:
+- autocomplete suggestions appear while typing venue/city
+- choosing a result stores a usable structured location object
+- manual fallback remains available only if API fails
+
+Use one consistent location shape everywhere:
+{
+  label: string,
+  lat: number,
+  lng: number,
+  source: "geolocation" | "manual" | "place_search"
+}
+
+If there are old formats like:
+- latitude / longitude
+- address / formattedAddress / name
+- origin / homeBase / startLocation
+normalize them into one shared shape.
+
+==================================================
+PART 3 — FIX “USE MY CURRENT LOCATION”
+==================================================
+
+When user taps “Use my current location”:
+1. get browser geolocation
+2. save coordinates
+3. reverse geocode them into a readable label
+4. store both label + lat/lng
+5. show the label in the UI, not raw full coordinates
+
+Display rule:
+- first choice = label
+- fallback = compact coordinates like `Lat -37.08, Lng 144.26`
+- never show long raw coordinate strings if a label exists
+
+Fix this across:
+- onboarding/profile creation
+- profile editing
+- single show calculator
+- summary cards / from-location display
+
+==================================================
+PART 4 — FIX DISTANCE SERVICE
+==================================================
+
+Distance lookup is currently unavailable. Audit the whole route-distance path.
+
+Check:
+- whether app is using Distance Matrix or Routes API
+- whether the needed Google library/service is actually loaded
+- whether route service is being called with the correct origin/destination shape
+- whether the result is parsed correctly into km
+- whether errors are swallowed and replaced with silent failure
+
+Requirements:
+- resolve route distance in km
+- return a clear null/error state if route cannot be calculated
+- do not silently emit zero distance
+- show “Route unavailable” or equivalent when lookup fails
+
+==================================================
+PART 5 — FIX FUEL CALCULATION USING REAL DISTANCE
+==================================================
+
+Fuel depends on route distance, so fix the full dependency chain.
+
+Use one helper only, for example:
+resolveFuelCost({
+  distanceKm,
+  fuelEfficiencyLPer100Km,
+  fuelPricePerLitre
+})
+
+Formula:
+litresUsed = (distanceKm / 100) * fuelEfficiencyLPer100Km
+fuelCost = litresUsed * fuelPricePerLitre
+
+Rules:
+- do not calculate fuel if distance is missing
+- do not silently show $0 unless truly zero by design
+- if route is unavailable, show a clear state instead
+- ensure expenses total and result page use the same computed fuel value
+
+==================================================
+PART 6 — FIX PROFILE + DEFAULT HYDRATION
+==================================================
+
+Make sure location fixes work with the profile system.
+
+Requirements:
+- onboarding-created profile becomes default profile
+- calculator auto-loads the default profile
+- profile home base is used as origin
+- profile vehicle settings flow into fuel calc
+- switching profiles updates origin, vehicle, route, and fuel
+
+Check for stale state bugs:
+- selected profile initialized before profiles load
+- useEffect dependencies missing
+- query data arrives but does not sync to form state
+- summary panel reads different state than calc engine
+
+==================================================
+PART 7 — REMOVE BAD FALLBACKS
+==================================================
+
+Find and fix places where the UI currently hides real failures by showing:
+- manual entry without explaining API missing
+- $0 fuel when distance failed
+- raw lat/lng even when label should exist
+- “Auto” without numeric fuel ever being computed
+
+Replace with explicit states:
+- “Location services unavailable”
+- “Search unavailable”
+- “Distance unavailable”
+- “Fuel unavailable until route resolves”
+
+==================================================
+PART 8 — ADD TEMP DEBUGGING
+==================================================
+
+Add temporary logs around:
+- resolved Google Maps API key presence
+- maps script/library load status
+- place autocomplete selection result
+- geolocation result
+- reverse geocode response
+- resolved profile home base
+- route distance response
+- final fuel input object
+- final fuel cost
+
+Use clear, searchable log labels.
+Then remove noisy logs and keep only useful guarded debug logs if appropriate.
+
+==================================================
+PART 9 — ACCEPTANCE TESTS
+==================================================
+
+TEST 1 — Venue search
+- Type a city/venue
+Expected:
+- autocomplete suggestions appear
+- selecting one stores a usable location object
+
+TEST 2 — Current location
+- Tap “Use my current location”
+Expected:
+- readable place label shown
+- coordinates still stored underneath
+- no ugly raw full lat/lng in UI unless fallback needed
+
+TEST 3 — Default profile
+- Finish onboarding with current location set
+Expected:
+- default profile auto-loads in calculator
+- origin comes from saved home base
+
+TEST 4 — Route + fuel
+- Select profile origin and venue
+Expected:
+- route distance resolves
+- fuel calculates to a non-zero value when distance > 0
+- expenses total includes fuel
+
+TEST 5 — Service failure
+- Simulate missing API key or failed route lookup
+Expected:
+- clear UI error/fallback state
+- no fake $0 fuel
+- no misleading successful-looking location state
+
+==================================================
+OUTPUT REQUIRED
+==================================================
+
+When done, provide:
+1. Root cause found
+2. Files changed
+3. Exact env var name now used for the frontend
+4. Exact shared location object shape now used
+5. Whether app uses Distance Matrix or Routes API now
+6. Exact reason fuel was failing
+7. Any follow-up config still needed in Replit or Google Cloud
+
+IMPORTANT IMPLEMENTATION RULES
+- Keep alpha flow simple and reliable
+- Do not break manual entry
+- Do not break existing profile creation
+- Prefer one source of truth for location, route distance, and fuel inputs
+- Consolidate duplicate helpers if found
+- If there are conflicting old location formats, remove or normalize them
