@@ -1,0 +1,109 @@
+Repo: Gigtrail/Gigtrailcalc
+
+Task: Redesign the Admin Dashboard users section from card layout into a spreadsheet-style admin table, and add safe admin actions for refreshing and deleting user profile data.
+
+Context:
+The current admin dashboard displays users as cards. This will become unmanageable as alpha users grow. Replace the user card grid with a dense, sortable, searchable table.
+
+Important:
+Do not change public user-facing flows.
+Do not change pricing, billing, onboarding, or calculator logic unless required for admin actions.
+Keep this alpha-safe and focused.
+
+Admin Users Table Requirements:
+1. Replace the current user cards with a spreadsheet-style table.
+2. Keep the existing summary cards at the top:
+   - Total users
+   - Free
+   - Pro
+   - Tester/Admin
+3. Below that, show users in a table with columns:
+   - Name/email
+   - User ID
+   - Role/plan
+   - Access source
+   - Profile count
+   - Vehicle count
+   - Saved calculations count
+   - Created date
+   - Last updated / last seen if available
+   - Actions
+
+4. Table UX:
+   - Search by email, user ID, name.
+   - Filter by role/plan: all/free/pro/tester/admin.
+   - Sort by created date, role, email, calculation count if simple.
+   - Compact row height.
+   - Keep mobile usable with horizontal scroll.
+   - Use badges for roles/plans.
+   - Show empty/loading/error states cleanly.
+
+Admin Actions Needed:
+Add two admin-only actions per user row:
+
+A) Refresh Profile Data
+Purpose:
+Useful when profile/onboarding state gets stale during alpha testing.
+
+Behaviour:
+- Button label: “Refresh”
+- This should re-fetch/rebuild the admin-visible user summary from database state.
+- If there is already a backend endpoint suitable for this, use it.
+- If needed, add a safe admin endpoint like:
+  POST /api/admin/users/:userId/refresh
+- This action should NOT delete data.
+- It should return updated user summary data for that row.
+- Show toast: “User data refreshed.”
+
+B) Delete Profile Data / Reset User Setup
+Purpose:
+For alpha testers who get stuck and need a clean setup.
+
+Behaviour:
+- Button label: “Reset profile”
+- This should delete or reset the user’s profile-related setup data, not necessarily delete the Clerk auth user.
+- It should remove user-owned profile data needed to restart onboarding:
+  - profiles
+  - vehicles created during onboarding/profile setup if they are user-owned
+  - active default profile references if stored
+- Be careful with saved calculations:
+  - Do NOT delete saved calculations by default.
+  - If runs depend on profile IDs, either preserve runs safely or set profile references to null if schema allows.
+- After reset, the user should be treated like a user with no profile and be sent back through onboarding on next login.
+- Add a confirmation dialog before running:
+  “Reset this user’s profile setup? This will send them back through onboarding. Saved calculations will be preserved where possible.”
+- Add backend endpoint:
+  POST /api/admin/users/:userId/reset-profile
+- Must be admin-only protected.
+- Must not allow non-admin users to call it.
+- Must not allow accidental deletion of the permanent admin account profile without an extra guard.
+
+Safety:
+- Add backend validation and clear error messages.
+- Preserve thegigtrail@gmail.com admin entitlement.
+- Do not remove billing/subscription data.
+- Do not delete Clerk auth users.
+- Do not delete promo code history.
+- Log the admin action server-side.
+
+Files likely involved:
+- artifacts/gig-trail/src/pages/admin.tsx
+- artifacts/api-server/src/routes/admin.ts
+- lib/db/src/schema/*
+- lib/api-spec/openapi.yaml
+- generated API client/zod files if this repo uses generation
+
+Testing:
+Run:
+pnpm run typecheck
+pnpm run build
+pnpm -r --if-present run test
+
+Acceptance Criteria:
+- Admin users display as a spreadsheet-style table, not cards.
+- Admin can search/filter users quickly.
+- Admin can refresh a user row without changing user data.
+- Admin can reset a tester’s profile setup and force onboarding again.
+- Saved calculations are not deleted by default.
+- Permanent admin access remains intact.
+- Typecheck and build pass.
