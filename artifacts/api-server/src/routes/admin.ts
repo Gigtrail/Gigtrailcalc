@@ -116,9 +116,13 @@ const adminUserSummarySelect = {
   accessSource: usersTable.accessSource,
   plan: usersTable.plan,
   createdAt: usersTable.createdAt,
-  profileCount: sql<number>`(SELECT COUNT(*)::int FROM ${profilesTable} WHERE ${profilesTable.userId} = ${usersTable.id})`.as("profile_count"),
-  vehicleCount: sql<number>`(SELECT COUNT(*)::int FROM ${vehiclesTable} WHERE ${vehiclesTable.userId} = ${usersTable.id})`.as("vehicle_count"),
-  runCount: sql<number>`(SELECT COUNT(*)::int FROM ${runsTable} WHERE ${runsTable.userId} = ${usersTable.id})`.as("run_count"),
+  // Use raw SQL with fully-qualified column names so the inner subquery's
+  // `users.id` reference is unambiguous (drizzle's column interpolation in
+  // sql`` strips the table prefix and Postgres would otherwise resolve
+  // `"id"` to the subquery's own table).
+  profileCount: sql<number>`(SELECT COUNT(*)::int FROM "profiles" WHERE "profiles"."user_id" = "users"."id")`.as("profile_count"),
+  vehicleCount: sql<number>`(SELECT COUNT(*)::int FROM "vehicles" WHERE "vehicles"."user_id" = "users"."id")`.as("vehicle_count"),
+  runCount: sql<number>`(SELECT COUNT(*)::int FROM "runs" WHERE "runs"."user_id" = "users"."id")`.as("run_count"),
 } as const;
 
 function serializeAdminUser(row: {
