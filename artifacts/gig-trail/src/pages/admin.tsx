@@ -4,6 +4,8 @@ import {
   hasProAccess,
   useAdminUsers,
   useUpdateUserRole,
+  useRefreshAdminUser,
+  useResetAdminUserProfile,
   useAdminPromoCodes,
   useCreatePromoCode,
   useUpdatePromoCode,
@@ -65,11 +67,15 @@ import {
   X,
   MessageSquare,
   ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
   RotateCcw,
+  RefreshCw,
   Reply,
   Upload,
   Database,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -133,17 +139,95 @@ function MetricCard({ label, value, sub, icon, iconBg, loading }: MetricCardProp
   );
 }
 
-// ─── User Card ────────────────────────────────────────────────────────────────
+// ─── Users Section (spreadsheet table) ────────────────────────────────────────
 
-interface UserCardProps {
-  user: { id: string; email: string | null; role: string };
-  onRoleChange: (userId: string, role: string) => Promise<void>;
-  isPending: boolean;
+const PERMANENT_ADMIN_EMAIL = "thegigtrail@gmail.com";
+
+type SortKey = "email" | "role" | "createdAt" | "runCount" | "profileCount";
+type SortDir = "asc" | "desc";
+type RoleFilter = "all" | "free" | "pro" | "tester" | "admin";
+
+function isPermanentAdmin(email: string | null | undefined): boolean {
+  return (email ?? "").trim().toLowerCase() === PERMANENT_ADMIN_EMAIL;
 }
 
-function UserCard({ user, onRoleChange, isPending }: UserCardProps) {
+function SortHeader({
+  label,
+  active,
+  dir,
+  onClick,
+  align = "left",
+  className,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  onClick: () => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const Icon = !active ? ChevronsUpDown : dir === "asc" ? ChevronUp : ChevronDown;
+  return (
+    <th
+      scope="col"
+      className={cn(
+        "px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 select-none",
+        align === "right" && "text-right",
+        className,
+      )}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-slate-900 transition-colors",
+          active && "text-slate-900",
+          align === "right" && "ml-auto",
+        )}
+      >
+        {label}
+        <Icon className="w-3 h-3" />
+      </button>
+    </th>
+  );
+}
+
+interface AdminUserRow {
+  id: string;
+  email: string | null;
+  role: string;
+  accessSource: string;
+  plan: string;
+  createdAt: string | null;
+  profileCount: number;
+  vehicleCount: number;
+  runCount: number;
+}
+
+interface UserTableRowProps {
+  user: AdminUserRow;
+  onRoleChange: (userId: string, role: string) => Promise<void>;
+  isRolePending: boolean;
+  onRefresh: (user: AdminUserRow) => void;
+  refreshingId: string | null;
+  onRequestReset: (user: AdminUserRow) => void;
+  resettingId: string | null;
+}
+
+function UserTableRow({
+  user,
+  onRoleChange,
+  isRolePending,
+  onRefresh,
+  refreshingId,
+  onRequestReset,
+  resettingId,
+}: UserTableRowProps) {
   const [editing, setEditing] = useState(false);
   const [pendingRole, setPendingRole] = useState(user.role);
+  const isPermAdmin = isPermanentAdmin(user.email);
+  const isRefreshing = refreshingId === user.id;
+  const isResetting = resettingId === user.id;
 
   async function save() {
     await onRoleChange(user.id, pendingRole);
@@ -151,84 +235,183 @@ function UserCard({ user, onRoleChange, isPending }: UserCardProps) {
   }
 
   return (
-    <Card className="rounded-xl border-slate-200/70 shadow-none hover:shadow-sm transition-shadow bg-white group">
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3">
-          <Avatar className="h-11 w-11 border border-slate-100 shadow-sm shrink-0">
-            <AvatarFallback className="bg-slate-50 text-slate-600 font-semibold text-sm">
+    <tr
+      data-testid={`row-admin-user-${user.id}`}
+      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+    >
+      {/* Name / email */}
+      <td className="px-3 py-2 align-middle">
+        <div className="flex items-center gap-2.5 min-w-[220px]">
+          <Avatar className="h-7 w-7 border border-slate-100 shrink-0">
+            <AvatarFallback className="bg-slate-50 text-slate-600 font-semibold text-[11px]">
               {initials(user.email)}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 truncate">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-900 truncate flex items-center gap-1.5">
               {user.email ?? "(no email)"}
-            </p>
-            <p className="text-[10px] font-mono text-slate-400 truncate mt-0.5">{user.id}</p>
-
-            <div className="mt-2.5">
-              {editing ? (
-                <div className="flex items-center gap-1.5">
-                  <select
-                    className="text-xs border border-border rounded-md px-2 py-1 bg-background focus:outline-none"
-                    value={pendingRole}
-                    onChange={(e) => setPendingRole(e.target.value)}
-                    autoFocus
-                  >
-                    {ROLE_ORDER.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                  <Button
-                    size="icon"
-                    className="h-6 w-6"
-                    disabled={isPending}
-                    onClick={save}
-                  >
-                    <Check className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => { setEditing(false); setPendingRole(user.role); }}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <RoleBadge role={user.role} />
-                  <button
-                    className="text-slate-300 hover:text-slate-500 transition-colors opacity-0 group-hover:opacity-100"
-                    title="Edit role"
-                    onClick={() => { setEditing(true); setPendingRole(user.role); }}
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                </div>
+              {isPermAdmin && (
+                <Badge className="bg-indigo-100 text-indigo-800 border-none text-[9px] px-1.5 py-0 uppercase">
+                  Perm
+                </Badge>
               )}
-            </div>
+            </p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </td>
+
+      {/* User ID */}
+      <td className="px-3 py-2 align-middle">
+        <p className="text-[10px] font-mono text-slate-400 truncate max-w-[160px]" title={user.id}>
+          {user.id}
+        </p>
+      </td>
+
+      {/* Role */}
+      <td className="px-3 py-2 align-middle">
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <select
+              className="text-xs border border-border rounded-md px-2 py-1 bg-background focus:outline-none"
+              value={pendingRole}
+              onChange={(e) => setPendingRole(e.target.value)}
+              autoFocus
+              data-testid={`select-role-${user.id}`}
+            >
+              {ROLE_ORDER.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="icon"
+              className="h-6 w-6"
+              disabled={isRolePending}
+              onClick={save}
+              data-testid={`button-save-role-${user.id}`}
+            >
+              <Check className="w-3 h-3" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              onClick={() => {
+                setEditing(false);
+                setPendingRole(user.role);
+              }}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <RoleBadge role={user.role} />
+            <button
+              className="text-slate-300 hover:text-slate-600 transition-colors"
+              title="Edit role"
+              onClick={() => {
+                setEditing(true);
+                setPendingRole(user.role);
+              }}
+              data-testid={`button-edit-role-${user.id}`}
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </td>
+
+      {/* Access source */}
+      <td className="px-3 py-2 align-middle text-xs text-slate-600">{user.accessSource}</td>
+
+      {/* Profile count */}
+      <td className="px-3 py-2 align-middle text-xs text-slate-700 text-right tabular-nums">
+        {user.profileCount}
+      </td>
+
+      {/* Vehicle count */}
+      <td className="px-3 py-2 align-middle text-xs text-slate-700 text-right tabular-nums">
+        {user.vehicleCount}
+      </td>
+
+      {/* Saved calc count */}
+      <td className="px-3 py-2 align-middle text-xs text-slate-700 text-right tabular-nums">
+        {user.runCount}
+      </td>
+
+      {/* Created */}
+      <td className="px-3 py-2 align-middle text-xs text-slate-500 whitespace-nowrap">
+        {user.createdAt ? format(new Date(user.createdAt), "MMM d, yyyy") : "—"}
+      </td>
+
+      {/* Actions */}
+      <td className="px-3 py-2 align-middle">
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-[11px] gap-1.5"
+            onClick={() => onRefresh(user)}
+            disabled={isRefreshing}
+            data-testid={`button-refresh-user-${user.id}`}
+            title="Re-fetch this user's summary"
+          >
+            {isRefreshing ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3 h-3" />
+            )}
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-7 px-2 text-[11px] gap-1.5",
+              !isPermAdmin && "text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200",
+            )}
+            onClick={() => onRequestReset(user)}
+            disabled={isPermAdmin || isResetting}
+            data-testid={`button-reset-profile-${user.id}`}
+            title={
+              isPermAdmin
+                ? "The permanent admin account cannot be reset."
+                : "Delete profiles + vehicles, force re-onboarding"
+            }
+          >
+            {isResetting ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Trash2 className="w-3 h-3" />
+            )}
+            Reset profile
+          </Button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
-// ─── Users Section ────────────────────────────────────────────────────────────
-
 function UsersSection() {
   const [q, setQ] = useState("");
-  const { data, isLoading, refetch } = useAdminUsers();
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [confirmReset, setConfirmReset] = useState<AdminUserRow | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  const { data, isLoading, isError, refetch } = useAdminUsers();
   const { mutateAsync: updateRole, isPending } = useUpdateUserRole();
+  const { mutateAsync: refreshAdminUser } = useRefreshAdminUser();
+  const { mutateAsync: resetAdminUserProfile } = useResetAdminUserProfile();
   const { toast } = useToast();
 
-  const allUsers = data?.users ?? [];
-  const filtered = useMemo(() => {
-    const lower = q.toLowerCase().trim();
-    if (!lower) return allUsers;
-    return allUsers.filter((u) => u.email?.toLowerCase().includes(lower) || u.id.toLowerCase().includes(lower));
-  }, [allUsers, q]);
+  const allUsers = (data?.users ?? []) as AdminUserRow[];
 
   const counts = useMemo(() => {
     const free = allUsers.filter((u) => u.role === "free").length;
@@ -236,6 +419,52 @@ function UsersSection() {
     const testerAdmin = allUsers.filter((u) => u.role === "tester" || u.role === "admin").length;
     return { total: allUsers.length, free, pro, testerAdmin };
   }, [allUsers]);
+
+  const filtered = useMemo(() => {
+    const lower = q.toLowerCase().trim();
+    let rows = allUsers;
+    if (roleFilter !== "all") {
+      rows = rows.filter((u) => {
+        if (roleFilter === "pro") return hasProAccess(u.role);
+        return u.role === roleFilter;
+      });
+    }
+    if (lower) {
+      rows = rows.filter(
+        (u) =>
+          u.email?.toLowerCase().includes(lower) ||
+          u.id.toLowerCase().includes(lower),
+      );
+    }
+    const sorted = [...rows].sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      switch (sortKey) {
+        case "email":
+          return ((a.email ?? "").localeCompare(b.email ?? "")) * dir;
+        case "role":
+          return (ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)) * dir;
+        case "createdAt": {
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return (ta - tb) * dir;
+        }
+        case "runCount":
+          return (a.runCount - b.runCount) * dir;
+        case "profileCount":
+          return (a.profileCount - b.profileCount) * dir;
+      }
+    });
+    return sorted;
+  }, [allUsers, q, roleFilter, sortKey, sortDir]);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "email" || key === "role" ? "asc" : "desc");
+    }
+  }
 
   async function handleRoleChange(userId: string, role: string) {
     try {
@@ -248,6 +477,49 @@ function UsersSection() {
         description: e instanceof Error ? e.message : "Failed to update role",
         variant: "destructive",
       });
+    }
+  }
+
+  async function handleRefresh(user: AdminUserRow) {
+    setRefreshingId(user.id);
+    try {
+      await refreshAdminUser(user.id);
+      await refetch();
+      toast({ title: "User data refreshed.", description: user.email ?? user.id });
+    } catch (e: unknown) {
+      toast({
+        title: "Refresh failed",
+        description: e instanceof Error ? e.message : "Could not refresh user",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingId(null);
+    }
+  }
+
+  async function handleConfirmedReset() {
+    const target = confirmReset;
+    if (!target) return;
+    setConfirmReset(null);
+    setResettingId(target.id);
+    try {
+      const result = await resetAdminUserProfile(target.id);
+      await refetch();
+      toast({
+        title: "Profile reset",
+        description:
+          `Deleted ${result.summary.profilesDeleted} profile(s) and ` +
+          `${result.summary.vehiclesDeleted} vehicle(s). ` +
+          `${result.summary.runsPreserved} saved calculation(s) preserved.`,
+      });
+    } catch (e: unknown) {
+      toast({
+        title: "Reset failed",
+        description: e instanceof Error ? e.message : "Could not reset profile",
+        variant: "destructive",
+      });
+    } finally {
+      setResettingId(null);
     }
   }
 
@@ -289,44 +561,164 @@ function UsersSection() {
         />
       </section>
 
-      {/* Users Grid */}
-      <section className="space-y-4">
+      {/* Users Table */}
+      <section className="space-y-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h3 className="text-lg font-semibold text-slate-900">Users</h3>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search by email or ID…"
-              className="pl-9 w-64 rounded-xl border-slate-200 bg-white"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
+          <h3 className="text-lg font-semibold text-slate-900">
+            Users <span className="text-xs font-normal text-slate-500">({filtered.length} of {counts.total})</span>
+          </h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              className="text-sm border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+              data-testid="select-role-filter"
+            >
+              <option value="all">All roles</option>
+              <option value="free">Free</option>
+              <option value="pro">Pro</option>
+              <option value="tester">Tester</option>
+              <option value="admin">Admin</option>
+            </select>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search email, name or ID…"
+                className="pl-9 w-64 rounded-xl border-slate-200 bg-white"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                data-testid="input-user-search"
+              />
+            </div>
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-28 rounded-xl" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="text-sm text-slate-500 text-center py-10">
-            {q ? "No users matching that search" : "No users found"}
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((user) => (
-              <UserCard
-                key={user.id}
-                user={user}
-                onRoleChange={handleRoleChange}
-                isPending={isPending}
-              />
-            ))}
-          </div>
-        )}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+          <table className="w-full text-sm" data-testid="table-admin-users">
+            <thead className="bg-slate-50/70 border-b border-slate-200">
+              <tr>
+                <SortHeader
+                  label="User"
+                  active={sortKey === "email"}
+                  dir={sortDir}
+                  onClick={() => handleSort("email")}
+                />
+                <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 text-left">
+                  User ID
+                </th>
+                <SortHeader
+                  label="Role"
+                  active={sortKey === "role"}
+                  dir={sortDir}
+                  onClick={() => handleSort("role")}
+                />
+                <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 text-left">
+                  Access
+                </th>
+                <SortHeader
+                  label="Profiles"
+                  active={sortKey === "profileCount"}
+                  dir={sortDir}
+                  onClick={() => handleSort("profileCount")}
+                  align="right"
+                />
+                <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 text-right">
+                  Vehicles
+                </th>
+                <SortHeader
+                  label="Calcs"
+                  active={sortKey === "runCount"}
+                  dir={sortDir}
+                  onClick={() => handleSort("runCount")}
+                  align="right"
+                />
+                <SortHeader
+                  label="Created"
+                  active={sortKey === "createdAt"}
+                  dir={sortDir}
+                  onClick={() => handleSort("createdAt")}
+                />
+                <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                [0, 1, 2, 3, 4].map((i) => (
+                  <tr key={i} className="border-b border-slate-100 last:border-0">
+                    <td colSpan={9} className="px-3 py-2">
+                      <Skeleton className="h-7 w-full rounded-md" />
+                    </td>
+                  </tr>
+                ))
+              ) : isError ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-10 text-sm text-red-600">
+                    Failed to load users.{" "}
+                    <button
+                      className="underline hover:no-underline"
+                      onClick={() => refetch()}
+                    >
+                      Retry
+                    </button>
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="text-center py-10 text-sm text-slate-500">
+                    {q || roleFilter !== "all"
+                      ? "No users match your filters"
+                      : "No users found"}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((user) => (
+                  <UserTableRow
+                    key={user.id}
+                    user={user}
+                    onRoleChange={handleRoleChange}
+                    isRolePending={isPending}
+                    onRefresh={handleRefresh}
+                    refreshingId={refreshingId}
+                    onRequestReset={(u) => setConfirmReset(u)}
+                    resettingId={resettingId}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      {/* Reset confirmation */}
+      <AlertDialog
+        open={!!confirmReset}
+        onOpenChange={(open) => !open && setConfirmReset(null)}
+      >
+        <AlertDialogContent data-testid="dialog-reset-profile-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset this user's profile setup?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete{" "}
+              <span className="font-semibold">{confirmReset?.email ?? confirmReset?.id}</span>'s
+              profile(s) and vehicle(s) and send them back through onboarding on next login.
+              Saved calculations will be preserved (profile/vehicle references are cleared).
+              Login, billing, and promo history are not touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-reset-profile-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleConfirmedReset}
+              data-testid="button-reset-profile-confirm"
+            >
+              Reset profile
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

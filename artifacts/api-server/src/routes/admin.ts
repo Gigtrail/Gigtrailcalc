@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { requireAuth, requireAdmin, isPermanentAdminEmail, derivePlanFromRole, type AuthenticatedRequest, type UserRole } from "../middlewares/auth";
 import { VALID_ROLES } from "@workspace/entitlements";
-import { db, usersTable, promoCodesTable, promoCodeRedemptionsTable, feedbackPostsTable, feedbackVotesTable, venuesTable, venueImportBatchesTable, venueImportRowsTable } from "@workspace/db";
+import { db, usersTable, profilesTable, vehiclesTable, runsTable, toursTable, tourVehiclesTable, promoCodesTable, promoCodeRedemptionsTable, feedbackPostsTable, feedbackVotesTable, venuesTable, venueImportBatchesTable, venueImportRowsTable } from "@workspace/db";
 import { eq, ilike, desc, asc, sql, isNull, isNotNull, and, or, inArray } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { firstParam, parseIntegerParam } from "../lib/request-params";
@@ -107,34 +107,195 @@ function serializeImportRow(row: typeof venueImportRowsTable.$inferSelect) {
 
 // ─── User management ─────────────────────────────────────────────────────────
 
+const ADMIN_USER_LIST_LIMIT = 500;
+
+const adminUserSummarySelect = {
+  id: usersTable.id,
+  email: usersTable.email,
+  role: usersTable.role,
+  accessSource: usersTable.accessSource,
+  plan: usersTable.plan,
+  createdAt: usersTable.createdAt,
+  profileCount: sql<number>`(SELECT COUNT(*)::int FROM ${profilesTable} WHERE ${profilesTable.userId} = ${usersTable.id})`.as("profile_count"),
+  vehicleCount: sql<number>`(SELECT COUNT(*)::int FROM ${vehiclesTable} WHERE ${vehiclesTable.userId} = ${usersTable.id})`.as("vehicle_count"),
+  runCount: sql<number>`(SELECT COUNT(*)::int FROM ${runsTable} WHERE ${runsTable.userId} = ${usersTable.id})`.as("run_count"),
+} as const;
+
+function serializeAdminUser(row: {
+  id: string;
+  email: string | null;
+  role: string;
+  accessSource: string;
+  plan: string;
+  createdAt: Date | string | null;
+  profileCount: number | string | null;
+  vehicleCount: number | string | null;
+  runCount: number | string | null;
+}) {
+  const createdAtIso =
+    row.createdAt == null
+      ? null
+      : row.createdAt instanceof Date
+        ? row.createdAt.toISOString()
+        : new Date(String(row.createdAt)).toISOString();
+  return {
+    id: row.id,
+    email: row.email,
+    role: row.role,
+    accessSource: row.accessSource,
+    plan: row.plan,
+    createdAt: createdAtIso,
+    profileCount: Number(row.profileCount ?? 0),
+    vehicleCount: Number(row.vehicleCount ?? 0),
+    runCount: Number(row.runCount ?? 0),
+  };
+}
+
 router.get("/admin/users", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const q = firstParam(req.query.q)?.trim() ?? "";
 
   const users = q.length >= 2
     ? await db
-        .select({
-          id: usersTable.id,
-          email: usersTable.email,
-          role: usersTable.role,
-          accessSource: usersTable.accessSource,
-          plan: usersTable.plan,
-        })
+        .select(adminUserSummarySelect)
         .from(usersTable)
         .where(ilike(usersTable.email, `%${q}%`))
-        .limit(50)
+        .orderBy(desc(usersTable.createdAt))
+        .limit(ADMIN_USER_LIST_LIMIT)
     : await db
-        .select({
-          id: usersTable.id,
-          email: usersTable.email,
-          role: usersTable.role,
-          accessSource: usersTable.accessSource,
-          plan: usersTable.plan,
-        })
+        .select(adminUserSummarySelect)
         .from(usersTable)
         .orderBy(desc(usersTable.createdAt))
-        .limit(50);
+        .limit(ADMIN_USER_LIST_LIMIT);
 
-  res.json({ users });
+  res.json({ users: users.map(serializeAdminUser) });
+});
+
+router.post("/admin/users/:userId/refresh", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { userId: actingAdminId } = req as AuthenticatedRequest;
+  const targetId = firstParam(req.params.userId);
+  if (!targetId) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  const [row] = await db
+    .select(adminUserSummarySelect)
+    .from(usersTable)
+    .where(eq(usersTable.id, targetId))
+    .limit(1);
+
+  if (!row) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  console.log(
+    `[Admin] User refresh: acting_admin=${actingAdminId} target_id=${row.id} target_email=${row.email}`
+  );
+
+  res.json({ user: serializeAdminUser(row) });
+});
+
+router.post("/admin/users/:userId/reset-profile", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { userId: actingAdminId } = req as AuthenticatedRequest;
+  const targetId = firstParam(req.params.userId);
+  if (!targetId) {
+    res.status(400).json({ error: "Invalid user id" });
+    return;
+  }
+
+  const [target] = await db
+    .select({ id: usersTable.id, email: usersTable.email, role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetId))
+    .limit(1);
+
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (isPermanentAdminEmail(target.email)) {
+    console.warn(
+      `[Admin] Blocked reset-profile attempt against permanent admin ${target.email} (acting_admin=${actingAdminId})`
+    );
+    res.status(403).json({
+      error: "Cannot reset the permanent admin account's profile data.",
+    });
+    return;
+  }
+
+  console.log(
+    `[Admin] Reset profile START: acting_admin=${actingAdminId} ` +
+    `target_id=${target.id} target_email=${target.email}`
+  );
+
+  const summary = await db.transaction(async (tx) => {
+    // 1. Null out profile/vehicle references on saved runs so calculations
+    //    survive but no longer point at soon-to-be-deleted rows.
+    const updatedRuns = await tx
+      .update(runsTable)
+      .set({ profileId: null, vehicleId: null })
+      .where(eq(runsTable.userId, target.id))
+      .returning({ id: runsTable.id });
+
+    // 2. Same treatment for tours owned by this user.
+    const updatedTours = await tx
+      .update(toursTable)
+      .set({ profileId: null, vehicleId: null })
+      .where(eq(toursTable.userId, target.id))
+      .returning({ id: toursTable.id });
+
+    // 3. Drop tour_vehicles join rows that point at vehicles we're about
+    //    to delete (no FK cascade exists for this join table).
+    const userVehicleIds = await tx
+      .select({ id: vehiclesTable.id })
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.userId, target.id));
+
+    if (userVehicleIds.length > 0) {
+      await tx
+        .delete(tourVehiclesTable)
+        .where(inArray(tourVehiclesTable.vehicleId, userVehicleIds.map((v) => v.id)));
+    }
+
+    // 4. Delete vehicles (vehicle_act_assignments cascades automatically).
+    const deletedVehicles = await tx
+      .delete(vehiclesTable)
+      .where(eq(vehiclesTable.userId, target.id))
+      .returning({ id: vehiclesTable.id });
+
+    // 5. Delete profiles (vehicle_act_assignments cascades automatically).
+    const deletedProfiles = await tx
+      .delete(profilesTable)
+      .where(eq(profilesTable.userId, target.id))
+      .returning({ id: profilesTable.id });
+
+    return {
+      profilesDeleted: deletedProfiles.length,
+      vehiclesDeleted: deletedVehicles.length,
+      runsPreserved: updatedRuns.length,
+      toursPreserved: updatedTours.length,
+    };
+  });
+
+  console.log(
+    `[Admin] Reset profile DONE: target_id=${target.id} ` +
+    `profiles_deleted=${summary.profilesDeleted} vehicles_deleted=${summary.vehiclesDeleted} ` +
+    `runs_preserved=${summary.runsPreserved} tours_preserved=${summary.toursPreserved}`
+  );
+
+  // Return the refreshed user summary so the client can update the row inline.
+  const [refreshed] = await db
+    .select(adminUserSummarySelect)
+    .from(usersTable)
+    .where(eq(usersTable.id, target.id))
+    .limit(1);
+
+  res.json({
+    user: refreshed ? serializeAdminUser(refreshed) : null,
+    summary,
+  });
 });
 
 router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res): Promise<void> => {

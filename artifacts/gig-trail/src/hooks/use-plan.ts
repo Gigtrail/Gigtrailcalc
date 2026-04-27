@@ -205,6 +205,17 @@ export interface AdminUser {
   role: string;
   accessSource: string;
   plan: string;
+  createdAt: string | null;
+  profileCount: number;
+  vehicleCount: number;
+  runCount: number;
+}
+
+export interface AdminResetProfileSummary {
+  profilesDeleted: number;
+  vehiclesDeleted: number;
+  runsPreserved: number;
+  toursPreserved: number;
 }
 
 export function useAdminUsers() {
@@ -234,6 +245,34 @@ export function useUpdateUserRole() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Update failed");
       return data as { user: AdminUser };
+    },
+  });
+}
+
+export function useRefreshAdminUser() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await authedFetch(`/api/admin/users/${userId}/refresh`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Refresh failed");
+      return data as { user: AdminUser };
+    },
+  });
+}
+
+export function useResetAdminUserProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await authedFetch(`/api/admin/users/${userId}/reset-profile`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Reset failed");
+      return data as { user: AdminUser | null; summary: AdminResetProfileSummary };
     },
   });
 }
