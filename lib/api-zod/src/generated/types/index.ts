@@ -9,6 +9,7 @@
 export * from "./addTourVehicleBody";
 export * from "./completeRunBody";
 export * from "./completeRunBodyWouldDoAgain";
+export * from "./completeRunResponse";
 export * from "./createProfileBody";
 export * from "./createRunBody";
 export * from "./createTourBody";

@@ -852,6 +852,14 @@ export interface CompleteRunBody {
   notes?: string | null;
 }
 
+/**
+ * Response from `POST /runs/{id}/complete`. Currently identical in shape to a
+regular `Run`, but defined as its own schema so the contract for completion
+can evolve (e.g. extra metadata) without churning the base run schema.
+
+ */
+export type CompleteRunResponse = Run;
+
 export interface Tour {
   id: number;
   name: string;

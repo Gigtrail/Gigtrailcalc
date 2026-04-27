@@ -19,6 +19,7 @@ import type {
 import type {
   AddTourVehicleBody,
   CompleteRunBody,
+  CompleteRunResponse,
   CreateProfileBody,
   CreateRunBody,
   CreateTourBody,
@@ -1556,8 +1557,8 @@ export const completeRun = async (
   id: number,
   completeRunBody: CompleteRunBody,
   options?: RequestInit,
-): Promise<Run> => {
-  return customFetch<Run>(getCompleteRunUrl(id), {
+): Promise<CompleteRunResponse> => {
+  return customFetch<CompleteRunResponse>(getCompleteRunUrl(id), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },

@@ -392,7 +392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Run"
+                $ref: "#/components/schemas/CompleteRunResponse"
         "404":
           description: Not found
           content:
@@ -1852,6 +1852,14 @@ components:
           enum: [yes, no, unsure, null]
         notes:
           type: ["string", "null"]
+
+    CompleteRunResponse:
+      description: |
+        Response from `POST /runs/{id}/complete`. Currently identical in shape to a
+        regular `Run`, but defined as its own schema so the contract for completion
+        can evolve (e.g. extra metadata) without churning the base run schema.
+      allOf:
+        - $ref: "#/components/schemas/Run"
 
     RunStatus:
       type: string
