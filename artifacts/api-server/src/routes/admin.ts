@@ -215,6 +215,19 @@ router.post("/admin/users/:userId/reset-profile", requireAuth, requireAdmin, asy
     return;
   }
 
+  // Defensive: refuse reset on accounts with no email — we cannot verify
+  // they are not the permanent admin if the email is missing.
+  if (!target.email || target.email.trim().length === 0) {
+    console.warn(
+      `[Admin] Blocked reset-profile attempt against user with missing email ` +
+      `(target_id=${target.id}, acting_admin=${actingAdminId})`
+    );
+    res.status(400).json({
+      error: "Cannot reset a user account that has no email address on file.",
+    });
+    return;
+  }
+
   if (isPermanentAdminEmail(target.email)) {
     console.warn(
       `[Admin] Blocked reset-profile attempt against permanent admin ${target.email} (acting_admin=${actingAdminId})`
