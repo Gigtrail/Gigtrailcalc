@@ -896,6 +896,205 @@ router.post("/admin/feedback/:id/restore", requireAuth, requireAdmin, async (req
   res.json({ post: restored });
 });
 
+// ─── Profile archive (soft delete) ───────────────────────────────────────────
+//
+// Admins can archive a profile to hide it from normal user-facing endpoints
+// without destroying the row or any linked saved calculations / tours / venues.
+// We never cascade-delete or touch billing, auth, or historical data.
+
+const ADMIN_PROFILES_LIST_LIMIT = 500;
+const ARCHIVE_REASON_MAX_LENGTH = 500;
+
+const adminProfileSummarySelect = {
+  id: profilesTable.id,
+  userId: profilesTable.userId,
+  name: profilesTable.name,
+  actType: profilesTable.actType,
+  createdAt: profilesTable.createdAt,
+  archivedAt: profilesTable.archivedAt,
+  archivedByUserId: profilesTable.archivedByUserId,
+  archiveReason: profilesTable.archiveReason,
+  ownerEmail: usersTable.email,
+} as const;
+
+function serializeAdminProfile(row: {
+  id: number;
+  userId: string | null;
+  name: string;
+  actType: string;
+  createdAt: Date | string | null;
+  archivedAt: Date | string | null;
+  archivedByUserId: string | null;
+  archiveReason: string | null;
+  ownerEmail: string | null;
+}) {
+  const toIso = (v: Date | string | null) =>
+    v == null ? null : v instanceof Date ? v.toISOString() : String(v);
+  return {
+    id: row.id,
+    userId: row.userId,
+    name: row.name,
+    actType: row.actType,
+    createdAt: toIso(row.createdAt),
+    archivedAt: toIso(row.archivedAt),
+    archivedByUserId: row.archivedByUserId,
+    archiveReason: row.archiveReason,
+    ownerEmail: row.ownerEmail,
+    isArchived: row.archivedAt != null,
+  };
+}
+
+router.get("/admin/profiles", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const q = firstParam(req.query.q)?.trim() ?? "";
+  const statusParam = firstParam(req.query.status)?.trim().toLowerCase();
+  const status: "active" | "archived" | "all" =
+    statusParam === "archived" ? "archived"
+    : statusParam === "all" ? "all"
+    : "active";
+
+  const filters: SQL[] = [];
+  if (status === "active") filters.push(isNull(profilesTable.archivedAt));
+  if (status === "archived") filters.push(isNotNull(profilesTable.archivedAt));
+
+  if (q.length >= 2) {
+    const like = `%${q}%`;
+    const idAsNumber = Number(q);
+    const searchClauses: SQL[] = [
+      ilike(profilesTable.name, like),
+      ilike(usersTable.email, like),
+    ];
+    if (Number.isInteger(idAsNumber) && idAsNumber > 0) {
+      searchClauses.push(eq(profilesTable.id, idAsNumber));
+    }
+    const combined = or(...searchClauses);
+    if (combined) filters.push(combined);
+  }
+
+  const baseQuery = db
+    .select(adminProfileSummarySelect)
+    .from(profilesTable)
+    .leftJoin(usersTable, eq(usersTable.id, profilesTable.userId));
+
+  const rows = filters.length > 0
+    ? await baseQuery
+        .where(and(...filters))
+        .orderBy(desc(profilesTable.createdAt))
+        .limit(ADMIN_PROFILES_LIST_LIMIT)
+    : await baseQuery
+        .orderBy(desc(profilesTable.createdAt))
+        .limit(ADMIN_PROFILES_LIST_LIMIT);
+
+  res.json({ profiles: rows.map(serializeAdminProfile) });
+});
+
+router.post("/admin/profiles/:profileId/archive", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { userId: actingAdminId } = req as AuthenticatedRequest;
+  const profileId = parseIntegerParam(req.params.profileId);
+  if (isNaN(profileId)) {
+    res.status(400).json({ error: "Invalid profile id" });
+    return;
+  }
+
+  const rawReason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  const reason = rawReason.length > 0 ? rawReason.slice(0, ARCHIVE_REASON_MAX_LENGTH) : null;
+
+  const [target] = await db
+    .select({ id: profilesTable.id, archivedAt: profilesTable.archivedAt, name: profilesTable.name, userId: profilesTable.userId })
+    .from(profilesTable)
+    .where(eq(profilesTable.id, profileId))
+    .limit(1);
+
+  if (!target) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+
+  if (target.archivedAt != null) {
+    // Idempotent: return current state without overwriting prior archive metadata.
+    const [row] = await db
+      .select(adminProfileSummarySelect)
+      .from(profilesTable)
+      .leftJoin(usersTable, eq(usersTable.id, profilesTable.userId))
+      .where(eq(profilesTable.id, profileId))
+      .limit(1);
+    res.json({ profile: row ? serializeAdminProfile(row) : null, alreadyArchived: true });
+    return;
+  }
+
+  await db
+    .update(profilesTable)
+    .set({
+      archivedAt: new Date(),
+      archivedByUserId: actingAdminId,
+      archiveReason: reason,
+    })
+    .where(eq(profilesTable.id, profileId));
+
+  console.log(
+    `[Admin] Profile archived: acting_admin=${actingAdminId} profile_id=${profileId} ` +
+    `owner_user_id=${target.userId} name=${JSON.stringify(target.name)} reason=${JSON.stringify(reason)}`
+  );
+
+  const [row] = await db
+    .select(adminProfileSummarySelect)
+    .from(profilesTable)
+    .leftJoin(usersTable, eq(usersTable.id, profilesTable.userId))
+    .where(eq(profilesTable.id, profileId))
+    .limit(1);
+
+  res.json({ profile: row ? serializeAdminProfile(row) : null });
+});
+
+router.post("/admin/profiles/:profileId/restore", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { userId: actingAdminId } = req as AuthenticatedRequest;
+  const profileId = parseIntegerParam(req.params.profileId);
+  if (isNaN(profileId)) {
+    res.status(400).json({ error: "Invalid profile id" });
+    return;
+  }
+
+  const [target] = await db
+    .select({ id: profilesTable.id, archivedAt: profilesTable.archivedAt, userId: profilesTable.userId })
+    .from(profilesTable)
+    .where(eq(profilesTable.id, profileId))
+    .limit(1);
+
+  if (!target) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+
+  if (target.archivedAt == null) {
+    const [row] = await db
+      .select(adminProfileSummarySelect)
+      .from(profilesTable)
+      .leftJoin(usersTable, eq(usersTable.id, profilesTable.userId))
+      .where(eq(profilesTable.id, profileId))
+      .limit(1);
+    res.json({ profile: row ? serializeAdminProfile(row) : null, alreadyActive: true });
+    return;
+  }
+
+  await db
+    .update(profilesTable)
+    .set({ archivedAt: null, archivedByUserId: null, archiveReason: null })
+    .where(eq(profilesTable.id, profileId));
+
+  console.log(
+    `[Admin] Profile restored: acting_admin=${actingAdminId} profile_id=${profileId} ` +
+    `owner_user_id=${target.userId}`
+  );
+
+  const [row] = await db
+    .select(adminProfileSummarySelect)
+    .from(profilesTable)
+    .leftJoin(usersTable, eq(usersTable.id, profilesTable.userId))
+    .where(eq(profilesTable.id, profileId))
+    .limit(1);
+
+  res.json({ profile: row ? serializeAdminProfile(row) : null });
+});
+
 // ─── Promo code redemptions ───────────────────────────────────────────────────
 
 router.get("/admin/promo-codes/:id/redemptions", requireAuth, requireAdmin, async (req, res): Promise<void> => {

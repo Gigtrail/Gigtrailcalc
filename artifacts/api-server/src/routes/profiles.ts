@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import type { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, profilesTable } from "@workspace/db";
 import {
   CreateProfileBody,
@@ -146,12 +146,16 @@ function createProfileUpdateData(data: UpdateProfilePayload): Partial<typeof pro
   return updateData;
 }
 
+// Match active (non-archived) profiles owned by the given user.
+const ownedActiveProfile = (userId: string) =>
+  and(eq(profilesTable.userId, userId), isNull(profilesTable.archivedAt));
+
 router.get("/profiles", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const profiles = await db
     .select()
     .from(profilesTable)
-    .where(eq(profilesTable.userId, userId))
+    .where(ownedActiveProfile(userId))
     .orderBy(profilesTable.createdAt);
   res.json(GetProfilesResponse.parse(profiles.map(serializeProfile)));
 });
@@ -189,7 +193,7 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
 // otherwise Express matches the wildcard first and treats "weekly-usage" as an id.
 router.get("/profiles/weekly-usage", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole } = req as AuthenticatedRequest;
-  const profiles = await db.select().from(profilesTable).where(eq(profilesTable.userId, userId));
+  const profiles = await db.select().from(profilesTable).where(ownedActiveProfile(userId));
   res.json(getWeeklyUsagePayload(userRole, profiles[0]));
 });
 
@@ -200,7 +204,7 @@ router.get("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId)));
+  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId)));
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -221,7 +225,7 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const updateData = createProfileUpdateData(parsed.data);
-  const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
+  const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -236,7 +240,7 @@ router.delete("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [profile] = await db.delete(profilesTable).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
+  const [profile] = await db.delete(profilesTable).where(and(eq(profilesTable.id, params.data.id), ownedActiveProfile(userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -252,7 +256,7 @@ router.post("/profiles/:id/track-calculation", requireAuth, async (req, res): Pr
     return;
   }
 
-  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, id), eq(profilesTable.userId, userId)));
+  const [profile] = await db.select().from(profilesTable).where(and(eq(profilesTable.id, id), ownedActiveProfile(userId)));
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });
     return;

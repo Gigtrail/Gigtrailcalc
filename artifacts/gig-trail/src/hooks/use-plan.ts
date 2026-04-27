@@ -282,6 +282,72 @@ export function useUpdateUserPlan() {
   return useUpdateUserRole();
 }
 
+// ─── Admin: profile archive (soft delete) ───────────────────────────────────
+
+export interface AdminProfile {
+  id: number;
+  userId: string | null;
+  name: string;
+  actType: string;
+  createdAt: string | null;
+  archivedAt: string | null;
+  archivedByUserId: string | null;
+  archiveReason: string | null;
+  ownerEmail: string | null;
+  isArchived: boolean;
+}
+
+export type AdminProfileStatusFilter = "active" | "archived" | "all";
+
+export function useAdminProfiles(params: { status: AdminProfileStatusFilter; q?: string }) {
+  const { isSignedIn } = useUser();
+  const { getToken } = useAuth();
+  const q = params.q?.trim() ?? "";
+  return useQuery<{ profiles: AdminProfile[] }>({
+    queryKey: ["/api/admin/profiles", params.status, q],
+    queryFn: async () => {
+      const search = new URLSearchParams();
+      search.set("status", params.status);
+      if (q.length >= 2) search.set("q", q);
+      const res = await authedFetch(`/api/admin/profiles?${search.toString()}`, () => getToken());
+      if (!res.ok) throw new Error("Failed to fetch profiles");
+      return res.json();
+    },
+    enabled: !!isSignedIn,
+    staleTime: 0,
+  });
+}
+
+export function useArchiveAdminProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async ({ profileId, reason }: { profileId: number; reason?: string }) => {
+      const res = await authedFetch(`/api/admin/profiles/${profileId}/archive`, () => getToken(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason ?? null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Archive failed");
+      return data as { profile: AdminProfile | null; alreadyArchived?: boolean };
+    },
+  });
+}
+
+export function useRestoreAdminProfile() {
+  const { getToken } = useAuth();
+  return useMutation({
+    mutationFn: async (profileId: number) => {
+      const res = await authedFetch(`/api/admin/profiles/${profileId}/restore`, () => getToken(), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Restore failed");
+      return data as { profile: AdminProfile | null; alreadyActive?: boolean };
+    },
+  });
+}
+
 export interface PromoCode {
   id: number;
   code: string;

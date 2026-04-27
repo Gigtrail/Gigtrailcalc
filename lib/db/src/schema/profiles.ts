@@ -36,8 +36,17 @@ export const profilesTable = pgTable("profiles", {
   calculationsThisWeek: integer("calculations_this_week").notNull().default(0),
   lastCalculationReset: date("last_calculation_reset"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archivedByUserId: text("archived_by_user_id"),
+  archiveReason: text("archive_reason"),
 });
 
-export const insertProfileSchema = createInsertSchema(profilesTable).omit({ id: true, createdAt: true });
+export const insertProfileSchema = createInsertSchema(profilesTable).omit({
+  id: true,
+  createdAt: true,
+  archivedAt: true,
+  archivedByUserId: true,
+  archiveReason: true,
+});
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type Profile = typeof profilesTable.$inferSelect;
