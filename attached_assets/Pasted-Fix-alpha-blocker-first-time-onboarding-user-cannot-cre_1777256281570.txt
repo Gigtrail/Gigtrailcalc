@@ -1,0 +1,65 @@
+Fix alpha blocker: first-time onboarding user cannot create profile because POST /api/profiles returns 403.
+
+Observed:
+- Brand-new signed-in FREE user reaches onboarding Step 5.
+- Clicking “Save Profile & Start First Run” fails.
+- Browser console shows repeated:
+  POST /api/profiles 403 Forbidden
+- UI shows “Failed to create profile”.
+
+Goal:
+A signed-in user with zero profiles must always be allowed to create their first profile, regardless of FREE plan restrictions.
+
+This is alpha-critical.
+
+Rules:
+1. Authenticated user with zero profiles:
+   - POST /api/profiles must succeed.
+2. Authenticated FREE user with one existing profile:
+   - Additional profile creation may remain blocked if free tier allows only one profile.
+3. PRO / TESTER / ADMIN:
+   - Keep existing intended profile creation access.
+4. Anonymous user:
+   - Must still be blocked.
+5. Do not loosen auth globally.
+6. Do not add features.
+7. Do not redesign UI.
+
+Tasks:
+1. Inspect:
+   - artifacts/api-server/src/routes/profiles.ts
+   - lib/entitlements/*
+   - any route middleware used for profile creation
+2. Find where POST /api/profiles is returning 403.
+3. Change the permission logic so “first profile creation” bypasses profile-limit gating for authenticated users.
+4. Keep plan/profile limits after the first profile.
+5. Add clear backend logging when profile creation is denied:
+   - userId
+   - role/plan
+   - existing profile count
+   - denial reason
+6. Check frontend onboarding submit code:
+   - If it uses raw fetch, switch to the generated authenticated API client or existing authedFetch helper.
+   - Ensure Clerk Bearer token is attached.
+7. Stop repeated request spam:
+   - The create profile mutation should not retry endlessly on 403.
+   - Set retry false or handle the error once.
+
+Verification:
+- Run pnpm run typecheck
+- Run pnpm run build
+- Test in Replit:
+  1. Create/sign into brand-new user
+  2. Complete onboarding
+  3. Click “Save Profile & Start First Run”
+  4. Confirm profile is created
+  5. Confirm user lands in Single Show Calculator
+  6. Confirm no POST /api/profiles 403
+  7. Confirm a FREE user with one profile cannot create extra profiles if that is still the free-tier rule
+
+Report back:
+- root cause
+- files changed
+- typecheck result
+- build result
+- manual Replit test result

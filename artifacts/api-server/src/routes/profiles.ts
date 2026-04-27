@@ -160,8 +160,20 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
   const { userId, userRole, userPlan } = req as AuthenticatedRequest;
   const limits = getPlanLimits(userRole);
   const count = await countUserRecords(profilesTable, userId);
-  if (count >= limits.maxProfiles) {
-    res.status(403).json({ error: "Plan limit reached", code: "LIMIT_PROFILES", limit: limits.maxProfiles, plan: userPlan });
+  // Alpha-safe rule: an authenticated user with zero profiles must always be
+  // able to create their first profile, regardless of plan limit. Plan-based
+  // gating only applies once the user already has at least one profile.
+  if (count > 0 && count >= limits.maxProfiles) {
+    console.warn(
+      `[profiles.create.denied] userId=${userId} role=${userRole} plan=${userPlan} ` +
+      `existingCount=${count} limit=${limits.maxProfiles} reason=plan_limit_reached`,
+    );
+    res.status(403).json({
+      error: "Plan limit reached",
+      code: "LIMIT_PROFILES",
+      limit: limits.maxProfiles,
+      plan: userPlan,
+    });
     return;
   }
   const parsed = CreateProfileBody.safeParse(req.body);

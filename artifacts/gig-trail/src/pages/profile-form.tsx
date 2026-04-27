@@ -8,6 +8,7 @@ import {
   useUpdateProfile,
   type UpdateProfileMutationBody,
   useGetProfile,
+  useGetProfiles,
   useGetVehicles,
   useCreateVehicle,
   getGetVehiclesQueryKey,
@@ -532,12 +533,32 @@ export default function ProfileForm() {
   const { toast } = useToast();
   const { isPro, entitlements } = usePlan();
 
-  const isEditing = !!id;
-  const profileId = isEditing ? parseInt(id) : 0;
+  const editingFromUrl = !!id;
   const pathname = typeof window !== "undefined" ? window.location.pathname : location.split("?")[0];
   const isOnboardingRoute = pathname === "/onboarding";
   const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const isStartRequested = searchParams.get("start") === "1";
+
+  // Onboarding fix: if a FREE user has already created (an incomplete) profile
+  // earlier and then re-enters /onboarding, we must update that existing
+  // profile instead of trying to POST a new one — the create endpoint will
+  // (correctly) 403 once they're at the plan limit. Detect that here so the
+  // rest of the form re-uses the standard "edit" code path.
+  const { data: existingProfilesForOnboarding } = useGetProfiles({
+    query: {
+      enabled: isOnboardingRoute && !editingFromUrl,
+      queryKey: getGetProfilesQueryKey(),
+    },
+  });
+  const onboardingExistingProfileId =
+    isOnboardingRoute && !editingFromUrl && existingProfilesForOnboarding && existingProfilesForOnboarding.length > 0
+      ? existingProfilesForOnboarding[0].id
+      : null;
+
+  const isEditing = editingFromUrl || onboardingExistingProfileId !== null;
+  const profileId = editingFromUrl
+    ? parseInt(id)
+    : onboardingExistingProfileId ?? 0;
 
   const [step, setStep] = useState(1);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -564,8 +585,10 @@ export default function ProfileForm() {
   });
   const { data: vehicles } = useGetVehicles();
 
-  const createProfile = useCreateProfile();
-  const updateProfile = useUpdateProfile();
+  // retry: false — a 403 on POST /profiles is deterministic (plan-limit
+  // reached); retrying would just spam the server and the user.
+  const createProfile = useCreateProfile({ mutation: { retry: false } });
+  const updateProfile = useUpdateProfile({ mutation: { retry: false } });
   const createVehicle = useCreateVehicle();
   const queryClient = useQueryClient();
 
@@ -888,8 +911,17 @@ export default function ProfileForm() {
             queryClient.invalidateQueries({ queryKey: getGetToursQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
             queryClient.invalidateQueries({ queryKey: getGetDashboardRecentQueryKey() });
-            toast({ title: "Profile updated" });
-            setLocation("/profiles");
+            // Onboarding-via-update path: a returning user finished onboarding
+            // by completing the existing (incomplete) profile. Mirror the
+            // create flow so they land in Single Show Calculator, not /profiles.
+            if (isOnboardingRoute) {
+              clearProfileDraft();
+              setHasSavedDraft(false);
+              setSuccessRedirectPath(`/runs/new?profileId=${profileId}`);
+            } else {
+              toast({ title: "Profile updated" });
+              setLocation("/profiles");
+            }
           },
           onError: () => toast({ title: "Failed to update profile", variant: "destructive" }),
         }
