@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { endOfDay, format, parseISO, startOfDay } from "date-fns";
-import { usePlan } from "@/hooks/use-plan";
+import { usePlan, useWeeklyUsage } from "@/hooks/use-plan";
 import { UsageMeter } from "@/components/usage-meter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -240,6 +240,7 @@ export default function Runs() {
   const { data: runs, isLoading } = useGetRuns();
   const [, navigate] = useLocation();
   const { isPro, limits } = usePlan();
+  const { data: weeklyUsage } = useWeeklyUsage();
 
   const [search, setSearch] = useState("");
   const [profitFilter, setProfitFilter] = useState<ProfitFilter>("all");
@@ -410,8 +411,19 @@ export default function Runs() {
         </Button>
       </div>
 
-      {!isPro && limits.maxRuns !== Infinity ? (
-        <UsageMeter used={runs?.length ?? 0} limit={limits.maxRuns} label="saved calculations" className="max-w-xs" />
+      {!isPro && weeklyUsage && weeklyUsage.limit != null ? (
+        <div className="space-y-1 max-w-xs" data-testid="usage-meter-weekly-calculations">
+          <UsageMeter
+            used={weeklyUsage.used}
+            limit={weeklyUsage.limit}
+            label="weekly calculations"
+          />
+          {weeklyUsage.resetsIn != null ? (
+            <p className="text-[11px] text-muted-foreground/70">
+              resets in {weeklyUsage.resetsIn}d
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
