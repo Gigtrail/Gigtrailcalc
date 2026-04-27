@@ -151,10 +151,18 @@ export interface UpdateProfileBody {
 export interface Vehicle {
   id: number;
   name: string;
+  /** @nullable */
+  vehicleType?: string | null;
   fuelType: string;
   avgConsumption: number;
   /** @nullable */
+  tankSizeLitres?: number | null;
+  /** @nullable */
   maxPassengers: number | null;
+  isDefault?: boolean;
+  /** @nullable */
+  assignedMemberIds?: string | null;
+  assignedActIds?: number[];
   /** @nullable */
   notes: string | null;
   createdAt: string;
@@ -163,10 +171,19 @@ export interface Vehicle {
 
 export interface CreateVehicleBody {
   name: string;
+  /** @nullable */
+  vehicleType?: string | null;
   fuelType: string;
   avgConsumption: number;
   /** @nullable */
+  tankSizeLitres?: number | null;
+  /** @nullable */
   maxPassengers?: number | null;
+  isDefault?: boolean;
+  /** @nullable */
+  assignedMemberIds?: string | null;
+  actIds?: number[];
+  defaultForActIds?: number[];
   /** @nullable */
   notes?: string | null;
 }
@@ -803,6 +820,14 @@ export interface CreateTourBody {
   defaultFoodCost?: number | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  totalDistance?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
   /** @nullable */
   fuelType?: string | null;
   /** @nullable */

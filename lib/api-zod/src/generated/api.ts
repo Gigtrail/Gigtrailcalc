@@ -51,7 +51,7 @@ export const GetProfilesResponse = zod.array(GetProfilesResponseItem);
  * @summary Create a profile
  */
 export const CreateProfileBody = zod.object({
-  name: zod.string().optional(),
+  name: zod.string(),
   actType: zod.string().optional(),
   homeBase: zod.string().nullish(),
   homeBaseLat: zod.number().nullish(),
@@ -75,9 +75,6 @@ export const CreateProfileBody = zod.object({
   avgFoodPerDay: zod.number().optional(),
   maxDriveHoursPerDay: zod.number().nullish(),
   defaultFuelPrice: zod.number().nullish(),
-  defaultPetrolPrice: zod.number().nullish(),
-  defaultDieselPrice: zod.number().nullish(),
-  defaultLpgPrice: zod.number().nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -204,9 +201,14 @@ export const TrackCalculationResponse = zod.object({
 export const GetVehiclesResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean().optional(),
+  assignedMemberIds: zod.string().nullish(),
+  assignedActIds: zod.array(zod.number()).optional(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   duplicateProtection: zod
@@ -226,9 +228,15 @@ export const GetVehiclesResponse = zod.array(GetVehiclesResponseItem);
  */
 export const CreateVehicleBody = zod.object({
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
+  isDefault: zod.boolean().optional(),
+  assignedMemberIds: zod.string().nullish(),
+  actIds: zod.array(zod.number()).optional(),
+  defaultForActIds: zod.array(zod.number()).optional(),
   notes: zod.string().nullish(),
 });
 
@@ -242,9 +250,14 @@ export const GetVehicleParams = zod.object({
 export const GetVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean().optional(),
+  assignedMemberIds: zod.string().nullish(),
+  assignedActIds: zod.array(zod.number()).optional(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   duplicateProtection: zod
@@ -267,18 +280,29 @@ export const UpdateVehicleParams = zod.object({
 
 export const UpdateVehicleBody = zod.object({
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullish(),
+  isDefault: zod.boolean().optional(),
+  assignedMemberIds: zod.string().nullish(),
+  actIds: zod.array(zod.number()).optional(),
+  defaultForActIds: zod.array(zod.number()).optional(),
   notes: zod.string().nullish(),
 });
 
 export const UpdateVehicleResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  vehicleType: zod.string().nullish(),
   fuelType: zod.string(),
   avgConsumption: zod.number(),
+  tankSizeLitres: zod.number().nullish(),
   maxPassengers: zod.number().nullable(),
+  isDefault: zod.boolean().optional(),
+  assignedMemberIds: zod.string().nullish(),
+  assignedActIds: zod.array(zod.number()).optional(),
   notes: zod.string().nullable(),
   createdAt: zod.string(),
   duplicateProtection: zod
@@ -996,6 +1020,10 @@ export const CreateTourBody = zod.object({
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
   notes: zod.string().nullish(),
+  totalDistance: zod.number().nullish(),
+  totalCost: zod.number().nullish(),
+  totalIncome: zod.number().nullish(),
+  totalProfit: zod.number().nullish(),
   fuelType: zod.string().nullish(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),
@@ -1097,6 +1125,10 @@ export const UpdateTourBody = zod.object({
   endDate: zod.string().nullish(),
   defaultFoodCost: zod.number().nullish(),
   notes: zod.string().nullish(),
+  totalDistance: zod.number().nullish(),
+  totalCost: zod.number().nullish(),
+  totalIncome: zod.number().nullish(),
+  totalProfit: zod.number().nullish(),
   fuelType: zod.string().nullish(),
   fuelConsumption: zod.number().nullish(),
   fuelPrice: zod.number().nullish(),

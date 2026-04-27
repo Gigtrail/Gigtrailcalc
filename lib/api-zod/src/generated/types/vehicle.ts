@@ -10,10 +10,18 @@ import type { DuplicateProtection } from "./duplicateProtection";
 export interface Vehicle {
   id: number;
   name: string;
+  /** @nullable */
+  vehicleType?: string | null;
   fuelType: string;
   avgConsumption: number;
   /** @nullable */
+  tankSizeLitres?: number | null;
+  /** @nullable */
   maxPassengers: number | null;
+  isDefault?: boolean;
+  /** @nullable */
+  assignedMemberIds?: string | null;
+  assignedActIds?: number[];
   /** @nullable */
   notes: string | null;
   createdAt: string;

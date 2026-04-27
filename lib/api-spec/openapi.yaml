@@ -952,12 +952,24 @@ components:
           type: integer
         name:
           type: string
+        vehicleType:
+          type: ["string", "null"]
         fuelType:
           type: string
         avgConsumption:
           type: number
+        tankSizeLitres:
+          type: ["number", "null"]
         maxPassengers:
           type: ["integer", "null"]
+        isDefault:
+          type: boolean
+        assignedMemberIds:
+          type: ["string", "null"]
+        assignedActIds:
+          type: array
+          items:
+            type: integer
         notes:
           type: ["string", "null"]
         createdAt:
@@ -978,12 +990,28 @@ components:
       properties:
         name:
           type: string
+        vehicleType:
+          type: ["string", "null"]
         fuelType:
           type: string
         avgConsumption:
           type: number
+        tankSizeLitres:
+          type: ["number", "null"]
         maxPassengers:
           type: ["integer", "null"]
+        isDefault:
+          type: boolean
+        assignedMemberIds:
+          type: ["string", "null"]
+        actIds:
+          type: array
+          items:
+            type: integer
+        defaultForActIds:
+          type: array
+          items:
+            type: integer
         notes:
           type: ["string", "null"]
       required:
@@ -1562,6 +1590,14 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        totalDistance:
+          type: ["number", "null"]
+        totalCost:
+          type: ["number", "null"]
+        totalIncome:
+          type: ["number", "null"]
+        totalProfit:
+          type: ["number", "null"]
         fuelType:
           type: ["string", "null"]
         fuelConsumption:

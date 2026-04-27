@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import type { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { db, profilesTable } from "@workspace/db";
 import {
@@ -29,6 +30,9 @@ function daysDiff(dateStr: string) {
 }
 
 const router: IRouter = Router();
+
+type CreateProfilePayload = z.infer<typeof CreateProfileBody>;
+type UpdateProfilePayload = z.infer<typeof UpdateProfileBody>;
 
 function getWeeklyUsagePayload(
   userRole: AuthenticatedRequest["userRole"],
@@ -78,6 +82,61 @@ function serializeProfile(p: typeof profilesTable.$inferSelect) {
   };
 }
 
+function decimalString(value: number | null | undefined, fallback: number): string {
+  return String(value ?? fallback);
+}
+
+function nullableDecimalString(value: number | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  return value === null ? null : String(value);
+}
+
+function createProfileInsertData(
+  data: CreateProfilePayload,
+  userId: string,
+): typeof profilesTable.$inferInsert {
+  return {
+    ...data,
+    userId,
+    avgAccomPerNight: decimalString(data.avgAccomPerNight, 0),
+    avgFoodPerDay: decimalString(data.avgFoodPerDay, 0),
+    fuelConsumption: decimalString(data.fuelConsumption, 10),
+    expectedGigFee: decimalString(data.expectedGigFee, 0),
+    minTakeHomePerPerson: decimalString(data.minTakeHomePerPerson, 0),
+    payoutMode: data.payoutMode ?? "fixed",
+    minimumActTakeHome: decimalString(data.minimumActTakeHome, 0),
+    homeBaseLat: nullableDecimalString(data.homeBaseLat) ?? null,
+    homeBaseLng: nullableDecimalString(data.homeBaseLng) ?? null,
+    defaultFuelPrice: nullableDecimalString(data.defaultFuelPrice) ?? null,
+  };
+}
+
+function createProfileUpdateData(data: UpdateProfilePayload): Partial<typeof profilesTable.$inferInsert> {
+  const {
+    fuelConsumption,
+    expectedGigFee,
+    avgAccomPerNight,
+    avgFoodPerDay,
+    minTakeHomePerPerson,
+    minimumActTakeHome,
+    homeBaseLat,
+    homeBaseLng,
+    defaultFuelPrice,
+    ...nonDecimalFields
+  } = data;
+  const updateData: Partial<typeof profilesTable.$inferInsert> = { ...nonDecimalFields };
+  if (fuelConsumption !== undefined) updateData.fuelConsumption = decimalString(fuelConsumption, 10);
+  if (expectedGigFee !== undefined) updateData.expectedGigFee = decimalString(expectedGigFee, 0);
+  if (avgAccomPerNight !== undefined) updateData.avgAccomPerNight = decimalString(avgAccomPerNight, 0);
+  if (avgFoodPerDay !== undefined) updateData.avgFoodPerDay = decimalString(avgFoodPerDay, 0);
+  if (minTakeHomePerPerson !== undefined) updateData.minTakeHomePerPerson = decimalString(minTakeHomePerPerson, 0);
+  if (minimumActTakeHome !== undefined) updateData.minimumActTakeHome = decimalString(minimumActTakeHome, 0);
+  if (homeBaseLat !== undefined) updateData.homeBaseLat = nullableDecimalString(homeBaseLat);
+  if (homeBaseLng !== undefined) updateData.homeBaseLng = nullableDecimalString(homeBaseLng);
+  if (defaultFuelPrice !== undefined) updateData.defaultFuelPrice = nullableDecimalString(defaultFuelPrice);
+  return updateData;
+}
+
 router.get("/profiles", requireAuth, async (req, res): Promise<void> => {
   const { userId } = req as AuthenticatedRequest;
   const profiles = await db
@@ -101,23 +160,7 @@ router.post("/profiles", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [profile] = await db.insert(profilesTable).values({
-    ...parsed.data,
-    userId,
-    avgAccomPerNight: String(parsed.data.avgAccomPerNight ?? 0),
-    avgFoodPerDay: String(parsed.data.avgFoodPerDay ?? 0),
-    fuelConsumption: String(parsed.data.fuelConsumption ?? 10),
-    expectedGigFee: String(parsed.data.expectedGigFee ?? 0),
-    minTakeHomePerPerson: String(parsed.data.minTakeHomePerPerson ?? 0),
-    payoutMode: parsed.data.payoutMode ?? "fixed",
-    minimumActTakeHome: String(parsed.data.minimumActTakeHome ?? 0),
-    homeBaseLat: parsed.data.homeBaseLat != null ? String(parsed.data.homeBaseLat) : null,
-    homeBaseLng: parsed.data.homeBaseLng != null ? String(parsed.data.homeBaseLng) : null,
-    defaultFuelPrice: parsed.data.defaultFuelPrice != null ? String(parsed.data.defaultFuelPrice) : null,
-    defaultPetrolPrice: parsed.data.defaultPetrolPrice != null ? String(parsed.data.defaultPetrolPrice) : null,
-    defaultDieselPrice: parsed.data.defaultDieselPrice != null ? String(parsed.data.defaultDieselPrice) : null,
-    defaultLpgPrice: parsed.data.defaultLpgPrice != null ? String(parsed.data.defaultLpgPrice) : null,
-  }).returning();
+  const [profile] = await db.insert(profilesTable).values(createProfileInsertData(parsed.data, userId)).returning();
   res.status(201).json(GetProfileResponse.parse(serializeProfile(profile)));
 });
 
@@ -156,26 +199,7 @@ router.patch("/profiles/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const updateData = { ...parsed.data } as Partial<typeof profilesTable.$inferInsert>;
-  if (parsed.data.fuelConsumption != null) updateData.fuelConsumption = String(parsed.data.fuelConsumption);
-  if (parsed.data.expectedGigFee != null) updateData.expectedGigFee = String(parsed.data.expectedGigFee);
-  if (parsed.data.avgAccomPerNight != null) updateData.avgAccomPerNight = String(parsed.data.avgAccomPerNight);
-  if (parsed.data.avgFoodPerDay != null) updateData.avgFoodPerDay = String(parsed.data.avgFoodPerDay);
-  if (parsed.data.minTakeHomePerPerson != null) updateData.minTakeHomePerPerson = String(parsed.data.minTakeHomePerPerson);
-  if (parsed.data.payoutMode != null) updateData.payoutMode = parsed.data.payoutMode;
-  if (parsed.data.minimumActTakeHome != null) updateData.minimumActTakeHome = String(parsed.data.minimumActTakeHome);
-  if (parsed.data.homeBaseLat != null) updateData.homeBaseLat = String(parsed.data.homeBaseLat);
-  else if (parsed.data.homeBaseLat === null) updateData.homeBaseLat = null;
-  if (parsed.data.homeBaseLng != null) updateData.homeBaseLng = String(parsed.data.homeBaseLng);
-  else if (parsed.data.homeBaseLng === null) updateData.homeBaseLng = null;
-  if (parsed.data.defaultFuelPrice != null) updateData.defaultFuelPrice = String(parsed.data.defaultFuelPrice);
-  else if (parsed.data.defaultFuelPrice === null) updateData.defaultFuelPrice = null;
-  if (parsed.data.defaultPetrolPrice != null) updateData.defaultPetrolPrice = String(parsed.data.defaultPetrolPrice);
-  else if (parsed.data.defaultPetrolPrice === null) updateData.defaultPetrolPrice = null;
-  if (parsed.data.defaultDieselPrice != null) updateData.defaultDieselPrice = String(parsed.data.defaultDieselPrice);
-  else if (parsed.data.defaultDieselPrice === null) updateData.defaultDieselPrice = null;
-  if (parsed.data.defaultLpgPrice != null) updateData.defaultLpgPrice = String(parsed.data.defaultLpgPrice);
-  else if (parsed.data.defaultLpgPrice === null) updateData.defaultLpgPrice = null;
+  const updateData = createProfileUpdateData(parsed.data);
   const [profile] = await db.update(profilesTable).set(updateData).where(and(eq(profilesTable.id, params.data.id), eq(profilesTable.userId, userId))).returning();
   if (!profile) {
     res.status(404).json({ error: "Profile not found" });

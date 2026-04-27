@@ -26,6 +26,14 @@ export interface CreateTourBody {
   /** @nullable */
   notes?: string | null;
   /** @nullable */
+  totalDistance?: number | null;
+  /** @nullable */
+  totalCost?: number | null;
+  /** @nullable */
+  totalIncome?: number | null;
+  /** @nullable */
+  totalProfit?: number | null;
+  /** @nullable */
   fuelType?: string | null;
   /** @nullable */
   fuelConsumption?: number | null;
