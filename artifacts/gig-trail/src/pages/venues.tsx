@@ -18,6 +18,8 @@ import {
   Mail,
   Compass,
   RotateCcw,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +80,38 @@ function fmtDate(d: string | null | undefined) {
   }
 }
 
+type ViewMode = "card" | "table";
+
+interface VenueDisplay {
+  played: boolean;
+  location: string | null;
+  lastPlayedLabel: string | null;
+  hasEmail: boolean;
+  showAvgProfit: boolean;
+  showCount: number;
+}
+
+function deriveVenueDisplay(venue: Venue, filter: VenueFilter): VenueDisplay {
+  const showCount = venue.showCount ?? 0;
+  // Trust the backend filter when one is set — its "played" basis (any run,
+  // including future) differs from showCount (past runs only), so a future-only
+  // show would otherwise show the wrong badge/CTA.
+  const played =
+    filter === "played"
+      ? true
+      : filter === "lead"
+      ? false
+      : showCount > 0;
+  const location =
+    [venue.suburb ?? venue.city, venue.state, venue.country]
+      .filter(Boolean)
+      .join(", ") || venue.city || null;
+  const lastPlayedLabel = played ? fmtDate(venue.lastPlayed) : null;
+  const showAvgProfit = played && typeof venue.avgProfit === "number";
+  const hasEmail = !!venue.contactEmail?.trim();
+  return { played, location, lastPlayedLabel, hasEmail, showAvgProfit, showCount };
+}
+
 function VenueTypeBadge({ played }: { played: boolean }) {
   return (
     <Badge
@@ -101,6 +135,7 @@ export default function Venues() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<VenueFilter>("all");
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<ViewMode>("card");
 
   // Debounce search → API param to avoid one request per keystroke.
   useEffect(() => {
@@ -145,6 +180,44 @@ export default function Venues() {
             <Lock className="w-3 h-3 shrink-0" />
             Your deal history is private to you
           </p>
+        </div>
+
+        {/* View toggle */}
+        <div
+          className="flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-0.5 shrink-0"
+          role="group"
+          aria-label="View mode"
+        >
+          <button
+            type="button"
+            onClick={() => setViewMode("card")}
+            data-testid="button-view-card"
+            aria-pressed={viewMode === "card"}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              viewMode === "card"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            Card
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            data-testid="button-view-table"
+            aria-pressed={viewMode === "table"}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors",
+              viewMode === "table"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <TableIcon className="w-3.5 h-3.5" />
+            Table
+          </button>
         </div>
       </div>
 
@@ -230,27 +303,15 @@ export default function Venues() {
         </div>
       )}
 
-      {/* Venue list */}
-      {!isLoading && venues.length > 0 && (
-        <div className={cn("space-y-2", isFetching && "opacity-70")}>
+      {/* Venue list — Card view (existing UI, unchanged behavior) */}
+      {!isLoading && venues.length > 0 && viewMode === "card" && (
+        <div
+          className={cn("space-y-2", isFetching && "opacity-70")}
+          data-testid="venues-card-list"
+        >
           {venues.map(venue => {
-            // Trust the backend filter when one is set — its "played" basis
-            // (any run, including future) differs from showCount (past runs only),
-            // so a future-only show would otherwise show the wrong badge/CTA.
-            const played =
-              filter === "played"
-                ? true
-                : filter === "lead"
-                ? false
-                : (venue.showCount ?? 0) > 0;
-            const location = [
-              venue.suburb ?? venue.city,
-              venue.state,
-              venue.country,
-            ].filter(Boolean).join(", ") || venue.city || null;
-            const lastPlayedLabel = played ? fmtDate(venue.lastPlayed) : null;
-            const showAvgProfit = played && typeof venue.avgProfit === "number";
-            const hasEmail = !!venue.contactEmail?.trim();
+            const { played, location, lastPlayedLabel, hasEmail, showAvgProfit } =
+              deriveVenueDisplay(venue, filter);
 
             return (
               <div
@@ -385,6 +446,104 @@ export default function Venues() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Venue list — Table view */}
+      {!isLoading && venues.length > 0 && viewMode === "table" && (
+        <div
+          className={cn(
+            "rounded-xl border border-border/60 bg-card overflow-hidden",
+            isFetching && "opacity-70",
+          )}
+          data-testid="venues-table"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/30 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <th className="text-left font-medium px-3 py-2">Venue</th>
+                  <th className="text-left font-medium px-3 py-2">Location</th>
+                  <th className="text-right font-medium px-3 py-2">Shows</th>
+                  <th className="text-left font-medium px-3 py-2">Last played</th>
+                  <th className="text-right font-medium px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {venues.map((venue) => {
+                  const { played, location, lastPlayedLabel, hasEmail, showCount } =
+                    deriveVenueDisplay(venue, filter);
+                  return (
+                    <tr
+                      key={venue.id}
+                      onClick={() => navigate(`/venues/${venue.id}`)}
+                      className="cursor-pointer border-b border-border/40 last:border-b-0 hover:bg-primary/5 transition-colors"
+                    >
+                      <td className="px-3 py-2.5 align-middle">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="truncate font-medium text-foreground">
+                            {venue.venueName}
+                          </span>
+                          <VenueTypeBadge played={played} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle text-muted-foreground">
+                        <span className="truncate">{location ?? "-"}</span>
+                      </td>
+                      <td className="px-3 py-2.5 align-middle text-right tabular-nums text-foreground">
+                        {showCount > 0 ? showCount : "-"}
+                      </td>
+                      <td className="px-3 py-2.5 align-middle text-muted-foreground">
+                        {lastPlayedLabel ?? "-"}
+                      </td>
+                      <td className="px-3 py-2.5 align-middle text-right">
+                        {played ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/venues/${venue.id}`);
+                            }}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                            Rebook
+                          </Button>
+                        ) : hasEmail ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            asChild
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <a href={`mailto:${venue.contactEmail}`}>
+                              <Mail className="w-3.5 h-3.5 mr-1" />
+                              Contact
+                            </a>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/venues/${venue.id}`);
+                            }}
+                          >
+                            <Compass className="w-3.5 h-3.5 mr-1" />
+                            Research
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
